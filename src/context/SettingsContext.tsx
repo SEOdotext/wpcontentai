@@ -41,10 +41,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Fetch settings from Supabase whenever the current website changes
   useEffect(() => {
     const fetchSettings = async () => {
-      if (!currentWebsite) return;
+      if (!currentWebsite) {
+        setIsLoading(false);
+        return;
+      }
       
       try {
         setIsLoading(true);
+        
+        console.log("Fetching settings for website:", currentWebsite.id);
         
         // Filter settings by the current website's ID
         const { data, error } = await supabase
@@ -56,6 +61,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (error) throw error;
         
         if (data && data.length > 0) {
+          console.log("Found existing settings:", data[0]);
           const settings = data[0];
           setSettingsId(settings.id);
           setPublicationFrequency(settings.publication_frequency);
@@ -79,6 +85,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setSubjectMatters(defaultSettings.subjectMatters);
           }
         } else {
+          console.log("Creating default settings for website:", currentWebsite.id);
           // If no settings exist for this website, create default settings
           const { data: newSettings, error: insertError } = await supabase
             .from('publication_settings')
@@ -94,6 +101,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           if (insertError) throw insertError;
           
           if (newSettings) {
+            console.log("Created new settings:", newSettings);
             setSettingsId(newSettings.id);
             // Reset to default values for the new website
             setPublicationFrequency(defaultSettings.publicationFrequency);
@@ -118,9 +126,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     };
 
-    if (currentWebsite) {
-      fetchSettings();
-    }
+    fetchSettings();
   }, [currentWebsite]);
 
   // Update settings in Supabase when they change
@@ -129,21 +135,27 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     style: string, 
     subjects: string[]
   ) => {
-    if (!settingsId || !currentWebsite) return;
+    if (!settingsId || !currentWebsite) {
+      console.error("Cannot update settings: No settingsId or currentWebsite");
+      return;
+    }
     
     try {
+      console.log("Updating settings in database:", { frequency, style, subjects, settingsId });
+      
       const { error } = await supabase
         .from('publication_settings')
         .update({
           publication_frequency: frequency,
           writing_style: style,
           subject_matters: subjects,
-          updated_at: new Date().toISOString(),
-          website_id: currentWebsite.id
+          updated_at: new Date().toISOString()
         })
         .eq('id', settingsId);
         
       if (error) throw error;
+      
+      console.log("Settings updated successfully");
     } catch (error) {
       console.error('Error updating settings in database:', error);
       toast.error('Failed to save settings to database. Changes will only be stored locally.');
