@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { CalendarClock, CalendarIcon, List, Tag } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronDown, List, Tag } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentCard, { Keyword } from '@/components/ContentCard';
@@ -10,7 +10,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import EmptyState from '@/components/EmptyState';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, getMonth, getYear, parseISO } from 'date-fns';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 // Mock data with dates added for calendar view
 const recentContent = [
@@ -66,6 +72,32 @@ const upcomingContent = [
     ],
     isFavorite: true,
   },
+  // Adding more content across different months for testing accordion view
+  {
+    title: 'WordPress Theme Development: A Complete Guide',
+    description: 'Learn how to create custom WordPress themes from scratch.',
+    dateCreated: 'Dec 3, 2023',
+    date: new Date(2023, 11, 3), // December 3, 2023
+    status: 'draft',
+    keywords: [
+      { text: 'wordpress', difficulty: 'hard' },
+      { text: 'development', difficulty: 'hard' },
+      { text: 'themes', difficulty: 'medium' },
+    ],
+    isFavorite: false,
+  },
+  {
+    title: 'SEO Trends to Watch in 2024',
+    description: 'Stay ahead of the competition with these upcoming SEO trends.',
+    dateCreated: 'Jan 10, 2024',
+    date: new Date(2024, 0, 10), // January 10, 2024
+    status: 'scheduled',
+    keywords: [
+      { text: 'seo', difficulty: 'medium' },
+      { text: 'trends', difficulty: 'easy' },
+    ],
+    isFavorite: true,
+  },
 ];
 
 // Combine all content for calendar view
@@ -86,10 +118,55 @@ const getContentByDate = () => {
   return contentMap;
 };
 
+// Group content by month and year
+const getContentByMonthYear = () => {
+  const monthYearMap: Record<string, typeof allContent> = {};
+  
+  allContent.forEach(content => {
+    const date = content.date;
+    const monthYear = `${date.getFullYear()}-${date.getMonth()}`;
+    const monthYearLabel = format(date, 'MMMM yyyy');
+    
+    if (!monthYearMap[monthYear]) {
+      monthYearMap[monthYear] = [];
+    }
+    
+    monthYearMap[monthYear].push(content);
+  });
+  
+  // Sort the content within each month by date
+  Object.keys(monthYearMap).forEach(key => {
+    monthYearMap[key].sort((a, b) => a.date.getTime() - b.date.getTime());
+  });
+  
+  return monthYearMap;
+};
+
+// Get sorted array of unique month-year combinations
+const getSortedMonthYears = () => {
+  const monthYearMap = getContentByMonthYear();
+  return Object.keys(monthYearMap)
+    .sort((a, b) => {
+      const [yearA, monthA] = a.split('-').map(Number);
+      const [yearB, monthB] = b.split('-').map(Number);
+      return yearB - yearA || monthB - monthA; // Sort descending (newest first)
+    })
+    .map(key => {
+      const [year, month] = key.split('-').map(Number);
+      const date = new Date(year, month, 1);
+      return {
+        key,
+        label: format(date, 'MMMM yyyy'),
+        content: monthYearMap[key]
+      };
+    });
+};
+
 const ContentCalendar = () => {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [activeView, setActiveView] = useState<'calendar' | 'list'>('calendar');
+  const [activeView, setActiveView] = useState<'monthly' | 'list'>('monthly');
   const contentByDate = getContentByDate();
+  const sortedMonthYears = getSortedMonthYears();
 
   // Function to get content for a specific date
   const getContentForDate = (date: Date | undefined) => {
@@ -102,8 +179,9 @@ const ContentCalendar = () => {
 
   // Create date class names to highlight dates with content
   const getDayClassName = (date: Date) => {
-    const hasContent = contentByDate.has(date.toDateString());
-    return hasContent ? 'bg-primary/20 text-primary-foreground font-medium rounded-full' : '';
+    return contentByDate.has(date.toDateString()) 
+      ? "bg-primary/20 text-primary-foreground font-medium rounded-full" 
+      : "";
   };
 
   return (
@@ -123,11 +201,11 @@ const ContentCalendar = () => {
                       <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
                       <div className="flex space-x-2">
                         <button 
-                          onClick={() => setActiveView('calendar')}
-                          className={`p-2 rounded-md ${activeView === 'calendar' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+                          onClick={() => setActiveView('monthly')}
+                          className={`p-2 rounded-md ${activeView === 'monthly' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
                         >
                           <CalendarIcon className="h-4 w-4" />
-                          <span className="sr-only">Calendar View</span>
+                          <span className="sr-only">Monthly View</span>
                         </button>
                         <button 
                           onClick={() => setActiveView('list')}
@@ -140,51 +218,33 @@ const ContentCalendar = () => {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    {activeView === 'calendar' ? (
+                    {activeView === 'monthly' ? (
                       <div className="space-y-6">
-                        <div className="flex flex-col md:flex-row gap-6">
-                          <div className="md:w-1/2 bg-card rounded-lg shadow-sm p-4">
-                            <Calendar
-                              mode="single"
-                              selected={date}
-                              onSelect={setDate}
-                              className="rounded-md border p-3"
-                              classNames={{
-                                day_today: "bg-secondary text-secondary-foreground",
-                                day: (date) => getDayClassName(date)
-                              }}
-                            />
-                          </div>
-                          <div className="md:w-1/2">
-                            <div className="mb-4">
-                              <h3 className="text-lg font-medium">
-                                {date ? format(date, 'MMMM d, yyyy') : 'Select a date'}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                {selectedDateContent.length} {selectedDateContent.length === 1 ? 'item' : 'items'}
-                              </p>
-                            </div>
-                            <div className="space-y-4">
-                              {selectedDateContent.length > 0 ? (
-                                selectedDateContent.map((content, index) => (
-                                  <ContentCard
-                                    key={index}
-                                    title={content.title}
-                                    description={content.description}
-                                    keywords={content.keywords as Keyword[]}
-                                    dateCreated={content.dateCreated}
-                                    status={content.status as 'draft' | 'published' | 'scheduled'}
-                                    isFavorite={content.isFavorite}
-                                  />
-                                ))
-                              ) : (
-                                <div className="text-center py-6">
-                                  <p className="text-muted-foreground">No content scheduled for this date</p>
+                        <Accordion type="single" collapsible className="w-full">
+                          {sortedMonthYears.map((monthYear) => (
+                            <AccordionItem key={monthYear.key} value={monthYear.key}>
+                              <AccordionTrigger className="text-md font-medium hover:no-underline">
+                                {monthYear.label} ({monthYear.content.length} items)
+                              </AccordionTrigger>
+                              <AccordionContent>
+                                <div className="pt-2 space-y-4">
+                                  {monthYear.content.map((content, index) => (
+                                    <ContentCard
+                                      key={`${monthYear.key}-${index}`}
+                                      title={content.title}
+                                      description={content.description}
+                                      keywords={content.keywords as Keyword[]}
+                                      dateCreated={format(content.date, 'MMM d, yyyy')}
+                                      status={content.status as 'draft' | 'published' | 'scheduled'}
+                                      isFavorite={content.isFavorite}
+                                      className="border border-border/50"
+                                    />
+                                  ))}
                                 </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          ))}
+                        </Accordion>
                       </div>
                     ) : (
                       <Tabs defaultValue="recent" className="w-full">
@@ -194,7 +254,7 @@ const ContentCalendar = () => {
                             <span>Recent Content</span>
                           </TabsTrigger>
                           <TabsTrigger value="upcoming" className="flex items-center gap-2">
-                            <CalendarClock className="h-4 w-4" />
+                            <CalendarIcon className="h-4 w-4" />
                             <span>Upcoming Content</span>
                           </TabsTrigger>
                         </TabsList>
