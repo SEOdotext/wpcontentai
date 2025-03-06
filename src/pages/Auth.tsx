@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -160,10 +161,15 @@ const Auth = () => {
               {mode === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
             </Button>
             
-            <div className="relative flex items-center gap-2 py-2">
-              <Separator className="flex-grow" />
-              <span className="text-xs text-muted-foreground px-2">OR</span>
-              <Separator className="flex-grow" />
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                <Separator className="w-full" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-card px-2 text-xs text-muted-foreground">
+                  OR
+                </span>
+              </div>
             </div>
             
             <form onSubmit={handleAuth} className="space-y-4">
