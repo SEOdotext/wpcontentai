@@ -12,6 +12,7 @@ import { AlertCircle, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { Link } from 'react-router-dom';
 
 const ContentCreation = () => {
   const { currentWebsite, isLoading: websitesLoading } = useWebsites();
@@ -91,7 +92,10 @@ const ContentCreation = () => {
                   <AlertTitle>No Organisation Associated</AlertTitle>
                   <AlertDescription>
                     This website doesn't have an organisation associated with it. 
-                    You can still create content, but some features may be limited.
+                    You can still create content, but some features may be limited.{' '}
+                    <Link to="/setup" className="text-primary underline font-medium">
+                      Create an organisation
+                    </Link> to unlock all features.
                   </AlertDescription>
                 </Alert>
               ) : null}
