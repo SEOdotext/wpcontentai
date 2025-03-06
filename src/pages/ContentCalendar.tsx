@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentView from '@/components/ContentView';
@@ -15,8 +14,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { format, addMonths, subMonths } from 'date-fns';
+import { format, addMonths, subMonths, parseISO } from 'date-fns';
 import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 
 interface CalendarContent {
   id: number;
@@ -102,6 +104,23 @@ const ContentCalendar = () => {
     toast.info("AI regeneration will be implemented soon");
   };
 
+  const handleDateChange = (contentId: number, newDate: Date | undefined) => {
+    if (!newDate) return;
+    
+    const updatedContent = allContent.map(content => 
+      content.id === contentId 
+        ? { ...content, date: newDate.toISOString() } 
+        : content
+    );
+    
+    setAllContent(updatedContent);
+    localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
+    
+    toast.success("Publication date updated", {
+      description: `Content scheduled for ${format(newDate, 'MMM dd, yyyy')}`
+    });
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -143,7 +162,7 @@ const ContentCalendar = () => {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-[100px]">Date</TableHead>
+                            <TableHead className="w-[150px]">Date</TableHead>
                             <TableHead>Title</TableHead>
                             <TableHead className="w-[120px]">Actions</TableHead>
                           </TableRow>
@@ -153,13 +172,33 @@ const ContentCalendar = () => {
                             getContentByMonth(displayDate).map((content, index) => (
                               <TableRow 
                                 key={index} 
-                                className="cursor-pointer hover:bg-accent/30" 
-                                onClick={() => handleContentClick(content)}
+                                className="cursor-pointer hover:bg-accent/30"
                               >
                                 <TableCell className="font-medium">
-                                  {format(new Date(content.date), 'd MMM')}
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="flex items-center text-xs p-0 h-auto font-medium hover:bg-transparent hover:text-primary"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <CalendarIcon className="h-3 w-3 mr-1" />
+                                        <span>{format(parseISO(content.date), 'd MMM yyyy')}</span>
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                      <Calendar
+                                        mode="single"
+                                        selected={parseISO(content.date)}
+                                        onSelect={(date) => handleDateChange(content.id, date)}
+                                        initialFocus
+                                        className={cn("p-3 pointer-events-auto")}
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
                                 </TableCell>
-                                <TableCell>{content.title}</TableCell>
+                                <TableCell onClick={() => handleContentClick(content)}>{content.title}</TableCell>
                                 <TableCell>
                                   <Button
                                     variant="ghost"
