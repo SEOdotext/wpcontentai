@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { ThumbsDown, ThumbsUp, Calendar, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -57,13 +58,18 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         existingContent.forEach(item => {
           // Ensure we have a valid date object
           if (item.date) {
-            const itemDate = new Date(item.date);
-            
-            // Only consider valid dates
-            if (itemDate && !isNaN(itemDate.getTime())) {
-              if (isAfter(itemDate, latestDate)) {
-                latestDate = itemDate;
+            try {
+              const itemDate = new Date(item.date);
+              
+              // Only consider valid dates
+              if (!isNaN(itemDate.getTime())) {
+                if (isAfter(itemDate, latestDate)) {
+                  latestDate = itemDate;
+                  console.log('Found later date:', itemDate);
+                }
               }
+            } catch (err) {
+              console.error('Error parsing date:', item.date, err);
             }
           }
         });
@@ -72,7 +78,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         
         // Add the publication frequency to the most future date
         const nextDate = addDays(latestDate, publicationFrequency);
-        console.log('Proposing next date:', nextDate, 'with frequency:', publicationFrequency);
+        console.log('Next date calculated:', nextDate, 'with frequency:', publicationFrequency);
         
         return nextDate;
       }
@@ -90,7 +96,8 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       // First get the current calendar content
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
       
-      // Calculate the next available date
+      // Calculate the next available date - IMPORTANT: this must be calculated AFTER retrieving
+      // the latest content to ensure we're using the most up-to-date information
       const publicationDate = getNextAvailableDate();
       
       // Create the new content object

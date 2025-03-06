@@ -1,9 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
-import ContentCard, { Keyword } from '@/components/ContentCard';
 import ContentView from '@/components/ContentView';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Separator } from '@/components/ui/separator';
 import { format, addMonths, subMonths } from 'date-fns';
 import { toast } from 'sonner';
 
@@ -25,8 +24,8 @@ interface CalendarContent {
   description: string;
   dateCreated: string;
   date: string;
-  contentStatus: 'published' | 'draft' | 'scheduled';
-  keywords: Keyword[];
+  contentStatus?: 'published' | 'draft' | 'scheduled';
+  keywords: any[];
   // For backward compatibility with older data
   status?: 'published' | 'draft' | 'scheduled';
 }
@@ -45,11 +44,14 @@ const ContentCalendar = () => {
         
         const processedContent = parsedContent.map(item => ({
           ...item,
-          date: new Date(item.date).toISOString(),
+          date: item.date ? new Date(item.date).toISOString() : new Date().toISOString(),
           dateCreated: item.dateCreated || new Date().toISOString(),
           // Convert status to contentStatus if the old format exists
-          contentStatus: item.contentStatus || (item.status as CalendarContent['contentStatus'] | undefined)
+          contentStatus: item.contentStatus || item.status || 'scheduled'
         }));
+        
+        // Sort by date
+        processedContent.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
         setAllContent(processedContent);
       }
@@ -198,7 +200,7 @@ const ContentCalendar = () => {
           description={selectedContent.description}
           keywords={selectedContent.keywords}
           dateCreated={selectedContent.dateCreated}
-          status={selectedContent.contentStatus}
+          status={selectedContent.contentStatus || 'scheduled'}
           onClose={() => setSelectedContent(null)}
           onDeleteClick={() => handleDeleteContent(selectedContent.id)}
           onEditClick={() => handleEditContent(selectedContent.id)}
