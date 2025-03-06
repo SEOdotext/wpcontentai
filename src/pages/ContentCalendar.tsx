@@ -92,14 +92,11 @@ const ContentCalendar = () => {
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
 
-  // Add these handlers for the new features
   const handleEditContent = (contentId: number) => {
-    // Placeholder for edit functionality
     toast.info("Edit functionality will be implemented soon");
   };
 
   const handleRegenerateContent = (contentId: number) => {
-    // Placeholder for AI regeneration functionality
     toast.info("AI regeneration will be implemented soon");
   };
 
@@ -146,7 +143,7 @@ const ContentCalendar = () => {
                           <TableRow>
                             <TableHead className="w-[100px]">Date</TableHead>
                             <TableHead>Title</TableHead>
-                            <TableHead className="w-[120px]">Status</TableHead>
+                            <TableHead className="w-[120px]">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
