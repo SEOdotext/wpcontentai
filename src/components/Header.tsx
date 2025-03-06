@@ -21,6 +21,7 @@ const Header: React.FC = () => {
     const path = location.pathname;
     if (path === '/calendar') return 'Content Calendar';
     if (path === '/') return 'Dashboard';
+    if (path === '/create') return 'Content Creation';
     return '';
   };
 

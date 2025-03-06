@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -5,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import TitleSuggestion, { Keyword } from './TitleSuggestion';
 import EmptyState from './EmptyState';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ContentStructureViewProps {
   className?: string;
@@ -76,12 +76,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
 
   return (
     <div className={className}>
-      <Card className="border-0 shadow-elevation mb-8">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
-        </CardHeader>
-      </Card>
-
       <div className="mb-4">
         <div className="flex gap-2">
           <Input
