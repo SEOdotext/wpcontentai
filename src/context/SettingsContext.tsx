@@ -56,7 +56,24 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setSettingsId(settings.id);
           setPublicationFrequency(settings.publication_frequency);
           setWritingStyle(settings.writing_style);
-          setSubjectMatters(Array.isArray(settings.subject_matters) ? settings.subject_matters : defaultSettings.subjectMatters);
+          
+          // Convert subject_matters to string[] ensuring type safety
+          if (settings.subject_matters) {
+            const subjects = settings.subject_matters as unknown;
+            // Ensure we're dealing with an array and all elements are strings
+            if (Array.isArray(subjects)) {
+              const stringSubjects = subjects.map(item => 
+                // Convert any non-string values to strings
+                typeof item === 'string' ? item : String(item)
+              );
+              setSubjectMatters(stringSubjects);
+            } else {
+              // Fallback to default if subject_matters isn't an array
+              setSubjectMatters(defaultSettings.subjectMatters);
+            }
+          } else {
+            setSubjectMatters(defaultSettings.subjectMatters);
+          }
         } else {
           // If no settings exist, create a default record
           const { data: newSettings, error: insertError } = await supabase
