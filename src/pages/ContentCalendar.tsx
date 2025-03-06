@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List } from 'lucide-react';
@@ -144,10 +145,12 @@ const ContentCalendar = () => {
   
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
+  // Don't use direct navigation from tabs - they're just for display
+  // Instead, we'll rely only on chevron navigation
   const handleTabChange = (value: string) => {
-    const [year, month] = value.split('-').map(Number);
-    const newDate = new Date(year, month - 1, 1);
-    setCurrentDate(newDate);
+    // This function is intentionally not changing the date
+    // to prevent double jumps
+    console.log("Tab changed to", value);
   };
 
   const handleContentClick = (content: typeof allContent[0]) => {
@@ -217,19 +220,19 @@ const ContentCalendar = () => {
                   <CardContent>
                     {activeView === 'monthly' ? (
                       <Tabs 
-                        defaultValue={formatTabValue(currentDate)} 
+                        defaultValue={formatTabValue(currentDate)}
                         value={formatTabValue(currentDate)}
                         onValueChange={handleTabChange}
                         className="w-full"
                       >
                         <TabsList className="grid grid-cols-3 mb-6">
-                          <TabsTrigger value={formatTabValue(previousMonth)}>
+                          <TabsTrigger value={formatTabValue(previousMonth)} disabled>
                             {format(previousMonth, 'MMM yyyy')}
                           </TabsTrigger>
-                          <TabsTrigger value={formatTabValue(currentDate)}>
+                          <TabsTrigger value={formatTabValue(currentDate)} disabled>
                             {format(currentDate, 'MMM yyyy')}
                           </TabsTrigger>
-                          <TabsTrigger value={formatTabValue(nextMonth)}>
+                          <TabsTrigger value={formatTabValue(nextMonth)} disabled>
                             {format(nextMonth, 'MMM yyyy')}
                           </TabsTrigger>
                         </TabsList>
