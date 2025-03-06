@@ -1,16 +1,9 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, Filter, Plus, RefreshCw } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import TitleSuggestion, { Keyword } from './TitleSuggestion';
 import EmptyState from './EmptyState';
 
@@ -70,61 +63,27 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   return (
     <div className={className}>
       <Tabs defaultValue="titles" className="w-full">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <TabsList className="h-9">
-            <TabsTrigger value="titles" className="text-sm px-3">
-              Title Suggestions
-            </TabsTrigger>
-            <TabsTrigger value="outlines" className="text-sm px-3">
-              Outlines
-            </TabsTrigger>
-            <TabsTrigger value="sections" className="text-sm px-3">
-              Sections
-            </TabsTrigger>
-          </TabsList>
-          
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Select defaultValue="recent">
-              <SelectTrigger className="w-[130px]">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="recent">Most Recent</SelectItem>
-                <SelectItem value="popular">Most Popular</SelectItem>
-                <SelectItem value="keywords">Keyword Usage</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            <Button size="icon" variant="outline">
-              <Filter className="h-4 w-4" />
-              <span className="sr-only">Filter</span>
-            </Button>
-            
-            <Button size="icon" variant="outline">
-              <RefreshCw className="h-4 w-4" />
-              <span className="sr-only">Refresh</span>
-            </Button>
-          </div>
-        </div>
+        <TabsList className="mb-4">
+          <TabsTrigger value="titles">Title Suggestions</TabsTrigger>
+          <TabsTrigger value="outlines">Outlines</TabsTrigger>
+        </TabsList>
         
-        <div className="mb-6">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
-              <Input
-                placeholder="Enter your focus keywords (e.g., wordpress, seo, content)"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                className="w-full bg-background"
-              />
-            </div>
-            <Button className="shrink-0">
+        <div className="mb-4">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Enter keywords (e.g., wordpress, seo)"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              className="flex-1"
+            />
+            <Button>
               <Plus className="h-4 w-4 mr-2" />
-              Generate Titles
+              Generate
             </Button>
           </div>
         </div>
         
-        <TabsContent value="titles" className="mt-0">
+        <TabsContent value="titles">
           {mockTitles.length > 0 ? (
             <div className="grid gap-4">
               {mockTitles.map((title) => (
@@ -137,52 +96,27 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   onSelect={() => handleSelectTitle(title.id)}
                 />
               ))}
-              
-              <div className="flex items-center justify-between mt-2">
-                <Button variant="ghost" size="sm" className="gap-1">
-                  <ArrowLeft className="h-4 w-4" />
-                  Previous
-                </Button>
-                <div className="text-sm text-muted-foreground">
-                  Page 1 of 3
-                </div>
-                <Button variant="ghost" size="sm" className="gap-1">
-                  Next
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
             </div>
           ) : (
             <EmptyState
               icon={<Plus className="h-6 w-6" />}
               title="No Title Suggestions Yet"
-              description="Enter your keywords and generate title suggestions for your content."
+              description="Enter keywords and generate title suggestions."
               actionLabel="Generate Titles"
               onAction={() => {}}
-              className="py-12"
+              className="py-6"
             />
           )}
         </TabsContent>
         
-        <TabsContent value="outlines" className="mt-0">
+        <TabsContent value="outlines">
           <EmptyState
             icon={<Plus className="h-6 w-6" />}
             title="No Outlines Generated"
-            description="Select a title first, then generate an outline for your content."
+            description="Select a title first to generate an outline."
             actionLabel="Generate Outline"
             onAction={() => {}}
-            className="py-12"
-          />
-        </TabsContent>
-        
-        <TabsContent value="sections" className="mt-0">
-          <EmptyState
-            icon={<Plus className="h-6 w-6" />}
-            title="No Sections Created"
-            description="Generate an outline first, then create detailed sections for your content."
-            actionLabel="Create Sections"
-            onAction={() => {}}
-            className="py-12"
+            className="py-6"
           />
         </TabsContent>
       </Tabs>
