@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Calendar, FileText, Globe, Home, Map, PlusCircle, Settings } from 'lucide-react';
 import {
@@ -74,25 +73,25 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton 
               className="gap-2" 
-              isActive={location.pathname === '/sitemap'}
-              asChild
-            >
-              <Link to="/sitemap">
-                <Map className="h-4 w-4" />
-                <span>Website Content</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          
-          <SidebarMenuItem>
-            <SidebarMenuButton 
-              className="gap-2"
               isActive={location.pathname === '/create'}
               asChild
             >
               <Link to="/create">
                 <PlusCircle className="h-4 w-4" />
                 <span>Content Creation</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              className="gap-2"
+              isActive={location.pathname === '/sitemap'}
+              asChild
+            >
+              <Link to="/sitemap">
+                <Map className="h-4 w-4" />
+                <span>Website Content</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
