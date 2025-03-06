@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { ThumbsDown, ThumbsUp, Calendar, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -83,9 +82,12 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   
   const addToCalendar = useCallback((title: string, keywords: Keyword[]) => {
     try {
+      // Get the most up-to-date content including any just added
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
       
-      const publicationDate = date || proposedDate();
+      // Calculate a new date for this content
+      // Important: Call proposedDate() to get a fresh calculation based on the current state
+      const publicationDate = proposedDate();
       
       const newContent = {
         id: Date.now(),
@@ -107,7 +109,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       console.error('Error adding content to calendar:', error);
       return null;
     }
-  }, [date, proposedDate]);
+  }, [proposedDate]);
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
