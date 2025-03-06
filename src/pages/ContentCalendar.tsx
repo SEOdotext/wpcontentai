@@ -145,12 +145,14 @@ const ContentCalendar = () => {
   
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
-  // Don't use direct navigation from tabs - they're just for display
-  // Instead, we'll rely only on chevron navigation
   const handleTabChange = (value: string) => {
-    // This function is intentionally not changing the date
-    // to prevent double jumps
-    console.log("Tab changed to", value);
+    // Directly set the date based on the selected tab value
+    if (value === formatTabValue(previousMonth)) {
+      setCurrentDate(previousMonth);
+    } else if (value === formatTabValue(nextMonth)) {
+      setCurrentDate(nextMonth);
+    }
+    // Current month case is already set
   };
 
   const handleContentClick = (content: typeof allContent[0]) => {
@@ -226,13 +228,13 @@ const ContentCalendar = () => {
                         className="w-full"
                       >
                         <TabsList className="grid grid-cols-3 mb-6">
-                          <TabsTrigger value={formatTabValue(previousMonth)} disabled>
+                          <TabsTrigger value={formatTabValue(previousMonth)}>
                             {format(previousMonth, 'MMM yyyy')}
                           </TabsTrigger>
-                          <TabsTrigger value={formatTabValue(currentDate)} disabled>
+                          <TabsTrigger value={formatTabValue(currentDate)}>
                             {format(currentDate, 'MMM yyyy')}
                           </TabsTrigger>
-                          <TabsTrigger value={formatTabValue(nextMonth)} disabled>
+                          <TabsTrigger value={formatTabValue(nextMonth)}>
                             {format(nextMonth, 'MMM yyyy')}
                           </TabsTrigger>
                         </TabsList>
