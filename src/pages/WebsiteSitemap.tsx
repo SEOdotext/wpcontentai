@@ -145,8 +145,8 @@ const WebsiteSitemap = () => {
     <div className="flex min-h-screen bg-background">
       <AppSidebar />
       <div className="flex-1">
-        {/* Fix: The Header component in this project is designed to receive its children as props */}
-        <Header>Website Content</Header>
+        {/* The Header component doesn't accept children props in this project */}
+        <Header />
         
         <main className="container mx-auto py-6 px-4 md:px-6 lg:px-8">
           {!currentWebsite ? (
