@@ -18,6 +18,7 @@ import { WebsitesProvider } from "./context/WebsitesContext";
 import { OrganisationProvider } from "./context/OrganisationContext";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
+import { SidebarProvider } from "./components/ui/sidebar";
 
 const queryClient = new QueryClient();
 
@@ -100,7 +101,7 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
     return <Navigate to="/setup" replace />;
   }
 
-  return <>{children}</>;
+  return <SidebarProvider>{children}</SidebarProvider>;
 };
 
 const App = () => (
