@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,7 +21,6 @@ const Auth = () => {
   const [authError, setAuthError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  // Check if user is already authenticated
   useEffect(() => {
     const checkAuth = async () => {
       const { data } = await supabase.auth.getSession();
@@ -47,7 +45,6 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Check for OAuth errors in URL
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
     const error = query.get('error');
@@ -121,7 +118,6 @@ const Auth = () => {
     }
   };
 
-  // Show loading state while checking authentication
   if (isAuthenticated === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -164,9 +160,9 @@ const Auth = () => {
               {mode === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
             </Button>
             
-            <div className="flex items-center gap-2">
+            <div className="relative flex items-center gap-2 py-2">
               <Separator className="flex-grow" />
-              <span className="text-xs text-muted-foreground">OR</span>
+              <span className="text-xs text-muted-foreground px-2">OR</span>
               <Separator className="flex-grow" />
             </div>
             
