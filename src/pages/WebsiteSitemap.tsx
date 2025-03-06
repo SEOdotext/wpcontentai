@@ -10,7 +10,6 @@ import { Separator } from '@/components/ui/separator';
 import { FileText, ExternalLink, GanttChart, Map } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/EmptyState';
-import { SidebarProvider } from '@/components/ui/sidebar';
 
 interface PageItem {
   id: string;
@@ -143,96 +142,94 @@ const WebsiteSitemap = () => {
   const { currentWebsite } = useWebsites();
 
   return (
-    <SidebarProvider>
-      <div className="flex min-h-screen bg-background">
-        <AppSidebar />
-        <div className="flex-1">
-          <Header />
-          
-          <main className="container mx-auto py-6 px-4 md:px-6 lg:px-8">
-            {!currentWebsite ? (
-              <EmptyState 
-                title="No Website Selected"
-                description="Please select a website from the dropdown in the sidebar to view its content structure."
-                icon={<Map className="h-6 w-6" />}
-                onAction={() => {}}
-                actionLabel="Select Website"
-              />
-            ) : (
-              <Tabs defaultValue="sitemap">
-                <div className="flex items-center justify-between mb-6">
-                  <h1 className="text-2xl font-bold tracking-tight">
-                    {currentWebsite.name} Content
-                  </h1>
-                  <TabsList>
-                    <TabsTrigger value="sitemap">Sitemap View</TabsTrigger>
-                    <TabsTrigger value="list">List View</TabsTrigger>
-                  </TabsList>
-                </div>
-                
-                <TabsContent value="sitemap" className="mt-0">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Website Structure</CardTitle>
-                      <CardDescription>
-                        Overview of your website pages and structure
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ScrollArea className="h-[500px] pr-4">
-                        {mockSitemapData.map(page => (
-                          <PageItem key={page.id} page={page} />
-                        ))}
-                      </ScrollArea>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-                
-                <TabsContent value="list" className="mt-0">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>All Pages</CardTitle>
-                      <CardDescription>
-                        Complete list of pages on your website
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ScrollArea className="h-[500px]">
-                        <div className="space-y-1">
-                          {mockSitemapData.flatMap(page => [
-                            page,
-                            ...(page.children || [])
-                          ]).map((page, i) => (
-                            <div key={page.id}>
-                              {i > 0 && <Separator className="my-2" />}
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center">
-                                  <FileText className="h-4 w-4 mr-2" />
-                                  <span>{page.title}</span>
-                                </div>
-                                <Button 
-                                  variant="ghost" 
-                                  size="icon"
-                                  asChild
-                                >
-                                  <a href={page.url} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="h-4 w-4" />
-                                  </a>
-                                </Button>
+    <div className="flex min-h-screen bg-background">
+      <AppSidebar />
+      <div className="flex-1">
+        <Header />
+        
+        <main className="container mx-auto py-6 px-4 md:px-6 lg:px-8">
+          {!currentWebsite ? (
+            <EmptyState 
+              title="No Website Selected"
+              description="Please select a website from the dropdown in the sidebar to view its content structure."
+              icon={<Map className="h-6 w-6" />}
+              onAction={() => {}}
+              actionLabel="Select Website"
+            />
+          ) : (
+            <Tabs defaultValue="sitemap">
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-2xl font-bold tracking-tight">
+                  {currentWebsite.name} Content
+                </h1>
+                <TabsList>
+                  <TabsTrigger value="sitemap">Sitemap View</TabsTrigger>
+                  <TabsTrigger value="list">List View</TabsTrigger>
+                </TabsList>
+              </div>
+              
+              <TabsContent value="sitemap" className="mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Website Structure</CardTitle>
+                    <CardDescription>
+                      Overview of your website pages and structure
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[500px] pr-4">
+                      {mockSitemapData.map(page => (
+                        <PageItem key={page.id} page={page} />
+                      ))}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="list" className="mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>All Pages</CardTitle>
+                    <CardDescription>
+                      Complete list of pages on your website
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[500px]">
+                      <div className="space-y-1">
+                        {mockSitemapData.flatMap(page => [
+                          page,
+                          ...(page.children || [])
+                        ]).map((page, i) => (
+                          <div key={page.id}>
+                            {i > 0 && <Separator className="my-2" />}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <FileText className="h-4 w-4 mr-2" />
+                                <span>{page.title}</span>
                               </div>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                asChild
+                              >
+                                <a href={page.url} target="_blank" rel="noopener noreferrer">
+                                  <ExternalLink className="h-4 w-4" />
+                                </a>
+                              </Button>
                             </div>
-                          ))}
-                        </div>
-                      </ScrollArea>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </Tabs>
-            )}
-          </main>
-        </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          )}
+        </main>
       </div>
-    </SidebarProvider>
+    </div>
   );
 };
 
