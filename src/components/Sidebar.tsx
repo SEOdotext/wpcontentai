@@ -18,8 +18,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
+import { useWebsites } from '@/context/WebsitesContext';
 
 export function AppSidebar() {
+  const { websites, currentWebsite, setCurrentWebsite, isLoading } = useWebsites();
+
   return (
     <Sidebar className="border-r border-border/50">
       <SidebarHeader className="h-16 flex items-center px-6">
@@ -32,23 +35,27 @@ export function AppSidebar() {
               <Button variant="outline" className="w-full justify-between">
                 <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4" />
-                  <span>My Tech Blog</span>
+                  <span>{isLoading ? 'Loading...' : (currentWebsite?.name || 'Select Website')}</span>
                 </div>
                 <Globe className="h-4 w-4 ml-2 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-[200px]">
-              <DropdownMenuItem>
-                <Globe className="h-4 w-4 mr-2" />
-                <span>My Tech Blog</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Globe className="h-4 w-4 mr-2" />
-                <span>Company Website</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Globe className="h-4 w-4 mr-2" />
-                <span>Personal Portfolio</span>
+              {websites.map((website) => (
+                <DropdownMenuItem 
+                  key={website.id}
+                  onClick={() => setCurrentWebsite(website)}
+                  className={currentWebsite?.id === website.id ? 'bg-muted' : ''}
+                >
+                  <Globe className="h-4 w-4 mr-2" />
+                  <span>{website.name}</span>
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuItem asChild>
+                <Link to="/websites" className="w-full cursor-pointer">
+                  <PlusCircle className="h-4 w-4 mr-2" />
+                  <span>Manage Websites</span>
+                </Link>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
