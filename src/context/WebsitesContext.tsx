@@ -7,7 +7,9 @@ interface Website {
   id: string;
   name: string;
   url: string;
+  company_id?: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 interface WebsitesContextType {
@@ -39,8 +41,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         setIsLoading(true);
         
-        // For now, we'll fetch all websites since we don't have authentication yet
-        // Later this will be filtered by company_id based on the authenticated user
+        // For now, we'll fetch all websites
         const { data, error } = await supabase
           .from('websites')
           .select('*')
@@ -49,11 +50,11 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (error) throw error;
         
         if (data && data.length > 0) {
-          setWebsites(data);
+          setWebsites(data as Website[]);
           
           // Set first website as current if none is selected
           if (!currentWebsite) {
-            setCurrentWebsite(data[0]);
+            setCurrentWebsite(data[0] as Website);
           }
         } else {
           // If no websites exist, create a default one
@@ -69,8 +70,8 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           if (insertError) throw insertError;
           
           if (newWebsite) {
-            setWebsites([newWebsite]);
-            setCurrentWebsite(newWebsite);
+            setWebsites([newWebsite as Website]);
+            setCurrentWebsite(newWebsite as Website);
           }
         }
       } catch (error) {
@@ -78,12 +79,13 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         toast.error('Failed to load websites. Using sample data instead.');
         
         // Fall back to sample data if database fetch fails
-        const sampleWebsites = [
+        const sampleWebsites: Website[] = [
           { 
             id: '1', 
             name: 'My Tech Blog', 
             url: 'https://mytechblog.com',
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }
         ];
         
@@ -112,7 +114,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (error) throw error;
       
       if (data) {
-        setWebsites(prev => [data, ...prev]);
+        setWebsites(prev => [data as Website, ...prev]);
         toast.success('Website added successfully');
         return true;
       }

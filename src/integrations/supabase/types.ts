@@ -35,6 +35,7 @@ export type Database = {
           publication_frequency: number
           subject_matters: Json
           updated_at: string
+          website_id: string | null
           writing_style: string
         }
         Insert: {
@@ -44,6 +45,7 @@ export type Database = {
           publication_frequency?: number
           subject_matters?: Json
           updated_at?: string
+          website_id?: string | null
           writing_style?: string
         }
         Update: {
@@ -53,6 +55,7 @@ export type Database = {
           publication_frequency?: number
           subject_matters?: Json
           updated_at?: string
+          website_id?: string | null
           writing_style?: string
         }
         Relationships: [
@@ -61,6 +64,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publication_settings_website_id_fkey"
+            columns: ["website_id"]
+            isOneToOne: false
+            referencedRelation: "websites"
             referencedColumns: ["id"]
           },
         ]
@@ -96,6 +106,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      websites: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "websites_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
