@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,8 +33,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   const [nextPostDate, setNextPostDate] = useState<Date>(new Date());
   const { publicationFrequency } = useSettings();
 
-  // Calculate the next post date based on content in the calendar
-  useEffect(() => {
+  // Function to calculate the next post date based on content in the calendar
+  const calculateNextPostDate = useCallback(() => {
     try {
       // Get content from localStorage
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
@@ -72,7 +72,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     }
   }, [publicationFrequency]);
 
-  // Load initial mock data with ALL the same future date
+  // Calculate initial next post date when component mounts
+  useEffect(() => {
+    calculateNextPostDate();
+  }, [calculateNextPostDate]);
+
+  // Update all titles with the new next post date
   useEffect(() => {
     if (!nextPostDate) return;
     
@@ -113,9 +118,9 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   }, [nextPostDate]);
 
   // Update all dates when a post is added to the calendar
-  const updateAllDates = () => {
+  const updateAllDates = useCallback(() => {
     try {
-      // Get the current content in the calendar
+      // Get the fresh content from localStorage
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
       
       // Find the latest date
@@ -152,7 +157,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     } catch (error) {
       console.error('Error updating dates:', error);
     }
-  };
+  }, [publicationFrequency]);
 
   const handleSelectTitle = (id: number) => {
     setSelectedTitleId(id === selectedTitleId ? null : id);
@@ -173,7 +178,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
 
   const handleTitleLiked = () => {
     // Update all dates after a post has been liked and added to calendar
-    updateAllDates();
+    calculateNextPostDate();
+    
+    // Add a small delay to ensure the localStorage is updated
+    setTimeout(() => {
+      updateAllDates();
+    }, 200);
   };
 
   return (

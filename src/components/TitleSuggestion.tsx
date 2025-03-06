@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { ThumbsDown, ThumbsUp, Calendar, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -43,6 +44,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   
   const addToCalendar = useCallback((title: string, keywords: Keyword[], selectedDate: Date) => {
     try {
+      // Get the latest calendar content
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
       
       const publicationDate = selectedDate;
@@ -60,8 +62,10 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       
       const updatedContent = [...existingContent, newContent];
       
+      // Sort by date
       updatedContent.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
+      // Save back to localStorage
       localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
       
       console.log('Added content to calendar:', newContent);
