@@ -40,6 +40,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const [disliked, setDisliked] = useState(false);
   const { publicationFrequency } = useSettings();
   
+  // This function finds the latest scheduled date and returns a new date based on publication frequency
   const getNextAvailableDate = useCallback(() => {
     try {
       // Get the current content in the calendar
@@ -52,11 +53,11 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         console.log('No existing content, setting first date to:', newDate);
         return newDate;
       } else {
-        // Find the most future date in the calendar
+        // Always start with current date as the baseline
         let latestDate = new Date();
         
+        // Find the latest date in the calendar content
         existingContent.forEach(item => {
-          // Ensure we have a valid date object
           if (item.date) {
             try {
               const itemDate = new Date(item.date);
@@ -74,7 +75,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
           }
         });
         
-        console.log('Most future date found:', latestDate);
+        console.log('Latest date found:', latestDate);
         
         // Add the publication frequency to the most future date
         const nextDate = addDays(latestDate, publicationFrequency);
@@ -93,10 +94,11 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   
   const addToCalendar = useCallback((title: string, keywords: Keyword[]) => {
     try {
-      // First get the current calendar content
+      // First get the current calendar content - we need to do this AGAIN here, even if we 
+      // did it in getNextAvailableDate, to ensure we're working with the most up-to-date data
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
       
-      // Calculate the next available date - IMPORTANT: this must be calculated AFTER retrieving
+      // Calculate the next available date - IMPORTANT: we calculate this AFTER retrieving
       // the latest content to ensure we're using the most up-to-date information
       const publicationDate = getNextAvailableDate();
       
@@ -106,7 +108,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         title,
         description: `Generated content for: ${title}`,
         dateCreated: new Date().toISOString(),
-        date: publicationDate.toISOString(),
+        date: publicationDate.toISOString(), // Use the calculated next date
         status: 'scheduled',
         keywords,
         isFavorite: false,
@@ -114,6 +116,11 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       
       // Update the calendar content with the new item
       const updatedContent = [...existingContent, newContent];
+      
+      // Sort the content by date before saving
+      updatedContent.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      
+      // Save the updated content
       localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
       
       console.log('Added content to calendar:', newContent);
