@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { FileText, Home, LayoutList, Settings } from 'lucide-react';
+import { FileText, Globe, Home, LayoutList, Settings } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -10,6 +10,13 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 
 export function AppSidebar() {
   return (
@@ -18,6 +25,33 @@ export function AppSidebar() {
         <span className="font-semibold text-lg text-primary">WPcontentAI</span>
       </SidebarHeader>
       <SidebarContent>
+        <div className="px-3 mb-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  <span>My Tech Blog</span>
+                </div>
+                <Globe className="h-4 w-4 ml-2 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[200px]">
+              <DropdownMenuItem>
+                <Globe className="h-4 w-4 mr-2" />
+                <span>My Tech Blog</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Globe className="h-4 w-4 mr-2" />
+                <span>Company Website</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Globe className="h-4 w-4 mr-2" />
+                <span>Personal Portfolio</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton className="gap-2">
