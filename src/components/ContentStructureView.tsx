@@ -47,7 +47,7 @@ const mockTitles = [
   },
   {
     id: 4,
-    title: 'WordPress SEO in 2023: What's Changed and How to Adapt',
+    title: "WordPress SEO in 2023: What's Changed and How to Adapt",
     keywords: mockKeywords.slice(0, 2),
     keywordUsage: 58,
   },
