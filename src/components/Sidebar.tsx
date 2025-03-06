@@ -91,7 +91,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton 
               className="gap-2"
-              isActive={location.pathname === '/sitemap'}
+              isActive={location.pathname.startsWith('/sitemap')}
               asChild
             >
               <Link to="/sitemap">
@@ -104,7 +104,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton 
               className="gap-2"
-              isActive={location.pathname === '/calendar'}
+              isActive={location.pathname.startsWith('/calendar')}
               asChild
             >
               <Link to="/calendar">
@@ -117,7 +117,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton 
               className="gap-2"
-              isActive={location.pathname === '/settings'}
+              isActive={location.pathname.startsWith('/settings')}
               asChild
             >
               <Link to="/settings">
