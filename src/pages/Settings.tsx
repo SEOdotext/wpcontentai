@@ -12,28 +12,16 @@ import { useSettings } from '@/context/SettingsContext';
 import { toast } from 'sonner';
 import { X, Plus } from 'lucide-react';
 
-const writingStyleOptions = [
-  'Informative',
-  'Conversational',
-  'Professional',
-  'Casual',
-  'Formal',
-  'Technical',
-  'Storytelling',
-  'Persuasive',
-  'Analytical'
-];
-
 const Settings = () => {
   const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters } = useSettings();
   const [frequency, setFrequency] = useState(publicationFrequency);
-  const [selectedStyle, setSelectedStyle] = useState(writingStyle);
+  const [styleInput, setStyleInput] = useState(writingStyle);
   const [subjects, setSubjects] = useState<string[]>(subjectMatters);
   const [newSubject, setNewSubject] = useState('');
 
   const handleSave = () => {
     setPublicationFrequency(frequency);
-    setWritingStyle(selectedStyle);
+    setWritingStyle(styleInput);
     setSubjectMatters(subjects);
     toast.success("Settings saved successfully");
   };
@@ -95,19 +83,12 @@ const Settings = () => {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="writingStyle">Writing Style</Label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      {writingStyleOptions.map((style) => (
-                        <Button
-                          key={style}
-                          type="button"
-                          variant={selectedStyle === style ? "default" : "outline"}
-                          className="justify-start"
-                          onClick={() => setSelectedStyle(style)}
-                        >
-                          {style}
-                        </Button>
-                      ))}
-                    </div>
+                    <Input 
+                      id="writingStyle" 
+                      value={styleInput} 
+                      onChange={(e) => setStyleInput(e.target.value)}
+                      placeholder="Enter your preferred writing style"
+                    />
                   </div>
                 </CardContent>
               </Card>
