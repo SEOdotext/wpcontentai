@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import Header from '@/components/Header';
@@ -12,7 +13,7 @@ const recentContent = [
     title: 'How to Optimize Your WordPress Site for Speed',
     description: 'Learn the best practices for improving your WordPress site loading times.',
     dateCreated: 'Oct 15, 2023',
-    status: 'published',
+    contentStatus: 'published',
     keywords: [
       { text: 'wordpress', difficulty: 'medium' },
       { text: 'speed', difficulty: 'easy' },
@@ -22,7 +23,7 @@ const recentContent = [
     title: 'The Ultimate Guide to On-Page SEO',
     description: 'Discover everything you need to know about optimizing your content for search engines.',
     dateCreated: 'Oct 10, 2023',
-    status: 'draft',
+    contentStatus: 'draft',
     keywords: [
       { text: 'seo', difficulty: 'hard' },
       { text: 'content', difficulty: 'easy' },
@@ -52,7 +53,7 @@ const Index = () => {
                         description={content.description}
                         keywords={content.keywords as Keyword[]}
                         dateCreated={content.dateCreated}
-                        status={content.status as 'draft' | 'published' | 'scheduled'}
+                        contentStatus={content.contentStatus as 'draft' | 'published' | 'scheduled'}
                       />
                     ))}
                   </div>

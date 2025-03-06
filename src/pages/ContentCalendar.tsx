@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -25,7 +26,7 @@ interface CalendarContent {
   description: string;
   dateCreated: string;
   date: string;
-  status: 'published' | 'draft' | 'scheduled';
+  contentStatus: 'published' | 'draft' | 'scheduled';
   keywords: Keyword[];
 }
 
@@ -44,7 +45,9 @@ const ContentCalendar = () => {
         const processedContent = parsedContent.map(item => ({
           ...item,
           date: new Date(item.date).toISOString(),
-          dateCreated: item.dateCreated || new Date().toISOString()
+          dateCreated: item.dateCreated || new Date().toISOString(),
+          // Convert status to contentStatus if the old format exists
+          contentStatus: item.contentStatus || item.status
         }));
         
         setAllContent(processedContent);
@@ -186,7 +189,7 @@ const ContentCalendar = () => {
           description={selectedContent.description}
           keywords={selectedContent.keywords}
           dateCreated={selectedContent.dateCreated}
-          status={selectedContent.status}
+          status={selectedContent.contentStatus}
           onClose={() => setSelectedContent(null)}
           onDeleteClick={() => handleDeleteContent(selectedContent.id)}
         />

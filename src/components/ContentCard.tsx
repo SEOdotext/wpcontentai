@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MoreHorizontal, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -21,7 +22,7 @@ export interface ContentCardProps {
   description?: string;
   keywords?: Keyword[];
   dateCreated?: string;
-  status?: 'draft' | 'published' | 'scheduled';
+  contentStatus?: 'draft' | 'published' | 'scheduled';
   onClick?: () => void;
   onEditClick?: () => void;
   onDuplicateClick?: () => void;
@@ -34,7 +35,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
   description,
   keywords = [],
   dateCreated,
-  status = 'draft',
+  contentStatus = 'draft',
   onClick,
   onEditClick,
   onDuplicateClick,
