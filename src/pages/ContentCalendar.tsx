@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { CalendarClock, List, Tag } from 'lucide-react';
+import { CalendarClock, CalendarIcon, List, Tag } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentCard, { Keyword } from '@/components/ContentCard';
@@ -9,13 +9,16 @@ import KeywordGenerator from '@/components/KeywordGenerator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import EmptyState from '@/components/EmptyState';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
 
-// Mock data
+// Mock data with dates added for calendar view
 const recentContent = [
   {
     title: 'How to Optimize Your WordPress Site for Speed',
     description: 'Learn the best practices for improving your WordPress site loading times.',
     dateCreated: 'Oct 15, 2023',
+    date: new Date(2023, 9, 15), // October 15, 2023
     status: 'published',
     keywords: [
       { text: 'wordpress', difficulty: 'medium' },
@@ -27,6 +30,7 @@ const recentContent = [
     title: 'The Ultimate Guide to On-Page SEO',
     description: 'Discover everything you need to know about optimizing your content for search engines.',
     dateCreated: 'Oct 10, 2023',
+    date: new Date(2023, 9, 10), // October 10, 2023
     status: 'draft',
     keywords: [
       { text: 'seo', difficulty: 'hard' },
@@ -41,6 +45,7 @@ const upcomingContent = [
     title: 'WordPress Security: Best Practices for 2023',
     description: 'Keep your WordPress site secure with these essential security tips.',
     dateCreated: 'Nov 5, 2023',
+    date: new Date(2023, 10, 5), // November 5, 2023
     status: 'scheduled',
     keywords: [
       { text: 'wordpress', difficulty: 'medium' },
@@ -52,6 +57,7 @@ const upcomingContent = [
     title: '10 WordPress Plugins Every Business Site Needs',
     description: 'Essential plugins to improve functionality and performance.',
     dateCreated: 'Nov 12, 2023',
+    date: new Date(2023, 10, 12), // November 12, 2023
     status: 'scheduled',
     keywords: [
       { text: 'wordpress', difficulty: 'easy' },
@@ -62,7 +68,44 @@ const upcomingContent = [
   },
 ];
 
+// Combine all content for calendar view
+const allContent = [...recentContent, ...upcomingContent];
+
+// Create mapping of dates to content for calendar view
+const getContentByDate = () => {
+  const contentMap = new Map();
+  
+  allContent.forEach(content => {
+    const dateStr = content.date.toDateString();
+    if (!contentMap.has(dateStr)) {
+      contentMap.set(dateStr, []);
+    }
+    contentMap.get(dateStr).push(content);
+  });
+  
+  return contentMap;
+};
+
 const ContentCalendar = () => {
+  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [activeView, setActiveView] = useState<'calendar' | 'list'>('calendar');
+  const contentByDate = getContentByDate();
+
+  // Function to get content for a specific date
+  const getContentForDate = (date: Date | undefined) => {
+    if (!date) return [];
+    return contentByDate.get(date.toDateString()) || [];
+  };
+
+  // Get selected date content
+  const selectedDateContent = getContentForDate(date);
+
+  // Create date class names to highlight dates with content
+  const getDayClassName = (date: Date) => {
+    const hasContent = contentByDate.has(date.toDateString());
+    return hasContent ? 'bg-primary/20 text-primary-foreground font-medium rounded-full' : '';
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -76,53 +119,119 @@ const ContentCalendar = () => {
                 
                 <Card className="border-0 shadow-elevation">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
+                    <div className="flex justify-between items-center">
+                      <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
+                      <div className="flex space-x-2">
+                        <button 
+                          onClick={() => setActiveView('calendar')}
+                          className={`p-2 rounded-md ${activeView === 'calendar' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+                        >
+                          <CalendarIcon className="h-4 w-4" />
+                          <span className="sr-only">Calendar View</span>
+                        </button>
+                        <button 
+                          onClick={() => setActiveView('list')}
+                          className={`p-2 rounded-md ${activeView === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+                        >
+                          <List className="h-4 w-4" />
+                          <span className="sr-only">List View</span>
+                        </button>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent>
-                    <Tabs defaultValue="recent" className="w-full">
-                      <TabsList className="mb-6 w-full justify-start">
-                        <TabsTrigger value="recent" className="flex items-center gap-2">
-                          <List className="h-4 w-4" />
-                          <span>Recent Content</span>
-                        </TabsTrigger>
-                        <TabsTrigger value="upcoming" className="flex items-center gap-2">
-                          <CalendarClock className="h-4 w-4" />
-                          <span>Upcoming Content</span>
-                        </TabsTrigger>
-                      </TabsList>
-                      
-                      <TabsContent value="recent">
-                        <div className="grid gap-6">
-                          {recentContent.map((content, index) => (
-                            <ContentCard
-                              key={index}
-                              title={content.title}
-                              description={content.description}
-                              keywords={content.keywords as Keyword[]}
-                              dateCreated={content.dateCreated}
-                              status={content.status as 'draft' | 'published' | 'scheduled'}
-                              isFavorite={content.isFavorite}
+                    {activeView === 'calendar' ? (
+                      <div className="space-y-6">
+                        <div className="flex flex-col md:flex-row gap-6">
+                          <div className="md:w-1/2 bg-card rounded-lg shadow-sm p-4">
+                            <Calendar
+                              mode="single"
+                              selected={date}
+                              onSelect={setDate}
+                              className="rounded-md border p-3"
+                              classNames={{
+                                day_today: "bg-secondary text-secondary-foreground",
+                                day: (date) => getDayClassName(date)
+                              }}
                             />
-                          ))}
+                          </div>
+                          <div className="md:w-1/2">
+                            <div className="mb-4">
+                              <h3 className="text-lg font-medium">
+                                {date ? format(date, 'MMMM d, yyyy') : 'Select a date'}
+                              </h3>
+                              <p className="text-sm text-muted-foreground">
+                                {selectedDateContent.length} {selectedDateContent.length === 1 ? 'item' : 'items'}
+                              </p>
+                            </div>
+                            <div className="space-y-4">
+                              {selectedDateContent.length > 0 ? (
+                                selectedDateContent.map((content, index) => (
+                                  <ContentCard
+                                    key={index}
+                                    title={content.title}
+                                    description={content.description}
+                                    keywords={content.keywords as Keyword[]}
+                                    dateCreated={content.dateCreated}
+                                    status={content.status as 'draft' | 'published' | 'scheduled'}
+                                    isFavorite={content.isFavorite}
+                                  />
+                                ))
+                              ) : (
+                                <div className="text-center py-6">
+                                  <p className="text-muted-foreground">No content scheduled for this date</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </TabsContent>
-                      
-                      <TabsContent value="upcoming">
-                        <div className="grid gap-6">
-                          {upcomingContent.map((content, index) => (
-                            <ContentCard
-                              key={index}
-                              title={content.title}
-                              description={content.description}
-                              keywords={content.keywords as Keyword[]}
-                              dateCreated={content.dateCreated}
-                              status={content.status as 'draft' | 'published' | 'scheduled'}
-                              isFavorite={content.isFavorite}
-                            />
-                          ))}
-                        </div>
-                      </TabsContent>
-                    </Tabs>
+                      </div>
+                    ) : (
+                      <Tabs defaultValue="recent" className="w-full">
+                        <TabsList className="mb-6 w-full justify-start">
+                          <TabsTrigger value="recent" className="flex items-center gap-2">
+                            <List className="h-4 w-4" />
+                            <span>Recent Content</span>
+                          </TabsTrigger>
+                          <TabsTrigger value="upcoming" className="flex items-center gap-2">
+                            <CalendarClock className="h-4 w-4" />
+                            <span>Upcoming Content</span>
+                          </TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="recent">
+                          <div className="grid gap-6">
+                            {recentContent.map((content, index) => (
+                              <ContentCard
+                                key={index}
+                                title={content.title}
+                                description={content.description}
+                                keywords={content.keywords as Keyword[]}
+                                dateCreated={content.dateCreated}
+                                status={content.status as 'draft' | 'published' | 'scheduled'}
+                                isFavorite={content.isFavorite}
+                              />
+                            ))}
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value="upcoming">
+                          <div className="grid gap-6">
+                            {upcomingContent.map((content, index) => (
+                              <ContentCard
+                                key={index}
+                                title={content.title}
+                                description={content.description}
+                                keywords={content.keywords as Keyword[]}
+                                dateCreated={content.dateCreated}
+                                status={content.status as 'draft' | 'published' | 'scheduled'}
+                                isFavorite={content.isFavorite}
+                              />
+                            ))}
+                          </div>
+                        </TabsContent>
+                      </Tabs>
+                    )}
                   </CardContent>
                 </Card>
                 
