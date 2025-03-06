@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List } from 'lucide-react';
 import Header from '@/components/Header';
@@ -132,6 +132,16 @@ const ContentCalendar = () => {
   
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
+  useEffect(() => {
+    // No need to do anything else, just having currentDate in the dependency array
+    // will ensure that the previousMonth and nextMonth are recalculated whenever currentDate changes
+  }, [currentDate]);
+  
+  const handleTabChange = (value: string) => {
+    const [year, month] = value.split('-').map(Number);
+    setCurrentDate(new Date(year, month));
+  };
+  
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -194,10 +204,7 @@ const ContentCalendar = () => {
                       <Tabs 
                         defaultValue={formatTabValue(currentDate)} 
                         value={formatTabValue(currentDate)}
-                        onValueChange={(value) => {
-                          const [year, month] = value.split('-').map(Number);
-                          setCurrentDate(new Date(year, month));
-                        }}
+                        onValueChange={handleTabChange}
                         className="w-full"
                       >
                         <TabsList className="grid grid-cols-3 mb-6">
@@ -212,72 +219,200 @@ const ContentCalendar = () => {
                           </TabsTrigger>
                         </TabsList>
                         
-                        {[previousMonth, currentDate, nextMonth].map((date) => (
-                          <TabsContent key={formatTabValue(date)} value={formatTabValue(date)}>
-                            <div className="rounded-md border">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead className="w-[100px]">Date</TableHead>
-                                    <TableHead>Title</TableHead>
-                                    <TableHead className="w-[120px]">Status</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {getContentByMonth(date).length > 0 ? (
-                                    getContentByMonth(date).map((content, index) => (
-                                      <TableRow key={`${formatTabValue(date)}-${index}`}>
-                                        <TableCell className="font-medium">
-                                          {format(content.date, 'd MMM')}
-                                        </TableCell>
-                                        <TableCell>
-                                          <Accordion type="single" collapsible className="w-full">
-                                            <AccordionItem value={`${formatTabValue(date)}-${index}`} className="border-0">
-                                              <AccordionTrigger className="py-0 hover:no-underline">
-                                                <span className="text-sm font-medium">{content.title}</span>
-                                              </AccordionTrigger>
-                                              <AccordionContent>
-                                                <div className="py-2">
-                                                  <p className="text-sm text-muted-foreground mb-3">{content.description}</p>
-                                                  {content.keywords.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1.5 mt-2">
-                                                      {content.keywords.map((keyword, keywordIndex) => (
-                                                        <span key={keywordIndex} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                                                          {keyword.text}
-                                                        </span>
-                                                      ))}
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              </AccordionContent>
-                                            </AccordionItem>
-                                          </Accordion>
-                                        </TableCell>
-                                        <TableCell>
-                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                            content.status === 'published' 
-                                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                              : content.status === 'scheduled'
-                                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                                          }`}>
-                                            {content.status}
-                                          </span>
-                                        </TableCell>
-                                      </TableRow>
-                                    ))
-                                  ) : (
-                                    <TableRow>
-                                      <TableCell colSpan={3} className="h-24 text-center">
-                                        No content scheduled for this month
+                        <TabsContent value={formatTabValue(previousMonth)}>
+                          <div className="rounded-md border">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-[100px]">Date</TableHead>
+                                  <TableHead>Title</TableHead>
+                                  <TableHead className="w-[120px]">Status</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {getContentByMonth(previousMonth).length > 0 ? (
+                                  getContentByMonth(previousMonth).map((content, index) => (
+                                    <TableRow key={`prev-${index}`}>
+                                      <TableCell className="font-medium">
+                                        {format(content.date, 'd MMM')}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Accordion type="single" collapsible className="w-full">
+                                          <AccordionItem value={`prev-${index}`} className="border-0">
+                                            <AccordionTrigger className="py-0 hover:no-underline">
+                                              <span className="text-sm font-medium">{content.title}</span>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                              <div className="py-2">
+                                                <p className="text-sm text-muted-foreground mb-3">{content.description}</p>
+                                                {content.keywords.length > 0 && (
+                                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                                    {content.keywords.map((keyword, keywordIndex) => (
+                                                      <span key={keywordIndex} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                                        {keyword.text}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </AccordionContent>
+                                          </AccordionItem>
+                                        </Accordion>
+                                      </TableCell>
+                                      <TableCell>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                          content.status === 'published' 
+                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                            : content.status === 'scheduled'
+                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                        }`}>
+                                          {content.status}
+                                        </span>
                                       </TableCell>
                                     </TableRow>
-                                  )}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          </TabsContent>
-                        ))}
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={3} className="h-24 text-center">
+                                      No content scheduled for this month
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value={formatTabValue(currentDate)}>
+                          <div className="rounded-md border">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-[100px]">Date</TableHead>
+                                  <TableHead>Title</TableHead>
+                                  <TableHead className="w-[120px]">Status</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {getContentByMonth(currentDate).length > 0 ? (
+                                  getContentByMonth(currentDate).map((content, index) => (
+                                    <TableRow key={`current-${index}`}>
+                                      <TableCell className="font-medium">
+                                        {format(content.date, 'd MMM')}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Accordion type="single" collapsible className="w-full">
+                                          <AccordionItem value={`current-${index}`} className="border-0">
+                                            <AccordionTrigger className="py-0 hover:no-underline">
+                                              <span className="text-sm font-medium">{content.title}</span>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                              <div className="py-2">
+                                                <p className="text-sm text-muted-foreground mb-3">{content.description}</p>
+                                                {content.keywords.length > 0 && (
+                                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                                    {content.keywords.map((keyword, keywordIndex) => (
+                                                      <span key={keywordIndex} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                                        {keyword.text}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </AccordionContent>
+                                          </AccordionItem>
+                                        </Accordion>
+                                      </TableCell>
+                                      <TableCell>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                          content.status === 'published' 
+                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                            : content.status === 'scheduled'
+                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                        }`}>
+                                          {content.status}
+                                        </span>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={3} className="h-24 text-center">
+                                      No content scheduled for this month
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </TabsContent>
+                        
+                        <TabsContent value={formatTabValue(nextMonth)}>
+                          <div className="rounded-md border">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-[100px]">Date</TableHead>
+                                  <TableHead>Title</TableHead>
+                                  <TableHead className="w-[120px]">Status</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {getContentByMonth(nextMonth).length > 0 ? (
+                                  getContentByMonth(nextMonth).map((content, index) => (
+                                    <TableRow key={`next-${index}`}>
+                                      <TableCell className="font-medium">
+                                        {format(content.date, 'd MMM')}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Accordion type="single" collapsible className="w-full">
+                                          <AccordionItem value={`next-${index}`} className="border-0">
+                                            <AccordionTrigger className="py-0 hover:no-underline">
+                                              <span className="text-sm font-medium">{content.title}</span>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                              <div className="py-2">
+                                                <p className="text-sm text-muted-foreground mb-3">{content.description}</p>
+                                                {content.keywords.length > 0 && (
+                                                  <div className="flex flex-wrap gap-1.5 mt-2">
+                                                    {content.keywords.map((keyword, keywordIndex) => (
+                                                      <span key={keywordIndex} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                                        {keyword.text}
+                                                      </span>
+                                                    ))}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </AccordionContent>
+                                          </AccordionItem>
+                                        </Accordion>
+                                      </TableCell>
+                                      <TableCell>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                          content.status === 'published' 
+                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                            : content.status === 'scheduled'
+                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                        }`}>
+                                          {content.status}
+                                        </span>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))
+                                ) : (
+                                  <TableRow>
+                                    <TableCell colSpan={3} className="h-24 text-center">
+                                      No content scheduled for this month
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </TabsContent>
                       </Tabs>
                     ) : (
                       <Tabs defaultValue="recent" className="w-full">
