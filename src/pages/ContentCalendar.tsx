@@ -1,4 +1,4 @@
-
+importtypescript
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
@@ -28,6 +28,8 @@ interface CalendarContent {
   date: string;
   contentStatus: 'published' | 'draft' | 'scheduled';
   keywords: Keyword[];
+  // For backward compatibility with older data
+  status?: 'published' | 'draft' | 'scheduled';
 }
 
 const ContentCalendar = () => {
@@ -47,7 +49,7 @@ const ContentCalendar = () => {
           date: new Date(item.date).toISOString(),
           dateCreated: item.dateCreated || new Date().toISOString(),
           // Convert status to contentStatus if the old format exists
-          contentStatus: item.contentStatus || item.status
+          contentStatus: item.contentStatus || (item.status as CalendarContent['contentStatus'] | undefined)
         }));
         
         setAllContent(processedContent);
@@ -89,6 +91,17 @@ const ContentCalendar = () => {
       const contentYear = contentDate.getFullYear();
       return contentMonth === month && contentYear === year;
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  };
+
+  // Add these handlers for the new features
+  const handleEditContent = (contentId: number) => {
+    // Placeholder for edit functionality
+    toast.info("Edit functionality will be implemented soon");
+  };
+
+  const handleRegenerateContent = (contentId: number) => {
+    // Placeholder for AI regeneration functionality
+    toast.info("AI regeneration will be implemented soon");
   };
 
   return (
@@ -192,6 +205,8 @@ const ContentCalendar = () => {
           status={selectedContent.contentStatus}
           onClose={() => setSelectedContent(null)}
           onDeleteClick={() => handleDeleteContent(selectedContent.id)}
+          onEditClick={() => handleEditContent(selectedContent.id)}
+          onRegenerateClick={() => handleRegenerateContent(selectedContent.id)}
         />
       )}
     </SidebarProvider>

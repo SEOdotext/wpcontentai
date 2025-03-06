@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ArrowLeft, Calendar as CalendarIcon, MoreHorizontal, Tag as TagIcon, X } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Edit, RefreshCw, Trash, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -13,12 +13,6 @@ import {
   SheetOverlay,
   SheetPortal,
 } from '@/components/ui/sheet';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
 interface ContentViewProps {
   title: string;
@@ -29,6 +23,8 @@ interface ContentViewProps {
   status?: 'draft' | 'published' | 'scheduled';
   onClose: () => void;
   onDeleteClick?: () => void;
+  onEditClick?: () => void;
+  onRegenerateClick?: () => void;
 }
 
 const ContentView: React.FC<ContentViewProps> = ({
@@ -40,6 +36,8 @@ const ContentView: React.FC<ContentViewProps> = ({
   status = 'draft',
   onClose,
   onDeleteClick,
+  onEditClick,
+  onRegenerateClick,
 }) => {
   const defaultContent = `<p>This is the default content. You can replace it with your own content.</p>`;
 
@@ -57,26 +55,39 @@ const ContentView: React.FC<ContentViewProps> = ({
                 <CardTitle className="text-xl md:text-2xl">{title}</CardTitle>
               </div>
               <div className="flex items-center gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                      <span className="sr-only">More options</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem 
-                      className="text-destructive"
-                      onClick={onDeleteClick}
-                    >
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {onRegenerateClick && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={onRegenerateClick}
+                    title="Regenerate with AI"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                )}
+                {onEditClick && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={onEditClick}
+                    title="Edit"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                )}
+                {onDeleteClick && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={onDeleteClick}
+                    title="Delete"
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button variant="ghost" size="icon" onClick={onClose}>
                   <X className="h-5 w-5" />
                 </Button>
