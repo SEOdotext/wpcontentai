@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { FileText, Globe, Home, LayoutList, Settings, Calendar } from 'lucide-react';
+import { Calendar, FileText, Globe, Home, LayoutList, Settings, PlusCircle } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -67,6 +67,14 @@ export function AppSidebar() {
               <Link to="/calendar">
                 <Calendar className="h-4 w-4" />
                 <span>Content Calendar</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton className="gap-2" asChild>
+              <Link to="/create">
+                <PlusCircle className="h-4 w-4" />
+                <span>Content Creation</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
