@@ -1,11 +1,12 @@
 
 import React, { useState, useCallback } from 'react';
-import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { Check, Copy, ThumbsDown, ThumbsUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import KeywordBadge, { KeywordDifficulty } from './KeywordBadge';
-import { addMonths } from 'date-fns';
-import { useToast } from '@/components/ui/use-toast';
+import { addDays, format } from 'date-fns';
+import { toast } from 'sonner';
+import { useSettings } from '@/context/SettingsContext';
 
 export interface Keyword {
   text: string;
@@ -34,7 +35,25 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
-  const { toast } = useToast();
+  const { publicationFrequency } = useSettings();
+  
+  // Calculate proposed publication date based on existing calendar content
+  const proposedDate = useCallback(() => {
+    const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
+    
+    if (existingContent.length === 0) {
+      // If no content exists, start with today + frequency
+      return addDays(new Date(), publicationFrequency);
+    } else {
+      // Sort by date and get the latest date
+      const sortedContent = [...existingContent].sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      
+      // Add frequency days to the latest date
+      return addDays(new Date(sortedContent[0].date), publicationFrequency);
+    }
+  }, [publicationFrequency]);
   
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -47,13 +66,16 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     // Get existing calendar content
     const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
     
+    // Calculate publication date
+    const publicationDate = proposedDate();
+    
     // Create new content entry
     const newContent = {
       id: Date.now(),
       title,
       description: `Generated content for: ${title}`,
       dateCreated: new Date().toISOString(),
-      date: addMonths(new Date(), 1).toISOString(), // Schedule for next month
+      date: publicationDate.toISOString(),
       status: 'scheduled',
       keywords,
       isFavorite: false,
@@ -63,7 +85,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     localStorage.setItem('calendarContent', JSON.stringify([...existingContent, newContent]));
     
     return newContent;
-  }, []);
+  }, [proposedDate]);
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -74,10 +96,12 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       if (disliked) setDisliked(false);
       
       const newContent = addToCalendar(title, keywords);
-      toast({
-        title: "Added to Calendar",
-        description: `"${title}" has been scheduled for ${new Date(newContent.date).toLocaleDateString()}`,
-      });
+      toast.success(
+        `"${title}" has been scheduled for ${format(new Date(newContent.date), 'MMM dd, yyyy')}`,
+        {
+          description: "Content added to your calendar"
+        }
+      );
       
       // Remove from suggestions list
       if (onRemove) {
@@ -106,6 +130,9 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     if (keywordUsage >= 50) return "text-amber-600 dark:text-amber-400";
     return "text-red-600 dark:text-red-400";
   };
+
+  // Format the proposed date
+  const formattedProposedDate = format(proposedDate(), 'MMM dd, yyyy');
 
   return (
     <div 
@@ -141,6 +168,11 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
           )}>
             {keywordUsage}% keywords
           </span>
+          
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Calendar className="h-3 w-3" />
+            <span>{formattedProposedDate}</span>
+          </div>
         </div>
         
         <div className="flex items-center gap-1">
