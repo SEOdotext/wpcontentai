@@ -1,13 +1,11 @@
 
 import React, { useState } from 'react';
-import { Plus, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TitleSuggestion, { Keyword } from './TitleSuggestion';
 import EmptyState from './EmptyState';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
+import { format, addMonths, subMonths } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -60,7 +58,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   const [selectedTitleId, setSelectedTitleId] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [titles, setTitles] = useState(initialMockTitles);
-  const [date, setDate] = useState<Date>(new Date());
+  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
   const handleSelectTitle = (id: number) => {
     setSelectedTitleId(id === selectedTitleId ? null : id);
@@ -79,6 +77,14 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     ));
   };
 
+  const goToPreviousMonth = () => {
+    setCurrentMonth(prevMonth => subMonths(prevMonth, 1));
+  };
+
+  const goToNextMonth = () => {
+    setCurrentMonth(prevMonth => addMonths(prevMonth, 1));
+  };
+
   return (
     <div className={className}>
       <Card className="border-0 shadow-elevation mb-8">
@@ -86,29 +92,27 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           <div className="flex justify-between items-center">
             <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
             <div className="flex items-center space-x-2">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className={cn(
-                      "justify-start text-left font-normal",
-                      !date && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date ? format(date, 'MMMM yyyy') : <span>Pick a date</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={date}
-                    onSelect={(newDate) => newDate && setDate(newDate)}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </PopoverContent>
-              </Popover>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={goToPreviousMonth}
+                className="h-8 w-8"
+              >
+                <ChevronLeft className="h-4 w-4" />
+                <span className="sr-only">Previous month</span>
+              </Button>
+              <span className="text-sm font-medium">
+                {format(currentMonth, 'MMMM yyyy')}
+              </span>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={goToNextMonth}
+                className="h-8 w-8"
+              >
+                <ChevronRight className="h-4 w-4" />
+                <span className="sr-only">Next month</span>
+              </Button>
             </div>
           </div>
         </CardHeader>
