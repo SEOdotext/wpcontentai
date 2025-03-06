@@ -1,13 +1,13 @@
 
 import React, { useState } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { CalendarClock, Calendar as CalendarIcon, List, Tag } from 'lucide-react';
+import { CalendarClock, List, Tag } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentCard, { Keyword } from '@/components/ContentCard';
 import KeywordGenerator from '@/components/KeywordGenerator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import EmptyState from '@/components/EmptyState';
 
 // Mock data
@@ -70,58 +70,70 @@ const ContentCalendar = () => {
         <div className="flex-1 flex flex-col">
           <Header />
           <main className="flex-1 px-4 py-6 overflow-y-auto">
-            <div className="max-w-6xl mx-auto space-y-6">
-              <h1 className="text-2xl font-semibold">Content Calendar</h1>
-              
-              <Tabs defaultValue="recent" className="w-full">
-                <TabsList className="mb-4">
-                  <TabsTrigger value="recent" className="flex items-center gap-2">
-                    <List className="h-4 w-4" />
-                    <span>Recent Content</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="upcoming" className="flex items-center gap-2">
-                    <CalendarClock className="h-4 w-4" />
-                    <span>Upcoming Content</span>
-                  </TabsTrigger>
-                </TabsList>
+            <div className="max-w-6xl mx-auto space-y-8">
+              <div className="flex flex-col gap-4">
+                <h1 className="text-2xl font-bold">Content Calendar</h1>
                 
-                <TabsContent value="recent">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {recentContent.map((content, index) => (
-                      <ContentCard
-                        key={index}
-                        title={content.title}
-                        description={content.description}
-                        keywords={content.keywords as Keyword[]}
-                        dateCreated={content.dateCreated}
-                        status={content.status as 'draft' | 'published' | 'scheduled'}
-                        isFavorite={content.isFavorite}
-                      />
-                    ))}
-                  </div>
-                </TabsContent>
+                <Card className="border-0 shadow-elevation">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Tabs defaultValue="recent" className="w-full">
+                      <TabsList className="mb-6 w-full justify-start">
+                        <TabsTrigger value="recent" className="flex items-center gap-2">
+                          <List className="h-4 w-4" />
+                          <span>Recent Content</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="upcoming" className="flex items-center gap-2">
+                          <CalendarClock className="h-4 w-4" />
+                          <span>Upcoming Content</span>
+                        </TabsTrigger>
+                      </TabsList>
+                      
+                      <TabsContent value="recent">
+                        <div className="grid gap-6">
+                          {recentContent.map((content, index) => (
+                            <ContentCard
+                              key={index}
+                              title={content.title}
+                              description={content.description}
+                              keywords={content.keywords as Keyword[]}
+                              dateCreated={content.dateCreated}
+                              status={content.status as 'draft' | 'published' | 'scheduled'}
+                              isFavorite={content.isFavorite}
+                            />
+                          ))}
+                        </div>
+                      </TabsContent>
+                      
+                      <TabsContent value="upcoming">
+                        <div className="grid gap-6">
+                          {upcomingContent.map((content, index) => (
+                            <ContentCard
+                              key={index}
+                              title={content.title}
+                              description={content.description}
+                              keywords={content.keywords as Keyword[]}
+                              dateCreated={content.dateCreated}
+                              status={content.status as 'draft' | 'published' | 'scheduled'}
+                              isFavorite={content.isFavorite}
+                            />
+                          ))}
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
                 
-                <TabsContent value="upcoming">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {upcomingContent.map((content, index) => (
-                      <ContentCard
-                        key={index}
-                        title={content.title}
-                        description={content.description}
-                        keywords={content.keywords as Keyword[]}
-                        dateCreated={content.dateCreated}
-                        status={content.status as 'draft' | 'published' | 'scheduled'}
-                        isFavorite={content.isFavorite}
-                      />
-                    ))}
-                  </div>
-                </TabsContent>
-              </Tabs>
-              
-              <div className="mt-8">
-                <h2 className="text-lg font-medium mb-4">Keyword Generator</h2>
-                <Card>
-                  <CardContent className="p-4">
+                <Card className="border-0 shadow-elevation">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-lg font-medium flex items-center gap-2">
+                      <Tag className="h-4 w-4" />
+                      Keyword Generator
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
                     <KeywordGenerator />
                   </CardContent>
                 </Card>
