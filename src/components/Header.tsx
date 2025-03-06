@@ -11,8 +11,19 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { useLocation } from 'react-router-dom';
 
 const Header: React.FC = () => {
+  const location = useLocation();
+  
+  // Determine page title based on current route
+  const getPageTitle = () => {
+    const path = location.pathname;
+    if (path === '/calendar') return 'Content Calendar';
+    if (path === '/') return 'Dashboard';
+    return '';
+  };
+
   return (
     <header className="w-full h-16 border-b border-border/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
       <div className="h-full flex items-center justify-between px-4 lg:px-6">
@@ -25,6 +36,7 @@ const Header: React.FC = () => {
               </Button>
             </SidebarTrigger>
           </div>
+          <h1 className="text-xl font-semibold">{getPageTitle()}</h1>
         </div>
         
         <div className="flex items-center gap-4">

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List } from 'lucide-react';
@@ -26,12 +25,10 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { format, addMonths, subMonths, getDate, parseISO } from 'date-fns';
 
-// Get the current date for reference
 const currentDate = new Date();
 const currentMonth = currentDate.getMonth();
 const currentYear = currentDate.getFullYear();
 
-// Create content with dates relative to now
 const recentContent = [
   {
     id: 1,
@@ -157,7 +154,6 @@ const ContentCalendar = () => {
   };
 
   const handleToggleFavorite = (contentId: number) => {
-    // In a real app, this would update the database
     console.log(`Toggle favorite for content ${contentId}`);
   };
   
@@ -170,7 +166,6 @@ const ContentCalendar = () => {
           <main className="flex-1 px-4 py-6 overflow-y-auto">
             <div className="max-w-6xl mx-auto space-y-8">
               <div className="flex flex-col gap-4">
-                <h1 className="text-2xl font-bold">Content Calendar</h1>
                 
                 <Card className="border-0 shadow-elevation">
                   <CardHeader className="pb-2">
