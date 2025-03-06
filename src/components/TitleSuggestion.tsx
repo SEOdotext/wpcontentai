@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { ThumbsDown, ThumbsUp, Calendar, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,6 +23,7 @@ interface TitleSuggestionProps {
   className?: string;
   date?: Date;
   onUpdateDate?: (date: Date) => void;
+  onLiked?: () => void;
 }
 
 const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
@@ -35,92 +35,33 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   className,
   date = new Date(),
   onUpdateDate,
+  onLiked,
 }) => {
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
   const { publicationFrequency } = useSettings();
   
-  // This function finds the latest scheduled date and returns a new date based on publication frequency
-  const getNextAvailableDate = useCallback(() => {
+  const addToCalendar = useCallback((title: string, keywords: Keyword[], selectedDate: Date) => {
     try {
-      // Get the current content in the calendar
-      const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
-      console.log('Retrieved calendar content for date calculation:', existingContent);
-      
-      if (existingContent.length === 0) {
-        // If no content exists yet, start with today + frequency
-        const newDate = addDays(new Date(), publicationFrequency);
-        console.log('No existing content, setting first date to:', newDate);
-        return newDate;
-      } else {
-        // Always start with current date as the baseline
-        let latestDate = new Date();
-        
-        // Find the latest date in the calendar content
-        existingContent.forEach(item => {
-          if (item.date) {
-            try {
-              const itemDate = new Date(item.date);
-              
-              // Only consider valid dates
-              if (!isNaN(itemDate.getTime())) {
-                if (isAfter(itemDate, latestDate)) {
-                  latestDate = itemDate;
-                  console.log('Found later date:', itemDate);
-                }
-              }
-            } catch (err) {
-              console.error('Error parsing date:', item.date, err);
-            }
-          }
-        });
-        
-        console.log('Latest date found:', latestDate);
-        
-        // Add the publication frequency to the most future date
-        const nextDate = addDays(latestDate, publicationFrequency);
-        console.log('Next date calculated:', nextDate, 'with frequency:', publicationFrequency);
-        
-        return nextDate;
-      }
-    } catch (error) {
-      console.error('Error calculating next available date:', error);
-      // Fallback to adding days to current date
-      const fallbackDate = addDays(new Date(), publicationFrequency);
-      console.log('Using fallback date:', fallbackDate);
-      return fallbackDate;
-    }
-  }, [publicationFrequency]);
-  
-  const addToCalendar = useCallback((title: string, keywords: Keyword[]) => {
-    try {
-      // First get the current calendar content - we need to do this AGAIN here, even if we 
-      // did it in getNextAvailableDate, to ensure we're working with the most up-to-date data
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
       
-      // Calculate the next available date - IMPORTANT: we calculate this AFTER retrieving
-      // the latest content to ensure we're using the most up-to-date information
-      const publicationDate = getNextAvailableDate();
+      const publicationDate = selectedDate;
       
-      // Create the new content object
       const newContent = {
         id: Date.now(),
         title,
         description: `Generated content for: ${title}`,
         dateCreated: new Date().toISOString(),
-        date: publicationDate.toISOString(), // Use the calculated next date
+        date: publicationDate.toISOString(),
         status: 'scheduled',
         keywords,
         isFavorite: false,
       };
       
-      // Update the calendar content with the new item
       const updatedContent = [...existingContent, newContent];
       
-      // Sort the content by date before saving
       updatedContent.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
-      // Save the updated content
       localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
       
       console.log('Added content to calendar:', newContent);
@@ -131,7 +72,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       console.error('Error adding content to calendar:', error);
       return null;
     }
-  }, [getNextAvailableDate]);
+  }, []);
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -140,7 +81,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       setLiked(true);
       if (disliked) setDisliked(false);
       
-      const newContent = addToCalendar(title, keywords);
+      const newContent = addToCalendar(title, keywords, date);
       if (newContent) {
         toast.success(
           `"${title}" has been scheduled for ${format(new Date(newContent.date), 'MMM dd, yyyy')}`,
@@ -148,6 +89,10 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
             description: "Content added to your calendar"
           }
         );
+        
+        if (onLiked) {
+          onLiked();
+        }
         
         if (onRemove) {
           setTimeout(onRemove, 300);
