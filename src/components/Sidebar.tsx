@@ -131,7 +131,7 @@ export function AppSidebar() {
       
       <SidebarFooter>
         <SidebarMenu>
-          {/* Footer content if needed */}
+          {/* Footer content */}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
