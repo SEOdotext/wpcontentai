@@ -12,30 +12,83 @@ import WebsiteManager from "./pages/WebsiteManager";
 import WebsiteSitemap from "./pages/WebsiteSitemap";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
+import OrganisationSetup from "./pages/OrganisationSetup";
 import { SettingsProvider } from "./context/SettingsContext";
 import { WebsitesProvider } from "./context/WebsitesContext";
+import { OrganisationProvider } from "./context/OrganisationContext";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 
 const queryClient = new QueryClient();
 
-// Protected Route component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+// Protected Route component that checks for organisation setup
+const ProtectedRoute = ({ children, requireOrg = true }: { children: React.ReactNode, requireOrg?: boolean }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [hasOrganisation, setHasOrganisation] = useState<boolean | null>(null);
+  const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAuthenticated(!!session);
-    });
+    const checkAuth = async () => {
+      try {
+        setIsChecking(true);
+        
+        // Check if user is logged in
+        const { data: sessionData } = await supabase.auth.getSession();
+        const isLoggedIn = !!sessionData.session;
+        setIsAuthenticated(isLoggedIn);
+        
+        if (isLoggedIn && requireOrg) {
+          // Check if user has an organisation
+          const { data: userData, error } = await supabase
+            .from('user_profiles')
+            .select('organisation_id')
+            .eq('id', sessionData.session!.user.id)
+            .single();
+          
+          if (error) {
+            console.error("Error checking user profile:", error);
+            setHasOrganisation(false);
+          } else {
+            setHasOrganisation(!!userData.organisation_id);
+          }
+        }
+      } catch (error) {
+        console.error("Error in auth check:", error);
+      } finally {
+        setIsChecking(false);
+      }
+    };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setIsAuthenticated(!!session);
+      
+      if (session && requireOrg) {
+        try {
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .select('organisation_id')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (error) {
+            console.error("Error checking user profile:", error);
+            setHasOrganisation(false);
+          } else {
+            setHasOrganisation(!!data.organisation_id);
+          }
+        } catch (error) {
+          console.error("Error in auth state change:", error);
+          setHasOrganisation(false);
+        }
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [requireOrg]);
 
-  if (isAuthenticated === null) {
+  if (isChecking) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   }
 
@@ -43,31 +96,38 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/auth" replace />;
   }
 
+  if (requireOrg && !hasOrganisation) {
+    return <Navigate to="/setup" replace />;
+  }
+
   return <>{children}</>;
 };
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <WebsitesProvider>
-      <SettingsProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-              <Route path="/calendar" element={<ProtectedRoute><ContentCalendar /></ProtectedRoute>} />
-              <Route path="/create" element={<ProtectedRoute><ContentCreation /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-              <Route path="/websites" element={<ProtectedRoute><WebsiteManager /></ProtectedRoute>} />
-              <Route path="/sitemap" element={<ProtectedRoute><WebsiteSitemap /></ProtectedRoute>} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </SettingsProvider>
-    </WebsitesProvider>
+    <BrowserRouter>
+      <OrganisationProvider>
+        <WebsitesProvider>
+          <SettingsProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/setup" element={<ProtectedRoute requireOrg={false}><OrganisationSetup /></ProtectedRoute>} />
+                <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+                <Route path="/calendar" element={<ProtectedRoute><ContentCalendar /></ProtectedRoute>} />
+                <Route path="/create" element={<ProtectedRoute><ContentCreation /></ProtectedRoute>} />
+                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                <Route path="/websites" element={<ProtectedRoute><WebsiteManager /></ProtectedRoute>} />
+                <Route path="/sitemap" element={<ProtectedRoute><WebsiteSitemap /></ProtectedRoute>} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </TooltipProvider>
+          </SettingsProvider>
+        </WebsitesProvider>
+      </OrganisationProvider>
+    </BrowserRouter>
   </QueryClientProvider>
 );
 

@@ -9,7 +9,7 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      companies: {
+      organisations: {
         Row: {
           created_at: string
           id: string
@@ -29,9 +29,9 @@ export type Database = {
       }
       publication_settings: {
         Row: {
-          company_id: string | null
           created_at: string
           id: string
+          organisation_id: string | null
           publication_frequency: number
           subject_matters: Json
           updated_at: string
@@ -39,9 +39,9 @@ export type Database = {
           writing_style: string
         }
         Insert: {
-          company_id?: string | null
           created_at?: string
           id?: string
+          organisation_id?: string | null
           publication_frequency?: number
           subject_matters?: Json
           updated_at?: string
@@ -49,9 +49,9 @@ export type Database = {
           writing_style?: string
         }
         Update: {
-          company_id?: string | null
           created_at?: string
           id?: string
+          organisation_id?: string | null
           publication_frequency?: number
           subject_matters?: Json
           updated_at?: string
@@ -60,10 +60,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "publication_settings_company_id_fkey"
-            columns: ["company_id"]
+            foreignKeyName: "publication_settings_organisation_id_fkey"
+            columns: ["organisation_id"]
             isOneToOne: false
-            referencedRelation: "companies"
+            referencedRelation: "organisations"
             referencedColumns: ["id"]
           },
           {
@@ -77,73 +77,73 @@ export type Database = {
       }
       user_profiles: {
         Row: {
-          company_id: string | null
           created_at: string
           email: string
           first_name: string | null
           id: string
           last_name: string | null
+          organisation_id: string | null
           role: string
         }
         Insert: {
-          company_id?: string | null
           created_at?: string
           email: string
           first_name?: string | null
           id: string
           last_name?: string | null
+          organisation_id?: string | null
           role?: string
         }
         Update: {
-          company_id?: string | null
           created_at?: string
           email?: string
           first_name?: string | null
           id?: string
           last_name?: string | null
+          organisation_id?: string | null
           role?: string
         }
         Relationships: [
           {
-            foreignKeyName: "user_profiles_company_id_fkey"
-            columns: ["company_id"]
+            foreignKeyName: "user_profiles_organisation_id_fkey"
+            columns: ["organisation_id"]
             isOneToOne: false
-            referencedRelation: "companies"
+            referencedRelation: "organisations"
             referencedColumns: ["id"]
           },
         ]
       }
       websites: {
         Row: {
-          company_id: string | null
           created_at: string
           id: string
           name: string
+          organisation_id: string | null
           updated_at: string
           url: string
         }
         Insert: {
-          company_id?: string | null
           created_at?: string
           id?: string
           name: string
+          organisation_id?: string | null
           updated_at?: string
           url: string
         }
         Update: {
-          company_id?: string | null
           created_at?: string
           id?: string
           name?: string
+          organisation_id?: string | null
           updated_at?: string
           url?: string
         }
         Relationships: [
           {
-            foreignKeyName: "websites_company_id_fkey"
-            columns: ["company_id"]
+            foreignKeyName: "websites_organisation_id_fkey"
+            columns: ["organisation_id"]
             isOneToOne: false
-            referencedRelation: "companies"
+            referencedRelation: "organisations"
             referencedColumns: ["id"]
           },
         ]
@@ -156,12 +156,12 @@ export type Database = {
       get_current_user_profile: {
         Args: Record<PropertyKey, never>
         Returns: {
-          company_id: string | null
           created_at: string
           email: string
           first_name: string | null
           id: string
           last_name: string | null
+          organisation_id: string | null
           role: string
         }[]
       }

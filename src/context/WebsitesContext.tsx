@@ -7,7 +7,7 @@ interface Website {
   id: string;
   name: string;
   url: string;
-  company_id?: string | null;
+  organisation_id?: string | null;
   created_at: string;
   updated_at?: string;
 }

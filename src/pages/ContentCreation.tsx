@@ -17,7 +17,7 @@ const ContentCreation = () => {
   const { currentWebsite, isLoading: websitesLoading } = useWebsites();
   const { writingStyle, subjectMatters, isLoading: settingsLoading } = useSettings();
   const [hasError, setHasError] = useState<boolean>(false);
-  const [missingCompany, setMissingCompany] = useState<boolean>(false);
+  const [missingOrganisation, setMissingOrganisation] = useState<boolean>(false);
 
   // Adding a console log to help with debugging
   console.log('ContentCreation rendering, currentWebsite:', currentWebsite?.name);
@@ -38,17 +38,17 @@ const ContentCreation = () => {
           setHasError(false);
         }
 
-        // Check specifically for missing company
-        if (currentWebsite && !currentWebsite.company_id) {
-          console.log('Website missing company_id:', currentWebsite);
-          setMissingCompany(true);
+        // Check specifically for missing organisation
+        if (currentWebsite && !currentWebsite.organisation_id) {
+          console.log('Website missing organisation_id:', currentWebsite);
+          setMissingOrganisation(true);
           // Only show toast once when detected
-          toast.info("No company associated with this website. Some features may be limited.", {
-            id: "missing-company-warning",
+          toast.info("No organisation associated with this website. Some features may be limited.", {
+            id: "missing-organisation-warning",
             duration: 5000,
           });
         } else {
-          setMissingCompany(false);
+          setMissingOrganisation(false);
         }
       }
     };
@@ -85,12 +85,12 @@ const ContentCreation = () => {
                     If this persists, please try selecting a different website or refreshing the page.
                   </AlertDescription>
                 </Alert>
-              ) : missingCompany ? (
+              ) : missingOrganisation ? (
                 <Alert variant="default" className="mb-6">
                   <Info className="h-4 w-4" />
-                  <AlertTitle>No Company Associated</AlertTitle>
+                  <AlertTitle>No Organisation Associated</AlertTitle>
                   <AlertDescription>
-                    This website doesn't have a company associated with it. 
+                    This website doesn't have an organisation associated with it. 
                     You can still create content, but some features may be limited.
                   </AlertDescription>
                 </Alert>
