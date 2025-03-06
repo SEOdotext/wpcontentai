@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { MoreHorizontal, Star } from 'lucide-react';
+import { MoreHorizontal, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import KeywordBadge, { KeywordDifficulty } from './KeywordBadge';
@@ -23,12 +22,10 @@ export interface ContentCardProps {
   keywords?: Keyword[];
   dateCreated?: string;
   status?: 'draft' | 'published' | 'scheduled';
-  isFavorite?: boolean;
   onClick?: () => void;
   onEditClick?: () => void;
   onDuplicateClick?: () => void;
   onDeleteClick?: () => void;
-  onFavoriteToggle?: () => void;
   className?: string;
 }
 
@@ -38,20 +35,12 @@ const ContentCard: React.FC<ContentCardProps> = ({
   keywords = [],
   dateCreated,
   status = 'draft',
-  isFavorite = false,
   onClick,
   onEditClick,
   onDuplicateClick,
   onDeleteClick,
-  onFavoriteToggle,
   className,
 }) => {
-  const statusStyles = {
-    draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-    published: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-    scheduled: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  };
-
   return (
     <div 
       className={cn(
@@ -62,32 +51,24 @@ const ContentCard: React.FC<ContentCardProps> = ({
     >
       <div className="flex justify-between items-start mb-2">
         <div className="flex items-center">
-          {status && (
-            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', statusStyles[status])}>
-              {status}
-            </span>
-          )}
           {dateCreated && (
-            <span className="text-xs text-muted-foreground ml-2">
+            <span className="text-xs text-muted-foreground">
               {dateCreated}
             </span>
           )}
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
           <Button 
             variant="ghost" 
-            size="icon" 
-            className={cn(
-              'h-8 w-8', 
-              isFavorite ? 'text-amber-500' : 'text-muted-foreground'
-            )}
+            size="icon"
+            className="h-8 w-8 text-destructive hover:bg-destructive/10"
             onClick={(e) => {
               e.stopPropagation();
-              onFavoriteToggle?.();
+              onDeleteClick?.();
             }}
           >
-            <Star className="h-4 w-4" />
-            <span className="sr-only">Favorite</span>
+            <Minus className="h-4 w-4" />
+            <span className="sr-only">Remove from calendar</span>
           </Button>
           
           <DropdownMenu>
@@ -114,16 +95,6 @@ const ContentCard: React.FC<ContentCardProps> = ({
                 onDuplicateClick?.();
               }}>
                 Duplicate
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                className="text-destructive"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDeleteClick?.();
-                }}
-              >
-                Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

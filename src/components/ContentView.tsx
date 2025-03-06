@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { ArrowLeft, Calendar, Star, Tag, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Tag, X, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -21,9 +20,8 @@ interface ContentViewProps {
   keywords?: Keyword[];
   dateCreated?: string;
   status?: 'draft' | 'published' | 'scheduled';
-  isFavorite?: boolean;
   onClose: () => void;
-  onFavoriteToggle?: () => void;
+  onDeleteClick?: () => void;
 }
 
 const ContentView: React.FC<ContentViewProps> = ({
@@ -33,34 +31,9 @@ const ContentView: React.FC<ContentViewProps> = ({
   keywords = [],
   dateCreated,
   status = 'draft',
-  isFavorite = false,
   onClose,
-  onFavoriteToggle,
+  onDeleteClick,
 }) => {
-  const statusStyles = {
-    draft: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-    published: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-    scheduled: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  };
-
-  const defaultContent = `
-    <p>This is an example of full content that would be displayed in the content view. 
-    In a real application, this would be loaded from a database or CMS and could include 
-    formatted HTML content with headings, paragraphs, lists, images, and more.</p>
-    
-    <h2>Sample Heading</h2>
-    <p>The article continues with more detailed information about the topic.</p>
-    
-    <ul>
-      <li>Point one about the topic</li>
-      <li>Another important consideration</li>
-      <li>Final key takeaway</li>
-    </ul>
-    
-    <p>This is just placeholder content to demonstrate how the full article would look 
-    when displayed in this component.</p>
-  `;
-
   return (
     <Sheet open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <SheetPortal>
@@ -77,13 +50,12 @@ const ContentView: React.FC<ContentViewProps> = ({
               <div className="flex items-center gap-2">
                 <Button 
                   variant="ghost" 
-                  size="icon" 
-                  className={cn(
-                    isFavorite ? 'text-amber-500' : 'text-muted-foreground'
-                  )}
-                  onClick={onFavoriteToggle}
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                  onClick={() => onDeleteClick?.()}
                 >
-                  <Star className="h-5 w-5" />
+                  <Minus className="h-4 w-4" />
+                  <span className="sr-only">Remove from calendar</span>
                 </Button>
                 <Button variant="ghost" size="icon" onClick={onClose}>
                   <X className="h-5 w-5" />
@@ -92,12 +64,6 @@ const ContentView: React.FC<ContentViewProps> = ({
             </CardHeader>
             
             <div className="px-4 md:px-6 flex flex-wrap gap-3 items-center">
-              {status && (
-                <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', statusStyles[status])}>
-                  {status}
-                </span>
-              )}
-              
               {dateCreated && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Calendar className="h-3 w-3" />
