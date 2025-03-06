@@ -1,5 +1,6 @@
+
 import React, { useState, useCallback } from 'react';
-import { ThumbsDown, ThumbsUp, Calendar } from 'lucide-react';
+import { ThumbsDown, ThumbsUp, Calendar, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import KeywordBadge, { KeywordDifficulty } from './KeywordBadge';
