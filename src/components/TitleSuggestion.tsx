@@ -4,7 +4,7 @@ import { ThumbsDown, ThumbsUp, Calendar, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import KeywordBadge, { KeywordDifficulty } from './KeywordBadge';
-import { addDays, format } from 'date-fns';
+import { addDays, format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { useSettings } from '@/context/SettingsContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -41,21 +41,39 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const { publicationFrequency } = useSettings();
   
   const proposedDate = useCallback(() => {
-    const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
-    
-    if (existingContent.length === 0) {
-      return addDays(new Date(), publicationFrequency);
-    } else {
-      const sortedContent = [...existingContent].sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
+    try {
+      const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
       
-      // If we have content in the array, use the last date
-      if (sortedContent.length > 0) {
-        return addDays(new Date(sortedContent[0].date), publicationFrequency);
-      } else {
+      if (existingContent.length === 0) {
         return addDays(new Date(), publicationFrequency);
+      } else {
+        // Convert all dates to Date objects for proper comparison
+        const contentWithParsedDates = existingContent.map(item => ({
+          ...item,
+          parsedDate: new Date(item.date)
+        }));
+        
+        // Sort by date (newest first)
+        const sortedContent = contentWithParsedDates.sort((a, b) => 
+          b.parsedDate.getTime() - a.parsedDate.getTime()
+        );
+        
+        console.log('Sorted content dates:', sortedContent.map(item => item.parsedDate));
+        
+        // Get the most future date
+        const latestDate = sortedContent[0].parsedDate;
+        console.log('Latest date found:', latestDate);
+        
+        // Add the publication frequency to the most future date
+        const nextDate = addDays(latestDate, publicationFrequency);
+        console.log('Next proposed date:', nextDate);
+        
+        return nextDate;
       }
+    } catch (error) {
+      console.error('Error calculating proposed date:', error);
+      // Fallback to adding days to current date
+      return addDays(new Date(), publicationFrequency);
     }
   }, [publicationFrequency]);
   
@@ -169,7 +187,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
                 selected={date}
                 onSelect={handleDateChange}
                 initialFocus
-                className="p-3"
+                className="p-3 pointer-events-auto"
               />
             </PopoverContent>
           </Popover>
