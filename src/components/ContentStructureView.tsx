@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import TitleSuggestion, { Keyword } from './TitleSuggestion';
 import EmptyState from './EmptyState';
 
@@ -65,64 +64,44 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
 
   return (
     <div className={className}>
-      <Tabs defaultValue="titles" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="titles">Title Suggestions</TabsTrigger>
-          <TabsTrigger value="outlines">Outlines</TabsTrigger>
-        </TabsList>
-        
-        <div className="mb-4">
-          <div className="flex gap-2">
-            <Input
-              placeholder="Enter keywords (e.g., wordpress, seo)"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              className="flex-1"
-            />
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Generate
-            </Button>
-          </div>
-        </div>
-        
-        <TabsContent value="titles">
-          {titles.length > 0 ? (
-            <div className="grid gap-4">
-              {titles.map((title) => (
-                <TitleSuggestion
-                  key={title.id}
-                  title={title.title}
-                  keywords={title.keywords}
-                  selected={selectedTitleId === title.id}
-                  onSelect={() => handleSelectTitle(title.id)}
-                  onRemove={() => handleRemoveTitle(title.id)}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={<Plus className="h-6 w-6" />}
-              title="No Title Suggestions Yet"
-              description="Enter keywords and generate title suggestions."
-              actionLabel="Generate Titles"
-              onAction={() => {}}
-              className="py-6"
-            />
-          )}
-        </TabsContent>
-        
-        <TabsContent value="outlines">
-          <EmptyState
-            icon={<Plus className="h-6 w-6" />}
-            title="No Outlines Generated"
-            description="Select a title first to generate an outline."
-            actionLabel="Generate Outline"
-            onAction={() => {}}
-            className="py-6"
+      <div className="mb-4">
+        <div className="flex gap-2">
+          <Input
+            placeholder="Enter keywords (e.g., wordpress, seo)"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            className="flex-1"
           />
-        </TabsContent>
-      </Tabs>
+          <Button>
+            <Plus className="h-4 w-4 mr-2" />
+            Generate
+          </Button>
+        </div>
+      </div>
+      
+      {titles.length > 0 ? (
+        <div className="grid gap-4">
+          {titles.map((title) => (
+            <TitleSuggestion
+              key={title.id}
+              title={title.title}
+              keywords={title.keywords}
+              selected={selectedTitleId === title.id}
+              onSelect={() => handleSelectTitle(title.id)}
+              onRemove={() => handleRemoveTitle(title.id)}
+            />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          icon={<Plus className="h-6 w-6" />}
+          title="No Title Suggestions Yet"
+          description="Enter keywords and generate title suggestions."
+          actionLabel="Generate Titles"
+          onAction={() => {}}
+          className="py-6"
+        />
+      )}
     </div>
   );
 };
