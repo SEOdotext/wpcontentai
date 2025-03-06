@@ -9,7 +9,100 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      companies: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      publication_settings: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          id: string
+          publication_frequency: number
+          subject_matters: Json
+          updated_at: string
+          writing_style: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          publication_frequency?: number
+          subject_matters?: Json
+          updated_at?: string
+          writing_style?: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          publication_frequency?: number
+          subject_matters?: Json
+          updated_at?: string
+          writing_style?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publication_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_profiles: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          role: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          email: string
+          first_name?: string | null
+          id: string
+          last_name?: string | null
+          role?: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
