@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Calendar, FileText, Globe, Home, LayoutList, Settings, PlusCircle } from 'lucide-react';
+import { Calendar, FileText, Globe, Home, LayoutList, Settings, PlusCircle, Map } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -69,6 +69,17 @@ export function AppSidebar() {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          
+          {/* New website content/sitemap menu item */}
+          <SidebarMenuItem>
+            <SidebarMenuButton className="gap-2" asChild>
+              <Link to="/sitemap">
+                <Map className="h-4 w-4" />
+                <span>Website Content</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          
           <SidebarMenuItem>
             <SidebarMenuButton className="gap-2" asChild>
               <Link to="/create">

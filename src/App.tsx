@@ -9,6 +9,7 @@ import ContentCalendar from "./pages/ContentCalendar";
 import ContentCreation from "./pages/ContentCreation";
 import Settings from "./pages/Settings";
 import WebsiteManager from "./pages/WebsiteManager";
+import WebsiteSitemap from "./pages/WebsiteSitemap";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import { SettingsProvider } from "./context/SettingsContext";
@@ -60,6 +61,7 @@ const App = () => (
               <Route path="/create" element={<ProtectedRoute><ContentCreation /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/websites" element={<ProtectedRoute><WebsiteManager /></ProtectedRoute>} />
+              <Route path="/sitemap" element={<ProtectedRoute><WebsiteSitemap /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
