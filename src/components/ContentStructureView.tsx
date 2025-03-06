@@ -1,10 +1,13 @@
-
 import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TitleSuggestion, { Keyword } from './TitleSuggestion';
 import EmptyState from './EmptyState';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface ContentStructureViewProps {
   className?: string;
@@ -50,6 +53,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   const [selectedTitleId, setSelectedTitleId] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [titles, setTitles] = useState(initialMockTitles);
+  const [date, setDate] = useState<Date>(new Date());
 
   const handleSelectTitle = (id: number) => {
     setSelectedTitleId(id === selectedTitleId ? null : id);
@@ -64,6 +68,39 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
 
   return (
     <div className={className}>
+      <Card className="border-0 shadow-elevation mb-8">
+        <CardHeader className="pb-2">
+          <div className="flex justify-between items-center">
+            <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
+            <div className="flex items-center space-x-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className={cn(
+                      "justify-start text-left font-normal",
+                      !date && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {date ? format(date, 'MMMM yyyy') : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={(newDate) => newDate && setDate(newDate)}
+                    initialFocus
+                    className={cn("p-3 pointer-events-auto")}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+        </CardHeader>
+      </Card>
+
       <div className="mb-4">
         <div className="flex gap-2">
           <Input

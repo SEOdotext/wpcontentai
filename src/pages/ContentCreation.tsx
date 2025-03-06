@@ -5,19 +5,17 @@ import AppSidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import ContentStructureView from '@/components/ContentStructureView';
 import { Toaster } from "@/components/ui/sonner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const ContentCreation = () => {
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col">
           <Header />
-          <main className="flex-1 overflow-auto p-4">
-            <div className="max-w-6xl mx-auto space-y-4">
-              <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-semibold">Content Creation</h1>
-              </div>
+          <main className="flex-1 px-4 py-6 overflow-y-auto">
+            <div className="max-w-6xl mx-auto space-y-8">
               <ContentStructureView className="min-h-[600px]" />
             </div>
           </main>
