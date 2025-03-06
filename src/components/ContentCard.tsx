@@ -25,6 +25,10 @@ export interface ContentCardProps {
   status?: 'draft' | 'published' | 'scheduled';
   isFavorite?: boolean;
   onClick?: () => void;
+  onEditClick?: () => void;
+  onDuplicateClick?: () => void;
+  onDeleteClick?: () => void;
+  onFavoriteToggle?: () => void;
   className?: string;
 }
 
@@ -36,6 +40,10 @@ const ContentCard: React.FC<ContentCardProps> = ({
   status = 'draft',
   isFavorite = false,
   onClick,
+  onEditClick,
+  onDuplicateClick,
+  onDeleteClick,
+  onFavoriteToggle,
   className,
 }) => {
   const statusStyles = {
@@ -47,7 +55,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
   return (
     <div 
       className={cn(
-        'content-card p-4 cursor-pointer animate-scale-in', 
+        'content-card p-4 cursor-pointer animate-scale-in border rounded-md hover:shadow-md transition-all', 
         className
       )}
       onClick={onClick}
@@ -75,7 +83,7 @@ const ContentCard: React.FC<ContentCardProps> = ({
             )}
             onClick={(e) => {
               e.stopPropagation();
-              // Toggle favorite logic would go here
+              onFavoriteToggle?.();
             }}
           >
             <Star className="h-4 w-4" />
@@ -95,10 +103,28 @@ const ContentCard: React.FC<ContentCardProps> = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>Edit</DropdownMenuItem>
-              <DropdownMenuItem>Duplicate</DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                onEditClick?.();
+              }}>
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                onDuplicateClick?.();
+              }}>
+                Duplicate
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+              <DropdownMenuItem 
+                className="text-destructive"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteClick?.();
+                }}
+              >
+                Delete
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentCard, { Keyword } from '@/components/ContentCard';
+import ContentView from '@/components/ContentView';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,14 +24,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from '@/components/ui/separator';
-import { format, addMonths, subMonths, isEqual, startOfMonth, getDate } from 'date-fns';
+import { format, addMonths, subMonths, getDate, parseISO } from 'date-fns';
 
+// Get the current date for reference
+const currentDate = new Date();
+const currentMonth = currentDate.getMonth();
+const currentYear = currentDate.getFullYear();
+
+// Create content with dates relative to now
 const recentContent = [
   {
+    id: 1,
     title: 'How to Optimize Your WordPress Site for Speed',
     description: 'Learn the best practices for improving your WordPress site loading times.',
-    dateCreated: 'Oct 15, 2023',
-    date: new Date(2023, 9, 15),
+    dateCreated: format(subMonths(currentDate, 1), 'MMM d, yyyy'),
+    date: subMonths(currentDate, 1),
     status: 'published',
     keywords: [
       { text: 'wordpress', difficulty: 'medium' },
@@ -38,10 +47,11 @@ const recentContent = [
     isFavorite: true,
   },
   {
+    id: 2,
     title: 'The Ultimate Guide to On-Page SEO',
     description: 'Discover everything you need to know about optimizing your content for search engines.',
-    dateCreated: 'Oct 10, 2023',
-    date: new Date(2023, 9, 10),
+    dateCreated: format(subMonths(currentDate, 1), 'MMM d, yyyy'),
+    date: subMonths(currentDate, 1),
     status: 'draft',
     keywords: [
       { text: 'seo', difficulty: 'hard' },
@@ -53,10 +63,11 @@ const recentContent = [
 
 const upcomingContent = [
   {
-    title: 'WordPress Security: Best Practices for 2023',
+    id: 3,
+    title: 'WordPress Security: Best Practices for 2024',
     description: 'Keep your WordPress site secure with these essential security tips.',
-    dateCreated: 'Nov 5, 2023',
-    date: new Date(2023, 10, 5),
+    dateCreated: format(addMonths(currentDate, 1), 'MMM d, yyyy'),
+    date: addMonths(currentDate, 1),
     status: 'scheduled',
     keywords: [
       { text: 'wordpress', difficulty: 'medium' },
@@ -65,10 +76,11 @@ const upcomingContent = [
     isFavorite: false,
   },
   {
+    id: 4,
     title: '10 WordPress Plugins Every Business Site Needs',
     description: 'Essential plugins to improve functionality and performance.',
-    dateCreated: 'Nov 12, 2023',
-    date: new Date(2023, 10, 12),
+    dateCreated: format(addMonths(currentDate, 1), 'MMM d, yyyy'),
+    date: addMonths(currentDate, 1),
     status: 'scheduled',
     keywords: [
       { text: 'wordpress', difficulty: 'easy' },
@@ -78,10 +90,11 @@ const upcomingContent = [
     isFavorite: true,
   },
   {
+    id: 5,
     title: 'WordPress Theme Development: A Complete Guide',
     description: 'Learn how to create custom WordPress themes from scratch.',
-    dateCreated: 'Dec 3, 2023',
-    date: new Date(2023, 11, 3),
+    dateCreated: format(addMonths(currentDate, 2), 'MMM d, yyyy'),
+    date: addMonths(currentDate, 2),
     status: 'draft',
     keywords: [
       { text: 'wordpress', difficulty: 'hard' },
@@ -91,10 +104,11 @@ const upcomingContent = [
     isFavorite: false,
   },
   {
+    id: 6,
     title: 'SEO Trends to Watch in 2024',
     description: 'Stay ahead of the competition with these upcoming SEO trends.',
-    dateCreated: 'Jan 10, 2024',
-    date: new Date(2024, 0, 10),
+    dateCreated: format(addMonths(currentDate, 3), 'MMM d, yyyy'),
+    date: addMonths(currentDate, 3),
     status: 'scheduled',
     keywords: [
       { text: 'seo', difficulty: 'medium' },
@@ -120,6 +134,7 @@ const getContentByMonth = (date: Date) => {
 const ContentCalendar = () => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [activeView, setActiveView] = useState<'monthly' | 'list'>('monthly');
+  const [selectedContent, setSelectedContent] = useState<typeof allContent[0] | null>(null);
   
   const previousMonth = subMonths(currentDate, 1);
   const nextMonth = addMonths(currentDate, 1);
@@ -132,14 +147,18 @@ const ContentCalendar = () => {
   
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
-  useEffect(() => {
-    // No need to do anything else, just having currentDate in the dependency array
-    // will ensure that the previousMonth and nextMonth are recalculated whenever currentDate changes
-  }, [currentDate]);
-  
   const handleTabChange = (value: string) => {
     const [year, month] = value.split('-').map(Number);
-    setCurrentDate(new Date(year, month));
+    setCurrentDate(new Date(year, month - 1));
+  };
+
+  const handleContentClick = (content: typeof allContent[0]) => {
+    setSelectedContent(content);
+  };
+
+  const handleToggleFavorite = (contentId: number) => {
+    // In a real app, this would update the database
+    console.log(`Toggle favorite for content ${contentId}`);
   };
   
   return (
@@ -232,14 +251,14 @@ const ContentCalendar = () => {
                               <TableBody>
                                 {getContentByMonth(previousMonth).length > 0 ? (
                                   getContentByMonth(previousMonth).map((content, index) => (
-                                    <TableRow key={`prev-${index}`}>
+                                    <TableRow key={`prev-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
                                       <TableCell className="font-medium">
                                         {format(content.date, 'd MMM')}
                                       </TableCell>
                                       <TableCell>
                                         <Accordion type="single" collapsible className="w-full">
                                           <AccordionItem value={`prev-${index}`} className="border-0">
-                                            <AccordionTrigger className="py-0 hover:no-underline">
+                                            <AccordionTrigger className="py-0 hover:no-underline" onClick={(e) => e.stopPropagation()}>
                                               <span className="text-sm font-medium">{content.title}</span>
                                             </AccordionTrigger>
                                             <AccordionContent>
@@ -297,14 +316,14 @@ const ContentCalendar = () => {
                               <TableBody>
                                 {getContentByMonth(currentDate).length > 0 ? (
                                   getContentByMonth(currentDate).map((content, index) => (
-                                    <TableRow key={`current-${index}`}>
+                                    <TableRow key={`current-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
                                       <TableCell className="font-medium">
                                         {format(content.date, 'd MMM')}
                                       </TableCell>
                                       <TableCell>
                                         <Accordion type="single" collapsible className="w-full">
                                           <AccordionItem value={`current-${index}`} className="border-0">
-                                            <AccordionTrigger className="py-0 hover:no-underline">
+                                            <AccordionTrigger className="py-0 hover:no-underline" onClick={(e) => e.stopPropagation()}>
                                               <span className="text-sm font-medium">{content.title}</span>
                                             </AccordionTrigger>
                                             <AccordionContent>
@@ -362,14 +381,14 @@ const ContentCalendar = () => {
                               <TableBody>
                                 {getContentByMonth(nextMonth).length > 0 ? (
                                   getContentByMonth(nextMonth).map((content, index) => (
-                                    <TableRow key={`next-${index}`}>
+                                    <TableRow key={`next-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
                                       <TableCell className="font-medium">
                                         {format(content.date, 'd MMM')}
                                       </TableCell>
                                       <TableCell>
                                         <Accordion type="single" collapsible className="w-full">
                                           <AccordionItem value={`next-${index}`} className="border-0">
-                                            <AccordionTrigger className="py-0 hover:no-underline">
+                                            <AccordionTrigger className="py-0 hover:no-underline" onClick={(e) => e.stopPropagation()}>
                                               <span className="text-sm font-medium">{content.title}</span>
                                             </AccordionTrigger>
                                             <AccordionContent>
@@ -438,6 +457,11 @@ const ContentCalendar = () => {
                                 dateCreated={content.dateCreated}
                                 status={content.status as 'draft' | 'published' | 'scheduled'}
                                 isFavorite={content.isFavorite}
+                                onClick={() => handleContentClick(content)}
+                                onFavoriteToggle={() => handleToggleFavorite(content.id)}
+                                onEditClick={() => console.log(`Edit content ${content.id}`)}
+                                onDuplicateClick={() => console.log(`Duplicate content ${content.id}`)}
+                                onDeleteClick={() => console.log(`Delete content ${content.id}`)}
                               />
                             ))}
                           </div>
@@ -454,6 +478,11 @@ const ContentCalendar = () => {
                                 dateCreated={content.dateCreated}
                                 status={content.status as 'draft' | 'published' | 'scheduled'}
                                 isFavorite={content.isFavorite}
+                                onClick={() => handleContentClick(content)}
+                                onFavoriteToggle={() => handleToggleFavorite(content.id)}
+                                onEditClick={() => console.log(`Edit content ${content.id}`)}
+                                onDuplicateClick={() => console.log(`Duplicate content ${content.id}`)}
+                                onDeleteClick={() => console.log(`Delete content ${content.id}`)}
                               />
                             ))}
                           </div>
@@ -467,6 +496,19 @@ const ContentCalendar = () => {
           </main>
         </div>
       </div>
+      
+      {selectedContent && (
+        <ContentView
+          title={selectedContent.title}
+          description={selectedContent.description}
+          keywords={selectedContent.keywords as Keyword[]}
+          dateCreated={selectedContent.dateCreated}
+          status={selectedContent.status as 'draft' | 'published' | 'scheduled'}
+          isFavorite={selectedContent.isFavorite}
+          onClose={() => setSelectedContent(null)}
+          onFavoriteToggle={() => handleToggleFavorite(selectedContent.id)}
+        />
+      )}
     </SidebarProvider>
   );
 };
