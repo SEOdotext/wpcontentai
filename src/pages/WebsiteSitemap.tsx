@@ -153,9 +153,9 @@ const WebsiteSitemap = () => {
             <EmptyState 
               title="No Website Selected"
               description="Please select a website from the dropdown in the sidebar to view its content structure."
-              actionLabel="Select Website"
-              onAction={() => {}}
               icon={<Map className="h-6 w-6" />}
+              onAction={() => {}}
+              actionLabel="Select Website"
             />
           ) : (
             <Tabs defaultValue="sitemap">

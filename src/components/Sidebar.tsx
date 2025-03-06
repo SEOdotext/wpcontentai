@@ -17,12 +17,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useWebsites } from '@/context/WebsitesContext';
 
 export function AppSidebar() {
   const { websites, currentWebsite, setCurrentWebsite, isLoading } = useWebsites();
-
+  const location = useLocation();
+  
   return (
     <Sidebar className="border-r border-border/50">
       <SidebarHeader className="h-16 flex items-center px-6">
@@ -71,7 +72,11 @@ export function AppSidebar() {
           </SidebarMenuItem>
           
           <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2" asChild>
+            <SidebarMenuButton 
+              className="gap-2" 
+              isActive={location.pathname === '/sitemap'}
+              asChild
+            >
               <Link to="/sitemap">
                 <Map className="h-4 w-4" />
                 <span>Website Content</span>
@@ -80,7 +85,11 @@ export function AppSidebar() {
           </SidebarMenuItem>
           
           <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2" asChild>
+            <SidebarMenuButton 
+              className="gap-2"
+              isActive={location.pathname === '/create'}
+              asChild
+            >
               <Link to="/create">
                 <PlusCircle className="h-4 w-4" />
                 <span>Content Creation</span>
@@ -89,7 +98,11 @@ export function AppSidebar() {
           </SidebarMenuItem>
           
           <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2" asChild>
+            <SidebarMenuButton 
+              className="gap-2"
+              isActive={location.pathname === '/calendar'}
+              asChild
+            >
               <Link to="/calendar">
                 <Calendar className="h-4 w-4" />
                 <span>Content Calendar</span>
@@ -98,7 +111,11 @@ export function AppSidebar() {
           </SidebarMenuItem>
           
           <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2" asChild>
+            <SidebarMenuButton 
+              className="gap-2"
+              isActive={location.pathname === '/settings'}
+              asChild
+            >
               <Link to="/settings">
                 <Settings className="h-4 w-4" />
                 <span>Publication Settings</span>
