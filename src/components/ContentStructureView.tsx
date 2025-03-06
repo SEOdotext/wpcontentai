@@ -1,11 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TitleSuggestion, { Keyword } from './TitleSuggestion';
 import EmptyState from './EmptyState';
 import { cn } from '@/lib/utils';
+import { addDays } from 'date-fns';
+import { useSettings } from '@/context/SettingsContext';
 
 interface ContentStructureViewProps {
   className?: string;
@@ -19,43 +21,54 @@ const mockKeywords: Keyword[] = [
   { text: 'blog post', difficulty: 'easy' },
 ];
 
-const initialMockTitles = [
-  {
-    id: 1,
-    title: '10 Proven WordPress SEO Strategies for Higher Rankings in 2023',
-    keywords: mockKeywords.slice(0, 3),
-    date: new Date(),
-  },
-  {
-    id: 2,
-    title: 'How to Optimize Your WordPress Content for Maximum SEO Impact',
-    keywords: mockKeywords.slice(1, 4),
-    date: new Date(),
-  },
-  {
-    id: 3,
-    title: 'The Ultimate Guide to WordPress Content Strategy for Beginners',
-    keywords: [mockKeywords[0], mockKeywords[2], mockKeywords[3]],
-    date: new Date(),
-  },
-  {
-    id: 4,
-    title: "WordPress SEO in 2023: What's Changed and How to Adapt",
-    keywords: mockKeywords.slice(0, 2),
-    date: new Date(),
-  },
-  {
-    id: 5,
-    title: 'Creating SEO-Friendly Blog Posts in WordPress: A Step-by-Step Guide',
-    keywords: mockKeywords,
-    date: new Date(),
-  },
-];
-
 const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }) => {
   const [selectedTitleId, setSelectedTitleId] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState('');
-  const [titles, setTitles] = useState(initialMockTitles);
+  const [titles, setTitles] = useState<Array<{
+    id: number;
+    title: string;
+    keywords: Keyword[];
+    date: Date;
+  }>>([]);
+  const { publicationFrequency } = useSettings();
+
+  // Load initial mock data with appropriate future dates
+  useEffect(() => {
+    const initialMockTitles = [
+      {
+        id: 1,
+        title: '10 Proven WordPress SEO Strategies for Higher Rankings in 2023',
+        keywords: mockKeywords.slice(0, 3),
+        date: new Date(),
+      },
+      {
+        id: 2,
+        title: 'How to Optimize Your WordPress Content for Maximum SEO Impact',
+        keywords: mockKeywords.slice(1, 4),
+        date: addDays(new Date(), publicationFrequency),
+      },
+      {
+        id: 3,
+        title: 'The Ultimate Guide to WordPress Content Strategy for Beginners',
+        keywords: [mockKeywords[0], mockKeywords[2], mockKeywords[3]],
+        date: addDays(new Date(), publicationFrequency * 2),
+      },
+      {
+        id: 4,
+        title: "WordPress SEO in 2023: What's Changed and How to Adapt",
+        keywords: mockKeywords.slice(0, 2),
+        date: addDays(new Date(), publicationFrequency * 3),
+      },
+      {
+        id: 5,
+        title: 'Creating SEO-Friendly Blog Posts in WordPress: A Step-by-Step Guide',
+        keywords: mockKeywords,
+        date: addDays(new Date(), publicationFrequency * 4),
+      },
+    ];
+    
+    setTitles(initialMockTitles);
+  }, [publicationFrequency]);
 
   const handleSelectTitle = (id: number) => {
     setSelectedTitleId(id === selectedTitleId ? null : id);
