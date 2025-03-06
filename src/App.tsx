@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -101,7 +100,7 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
     return <Navigate to="/setup" replace />;
   }
 
-  return <SidebarProvider>{children}</SidebarProvider>;
+  return children;
 };
 
 const App = () => (
@@ -115,13 +114,55 @@ const App = () => (
               <Sonner />
               <Routes>
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/setup" element={<ProtectedRoute requireOrg={false}><OrganisationSetup /></ProtectedRoute>} />
-                <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-                <Route path="/calendar" element={<ProtectedRoute><ContentCalendar /></ProtectedRoute>} />
-                <Route path="/create" element={<ProtectedRoute><ContentCreation /></ProtectedRoute>} />
-                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-                <Route path="/websites" element={<ProtectedRoute><WebsiteManager /></ProtectedRoute>} />
-                <Route path="/sitemap" element={<ProtectedRoute><WebsiteSitemap /></ProtectedRoute>} />
+                <Route path="/setup" element={
+                  <ProtectedRoute requireOrg={false}>
+                    <SidebarProvider>
+                      <OrganisationSetup />
+                    </SidebarProvider>
+                  </ProtectedRoute>
+                } />
+                <Route path="/" element={
+                  <ProtectedRoute>
+                    <SidebarProvider>
+                      <Index />
+                    </SidebarProvider>
+                  </ProtectedRoute>
+                } />
+                <Route path="/calendar" element={
+                  <ProtectedRoute>
+                    <SidebarProvider>
+                      <ContentCalendar />
+                    </SidebarProvider>
+                  </ProtectedRoute>
+                } />
+                <Route path="/create" element={
+                  <ProtectedRoute>
+                    <SidebarProvider>
+                      <ContentCreation />
+                    </SidebarProvider>
+                  </ProtectedRoute>
+                } />
+                <Route path="/settings" element={
+                  <ProtectedRoute>
+                    <SidebarProvider>
+                      <Settings />
+                    </SidebarProvider>
+                  </ProtectedRoute>
+                } />
+                <Route path="/websites" element={
+                  <ProtectedRoute>
+                    <SidebarProvider>
+                      <WebsiteManager />
+                    </SidebarProvider>
+                  </ProtectedRoute>
+                } />
+                <Route path="/sitemap" element={
+                  <ProtectedRoute>
+                    <SidebarProvider>
+                      <WebsiteSitemap />
+                    </SidebarProvider>
+                  </ProtectedRoute>
+                } />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </TooltipProvider>
