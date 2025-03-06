@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List, Minus } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentCard, { Keyword } from '@/components/ContentCard';
@@ -25,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { Separator } from '@/components/ui/separator';
 import { format, addMonths, subMonths, getDate, parseISO } from 'date-fns';
+import { toast } from 'sonner';
 
 interface CalendarContent {
   id: number;
@@ -46,14 +46,12 @@ const ContentCalendar = () => {
   const [upcomingContent, setUpcomingContent] = useState<CalendarContent[]>([]);
   
   useEffect(() => {
-    // Load content from localStorage
     try {
       const storedContent = localStorage.getItem('calendarContent');
       if (storedContent) {
         const parsedContent = JSON.parse(storedContent) as CalendarContent[];
         console.log("Loaded calendar content:", parsedContent);
         
-        // Process dates to ensure they're Date objects
         const processedContent = parsedContent.map(item => ({
           ...item,
           date: new Date(item.date).toISOString(),
@@ -62,7 +60,6 @@ const ContentCalendar = () => {
         
         setAllContent(processedContent);
         
-        // Separate recent and upcoming content
         const now = new Date();
         const recent = processedContent.filter(
           item => new Date(item.date) <= now
@@ -79,26 +76,20 @@ const ContentCalendar = () => {
     }
   }, []);
   
-  // Pre-calculate these dates only when displayDate changes
   const previousMonth = subMonths(displayDate, 1);
   const nextMonth = addMonths(displayDate, 1);
   
-  // Format date for tab value
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
-  // This is the ONLY place we'll handle date changes
   const handleTabChange = (value: string) => {
-    // Get the month and year from the tab value
     const [yearStr, monthStr] = value.split('-');
     const year = parseInt(yearStr, 10);
-    const month = parseInt(monthStr, 10) - 1; // JS months are 0-indexed
+    const month = parseInt(monthStr, 10) - 1;
     
-    // Create a new date object preserving the current day
     const day = displayDate.getDate();
     setDisplayDate(new Date(year, month, day));
   };
   
-  // Navigation buttons also use setDisplayDate directly
   const navigateMonth = (direction: 'prev' | 'next') => {
     setDisplayDate(prev => 
       direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
@@ -119,15 +110,12 @@ const ContentCalendar = () => {
     
     setAllContent(updatedContent);
     
-    // Update localStorage
     localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
     
-    // Also update selected content if needed
     if (selectedContent && selectedContent.id === contentId) {
       setSelectedContent({ ...selectedContent, isFavorite: !selectedContent.isFavorite });
     }
     
-    // Update recent and upcoming content
     const now = new Date();
     const recent = updatedContent.filter(
       item => new Date(item.date) <= now
@@ -140,7 +128,31 @@ const ContentCalendar = () => {
     setUpcomingContent(upcoming);
   };
   
-  // Function to get content for a specific month
+  const handleDeleteContent = (contentId: number) => {
+    const updatedContent = allContent.filter(content => content.id !== contentId);
+    
+    localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
+    
+    setAllContent(updatedContent);
+    
+    const now = new Date();
+    const recent = updatedContent.filter(
+      item => new Date(item.date) <= now
+    );
+    const upcoming = updatedContent.filter(
+      item => new Date(item.date) > now
+    );
+    
+    setRecentContent(recent);
+    setUpcomingContent(upcoming);
+    
+    if (selectedContent && selectedContent.id === contentId) {
+      setSelectedContent(null);
+    }
+    
+    toast.success("Content removed from calendar");
+  };
+  
   const getContentByMonth = (date: Date) => {
     const month = date.getMonth();
     const year = date.getFullYear();
@@ -151,6 +163,65 @@ const ContentCalendar = () => {
       const contentYear = contentDate.getFullYear();
       return contentMonth === month && contentYear === year;
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  };
+  
+  const renderTableRow = (content: CalendarContent, period: string, index: number) => {
+    return (
+      <TableRow key={`${period}-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
+        <TableCell className="font-medium">
+          {format(new Date(content.date), 'd MMM')}
+        </TableCell>
+        <TableCell>
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value={`${period}-${index}`} className="border-0">
+              <AccordionTrigger className="py-0 hover:no-underline" onClick={(e) => e.stopPropagation()}>
+                <span className="text-sm font-medium">{content.title}</span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="py-2">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-sm text-muted-foreground">{content.description}</p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteContent(content.id);
+                      }}
+                      title="Remove from calendar"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                      <span className="sr-only">Remove</span>
+                    </Button>
+                  </div>
+                  {content.keywords.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {content.keywords.map((keyword, keywordIndex) => (
+                        <span key={keywordIndex} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                          {keyword.text}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </TableCell>
+        <TableCell>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            content.status === 'published' 
+              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+              : content.status === 'scheduled'
+              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+          }`}>
+            {content.status}
+          </span>
+        </TableCell>
+      </TableRow>
+    );
   };
   
   return (
@@ -240,47 +311,9 @@ const ContentCalendar = () => {
                               </TableHeader>
                               <TableBody>
                                 {getContentByMonth(previousMonth).length > 0 ? (
-                                  getContentByMonth(previousMonth).map((content, index) => (
-                                    <TableRow key={`prev-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
-                                      <TableCell className="font-medium">
-                                        {format(new Date(content.date), 'd MMM')}
-                                      </TableCell>
-                                      <TableCell>
-                                        <Accordion type="single" collapsible className="w-full">
-                                          <AccordionItem value={`prev-${index}`} className="border-0">
-                                            <AccordionTrigger className="py-0 hover:no-underline" onClick={(e) => e.stopPropagation()}>
-                                              <span className="text-sm font-medium">{content.title}</span>
-                                            </AccordionTrigger>
-                                            <AccordionContent>
-                                              <div className="py-2">
-                                                <p className="text-sm text-muted-foreground mb-3">{content.description}</p>
-                                                {content.keywords.length > 0 && (
-                                                  <div className="flex flex-wrap gap-1.5 mt-2">
-                                                    {content.keywords.map((keyword, keywordIndex) => (
-                                                      <span key={keywordIndex} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                                                        {keyword.text}
-                                                      </span>
-                                                    ))}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </AccordionContent>
-                                          </AccordionItem>
-                                        </Accordion>
-                                      </TableCell>
-                                      <TableCell>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                          content.status === 'published' 
-                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                            : content.status === 'scheduled'
-                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                                        }`}>
-                                          {content.status}
-                                        </span>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))
+                                  getContentByMonth(previousMonth).map((content, index) => 
+                                    renderTableRow(content, 'prev', index)
+                                  )
                                 ) : (
                                   <TableRow>
                                     <TableCell colSpan={3} className="h-24 text-center">
@@ -305,47 +338,9 @@ const ContentCalendar = () => {
                               </TableHeader>
                               <TableBody>
                                 {getContentByMonth(displayDate).length > 0 ? (
-                                  getContentByMonth(displayDate).map((content, index) => (
-                                    <TableRow key={`current-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
-                                      <TableCell className="font-medium">
-                                        {format(new Date(content.date), 'd MMM')}
-                                      </TableCell>
-                                      <TableCell>
-                                        <Accordion type="single" collapsible className="w-full">
-                                          <AccordionItem value={`current-${index}`} className="border-0">
-                                            <AccordionTrigger className="py-0 hover:no-underline" onClick={(e) => e.stopPropagation()}>
-                                              <span className="text-sm font-medium">{content.title}</span>
-                                            </AccordionTrigger>
-                                            <AccordionContent>
-                                              <div className="py-2">
-                                                <p className="text-sm text-muted-foreground mb-3">{content.description}</p>
-                                                {content.keywords.length > 0 && (
-                                                  <div className="flex flex-wrap gap-1.5 mt-2">
-                                                    {content.keywords.map((keyword, keywordIndex) => (
-                                                      <span key={keywordIndex} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                                                        {keyword.text}
-                                                      </span>
-                                                    ))}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </AccordionContent>
-                                          </AccordionItem>
-                                        </Accordion>
-                                      </TableCell>
-                                      <TableCell>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                          content.status === 'published' 
-                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                            : content.status === 'scheduled'
-                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                                        }`}>
-                                          {content.status}
-                                        </span>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))
+                                  getContentByMonth(displayDate).map((content, index) => 
+                                    renderTableRow(content, 'current', index)
+                                  )
                                 ) : (
                                   <TableRow>
                                     <TableCell colSpan={3} className="h-24 text-center">
@@ -370,47 +365,9 @@ const ContentCalendar = () => {
                               </TableHeader>
                               <TableBody>
                                 {getContentByMonth(nextMonth).length > 0 ? (
-                                  getContentByMonth(nextMonth).map((content, index) => (
-                                    <TableRow key={`next-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
-                                      <TableCell className="font-medium">
-                                        {format(new Date(content.date), 'd MMM')}
-                                      </TableCell>
-                                      <TableCell>
-                                        <Accordion type="single" collapsible className="w-full">
-                                          <AccordionItem value={`next-${index}`} className="border-0">
-                                            <AccordionTrigger className="py-0 hover:no-underline" onClick={(e) => e.stopPropagation()}>
-                                              <span className="text-sm font-medium">{content.title}</span>
-                                            </AccordionTrigger>
-                                            <AccordionContent>
-                                              <div className="py-2">
-                                                <p className="text-sm text-muted-foreground mb-3">{content.description}</p>
-                                                {content.keywords.length > 0 && (
-                                                  <div className="flex flex-wrap gap-1.5 mt-2">
-                                                    {content.keywords.map((keyword, keywordIndex) => (
-                                                      <span key={keywordIndex} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                                                        {keyword.text}
-                                                      </span>
-                                                    ))}
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </AccordionContent>
-                                          </AccordionItem>
-                                        </Accordion>
-                                      </TableCell>
-                                      <TableCell>
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                          content.status === 'published' 
-                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
-                                            : content.status === 'scheduled'
-                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                                        }`}>
-                                          {content.status}
-                                        </span>
-                                      </TableCell>
-                                    </TableRow>
-                                  ))
+                                  getContentByMonth(nextMonth).map((content, index) => 
+                                    renderTableRow(content, 'next', index)
+                                  )
                                 ) : (
                                   <TableRow>
                                     <TableCell colSpan={3} className="h-24 text-center">
@@ -452,7 +409,7 @@ const ContentCalendar = () => {
                                   onFavoriteToggle={() => handleToggleFavorite(content.id)}
                                   onEditClick={() => console.log(`Edit content ${content.id}`)}
                                   onDuplicateClick={() => console.log(`Duplicate content ${content.id}`)}
-                                  onDeleteClick={() => console.log(`Delete content ${content.id}`)}
+                                  onDeleteClick={() => handleDeleteContent(content.id)}
                                 />
                               ))
                             ) : (
@@ -479,7 +436,7 @@ const ContentCalendar = () => {
                                   onFavoriteToggle={() => handleToggleFavorite(content.id)}
                                   onEditClick={() => console.log(`Edit content ${content.id}`)}
                                   onDuplicateClick={() => console.log(`Duplicate content ${content.id}`)}
-                                  onDeleteClick={() => console.log(`Delete content ${content.id}`)}
+                                  onDeleteClick={() => handleDeleteContent(content.id)}
                                 />
                               ))
                             ) : (
@@ -509,6 +466,7 @@ const ContentCalendar = () => {
           isFavorite={selectedContent.isFavorite}
           onClose={() => setSelectedContent(null)}
           onFavoriteToggle={() => handleToggleFavorite(selectedContent.id)}
+          onDeleteClick={() => handleDeleteContent(selectedContent.id)}
         />
       )}
     </SidebarProvider>
