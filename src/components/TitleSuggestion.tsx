@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -27,13 +27,29 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   onSelect,
   className,
 }) => {
-  const [copied, setCopied] = React.useState(false);
+  const [copied, setCopied] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [disliked, setDisliked] = useState(false);
   
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(title);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleLike = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLiked(!liked);
+    if (disliked) setDisliked(false);
+    console.log(`Title "${title}" ${!liked ? 'liked' : 'like removed'}`);
+  };
+
+  const handleDislike = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDisliked(!disliked);
+    if (liked) setLiked(false);
+    console.log(`Title "${title}" ${!disliked ? 'disliked' : 'dislike removed'}`);
   };
 
   const getUsageColor = () => {
@@ -82,11 +98,11 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            onClick={(e) => {
-              e.stopPropagation();
-              // Thumbs up logic
-            }}
+            className={cn(
+              "h-7 w-7", 
+              liked ? "text-green-500" : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={handleLike}
           >
             <ThumbsUp className="h-3.5 w-3.5" />
             <span className="sr-only">Like</span>
@@ -95,11 +111,11 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
           <Button
             size="icon"
             variant="ghost"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            onClick={(e) => {
-              e.stopPropagation();
-              // Thumbs down logic
-            }}
+            className={cn(
+              "h-7 w-7", 
+              disliked ? "text-red-500" : "text-muted-foreground hover:text-foreground"
+            )}
+            onClick={handleDislike}
           >
             <ThumbsDown className="h-3.5 w-3.5" />
             <span className="sr-only">Dislike</span>
