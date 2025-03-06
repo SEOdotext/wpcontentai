@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List } from 'lucide-react';
@@ -146,11 +145,11 @@ const ContentCalendar = () => {
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
   const handleTabChange = (value: string) => {
-    // The issue was here - we need to parse the tab value correctly
-    const [year, month] = value.split('-').map(Number);
-    // Create a new date based on the year and month (month is 0-indexed in JS Date)
-    const newDate = new Date(year, month - 1, 1);
-    setCurrentDate(newDate);
+    if (value === formatTabValue(previousMonth)) {
+      setCurrentDate(previousMonth);
+    } else if (value === formatTabValue(nextMonth)) {
+      setCurrentDate(nextMonth);
+    }
   };
 
   const handleContentClick = (content: typeof allContent[0]) => {
