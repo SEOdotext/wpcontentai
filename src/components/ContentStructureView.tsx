@@ -198,7 +198,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           />
           <Button>
             <Plus className="h-4 w-4 mr-2" />
-            Generate Post Suggestions
+            Refresh Suggestions
           </Button>
         </div>
       </div>
