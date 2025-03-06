@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import AppSidebar from '@/components/Sidebar';
@@ -81,7 +80,6 @@ const Settings = () => {
               )}
               
               {isLoading ? (
-                // Loading skeletons
                 <div className="space-y-6">
                   <Card>
                     <CardHeader>
@@ -128,7 +126,6 @@ const Settings = () => {
                   </Card>
                 </div>
               ) : (
-                // Actual settings content
                 <>
                   <Card>
                     <CardHeader>

@@ -169,6 +169,20 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_user_profile_by_id: {
+        Args: {
+          user_id: string
+        }
+        Returns: {
+          created_at: string
+          email: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          organisation_id: string | null
+          role: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
