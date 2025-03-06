@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Calendar, FileText, Globe, Home, Map, PlusCircle, Settings } from 'lucide-react';
 import {
@@ -62,7 +63,11 @@ export function AppSidebar() {
         </div>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2" asChild>
+            <SidebarMenuButton 
+              className="gap-2" 
+              isActive={location.pathname === '/' || location.pathname === '/dashboard'}
+              asChild
+            >
               <Link to="/">
                 <Home className="h-4 w-4" />
                 <span>Dashboard</span>
