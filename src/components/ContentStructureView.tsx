@@ -1,11 +1,9 @@
-
 import React, { useState } from 'react';
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TitleSuggestion, { Keyword } from './TitleSuggestion';
 import EmptyState from './EmptyState';
-import { format, addMonths, subMonths } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -58,7 +56,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   const [selectedTitleId, setSelectedTitleId] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [titles, setTitles] = useState(initialMockTitles);
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
   const handleSelectTitle = (id: number) => {
     setSelectedTitleId(id === selectedTitleId ? null : id);
@@ -77,44 +74,11 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     ));
   };
 
-  const goToPreviousMonth = () => {
-    setCurrentMonth(prevMonth => subMonths(prevMonth, 1));
-  };
-
-  const goToNextMonth = () => {
-    setCurrentMonth(prevMonth => addMonths(prevMonth, 1));
-  };
-
   return (
     <div className={className}>
       <Card className="border-0 shadow-elevation mb-8">
         <CardHeader className="pb-2">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
-            <div className="flex items-center space-x-2">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={goToPreviousMonth}
-                className="h-8 w-8"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="sr-only">Previous month</span>
-              </Button>
-              <span className="text-sm font-medium">
-                {format(currentMonth, 'MMMM yyyy')}
-              </span>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={goToNextMonth}
-                className="h-8 w-8"
-              >
-                <ChevronRight className="h-4 w-4" />
-                <span className="sr-only">Next month</span>
-              </Button>
-            </div>
-          </div>
+          <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
         </CardHeader>
       </Card>
 
