@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, MoreHorizontal, X } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, MoreHorizontal, Tag as TagIcon, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -85,14 +85,14 @@ const ContentView: React.FC<ContentViewProps> = ({
             <div className="px-4 md:px-6 flex flex-wrap gap-3 items-center">
               {dateCreated && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Calendar className="h-3 w-3" />
+                  <CalendarIcon className="h-3 w-3" />
                   <span>{dateCreated}</span>
                 </div>
               )}
               
               {keywords.length > 0 && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Tag className="h-3 w-3" />
+                  <TagIcon className="h-3 w-3" />
                   <span>{keywords.length} keywords</span>
                 </div>
               )}
