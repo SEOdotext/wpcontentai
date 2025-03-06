@@ -4,7 +4,7 @@ import { ThumbsDown, ThumbsUp, Calendar, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import KeywordBadge, { KeywordDifficulty } from './KeywordBadge';
-import { addDays, format, parseISO } from 'date-fns';
+import { addDays, format, isAfter, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { useSettings } from '@/context/SettingsContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -43,37 +43,41 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const proposedDate = useCallback(() => {
     try {
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
+      console.log('Retrieved calendar content:', existingContent);
       
       if (existingContent.length === 0) {
-        return addDays(new Date(), publicationFrequency);
+        const newDate = addDays(new Date(), publicationFrequency);
+        console.log('No existing content, proposing date:', newDate);
+        return newDate;
       } else {
-        // Convert all dates to Date objects for proper comparison
-        const contentWithParsedDates = existingContent.map(item => ({
-          ...item,
-          parsedDate: new Date(item.date)
-        }));
+        // Find the most future date in the calendar
+        let latestDate = new Date();
         
-        // Sort by date (newest first)
-        const sortedContent = contentWithParsedDates.sort((a, b) => 
-          b.parsedDate.getTime() - a.parsedDate.getTime()
-        );
+        existingContent.forEach(item => {
+          const itemDate = new Date(item.date);
+          
+          // Only consider valid dates
+          if (itemDate && !isNaN(itemDate.getTime())) {
+            if (isAfter(itemDate, latestDate)) {
+              latestDate = itemDate;
+            }
+          }
+        });
         
-        console.log('Sorted content dates:', sortedContent.map(item => item.parsedDate));
-        
-        // Get the most future date
-        const latestDate = sortedContent[0].parsedDate;
-        console.log('Latest date found:', latestDate);
+        console.log('Most future date found:', latestDate);
         
         // Add the publication frequency to the most future date
         const nextDate = addDays(latestDate, publicationFrequency);
-        console.log('Next proposed date:', nextDate);
+        console.log('Proposing next date:', nextDate, 'with frequency:', publicationFrequency);
         
         return nextDate;
       }
     } catch (error) {
       console.error('Error calculating proposed date:', error);
       // Fallback to adding days to current date
-      return addDays(new Date(), publicationFrequency);
+      const fallbackDate = addDays(new Date(), publicationFrequency);
+      console.log('Using fallback date:', fallbackDate);
+      return fallbackDate;
     }
   }, [publicationFrequency]);
   
