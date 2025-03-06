@@ -145,8 +145,13 @@ const ContentCalendar = () => {
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
   const handleTabChange = (value: string) => {
-    const [year, month] = value.split('-').map(Number);
-    const newDate = new Date(year, month - 1, currentDate.getDate());
+    const [yearStr, monthStr] = value.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10) - 1;
+    
+    const day = currentDate.getDate();
+    const newDate = new Date(year, month, day);
+    
     setCurrentDate(newDate);
   };
 
