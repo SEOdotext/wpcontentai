@@ -44,29 +44,41 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         new Date(b.date).getTime() - new Date(a.date).getTime()
       );
       
-      return addDays(new Date(sortedContent[0].date), publicationFrequency);
+      // If we have content in the array, use the last date
+      if (sortedContent.length > 0) {
+        return addDays(new Date(sortedContent[0].date), publicationFrequency);
+      } else {
+        return addDays(new Date(), publicationFrequency);
+      }
     }
   }, [publicationFrequency]);
   
   const addToCalendar = useCallback((title: string, keywords: Keyword[]) => {
-    const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
-    
-    const publicationDate = proposedDate();
-    
-    const newContent = {
-      id: Date.now(),
-      title,
-      description: `Generated content for: ${title}`,
-      dateCreated: new Date().toISOString(),
-      date: publicationDate.toISOString(),
-      status: 'scheduled',
-      keywords,
-      isFavorite: false,
-    };
-    
-    localStorage.setItem('calendarContent', JSON.stringify([...existingContent, newContent]));
-    
-    return newContent;
+    try {
+      const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
+      
+      const publicationDate = proposedDate();
+      
+      const newContent = {
+        id: Date.now(),
+        title,
+        description: `Generated content for: ${title}`,
+        dateCreated: new Date().toISOString(),
+        date: publicationDate.toISOString(),
+        status: 'scheduled',
+        keywords,
+        isFavorite: false,
+      };
+      
+      localStorage.setItem('calendarContent', JSON.stringify([...existingContent, newContent]));
+      console.log('Added content to calendar:', newContent);
+      console.log('Current calendar content:', JSON.parse(localStorage.getItem('calendarContent') || '[]'));
+      
+      return newContent;
+    } catch (error) {
+      console.error('Error adding content to calendar:', error);
+      return null;
+    }
   }, [proposedDate]);
 
   const handleLike = (e: React.MouseEvent) => {
@@ -77,15 +89,19 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       if (disliked) setDisliked(false);
       
       const newContent = addToCalendar(title, keywords);
-      toast.success(
-        `"${title}" has been scheduled for ${format(new Date(newContent.date), 'MMM dd, yyyy')}`,
-        {
-          description: "Content added to your calendar"
+      if (newContent) {
+        toast.success(
+          `"${title}" has been scheduled for ${format(new Date(newContent.date), 'MMM dd, yyyy')}`,
+          {
+            description: "Content added to your calendar"
+          }
+        );
+        
+        if (onRemove) {
+          setTimeout(onRemove, 300);
         }
-      );
-      
-      if (onRemove) {
-        setTimeout(onRemove, 300);
+      } else {
+        toast.error("Failed to add content to calendar");
       }
     }
   };
@@ -100,6 +116,10 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       if (onRemove) {
         setTimeout(onRemove, 300);
       }
+      
+      toast.info("Content suggestion dismissed", {
+        description: "You can generate new suggestions"
+      });
     }
   };
 

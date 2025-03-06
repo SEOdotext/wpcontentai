@@ -26,113 +26,58 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { format, addMonths, subMonths, getDate, parseISO } from 'date-fns';
 
-const currentDate = new Date();
-const currentMonth = currentDate.getMonth();
-const currentYear = currentDate.getFullYear();
-
-const recentContent = [
-  {
-    id: 1,
-    title: 'How to Optimize Your WordPress Site for Speed',
-    description: 'Learn the best practices for improving your WordPress site loading times.',
-    dateCreated: format(subMonths(currentDate, 1), 'MMM d, yyyy'),
-    date: subMonths(currentDate, 1),
-    status: 'published',
-    keywords: [
-      { text: 'wordpress', difficulty: 'medium' },
-      { text: 'speed', difficulty: 'easy' },
-    ],
-    isFavorite: true,
-  },
-  {
-    id: 2,
-    title: 'The Ultimate Guide to On-Page SEO',
-    description: 'Discover everything you need to know about optimizing your content for search engines.',
-    dateCreated: format(subMonths(currentDate, 1), 'MMM d, yyyy'),
-    date: subMonths(currentDate, 1),
-    status: 'draft',
-    keywords: [
-      { text: 'seo', difficulty: 'hard' },
-      { text: 'content', difficulty: 'easy' },
-    ],
-    isFavorite: false,
-  },
-];
-
-const upcomingContent = [
-  {
-    id: 3,
-    title: 'WordPress Security: Best Practices for 2024',
-    description: 'Keep your WordPress site secure with these essential security tips.',
-    dateCreated: format(addMonths(currentDate, 1), 'MMM d, yyyy'),
-    date: addMonths(currentDate, 1),
-    status: 'scheduled',
-    keywords: [
-      { text: 'wordpress', difficulty: 'medium' },
-      { text: 'security', difficulty: 'hard' },
-    ],
-    isFavorite: false,
-  },
-  {
-    id: 4,
-    title: '10 WordPress Plugins Every Business Site Needs',
-    description: 'Essential plugins to improve functionality and performance.',
-    dateCreated: format(addMonths(currentDate, 1), 'MMM d, yyyy'),
-    date: addMonths(currentDate, 1),
-    status: 'scheduled',
-    keywords: [
-      { text: 'wordpress', difficulty: 'easy' },
-      { text: 'plugins', difficulty: 'medium' },
-      { text: 'business', difficulty: 'medium' },
-    ],
-    isFavorite: true,
-  },
-  {
-    id: 5,
-    title: 'WordPress Theme Development: A Complete Guide',
-    description: 'Learn how to create custom WordPress themes from scratch.',
-    dateCreated: format(addMonths(currentDate, 2), 'MMM d, yyyy'),
-    date: addMonths(currentDate, 2),
-    status: 'draft',
-    keywords: [
-      { text: 'wordpress', difficulty: 'hard' },
-      { text: 'development', difficulty: 'hard' },
-      { text: 'themes', difficulty: 'medium' },
-    ],
-    isFavorite: false,
-  },
-  {
-    id: 6,
-    title: 'SEO Trends to Watch in 2024',
-    description: 'Stay ahead of the competition with these upcoming SEO trends.',
-    dateCreated: format(addMonths(currentDate, 3), 'MMM d, yyyy'),
-    date: addMonths(currentDate, 3),
-    status: 'scheduled',
-    keywords: [
-      { text: 'seo', difficulty: 'medium' },
-      { text: 'trends', difficulty: 'easy' },
-    ],
-    isFavorite: true,
-  },
-];
-
-const allContent = [...recentContent, ...upcomingContent];
-
-const getContentByMonth = (date: Date) => {
-  const month = date.getMonth();
-  const year = date.getFullYear();
-  
-  return allContent.filter(content => {
-    const contentMonth = content.date.getMonth();
-    const contentYear = content.date.getFullYear();
-    return contentMonth === month && contentYear === year;
-  }).sort((a, b) => a.date.getTime() - b.date.getTime());
-};
+interface CalendarContent {
+  id: number;
+  title: string;
+  description: string;
+  dateCreated: string;
+  date: string;
+  status: 'published' | 'draft' | 'scheduled';
+  keywords: Keyword[];
+  isFavorite: boolean;
+}
 
 const ContentCalendar = () => {
   const [displayDate, setDisplayDate] = useState<Date>(new Date());
   const [activeView, setActiveView] = useState<'monthly' | 'list'>('monthly');
-  const [selectedContent, setSelectedContent] = useState<typeof allContent[0] | null>(null);
+  const [selectedContent, setSelectedContent] = useState<CalendarContent | null>(null);
+  const [allContent, setAllContent] = useState<CalendarContent[]>([]);
+  const [recentContent, setRecentContent] = useState<CalendarContent[]>([]);
+  const [upcomingContent, setUpcomingContent] = useState<CalendarContent[]>([]);
+  
+  useEffect(() => {
+    // Load content from localStorage
+    try {
+      const storedContent = localStorage.getItem('calendarContent');
+      if (storedContent) {
+        const parsedContent = JSON.parse(storedContent) as CalendarContent[];
+        console.log("Loaded calendar content:", parsedContent);
+        
+        // Process dates to ensure they're Date objects
+        const processedContent = parsedContent.map(item => ({
+          ...item,
+          date: new Date(item.date).toISOString(),
+          dateCreated: item.dateCreated || new Date().toISOString()
+        }));
+        
+        setAllContent(processedContent);
+        
+        // Separate recent and upcoming content
+        const now = new Date();
+        const recent = processedContent.filter(
+          item => new Date(item.date) <= now
+        );
+        const upcoming = processedContent.filter(
+          item => new Date(item.date) > now
+        );
+        
+        setRecentContent(recent);
+        setUpcomingContent(upcoming);
+      }
+    } catch (error) {
+      console.error("Error loading calendar content:", error);
+    }
+  }, []);
   
   // Pre-calculate these dates only when displayDate changes
   const previousMonth = subMonths(displayDate, 1);
@@ -160,12 +105,52 @@ const ContentCalendar = () => {
     );
   };
 
-  const handleContentClick = (content: typeof allContent[0]) => {
+  const handleContentClick = (content: CalendarContent) => {
     setSelectedContent(content);
   };
 
   const handleToggleFavorite = (contentId: number) => {
-    console.log(`Toggle favorite for content ${contentId}`);
+    const updatedContent = allContent.map(content => {
+      if (content.id === contentId) {
+        return { ...content, isFavorite: !content.isFavorite };
+      }
+      return content;
+    });
+    
+    setAllContent(updatedContent);
+    
+    // Update localStorage
+    localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
+    
+    // Also update selected content if needed
+    if (selectedContent && selectedContent.id === contentId) {
+      setSelectedContent({ ...selectedContent, isFavorite: !selectedContent.isFavorite });
+    }
+    
+    // Update recent and upcoming content
+    const now = new Date();
+    const recent = updatedContent.filter(
+      item => new Date(item.date) <= now
+    );
+    const upcoming = updatedContent.filter(
+      item => new Date(item.date) > now
+    );
+    
+    setRecentContent(recent);
+    setUpcomingContent(upcoming);
+  };
+  
+  // Function to get content for a specific month
+  const getContentByMonth = (date: Date) => {
+    const month = date.getMonth();
+    const year = date.getFullYear();
+    
+    return allContent.filter(content => {
+      const contentDate = new Date(content.date);
+      const contentMonth = contentDate.getMonth();
+      const contentYear = contentDate.getFullYear();
+      return contentMonth === month && contentYear === year;
+    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   };
   
   return (
@@ -258,7 +243,7 @@ const ContentCalendar = () => {
                                   getContentByMonth(previousMonth).map((content, index) => (
                                     <TableRow key={`prev-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
                                       <TableCell className="font-medium">
-                                        {format(content.date, 'd MMM')}
+                                        {format(new Date(content.date), 'd MMM')}
                                       </TableCell>
                                       <TableCell>
                                         <Accordion type="single" collapsible className="w-full">
@@ -323,7 +308,7 @@ const ContentCalendar = () => {
                                   getContentByMonth(displayDate).map((content, index) => (
                                     <TableRow key={`current-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
                                       <TableCell className="font-medium">
-                                        {format(content.date, 'd MMM')}
+                                        {format(new Date(content.date), 'd MMM')}
                                       </TableCell>
                                       <TableCell>
                                         <Accordion type="single" collapsible className="w-full">
@@ -388,7 +373,7 @@ const ContentCalendar = () => {
                                   getContentByMonth(nextMonth).map((content, index) => (
                                     <TableRow key={`next-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
                                       <TableCell className="font-medium">
-                                        {format(content.date, 'd MMM')}
+                                        {format(new Date(content.date), 'd MMM')}
                                       </TableCell>
                                       <TableCell>
                                         <Accordion type="single" collapsible className="w-full">
@@ -453,43 +438,55 @@ const ContentCalendar = () => {
                         
                         <TabsContent value="recent">
                           <div className="grid gap-6">
-                            {recentContent.map((content, index) => (
-                              <ContentCard
-                                key={index}
-                                title={content.title}
-                                description={content.description}
-                                keywords={content.keywords as Keyword[]}
-                                dateCreated={content.dateCreated}
-                                status={content.status as 'draft' | 'published' | 'scheduled'}
-                                isFavorite={content.isFavorite}
-                                onClick={() => handleContentClick(content)}
-                                onFavoriteToggle={() => handleToggleFavorite(content.id)}
-                                onEditClick={() => console.log(`Edit content ${content.id}`)}
-                                onDuplicateClick={() => console.log(`Duplicate content ${content.id}`)}
-                                onDeleteClick={() => console.log(`Delete content ${content.id}`)}
-                              />
-                            ))}
+                            {recentContent.length > 0 ? (
+                              recentContent.map((content, index) => (
+                                <ContentCard
+                                  key={index}
+                                  title={content.title}
+                                  description={content.description}
+                                  keywords={content.keywords as Keyword[]}
+                                  dateCreated={content.dateCreated}
+                                  status={content.status as 'draft' | 'published' | 'scheduled'}
+                                  isFavorite={content.isFavorite}
+                                  onClick={() => handleContentClick(content)}
+                                  onFavoriteToggle={() => handleToggleFavorite(content.id)}
+                                  onEditClick={() => console.log(`Edit content ${content.id}`)}
+                                  onDuplicateClick={() => console.log(`Duplicate content ${content.id}`)}
+                                  onDeleteClick={() => console.log(`Delete content ${content.id}`)}
+                                />
+                              ))
+                            ) : (
+                              <div className="text-center py-12 text-muted-foreground">
+                                No recent content available
+                              </div>
+                            )}
                           </div>
                         </TabsContent>
                         
                         <TabsContent value="upcoming">
                           <div className="grid gap-6">
-                            {upcomingContent.map((content, index) => (
-                              <ContentCard
-                                key={index}
-                                title={content.title}
-                                description={content.description}
-                                keywords={content.keywords as Keyword[]}
-                                dateCreated={content.dateCreated}
-                                status={content.status as 'draft' | 'published' | 'scheduled'}
-                                isFavorite={content.isFavorite}
-                                onClick={() => handleContentClick(content)}
-                                onFavoriteToggle={() => handleToggleFavorite(content.id)}
-                                onEditClick={() => console.log(`Edit content ${content.id}`)}
-                                onDuplicateClick={() => console.log(`Duplicate content ${content.id}`)}
-                                onDeleteClick={() => console.log(`Delete content ${content.id}`)}
-                              />
-                            ))}
+                            {upcomingContent.length > 0 ? (
+                              upcomingContent.map((content, index) => (
+                                <ContentCard
+                                  key={index}
+                                  title={content.title}
+                                  description={content.description}
+                                  keywords={content.keywords as Keyword[]}
+                                  dateCreated={content.dateCreated}
+                                  status={content.status as 'draft' | 'published' | 'scheduled'}
+                                  isFavorite={content.isFavorite}
+                                  onClick={() => handleContentClick(content)}
+                                  onFavoriteToggle={() => handleToggleFavorite(content.id)}
+                                  onEditClick={() => console.log(`Edit content ${content.id}`)}
+                                  onDuplicateClick={() => console.log(`Duplicate content ${content.id}`)}
+                                  onDeleteClick={() => console.log(`Delete content ${content.id}`)}
+                                />
+                              ))
+                            ) : (
+                              <div className="text-center py-12 text-muted-foreground">
+                                No upcoming content scheduled
+                              </div>
+                            )}
                           </div>
                         </TabsContent>
                       </Tabs>
