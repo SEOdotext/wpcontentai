@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useWebsites } from '@/context/WebsitesContext';
 
 interface SettingsContextType {
   publicationFrequency: number; // Days between posts
@@ -35,18 +36,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [subjectMatters, setSubjectMatters] = useState<string[]>(defaultSettings.subjectMatters);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [settingsId, setSettingsId] = useState<string | null>(null);
+  const { currentWebsite } = useWebsites();
 
-  // Fetch settings from Supabase on component mount
+  // Fetch settings from Supabase whenever the current website changes
   useEffect(() => {
     const fetchSettings = async () => {
+      if (!currentWebsite) return;
+      
       try {
         setIsLoading(true);
         
-        // For now, we'll fetch the first settings record since we don't have authentication yet
-        // Later this will be filtered by company_id based on the authenticated user
+        // Filter settings by the current website's ID
         const { data, error } = await supabase
           .from('publication_settings')
           .select('*')
+          .eq('website_id', currentWebsite.id)
           .limit(1);
           
         if (error) throw error;
@@ -75,13 +79,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setSubjectMatters(defaultSettings.subjectMatters);
           }
         } else {
-          // If no settings exist, create a default record
+          // If no settings exist for this website, create default settings
           const { data: newSettings, error: insertError } = await supabase
             .from('publication_settings')
             .insert({
               publication_frequency: defaultSettings.publicationFrequency,
               writing_style: defaultSettings.writingStyle,
-              subject_matters: defaultSettings.subjectMatters
+              subject_matters: defaultSettings.subjectMatters,
+              website_id: currentWebsite.id
             })
             .select()
             .single();
@@ -90,6 +95,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           
           if (newSettings) {
             setSettingsId(newSettings.id);
+            // Reset to default values for the new website
+            setPublicationFrequency(defaultSettings.publicationFrequency);
+            setWritingStyle(defaultSettings.writingStyle);
+            setSubjectMatters(defaultSettings.subjectMatters);
           }
         }
       } catch (error) {
@@ -109,8 +118,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
     };
 
-    fetchSettings();
-  }, []);
+    if (currentWebsite) {
+      fetchSettings();
+    }
+  }, [currentWebsite]);
 
   // Update settings in Supabase when they change
   const updateSettingsInDatabase = async (
@@ -118,7 +129,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     style: string, 
     subjects: string[]
   ) => {
-    if (!settingsId) return;
+    if (!settingsId || !currentWebsite) return;
     
     try {
       const { error } = await supabase
@@ -127,7 +138,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           publication_frequency: frequency,
           writing_style: style,
           subject_matters: subjects,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          website_id: currentWebsite.id
         })
         .eq('id', settingsId);
         

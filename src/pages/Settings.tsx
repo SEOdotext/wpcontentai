@@ -9,12 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useSettings } from '@/context/SettingsContext';
+import { useWebsites } from '@/context/WebsitesContext';
 import { toast } from 'sonner';
-import { X, Plus, Loader2 } from 'lucide-react';
+import { X, Plus, Loader2, Globe } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Settings = () => {
   const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, isLoading } = useSettings();
+  const { currentWebsite } = useWebsites();
   const [frequency, setFrequency] = useState(publicationFrequency);
   const [styleInput, setStyleInput] = useState(writingStyle);
   const [subjects, setSubjects] = useState<string[]>(subjectMatters);
@@ -65,8 +68,17 @@ const Settings = () => {
           <main className="flex-1 overflow-auto p-6">
             <div className="space-y-6 max-w-6xl mx-auto">
               <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold">Settings</h1>
+                <h1 className="text-3xl font-bold">Publication Settings</h1>
               </div>
+              
+              {currentWebsite && (
+                <Alert className="bg-muted/50 border-muted">
+                  <Globe className="h-4 w-4" />
+                  <AlertDescription>
+                    Managing settings for <strong>{currentWebsite.name}</strong>
+                  </AlertDescription>
+                </Alert>
+              )}
               
               {isLoading ? (
                 // Loading skeletons
