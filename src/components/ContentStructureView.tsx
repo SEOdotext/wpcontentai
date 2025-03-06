@@ -19,7 +19,7 @@ const mockKeywords: Keyword[] = [
   { text: 'blog post', difficulty: 'easy' },
 ];
 
-const mockTitles = [
+const initialMockTitles = [
   {
     id: 1,
     title: '10 Proven WordPress SEO Strategies for Higher Rankings in 2023',
@@ -55,9 +55,17 @@ const mockTitles = [
 const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }) => {
   const [selectedTitleId, setSelectedTitleId] = useState<number | null>(null);
   const [inputValue, setInputValue] = useState('');
+  const [titles, setTitles] = useState(initialMockTitles);
 
   const handleSelectTitle = (id: number) => {
     setSelectedTitleId(id === selectedTitleId ? null : id);
+  };
+
+  const handleRemoveTitle = (id: number) => {
+    setTitles(titles.filter(title => title.id !== id));
+    if (selectedTitleId === id) {
+      setSelectedTitleId(null);
+    }
   };
 
   return (
@@ -84,9 +92,9 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         </div>
         
         <TabsContent value="titles">
-          {mockTitles.length > 0 ? (
+          {titles.length > 0 ? (
             <div className="grid gap-4">
-              {mockTitles.map((title) => (
+              {titles.map((title) => (
                 <TitleSuggestion
                   key={title.id}
                   title={title.title}
@@ -94,6 +102,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   keywordUsage={title.keywordUsage}
                   selected={selectedTitleId === title.id}
                   onSelect={() => handleSelectTitle(title.id)}
+                  onRemove={() => handleRemoveTitle(title.id)}
                 />
               ))}
             </div>

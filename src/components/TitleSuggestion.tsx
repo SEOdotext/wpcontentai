@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,7 @@ interface TitleSuggestionProps {
   keywordUsage?: number;
   selected?: boolean;
   onSelect?: () => void;
+  onRemove?: () => void;
   className?: string;
 }
 
@@ -26,6 +28,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   keywordUsage = 0,
   selected = false,
   onSelect,
+  onRemove,
   className,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -64,23 +67,38 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const newLiked = !liked;
-    setLiked(newLiked);
-    if (disliked) setDisliked(false);
     
-    if (newLiked) {
+    // Only proceed if not already liked
+    if (!liked) {
+      setLiked(true);
+      if (disliked) setDisliked(false);
+      
       const newContent = addToCalendar(title, keywords);
       toast({
         title: "Added to Calendar",
         description: `"${title}" has been scheduled for ${new Date(newContent.date).toLocaleDateString()}`,
       });
+      
+      // Remove from suggestions list
+      if (onRemove) {
+        setTimeout(onRemove, 300); // Small delay for better UX
+      }
     }
   };
 
   const handleDislike = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setDisliked(!disliked);
-    if (liked) setLiked(false);
+    
+    // Only proceed if not already disliked
+    if (!disliked) {
+      setDisliked(true);
+      if (liked) setLiked(false);
+      
+      // Remove from suggestions list
+      if (onRemove) {
+        setTimeout(onRemove, 300); // Small delay for better UX
+      }
+    }
   };
 
   const getUsageColor = () => {
