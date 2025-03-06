@@ -39,26 +39,31 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const [disliked, setDisliked] = useState(false);
   const { publicationFrequency } = useSettings();
   
-  const proposedDate = useCallback(() => {
+  const getNextAvailableDate = useCallback(() => {
     try {
+      // Get the current content in the calendar
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
-      console.log('Retrieved calendar content:', existingContent);
+      console.log('Retrieved calendar content for date calculation:', existingContent);
       
       if (existingContent.length === 0) {
+        // If no content exists yet, start with today + frequency
         const newDate = addDays(new Date(), publicationFrequency);
-        console.log('No existing content, proposing date:', newDate);
+        console.log('No existing content, setting first date to:', newDate);
         return newDate;
       } else {
         // Find the most future date in the calendar
         let latestDate = new Date();
         
         existingContent.forEach(item => {
-          const itemDate = new Date(item.date);
-          
-          // Only consider valid dates
-          if (itemDate && !isNaN(itemDate.getTime())) {
-            if (isAfter(itemDate, latestDate)) {
-              latestDate = itemDate;
+          // Ensure we have a valid date object
+          if (item.date) {
+            const itemDate = new Date(item.date);
+            
+            // Only consider valid dates
+            if (itemDate && !isNaN(itemDate.getTime())) {
+              if (isAfter(itemDate, latestDate)) {
+                latestDate = itemDate;
+              }
             }
           }
         });
@@ -72,7 +77,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         return nextDate;
       }
     } catch (error) {
-      console.error('Error calculating proposed date:', error);
+      console.error('Error calculating next available date:', error);
       // Fallback to adding days to current date
       const fallbackDate = addDays(new Date(), publicationFrequency);
       console.log('Using fallback date:', fallbackDate);
@@ -82,13 +87,13 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   
   const addToCalendar = useCallback((title: string, keywords: Keyword[]) => {
     try {
-      // Get the most up-to-date content including any just added
+      // First get the current calendar content
       const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
       
-      // Calculate a new date for this content
-      // Important: Call proposedDate() to get a fresh calculation based on the current state
-      const publicationDate = proposedDate();
+      // Calculate the next available date
+      const publicationDate = getNextAvailableDate();
       
+      // Create the new content object
       const newContent = {
         id: Date.now(),
         title,
@@ -100,16 +105,19 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         isFavorite: false,
       };
       
-      localStorage.setItem('calendarContent', JSON.stringify([...existingContent, newContent]));
+      // Update the calendar content with the new item
+      const updatedContent = [...existingContent, newContent];
+      localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
+      
       console.log('Added content to calendar:', newContent);
-      console.log('Current calendar content:', JSON.parse(localStorage.getItem('calendarContent') || '[]'));
+      console.log('Updated calendar content:', updatedContent);
       
       return newContent;
     } catch (error) {
       console.error('Error adding content to calendar:', error);
       return null;
     }
-  }, [proposedDate]);
+  }, [getNextAvailableDate]);
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
