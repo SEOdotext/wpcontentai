@@ -1,11 +1,9 @@
-
 import React, { useState } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List, Tag } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentCard, { Keyword } from '@/components/ContentCard';
-import KeywordGenerator from '@/components/KeywordGenerator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,13 +24,12 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { format, addMonths, subMonths, isEqual, startOfMonth, getDate } from 'date-fns';
 
-// Mock data with dates added for calendar view
 const recentContent = [
   {
     title: 'How to Optimize Your WordPress Site for Speed',
     description: 'Learn the best practices for improving your WordPress site loading times.',
     dateCreated: 'Oct 15, 2023',
-    date: new Date(2023, 9, 15), // October 15, 2023
+    date: new Date(2023, 9, 15),
     status: 'published',
     keywords: [
       { text: 'wordpress', difficulty: 'medium' },
@@ -44,7 +41,7 @@ const recentContent = [
     title: 'The Ultimate Guide to On-Page SEO',
     description: 'Discover everything you need to know about optimizing your content for search engines.',
     dateCreated: 'Oct 10, 2023',
-    date: new Date(2023, 9, 10), // October 10, 2023
+    date: new Date(2023, 9, 10),
     status: 'draft',
     keywords: [
       { text: 'seo', difficulty: 'hard' },
@@ -59,7 +56,7 @@ const upcomingContent = [
     title: 'WordPress Security: Best Practices for 2023',
     description: 'Keep your WordPress site secure with these essential security tips.',
     dateCreated: 'Nov 5, 2023',
-    date: new Date(2023, 10, 5), // November 5, 2023
+    date: new Date(2023, 10, 5),
     status: 'scheduled',
     keywords: [
       { text: 'wordpress', difficulty: 'medium' },
@@ -71,7 +68,7 @@ const upcomingContent = [
     title: '10 WordPress Plugins Every Business Site Needs',
     description: 'Essential plugins to improve functionality and performance.',
     dateCreated: 'Nov 12, 2023',
-    date: new Date(2023, 10, 12), // November 12, 2023
+    date: new Date(2023, 10, 12),
     status: 'scheduled',
     keywords: [
       { text: 'wordpress', difficulty: 'easy' },
@@ -80,12 +77,11 @@ const upcomingContent = [
     ],
     isFavorite: true,
   },
-  // Adding more content across different months for testing accordion view
   {
     title: 'WordPress Theme Development: A Complete Guide',
     description: 'Learn how to create custom WordPress themes from scratch.',
     dateCreated: 'Dec 3, 2023',
-    date: new Date(2023, 11, 3), // December 3, 2023
+    date: new Date(2023, 11, 3),
     status: 'draft',
     keywords: [
       { text: 'wordpress', difficulty: 'hard' },
@@ -98,7 +94,7 @@ const upcomingContent = [
     title: 'SEO Trends to Watch in 2024',
     description: 'Stay ahead of the competition with these upcoming SEO trends.',
     dateCreated: 'Jan 10, 2024',
-    date: new Date(2024, 0, 10), // January 10, 2024
+    date: new Date(2024, 0, 10),
     status: 'scheduled',
     keywords: [
       { text: 'seo', difficulty: 'medium' },
@@ -108,10 +104,8 @@ const upcomingContent = [
   },
 ];
 
-// Combine all content for calendar view
 const allContent = [...recentContent, ...upcomingContent];
 
-// Group content by month to display in tabs
 const getContentByMonth = (date: Date) => {
   const month = date.getMonth();
   const year = date.getFullYear();
@@ -127,18 +121,15 @@ const ContentCalendar = () => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [activeView, setActiveView] = useState<'monthly' | 'list'>('monthly');
   
-  // Get the previous, current, and next months
   const previousMonth = subMonths(currentDate, 1);
   const nextMonth = addMonths(currentDate, 1);
   
-  // Function to navigate between months
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(prev => 
       direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
     );
   };
   
-  // Format tab values for month identification
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
   return (
@@ -334,18 +325,6 @@ const ContentCalendar = () => {
                         </TabsContent>
                       </Tabs>
                     )}
-                  </CardContent>
-                </Card>
-                
-                <Card className="border-0 shadow-elevation">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-lg font-medium flex items-center gap-2">
-                      <Tag className="h-4 w-4" />
-                      Keyword Generator
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <KeywordGenerator />
                   </CardContent>
                 </Card>
               </div>
