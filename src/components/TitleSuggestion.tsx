@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback } from 'react';
 import { ThumbsDown, ThumbsUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -119,7 +120,12 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       <div className="flex justify-between items-start mb-2">
         <h3 className="font-medium text-base text-balance">{title}</h3>
         
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center text-xs text-muted-foreground">
+            <Calendar className="h-3 w-3 mr-1" />
+            <span>{formattedProposedDate}</span>
+          </div>
+          
           <Button
             size="icon"
             variant="ghost"
@@ -146,11 +152,6 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
             <span className="sr-only">Dislike</span>
           </Button>
         </div>
-      </div>
-
-      <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
-        <Calendar className="h-3 w-3" />
-        <span>{formattedProposedDate}</span>
       </div>
       
       {keywords.length > 0 && (
