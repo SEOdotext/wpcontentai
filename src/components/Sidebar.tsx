@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Calendar, FileText, Globe, Home, LayoutList, Settings, PlusCircle } from 'lucide-react';
 import {
@@ -80,17 +79,9 @@ export function AppSidebar() {
           </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton className="gap-2" asChild>
-              <Link to="/">
-                <LayoutList className="h-4 w-4" />
-                <span>Content Structure</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2" asChild>
-              <Link to="/">
-                <FileText className="h-4 w-4" />
-                <span>Articles</span>
+              <Link to="/settings">
+                <Settings className="h-4 w-4" />
+                <span>Publication Settings</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -99,14 +90,7 @@ export function AppSidebar() {
       
       <SidebarFooter>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2" asChild>
-              <Link to="/">
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {/* Remove settings from footer since it's now in the main menu */}
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

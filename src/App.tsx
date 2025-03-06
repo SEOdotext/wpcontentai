@@ -25,7 +25,6 @@ const App = () => (
             <Route path="/calendar" element={<ContentCalendar />} />
             <Route path="/create" element={<ContentCreation />} />
             <Route path="/settings" element={<Settings />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
