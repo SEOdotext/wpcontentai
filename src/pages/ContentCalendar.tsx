@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List } from 'lucide-react';
@@ -146,13 +145,9 @@ const ContentCalendar = () => {
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
   const handleTabChange = (value: string) => {
-    // Directly set the date based on the selected tab value
-    if (value === formatTabValue(previousMonth)) {
-      setCurrentDate(previousMonth);
-    } else if (value === formatTabValue(nextMonth)) {
-      setCurrentDate(nextMonth);
-    }
-    // Current month case is already set
+    const [year, month] = value.split('-').map(Number);
+    const newDate = new Date(year, month - 1, currentDate.getDate());
+    setCurrentDate(newDate);
   };
 
   const handleContentClick = (content: typeof allContent[0]) => {
