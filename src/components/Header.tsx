@@ -19,7 +19,7 @@ import { useState, useEffect } from 'react';
 const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const [user, setUser] = useState<{ email: string } | null>(null);
+  const [user, setUser] = useState<{ email: string; provider?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   
   // Fetch user information
@@ -27,7 +27,11 @@ const Header: React.FC = () => {
     const getUser = async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        setUser({ email: data.session.user.email || 'User' });
+        const provider = data.session.user.app_metadata.provider || 'email';
+        setUser({ 
+          email: data.session.user.email || 'User',
+          provider
+        });
       }
       setLoading(false);
     };
@@ -37,7 +41,11 @@ const Header: React.FC = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session) {
-          setUser({ email: session.user.email || 'User' });
+          const provider = session.user.app_metadata.provider || 'email';
+          setUser({ 
+            email: session.user.email || 'User',
+            provider
+          });
         } else {
           setUser(null);
         }
@@ -73,6 +81,14 @@ const Header: React.FC = () => {
     return user.email.substring(0, 2).toUpperCase();
   };
 
+  // Get avatar background color based on provider
+  const getAvatarClass = () => {
+    if (user?.provider === 'google') {
+      return 'bg-red-500';
+    }
+    return 'bg-primary';
+  };
+
   return (
     <header className="w-full h-16 border-b border-border/50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
       <div className="h-full flex items-center justify-between px-4 lg:px-6">
@@ -93,7 +109,7 @@ const Header: React.FC = () => {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
+                  <div className={`w-8 h-8 rounded-full ${getAvatarClass()} flex items-center justify-center text-primary-foreground`}>
                     <span className="text-sm font-medium">{getUserInitials()}</span>
                   </div>
                   <span className="hidden md:inline-block font-medium truncate max-w-[150px]">
@@ -104,6 +120,11 @@ const Header: React.FC = () => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                {user.provider && (
+                  <DropdownMenuItem className="text-xs text-muted-foreground cursor-default">
+                    Signed in with {user.provider}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate('/settings')}>Settings</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/websites')}>Websites</DropdownMenuItem>

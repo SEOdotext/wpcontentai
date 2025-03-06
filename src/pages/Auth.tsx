@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Separator } from "@/components/ui/separator";
 import { Mail, Loader2 } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -18,6 +19,7 @@ const Auth = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Check if user is already authenticated
@@ -45,9 +47,24 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  // Check for OAuth errors in URL
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const error = query.get('error');
+    const errorDescription = query.get('error_description');
+    
+    if (error && errorDescription) {
+      setAuthError(decodeURIComponent(errorDescription));
+      toast.error('Authentication failed', {
+        description: decodeURIComponent(errorDescription),
+      });
+    }
+  }, []);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setAuthError(null);
 
     try {
       if (mode === 'signup') {
@@ -72,7 +89,9 @@ const Auth = () => {
       }
     } catch (error) {
       console.error('Authentication error:', error);
-      toast.error(error instanceof Error ? error.message : 'Authentication failed');
+      const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
+      setAuthError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -81,6 +100,8 @@ const Auth = () => {
   const handleGoogleSignIn = async () => {
     try {
       setGoogleLoading(true);
+      setAuthError(null);
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -93,7 +114,9 @@ const Auth = () => {
       // No need to navigate as the OAuth flow will redirect automatically
     } catch (error) {
       console.error('Google sign-in error:', error);
-      toast.error(error instanceof Error ? error.message : 'Google sign-in failed');
+      const errorMessage = error instanceof Error ? error.message : 'Google sign-in failed';
+      setAuthError(errorMessage);
+      toast.error(errorMessage);
       setGoogleLoading(false);
     }
   };
@@ -120,6 +143,12 @@ const Auth = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            {authError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>{authError}</AlertDescription>
+              </Alert>
+            )}
+            
             <Button 
               type="button" 
               variant="outline" 
