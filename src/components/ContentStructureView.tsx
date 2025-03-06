@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus } from 'lucide-react';
+import { RefreshCw, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import TitleSuggestion, { Keyword } from './TitleSuggestion';
@@ -197,7 +197,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
             className="flex-1"
           />
           <Button>
-            <Plus className="h-4 w-4 mr-2" />
+            <RefreshCw className="h-4 w-4 mr-2" />
             Refresh Suggestions
           </Button>
         </div>
