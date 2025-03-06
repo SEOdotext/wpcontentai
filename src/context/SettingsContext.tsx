@@ -49,6 +49,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         setIsLoading(true);
         
+        // Check if user is authenticated
+        const { data: sessionData } = await supabase.auth.getSession();
+        const session = sessionData.session;
+        
+        if (!session) {
+          console.log("User not authenticated, using default settings");
+          return;
+        }
+        
         console.log("Fetching settings for website:", currentWebsite.id);
         
         // Filter settings by the current website's ID
@@ -137,10 +146,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   ) => {
     if (!settingsId || !currentWebsite) {
       console.error("Cannot update settings: No settingsId or currentWebsite");
+      // Save to localStorage as fallback
+      localStorage.setItem('publicationFrequency', frequency.toString());
+      localStorage.setItem('writingStyle', style);
+      localStorage.setItem('subjectMatters', JSON.stringify(subjects));
       return;
     }
     
     try {
+      // Check if user is authenticated
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast.error('You must be logged in to save settings');
+        return;
+      }
+      
       console.log("Updating settings in database:", { frequency, style, subjects, settingsId });
       
       const { error } = await supabase
