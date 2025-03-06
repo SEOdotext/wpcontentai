@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { FileText, ExternalLink, GanttChart } from 'lucide-react';
+import { FileText, ExternalLink, GanttChart, Map } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/EmptyState';
 
@@ -150,10 +150,11 @@ const WebsiteSitemap = () => {
         <main className="container mx-auto py-6 px-4 md:px-6 lg:px-8">
           {!currentWebsite ? (
             <EmptyState 
-              icon="Map"
-              heading="No Website Selected"
-              message="Please select a website from the dropdown in the sidebar to view its content structure."
-              actions={<Button>Select Website</Button>}
+              title="No Website Selected"
+              description="Please select a website from the dropdown in the sidebar to view its content structure."
+              actionLabel="Select Website"
+              onAction={() => {}}
+              icon={<Map className="h-6 w-6" />}
             />
           ) : (
             <Tabs defaultValue="sitemap">
