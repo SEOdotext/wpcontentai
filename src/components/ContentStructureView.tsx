@@ -24,31 +24,26 @@ const initialMockTitles = [
     id: 1,
     title: '10 Proven WordPress SEO Strategies for Higher Rankings in 2023',
     keywords: mockKeywords.slice(0, 3),
-    keywordUsage: 85,
   },
   {
     id: 2,
     title: 'How to Optimize Your WordPress Content for Maximum SEO Impact',
     keywords: mockKeywords.slice(1, 4),
-    keywordUsage: 72,
   },
   {
     id: 3,
     title: 'The Ultimate Guide to WordPress Content Strategy for Beginners',
     keywords: [mockKeywords[0], mockKeywords[2], mockKeywords[3]],
-    keywordUsage: 65,
   },
   {
     id: 4,
     title: "WordPress SEO in 2023: What's Changed and How to Adapt",
     keywords: mockKeywords.slice(0, 2),
-    keywordUsage: 58,
   },
   {
     id: 5,
     title: 'Creating SEO-Friendly Blog Posts in WordPress: A Step-by-Step Guide',
     keywords: mockKeywords,
-    keywordUsage: 92,
   },
 ];
 
@@ -99,7 +94,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   key={title.id}
                   title={title.title}
                   keywords={title.keywords}
-                  keywordUsage={title.keywordUsage}
                   selected={selectedTitleId === title.id}
                   onSelect={() => handleSelectTitle(title.id)}
                   onRemove={() => handleRemoveTitle(title.id)}
