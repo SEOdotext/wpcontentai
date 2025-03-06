@@ -1,6 +1,5 @@
-
 import React, { useState, useCallback } from 'react';
-import { Check, Copy, ThumbsDown, ThumbsUp, Calendar } from 'lucide-react';
+import { ThumbsDown, ThumbsUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import KeywordBadge, { KeywordDifficulty } from './KeywordBadge';
@@ -32,44 +31,29 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   onRemove,
   className,
 }) => {
-  const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
   const { publicationFrequency } = useSettings();
   
-  // Calculate proposed publication date based on existing calendar content
   const proposedDate = useCallback(() => {
     const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
     
     if (existingContent.length === 0) {
-      // If no content exists, start with today + frequency
       return addDays(new Date(), publicationFrequency);
     } else {
-      // Sort by date and get the latest date
       const sortedContent = [...existingContent].sort((a, b) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
       );
       
-      // Add frequency days to the latest date
       return addDays(new Date(sortedContent[0].date), publicationFrequency);
     }
   }, [publicationFrequency]);
   
-  const handleCopy = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(title);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const addToCalendar = useCallback((title: string, keywords: Keyword[]) => {
-    // Get existing calendar content
     const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
     
-    // Calculate publication date
     const publicationDate = proposedDate();
     
-    // Create new content entry
     const newContent = {
       id: Date.now(),
       title,
@@ -81,7 +65,6 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       isFavorite: false,
     };
     
-    // Add to existing content
     localStorage.setItem('calendarContent', JSON.stringify([...existingContent, newContent]));
     
     return newContent;
@@ -90,7 +73,6 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    // Only proceed if not already liked
     if (!liked) {
       setLiked(true);
       if (disliked) setDisliked(false);
@@ -103,9 +85,8 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         }
       );
       
-      // Remove from suggestions list
       if (onRemove) {
-        setTimeout(onRemove, 300); // Small delay for better UX
+        setTimeout(onRemove, 300);
       }
     }
   };
@@ -113,14 +94,12 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const handleDislike = (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    // Only proceed if not already disliked
     if (!disliked) {
       setDisliked(true);
       if (liked) setLiked(false);
       
-      // Remove from suggestions list
       if (onRemove) {
-        setTimeout(onRemove, 300); // Small delay for better UX
+        setTimeout(onRemove, 300);
       }
     }
   };
@@ -131,7 +110,6 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     return "text-red-600 dark:text-red-400";
   };
 
-  // Format the proposed date
   const formattedProposedDate = format(proposedDate(), 'MMM dd, yyyy');
 
   return (
@@ -200,20 +178,6 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
           >
             <ThumbsDown className="h-3.5 w-3.5" />
             <span className="sr-only">Dislike</span>
-          </Button>
-          
-          <Button
-            size="icon"
-            variant="ghost"
-            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            onClick={handleCopy}
-          >
-            {copied ? (
-              <Check className="h-3.5 w-3.5 text-green-500" />
-            ) : (
-              <Copy className="h-3.5 w-3.5" />
-            )}
-            <span className="sr-only">Copy</span>
           </Button>
         </div>
       </div>
