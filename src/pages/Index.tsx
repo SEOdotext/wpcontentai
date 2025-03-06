@@ -40,8 +40,6 @@ const Index = () => {
           <Header />
           <main className="flex-1 px-4 py-6 overflow-y-auto">
             <div className="max-w-6xl mx-auto space-y-6">
-              <h1 className="text-2xl font-semibold">Content Structure</h1>
-              
               <div className="grid md:grid-cols-2 gap-6">
                 <div>
                   <h2 className="text-lg font-medium mb-4">Recent Content</h2>
