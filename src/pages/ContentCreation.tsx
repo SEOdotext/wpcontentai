@@ -8,14 +8,16 @@ import { Toaster } from "@/components/ui/sonner";
 import { useWebsites } from '@/context/WebsitesContext';
 import { useSettings } from '@/context/SettingsContext';
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
 
 const ContentCreation = () => {
   const { currentWebsite, isLoading: websitesLoading } = useWebsites();
   const { writingStyle, subjectMatters, isLoading: settingsLoading } = useSettings();
   const [hasError, setHasError] = useState<boolean>(false);
+  const [missingCompany, setMissingCompany] = useState<boolean>(false);
 
   // Adding a console log to help with debugging
   console.log('ContentCreation rendering, currentWebsite:', currentWebsite?.name);
@@ -24,7 +26,7 @@ const ContentCreation = () => {
     // Check for errors in the context data
     const checkErrors = () => {
       if (!websitesLoading && !settingsLoading) {
-        // If both contexts have loaded but we don't have data, we likely have an error
+        // Check if we're missing required data
         if (!currentWebsite || !writingStyle || !subjectMatters) {
           setHasError(true);
           console.log('Content creation detected missing data:', { 
@@ -34,6 +36,19 @@ const ContentCreation = () => {
           });
         } else {
           setHasError(false);
+        }
+
+        // Check specifically for missing company
+        if (currentWebsite && !currentWebsite.company_id) {
+          console.log('Website missing company_id:', currentWebsite);
+          setMissingCompany(true);
+          // Only show toast once when detected
+          toast.info("No company associated with this website. Some features may be limited.", {
+            id: "missing-company-warning",
+            duration: 5000,
+          });
+        } else {
+          setMissingCompany(false);
         }
       }
     };
@@ -68,6 +83,15 @@ const ContentCreation = () => {
                   <AlertDescription>
                     There was an issue loading your content settings. Using fallback data instead.
                     If this persists, please try selecting a different website or refreshing the page.
+                  </AlertDescription>
+                </Alert>
+              ) : missingCompany ? (
+                <Alert variant="default" className="mb-6">
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>No Company Associated</AlertTitle>
+                  <AlertDescription>
+                    This website doesn't have a company associated with it. 
+                    You can still create content, but some features may be limited.
                   </AlertDescription>
                 </Alert>
               ) : null}
