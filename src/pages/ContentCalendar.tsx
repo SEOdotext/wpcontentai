@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List } from 'lucide-react';
@@ -129,30 +130,34 @@ const getContentByMonth = (date: Date) => {
 };
 
 const ContentCalendar = () => {
-  const [currentDate, setCurrentDate] = useState<Date>(new Date());
+  const [displayDate, setDisplayDate] = useState<Date>(new Date());
   const [activeView, setActiveView] = useState<'monthly' | 'list'>('monthly');
   const [selectedContent, setSelectedContent] = useState<typeof allContent[0] | null>(null);
   
-  const previousMonth = subMonths(currentDate, 1);
-  const nextMonth = addMonths(currentDate, 1);
+  // Pre-calculate these dates only when displayDate changes
+  const previousMonth = subMonths(displayDate, 1);
+  const nextMonth = addMonths(displayDate, 1);
   
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentDate(prev => 
-      direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
-    );
-  };
-  
+  // Format date for tab value
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
+  // This is the ONLY place we'll handle date changes
   const handleTabChange = (value: string) => {
+    // Get the month and year from the tab value
     const [yearStr, monthStr] = value.split('-');
     const year = parseInt(yearStr, 10);
-    const month = parseInt(monthStr, 10) - 1;
+    const month = parseInt(monthStr, 10) - 1; // JS months are 0-indexed
     
-    const day = currentDate.getDate();
-    const newDate = new Date(year, month, day);
-    
-    setCurrentDate(newDate);
+    // Create a new date object preserving the current day
+    const day = displayDate.getDate();
+    setDisplayDate(new Date(year, month, day));
+  };
+  
+  // Navigation buttons also use setDisplayDate directly
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    setDisplayDate(prev => 
+      direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
+    );
   };
 
   const handleContentClick = (content: typeof allContent[0]) => {
@@ -187,7 +192,7 @@ const ContentCalendar = () => {
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <span className="text-sm font-medium">
-                          {format(currentDate, 'MMMM yyyy')}
+                          {format(displayDate, 'MMMM yyyy')}
                         </span>
                         <Button 
                           variant="ghost" 
@@ -222,8 +227,7 @@ const ContentCalendar = () => {
                   <CardContent>
                     {activeView === 'monthly' ? (
                       <Tabs 
-                        defaultValue={formatTabValue(currentDate)}
-                        value={formatTabValue(currentDate)}
+                        value={formatTabValue(displayDate)}
                         onValueChange={handleTabChange}
                         className="w-full"
                       >
@@ -231,8 +235,8 @@ const ContentCalendar = () => {
                           <TabsTrigger value={formatTabValue(previousMonth)}>
                             {format(previousMonth, 'MMM yyyy')}
                           </TabsTrigger>
-                          <TabsTrigger value={formatTabValue(currentDate)}>
-                            {format(currentDate, 'MMM yyyy')}
+                          <TabsTrigger value={formatTabValue(displayDate)}>
+                            {format(displayDate, 'MMM yyyy')}
                           </TabsTrigger>
                           <TabsTrigger value={formatTabValue(nextMonth)}>
                             {format(nextMonth, 'MMM yyyy')}
@@ -304,7 +308,7 @@ const ContentCalendar = () => {
                           </div>
                         </TabsContent>
                         
-                        <TabsContent value={formatTabValue(currentDate)}>
+                        <TabsContent value={formatTabValue(displayDate)}>
                           <div className="rounded-md border">
                             <Table>
                               <TableHeader>
@@ -315,8 +319,8 @@ const ContentCalendar = () => {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {getContentByMonth(currentDate).length > 0 ? (
-                                  getContentByMonth(currentDate).map((content, index) => (
+                                {getContentByMonth(displayDate).length > 0 ? (
+                                  getContentByMonth(displayDate).map((content, index) => (
                                     <TableRow key={`current-${index}`} className="cursor-pointer hover:bg-accent/30" onClick={() => handleContentClick(content)}>
                                       <TableCell className="font-medium">
                                         {format(content.date, 'd MMM')}
