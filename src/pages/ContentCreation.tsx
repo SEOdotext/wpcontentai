@@ -13,6 +13,9 @@ const ContentCreation = () => {
   const { currentWebsite } = useWebsites();
   const { writingStyle, subjectMatters, isLoading } = useSettings();
 
+  // Adding a console log to help with debugging
+  console.log('ContentCreation rendering, currentWebsite:', currentWebsite?.name);
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
