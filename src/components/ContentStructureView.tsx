@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Plus, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,26 +28,31 @@ const initialMockTitles = [
     id: 1,
     title: '10 Proven WordPress SEO Strategies for Higher Rankings in 2023',
     keywords: mockKeywords.slice(0, 3),
+    date: new Date(),
   },
   {
     id: 2,
     title: 'How to Optimize Your WordPress Content for Maximum SEO Impact',
     keywords: mockKeywords.slice(1, 4),
+    date: new Date(),
   },
   {
     id: 3,
     title: 'The Ultimate Guide to WordPress Content Strategy for Beginners',
     keywords: [mockKeywords[0], mockKeywords[2], mockKeywords[3]],
+    date: new Date(),
   },
   {
     id: 4,
     title: "WordPress SEO in 2023: What's Changed and How to Adapt",
     keywords: mockKeywords.slice(0, 2),
+    date: new Date(),
   },
   {
     id: 5,
     title: 'Creating SEO-Friendly Blog Posts in WordPress: A Step-by-Step Guide',
     keywords: mockKeywords,
+    date: new Date(),
   },
 ];
 
@@ -65,6 +71,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     if (selectedTitleId === id) {
       setSelectedTitleId(null);
     }
+  };
+
+  const handleUpdateTitleDate = (id: number, newDate: Date) => {
+    setTitles(titles.map(title => 
+      title.id === id ? { ...title, date: newDate } : title
+    ));
   };
 
   return (
@@ -127,6 +139,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               selected={selectedTitleId === title.id}
               onSelect={() => handleSelectTitle(title.id)}
               onRemove={() => handleRemoveTitle(title.id)}
+              date={title.date}
+              onUpdateDate={(newDate) => handleUpdateTitleDate(title.id, newDate)}
             />
           ))}
         </div>
