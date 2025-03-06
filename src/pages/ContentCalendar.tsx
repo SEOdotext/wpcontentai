@@ -1,22 +1,30 @@
 
 import React, { useState } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { Calendar as CalendarIcon, ChevronDown, List, Tag } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, List, Tag } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentCard, { Keyword } from '@/components/ContentCard';
 import KeywordGenerator from '@/components/KeywordGenerator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import EmptyState from '@/components/EmptyState';
-import { Calendar } from '@/components/ui/calendar';
-import { format, getMonth, getYear, parseISO } from 'date-fns';
+import { Button } from '@/components/ui/button';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Separator } from '@/components/ui/separator';
+import { format, addMonths, subMonths, isEqual, startOfMonth, getDate } from 'date-fns';
 
 // Mock data with dates added for calendar view
 const recentContent = [
@@ -103,87 +111,36 @@ const upcomingContent = [
 // Combine all content for calendar view
 const allContent = [...recentContent, ...upcomingContent];
 
-// Create mapping of dates to content for calendar view
-const getContentByDate = () => {
-  const contentMap = new Map();
+// Group content by month to display in tabs
+const getContentByMonth = (date: Date) => {
+  const month = date.getMonth();
+  const year = date.getFullYear();
   
-  allContent.forEach(content => {
-    const dateStr = content.date.toDateString();
-    if (!contentMap.has(dateStr)) {
-      contentMap.set(dateStr, []);
-    }
-    contentMap.get(dateStr).push(content);
-  });
-  
-  return contentMap;
-};
-
-// Group content by month and year
-const getContentByMonthYear = () => {
-  const monthYearMap: Record<string, typeof allContent> = {};
-  
-  allContent.forEach(content => {
-    const date = content.date;
-    const monthYear = `${date.getFullYear()}-${date.getMonth()}`;
-    const monthYearLabel = format(date, 'MMMM yyyy');
-    
-    if (!monthYearMap[monthYear]) {
-      monthYearMap[monthYear] = [];
-    }
-    
-    monthYearMap[monthYear].push(content);
-  });
-  
-  // Sort the content within each month by date
-  Object.keys(monthYearMap).forEach(key => {
-    monthYearMap[key].sort((a, b) => a.date.getTime() - b.date.getTime());
-  });
-  
-  return monthYearMap;
-};
-
-// Get sorted array of unique month-year combinations
-const getSortedMonthYears = () => {
-  const monthYearMap = getContentByMonthYear();
-  return Object.keys(monthYearMap)
-    .sort((a, b) => {
-      const [yearA, monthA] = a.split('-').map(Number);
-      const [yearB, monthB] = b.split('-').map(Number);
-      return yearB - yearA || monthB - monthA; // Sort descending (newest first)
-    })
-    .map(key => {
-      const [year, month] = key.split('-').map(Number);
-      const date = new Date(year, month, 1);
-      return {
-        key,
-        label: format(date, 'MMMM yyyy'),
-        content: monthYearMap[key]
-      };
-    });
+  return allContent.filter(content => {
+    const contentMonth = content.date.getMonth();
+    const contentYear = content.date.getFullYear();
+    return contentMonth === month && contentYear === year;
+  }).sort((a, b) => a.date.getTime() - b.date.getTime());
 };
 
 const ContentCalendar = () => {
-  const [date, setDate] = useState<Date | undefined>(new Date());
+  const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [activeView, setActiveView] = useState<'monthly' | 'list'>('monthly');
-  const contentByDate = getContentByDate();
-  const sortedMonthYears = getSortedMonthYears();
-
-  // Function to get content for a specific date
-  const getContentForDate = (date: Date | undefined) => {
-    if (!date) return [];
-    return contentByDate.get(date.toDateString()) || [];
+  
+  // Get the previous, current, and next months
+  const previousMonth = subMonths(currentDate, 1);
+  const nextMonth = addMonths(currentDate, 1);
+  
+  // Function to navigate between months
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    setCurrentDate(prev => 
+      direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
+    );
   };
-
-  // Get selected date content
-  const selectedDateContent = getContentForDate(date);
-
-  // Create date class names to highlight dates with content
-  const getDayClassName = (date: Date) => {
-    return contentByDate.has(date.toDateString()) 
-      ? "bg-primary/20 text-primary-foreground font-medium rounded-full" 
-      : "";
-  };
-
+  
+  // Format tab values for month identification
+  const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
+  
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -199,53 +156,138 @@ const ContentCalendar = () => {
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-center">
                       <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
-                      <div className="flex space-x-2">
-                        <button 
+                      <div className="flex items-center space-x-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => navigateMonth('prev')}
+                          title="Previous month"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-sm font-medium">
+                          {format(currentDate, 'MMMM yyyy')}
+                        </span>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          onClick={() => navigateMonth('next')}
+                          title="Next month"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                        <Separator orientation="vertical" className="h-6 mx-2" />
+                        <Button 
                           onClick={() => setActiveView('monthly')}
-                          className={`p-2 rounded-md ${activeView === 'monthly' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+                          variant={activeView === 'monthly' ? 'default' : 'ghost'}
+                          size="sm"
+                          className="px-2"
                         >
                           <CalendarIcon className="h-4 w-4" />
-                          <span className="sr-only">Monthly View</span>
-                        </button>
-                        <button 
+                          <span className="sr-only md:not-sr-only md:ml-2">Monthly</span>
+                        </Button>
+                        <Button 
                           onClick={() => setActiveView('list')}
-                          className={`p-2 rounded-md ${activeView === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+                          variant={activeView === 'list' ? 'default' : 'ghost'}
+                          size="sm"
+                          className="px-2"
                         >
                           <List className="h-4 w-4" />
-                          <span className="sr-only">List View</span>
-                        </button>
+                          <span className="sr-only md:not-sr-only md:ml-2">List</span>
+                        </Button>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
                     {activeView === 'monthly' ? (
-                      <div className="space-y-6">
-                        <Accordion type="single" collapsible className="w-full">
-                          {sortedMonthYears.map((monthYear) => (
-                            <AccordionItem key={monthYear.key} value={monthYear.key}>
-                              <AccordionTrigger className="text-md font-medium hover:no-underline">
-                                {monthYear.label} ({monthYear.content.length} items)
-                              </AccordionTrigger>
-                              <AccordionContent>
-                                <div className="pt-2 space-y-4">
-                                  {monthYear.content.map((content, index) => (
-                                    <ContentCard
-                                      key={`${monthYear.key}-${index}`}
-                                      title={content.title}
-                                      description={content.description}
-                                      keywords={content.keywords as Keyword[]}
-                                      dateCreated={format(content.date, 'MMM d, yyyy')}
-                                      status={content.status as 'draft' | 'published' | 'scheduled'}
-                                      isFavorite={content.isFavorite}
-                                      className="border border-border/50"
-                                    />
-                                  ))}
-                                </div>
-                              </AccordionContent>
-                            </AccordionItem>
-                          ))}
-                        </Accordion>
-                      </div>
+                      <Tabs 
+                        defaultValue={formatTabValue(currentDate)} 
+                        value={formatTabValue(currentDate)}
+                        onValueChange={(value) => {
+                          const [year, month] = value.split('-').map(Number);
+                          setCurrentDate(new Date(year, month));
+                        }}
+                        className="w-full"
+                      >
+                        <TabsList className="grid grid-cols-3 mb-6">
+                          <TabsTrigger value={formatTabValue(previousMonth)}>
+                            {format(previousMonth, 'MMM yyyy')}
+                          </TabsTrigger>
+                          <TabsTrigger value={formatTabValue(currentDate)}>
+                            {format(currentDate, 'MMM yyyy')}
+                          </TabsTrigger>
+                          <TabsTrigger value={formatTabValue(nextMonth)}>
+                            {format(nextMonth, 'MMM yyyy')}
+                          </TabsTrigger>
+                        </TabsList>
+                        
+                        {[previousMonth, currentDate, nextMonth].map((date) => (
+                          <TabsContent key={formatTabValue(date)} value={formatTabValue(date)}>
+                            <div className="rounded-md border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="w-[100px]">Date</TableHead>
+                                    <TableHead>Title</TableHead>
+                                    <TableHead className="w-[120px]">Status</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {getContentByMonth(date).length > 0 ? (
+                                    getContentByMonth(date).map((content, index) => (
+                                      <TableRow key={`${formatTabValue(date)}-${index}`}>
+                                        <TableCell className="font-medium">
+                                          {format(content.date, 'd MMM')}
+                                        </TableCell>
+                                        <TableCell>
+                                          <Accordion type="single" collapsible className="w-full">
+                                            <AccordionItem value={`${formatTabValue(date)}-${index}`} className="border-0">
+                                              <AccordionTrigger className="py-0 hover:no-underline">
+                                                <span className="text-sm font-medium">{content.title}</span>
+                                              </AccordionTrigger>
+                                              <AccordionContent>
+                                                <div className="py-2">
+                                                  <p className="text-sm text-muted-foreground mb-3">{content.description}</p>
+                                                  {content.keywords.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                                      {content.keywords.map((keyword, keywordIndex) => (
+                                                        <span key={keywordIndex} className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                                          {keyword.text}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </AccordionContent>
+                                            </AccordionItem>
+                                          </Accordion>
+                                        </TableCell>
+                                        <TableCell>
+                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                            content.status === 'published' 
+                                              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                              : content.status === 'scheduled'
+                                              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                                          }`}>
+                                            {content.status}
+                                          </span>
+                                        </TableCell>
+                                      </TableRow>
+                                    ))
+                                  ) : (
+                                    <TableRow>
+                                      <TableCell colSpan={3} className="h-24 text-center">
+                                        No content scheduled for this month
+                                      </TableCell>
+                                    </TableRow>
+                                  )}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </TabsContent>
+                        ))}
+                      </Tabs>
                     ) : (
                       <Tabs defaultValue="recent" className="w-full">
                         <TabsList className="mb-6 w-full justify-start">
