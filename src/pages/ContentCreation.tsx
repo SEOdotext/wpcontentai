@@ -8,7 +8,7 @@ import ContentStructureView from '@/components/ContentStructureView';
 const ContentCreation = () => {
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col overflow-hidden">
           <Header />

@@ -1,9 +1,10 @@
-
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Check, Copy, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import KeywordBadge, { KeywordDifficulty } from './KeywordBadge';
+import { addMonths } from 'date-fns';
+import { useToast } from '@/components/ui/use-toast';
 
 export interface Keyword {
   text: string;
@@ -30,6 +31,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const [copied, setCopied] = useState(false);
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
+  const { toast } = useToast();
   
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -38,18 +40,47 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const addToCalendar = useCallback((title: string, keywords: Keyword[]) => {
+    // Get existing calendar content
+    const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
+    
+    // Create new content entry
+    const newContent = {
+      id: Date.now(),
+      title,
+      description: `Generated content for: ${title}`,
+      dateCreated: new Date().toISOString(),
+      date: addMonths(new Date(), 1).toISOString(), // Schedule for next month
+      status: 'scheduled',
+      keywords,
+      isFavorite: false,
+    };
+    
+    // Add to existing content
+    localStorage.setItem('calendarContent', JSON.stringify([...existingContent, newContent]));
+    
+    return newContent;
+  }, []);
+
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setLiked(!liked);
+    const newLiked = !liked;
+    setLiked(newLiked);
     if (disliked) setDisliked(false);
-    console.log(`Title "${title}" ${!liked ? 'liked' : 'like removed'}`);
+    
+    if (newLiked) {
+      const newContent = addToCalendar(title, keywords);
+      toast({
+        title: "Added to Calendar",
+        description: `"${title}" has been scheduled for ${new Date(newContent.date).toLocaleDateString()}`,
+      });
+    }
   };
 
   const handleDislike = (e: React.MouseEvent) => {
     e.stopPropagation();
     setDisliked(!disliked);
     if (liked) setLiked(false);
-    console.log(`Title "${title}" ${!disliked ? 'disliked' : 'dislike removed'}`);
   };
 
   const getUsageColor = () => {
