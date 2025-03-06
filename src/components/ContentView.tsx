@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Calendar, Tag, X, Minus } from 'lucide-react';
+import { ArrowLeft, MoreHorizontal, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -12,6 +12,12 @@ import {
   SheetOverlay,
   SheetPortal,
 } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ContentViewProps {
   title: string;
@@ -34,6 +40,8 @@ const ContentView: React.FC<ContentViewProps> = ({
   onClose,
   onDeleteClick,
 }) => {
+  const defaultContent = `<p>This is the default content. You can replace it with your own content.</p>`;
+
   return (
     <Sheet open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <SheetPortal>
@@ -48,15 +56,26 @@ const ContentView: React.FC<ContentViewProps> = ({
                 <CardTitle className="text-xl md:text-2xl">{title}</CardTitle>
               </div>
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                  onClick={() => onDeleteClick?.()}
-                >
-                  <Minus className="h-4 w-4" />
-                  <span className="sr-only">Remove from calendar</span>
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                      <span className="sr-only">More options</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem 
+                      className="text-destructive"
+                      onClick={onDeleteClick}
+                    >
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button variant="ghost" size="icon" onClick={onClose}>
                   <X className="h-5 w-5" />
                 </Button>

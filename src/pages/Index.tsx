@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import Header from '@/components/Header';
@@ -18,7 +17,6 @@ const recentContent = [
       { text: 'wordpress', difficulty: 'medium' },
       { text: 'speed', difficulty: 'easy' },
     ],
-    isFavorite: true,
   },
   {
     title: 'The Ultimate Guide to On-Page SEO',
@@ -29,7 +27,6 @@ const recentContent = [
       { text: 'seo', difficulty: 'hard' },
       { text: 'content', difficulty: 'easy' },
     ],
-    isFavorite: false,
   },
 ];
 
@@ -56,7 +53,6 @@ const Index = () => {
                         keywords={content.keywords as Keyword[]}
                         dateCreated={content.dateCreated}
                         status={content.status as 'draft' | 'published' | 'scheduled'}
-                        isFavorite={content.isFavorite}
                       />
                     ))}
                   </div>

@@ -34,7 +34,6 @@ interface CalendarContent {
   date: string;
   status: 'published' | 'draft' | 'scheduled';
   keywords: Keyword[];
-  isFavorite: boolean;
 }
 
 const ContentCalendar = () => {
@@ -100,34 +99,6 @@ const ContentCalendar = () => {
     setSelectedContent(content);
   };
 
-  const handleToggleFavorite = (contentId: number) => {
-    const updatedContent = allContent.map(content => {
-      if (content.id === contentId) {
-        return { ...content, isFavorite: !content.isFavorite };
-      }
-      return content;
-    });
-    
-    setAllContent(updatedContent);
-    
-    localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
-    
-    if (selectedContent && selectedContent.id === contentId) {
-      setSelectedContent({ ...selectedContent, isFavorite: !selectedContent.isFavorite });
-    }
-    
-    const now = new Date();
-    const recent = updatedContent.filter(
-      item => new Date(item.date) <= now
-    );
-    const upcoming = updatedContent.filter(
-      item => new Date(item.date) > now
-    );
-    
-    setRecentContent(recent);
-    setUpcomingContent(upcoming);
-  };
-  
   const handleDeleteContent = (contentId: number) => {
     const updatedContent = allContent.filter(content => content.id !== contentId);
     
@@ -460,12 +431,10 @@ const ContentCalendar = () => {
         <ContentView
           title={selectedContent.title}
           description={selectedContent.description}
-          keywords={selectedContent.keywords as Keyword[]}
+          keywords={selectedContent.keywords}
           dateCreated={selectedContent.dateCreated}
-          status={selectedContent.status as 'draft' | 'published' | 'scheduled'}
-          isFavorite={selectedContent.isFavorite}
+          status={selectedContent.status}
           onClose={() => setSelectedContent(null)}
-          onFavoriteToggle={() => handleToggleFavorite(selectedContent.id)}
           onDeleteClick={() => handleDeleteContent(selectedContent.id)}
         />
       )}
