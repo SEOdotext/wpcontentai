@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { FileText, Globe, Home, LayoutList, Settings } from 'lucide-react';
+import { FileText, Globe, Home, LayoutList, Settings, Calendar } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
 
 export function AppSidebar() {
   return (
@@ -54,21 +55,35 @@ export function AppSidebar() {
         </div>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2">
-              <Home className="h-4 w-4" />
-              <span>Dashboard</span>
+            <SidebarMenuButton className="gap-2" asChild>
+              <Link to="/">
+                <Home className="h-4 w-4" />
+                <span>Dashboard</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2 text-primary bg-primary/10">
-              <LayoutList className="h-4 w-4" />
-              <span>Content Structure</span>
+            <SidebarMenuButton className="gap-2" asChild>
+              <Link to="/calendar">
+                <Calendar className="h-4 w-4" />
+                <span>Content Calendar</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2">
-              <FileText className="h-4 w-4" />
-              <span>Articles</span>
+            <SidebarMenuButton className="gap-2" asChild>
+              <Link to="/">
+                <LayoutList className="h-4 w-4" />
+                <span>Content Structure</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton className="gap-2" asChild>
+              <Link to="/">
+                <FileText className="h-4 w-4" />
+                <span>Articles</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -77,9 +92,11 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="gap-2">
-              <Settings className="h-4 w-4" />
-              <span>Settings</span>
+            <SidebarMenuButton className="gap-2" asChild>
+              <Link to="/">
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
