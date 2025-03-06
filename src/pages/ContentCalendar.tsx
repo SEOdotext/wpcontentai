@@ -145,11 +145,9 @@ const ContentCalendar = () => {
   const formatTabValue = (date: Date) => format(date, 'yyyy-MM');
   
   const handleTabChange = (value: string) => {
-    if (value === formatTabValue(previousMonth)) {
-      setCurrentDate(previousMonth);
-    } else if (value === formatTabValue(nextMonth)) {
-      setCurrentDate(nextMonth);
-    }
+    const [year, month] = value.split('-').map(Number);
+    const newDate = new Date(year, month - 1, 1);
+    setCurrentDate(newDate);
   };
 
   const handleContentClick = (content: typeof allContent[0]) => {
