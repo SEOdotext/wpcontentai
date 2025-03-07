@@ -1,0 +1,14 @@
+[build]
+command = "npm run build"
+cwd = "."
+
+[site]
+bucket = "./dist"
+include = ["**/*"]
+
+[build.environment]
+NODE_VERSION = "18"
+
+[env.production]
+name = "wpcontentai"
+route = "wpcontentai.com/*" 
