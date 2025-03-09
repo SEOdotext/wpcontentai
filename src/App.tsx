@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HelmetProvider } from 'react-helmet-async';
 import Index from "./pages/Index";
 import ContentCalendar from "./pages/ContentCalendar";
 import ContentCreation from "./pages/ContentCreation";
@@ -104,73 +105,75 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
-      <OrganisationProvider>
-        <WebsitesProvider>
-          <SettingsProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <Routes>
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/setup" element={
-                  <ProtectedRoute requireOrg={false}>
-                    <SidebarProvider>
-                      <OrganisationSetup />
-                    </SidebarProvider>
-                  </ProtectedRoute>
-                } />
-                <Route path="/" element={
-                  <ProtectedRoute>
-                    <SidebarProvider>
-                      <Index />
-                    </SidebarProvider>
-                  </ProtectedRoute>
-                } />
-                <Route path="/calendar" element={
-                  <ProtectedRoute>
-                    <SidebarProvider>
-                      <ContentCalendar />
-                    </SidebarProvider>
-                  </ProtectedRoute>
-                } />
-                <Route path="/create" element={
-                  <ProtectedRoute>
-                    <SidebarProvider>
-                      <ContentCreation />
-                    </SidebarProvider>
-                  </ProtectedRoute>
-                } />
-                <Route path="/settings" element={
-                  <ProtectedRoute>
-                    <SidebarProvider>
-                      <Settings />
-                    </SidebarProvider>
-                  </ProtectedRoute>
-                } />
-                <Route path="/websites" element={
-                  <ProtectedRoute>
-                    <SidebarProvider>
-                      <WebsiteManager />
-                    </SidebarProvider>
-                  </ProtectedRoute>
-                } />
-                <Route path="/sitemap" element={
-                  <ProtectedRoute>
-                    <SidebarProvider>
-                      <WebsiteSitemap />
-                    </SidebarProvider>
-                  </ProtectedRoute>
-                } />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </TooltipProvider>
-          </SettingsProvider>
-        </WebsitesProvider>
-      </OrganisationProvider>
-    </BrowserRouter>
-  </QueryClientProvider>
+  <HelmetProvider>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <OrganisationProvider>
+          <WebsitesProvider>
+            <SettingsProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <Routes>
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/setup" element={
+                    <ProtectedRoute requireOrg={false}>
+                      <SidebarProvider>
+                        <OrganisationSetup />
+                      </SidebarProvider>
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/" element={
+                    <ProtectedRoute>
+                      <SidebarProvider>
+                        <Index />
+                      </SidebarProvider>
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/calendar" element={
+                    <ProtectedRoute>
+                      <SidebarProvider>
+                        <ContentCalendar />
+                      </SidebarProvider>
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/create" element={
+                    <ProtectedRoute>
+                      <SidebarProvider>
+                        <ContentCreation />
+                      </SidebarProvider>
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/settings" element={
+                    <ProtectedRoute>
+                      <SidebarProvider>
+                        <Settings />
+                      </SidebarProvider>
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/websites" element={
+                    <ProtectedRoute>
+                      <SidebarProvider>
+                        <WebsiteManager />
+                      </SidebarProvider>
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/sitemap" element={
+                    <ProtectedRoute>
+                      <SidebarProvider>
+                        <WebsiteSitemap />
+                      </SidebarProvider>
+                    </ProtectedRoute>
+                  } />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </TooltipProvider>
+            </SettingsProvider>
+          </WebsitesProvider>
+        </OrganisationProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
+  </HelmetProvider>
 );
 
 export default App;

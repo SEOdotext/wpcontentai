@@ -10,10 +10,10 @@ import { Navigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { Helmet } from 'react-helmet-async';
 
 const OrganisationSetup = () => {
   const [websiteUrl, setWebsiteUrl] = useState('');
-  const [websiteName, setWebsiteName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { createOrganisation, hasOrganisation, isLoading } = useOrganisation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -42,15 +42,18 @@ const OrganisationSetup = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!websiteUrl.trim() || !websiteName.trim()) {
+    if (!websiteUrl.trim()) {
       return;
     }
     
     setIsSubmitting(true);
     try {
-      // First create organization using website name as base
-      const orgName = generateOrgName(websiteUrl);
-      const success = await createOrganisation(orgName);
+      // Generate names from URL
+      const siteName = generateOrgName(websiteUrl);
+      console.log('Generated site name:', siteName);
+      
+      const success = await createOrganisation(siteName);
+      console.log('Organization creation result:', success);
       
       if (!success) {
         throw new Error('Failed to create organisation');
@@ -58,6 +61,8 @@ const OrganisationSetup = () => {
 
       // Get the newly created organization
       const { data: sessionData } = await supabase.auth.getSession();
+      console.log('Session data:', sessionData);
+      
       if (!sessionData.session) {
         throw new Error('No session found');
       }
@@ -68,20 +73,26 @@ const OrganisationSetup = () => {
         .eq('id', sessionData.session.user.id)
         .single();
 
+      console.log('Profile data:', profileData);
+      console.log('Profile error:', profileError);
+
       if (profileError || !profileData?.organisation_id) {
         throw new Error('Could not find organization ID');
       }
 
       // Then create the website
-      const { error: websiteError } = await supabase
+      const { data: websiteData, error: websiteError } = await supabase
         .from('websites')
         .insert({
           url: websiteUrl.trim(),
-          name: websiteName.trim(),
+          name: siteName,
           organisation_id: profileData.organisation_id
         })
         .select()
         .single();
+
+      console.log('Website data:', websiteData);
+      console.log('Website error:', websiteError);
 
       if (websiteError) {
         throw websiteError;
@@ -120,64 +131,59 @@ const OrganisationSetup = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-4">
-          <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
-            <Globe className="h-8 w-8 text-primary" />
-          </div>
-          <div className="space-y-2">
-            <CardTitle className="text-2xl">Welcome to Your Content Platform</CardTitle>
-            <CardDescription>
-              Let's get started by adding your website
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="websiteName" className="text-center block">Website Name</Label>
-              <Input
-                id="websiteName"
-                value={websiteName}
-                onChange={(e) => setWebsiteName(e.target.value)}
-                placeholder="Enter your website name"
-                className="text-center"
-                required
-              />
+    <>
+      <Helmet>
+        <title>Setup Your Website | WP Content AI</title>
+        <meta name="description" content="Get started with WP Content AI by setting up your website" />
+      </Helmet>
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center space-y-4">
+            <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
+              <Globe className="h-8 w-8 text-primary" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="websiteUrl" className="text-center block">Website URL</Label>
-              <Input
-                id="websiteUrl"
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-                placeholder="https://example.com"
-                type="url"
-                className="text-center"
-                required
-              />
-              <p className="text-sm text-muted-foreground text-center">
-                Your organization will be created automatically based on your website name
-              </p>
+              <CardTitle className="text-2xl">Welcome to Your Content Platform</CardTitle>
+              <CardDescription>
+                Let's get started by adding your website
+              </CardDescription>
             </div>
-          </CardContent>
-          <CardFooter className="flex flex-col">
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Setting up...
-                </>
-              ) : (
-                'Complete Setup'
-              )}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
-      <Toaster />
-    </div>
+          </CardHeader>
+          <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="websiteUrl" className="text-center block">Website URL</Label>
+                <Input
+                  id="websiteUrl"
+                  value={websiteUrl}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  type="url"
+                  className="text-center"
+                  required
+                />
+                <p className="text-sm text-muted-foreground text-center">
+                  Your organization will be created automatically based on your website URL
+                </p>
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col">
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Setting up...
+                  </>
+                ) : (
+                  'Complete Setup'
+                )}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+        <Toaster />
+      </div>
+    </>
   );
 };
 
