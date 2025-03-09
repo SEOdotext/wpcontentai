@@ -170,54 +170,44 @@ const Settings = () => {
                         <div className="rounded-lg border bg-card p-4">
                           <h4 className="font-medium mb-2">Before you start:</h4>
                           <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
-                            <li>Make sure you have admin access to your WordPress site</li>
-                            <li>You'll need to create a secure connection for WP Content AI</li>
-                            <li>We'll guide you through each step of the process</li>
+                            <li>Make sure you're logged into your WordPress admin</li>
+                            <li>You'll create a secure connection key that only WP Content AI can use</li>
+                            <li>This is more secure than using your admin password</li>
                           </ul>
                         </div>
 
                         <div className="space-y-4">
                           <div className="space-y-2">
-                            <Label>Step 1: Access WordPress Admin</Label>
-                            <Button 
-                              variant="outline" 
-                              className="w-full justify-start" 
-                              onClick={() => window.open(`${currentWebsite?.url}/wp-admin/user-new.php`, '_blank')}
-                            >
-                              <Globe className="h-4 w-4 mr-2" />
-                              Open WordPress Admin
-                            </Button>
-                            <p className="text-sm text-muted-foreground">
-                              First, create a new WordPress user for WP Content AI (if you haven't already)
-                            </p>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label>Step 2: Create Application Password</Label>
+                            <Label>Create a Secure Connection</Label>
                             <Button 
                               variant="outline" 
                               className="w-full justify-start"
-                              onClick={handleStartWordPressAuth}
+                              onClick={() => {
+                                if (!currentWebsite?.url) {
+                                  toast.error('Website URL is not configured');
+                                  return;
+                                }
+                                // Remove protocol if present and add https
+                                const cleanUrl = currentWebsite.url.replace(/^https?:\/\//, '');
+                                // Check if URL ends with /wp-admin or similar
+                                const baseUrl = cleanUrl.replace(/\/(wp-admin|wp-login|wp-content).*$/, '');
+                                window.open(`https://${baseUrl}/wp-admin/profile.php#application-passwords-section`, '_blank');
+                                handleStartWordPressAuth();
+                              }}
                             >
                               <Key className="h-4 w-4 mr-2" />
-                              Generate Application Password
+                              Generate Connection Key
                             </Button>
                             <p className="text-sm text-muted-foreground">
-                              We'll help you create a secure connection key for WP Content AI
+                              We'll open your WordPress profile where you can create a secure connection key
                             </p>
                           </div>
 
                           <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-                            <p className="text-sm font-medium">Need help?</p>
+                            <p className="text-sm font-medium">What is a Connection Key?</p>
                             <p className="text-sm text-muted-foreground">
-                              Check out our guide on {" "}
-                              <Button 
-                                variant="link" 
-                                className="h-auto p-0 text-sm"
-                                onClick={() => window.open('https://docs.wpcontentai.com/wordpress-integration', '_blank')}
-                              >
-                                how to connect WordPress
-                              </Button>
+                              A connection key (or application password) is a secure way to let WP Content AI connect to your WordPress site. 
+                              Unlike your admin password, it has limited access and can be revoked at any time.
                             </p>
                           </div>
                         </div>
@@ -346,19 +336,19 @@ const Settings = () => {
           <DialogHeader>
             <DialogTitle>Connect to WordPress</DialogTitle>
             <DialogDescription>
-              Follow these steps to securely connect WP Content AI with your WordPress site
+              Follow these steps to connect WP Content AI with your WordPress site
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
             <div className="rounded-lg border bg-muted/50 p-4 space-y-4">
               <div className="space-y-2">
-                <h4 className="font-medium">How to generate an Application Password:</h4>
+                <h4 className="font-medium">Creating your Connection Key:</h4>
                 <ol className="list-decimal pl-4 space-y-2 text-sm text-muted-foreground">
-                  <li>Go to your WordPress profile page</li>
-                  <li>Scroll down to "Application Passwords" section</li>
+                  <li>In the Application Passwords section of your profile</li>
                   <li>Enter "WP Content AI" as the name</li>
                   <li>Click "Add New Application Password"</li>
-                  <li>Copy the generated password (it looks like: xxxx xxxx xxxx xxxx)</li>
+                  <li>Copy the generated password - it looks like: xxxx xxxx xxxx xxxx</li>
+                  <li>Paste it below along with your WordPress username</li>
                 </ol>
               </div>
             </div>
@@ -378,16 +368,16 @@ const Settings = () => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="wpPassword">Application Password</Label>
+                <Label htmlFor="wpPassword">Connection Key</Label>
                 <Input
                   id="wpPassword"
                   type="password"
                   value={wpPassword}
                   onChange={(e) => setWpPassword(e.target.value)}
-                  placeholder="Paste the generated password here"
+                  placeholder="Paste your connection key here"
                 />
                 <p className="text-sm text-muted-foreground">
-                  This is the application password you just generated, not your regular WordPress password
+                  Paste the connection key you just generated (it should look like: xxxx xxxx xxxx xxxx)
                 </p>
               </div>
             </div>

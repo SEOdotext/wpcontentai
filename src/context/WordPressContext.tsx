@@ -89,11 +89,21 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     fetchSettings();
   }, [currentWebsite]);
 
+  // Helper function to construct WordPress admin URLs
+  const constructWpUrl = (baseUrl: string, path: string = ''): string => {
+    // Remove protocol if present
+    const cleanUrl = baseUrl.replace(/^https?:\/\//, '');
+    // Remove any WordPress-specific paths
+    const baseWpUrl = cleanUrl.replace(/\/(wp-admin|wp-login|wp-content).*$/, '');
+    // Remove trailing slashes
+    const cleanPath = path.replace(/^\/+|\/+$/g, '');
+    return `https://${baseWpUrl}/${cleanPath}`;
+  };
+
   // Initiate WordPress authentication by opening the application passwords page
   const initiateWordPressAuth = (wpAdminUrl: string) => {
-    // Clean up the URL
-    const baseUrl = wpAdminUrl.replace(/\/+$/, '');
-    const appPasswordsUrl = `${baseUrl}/wp-admin/profile.php#application-passwords-section`;
+    // Construct the application passwords URL
+    const appPasswordsUrl = constructWpUrl(wpAdminUrl, 'wp-admin/profile.php#application-passwords-section');
     
     // Open WordPress admin in a new tab
     window.open(appPasswordsUrl, '_blank');
@@ -126,8 +136,12 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       setIsLoading(true);
 
+      // Construct the API URL and clean the base URL
+      const apiUrl = constructWpUrl(wpUrl, 'wp-json/wp/v2/users/me');
+      const cleanWpUrl = constructWpUrl(wpUrl);
+
       // Test the credentials first
-      const response = await fetch(`${wpUrl}/wp-json/wp/v2/users/me`, {
+      const response = await fetch(apiUrl, {
         headers: {
           'Authorization': 'Basic ' + btoa(`${username}:${password}`)
         }
@@ -142,7 +156,7 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         .from('wordpress_settings')
         .upsert({
           website_id: currentWebsite.id,
-          wp_url: wpUrl,
+          wp_url: cleanWpUrl,
           wp_username: username,
           wp_application_password: password,
           is_connected: true,
@@ -212,7 +226,8 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     try {
-      const response = await fetch(`${settings.wp_url}/wp-json/wp/v2/posts`, {
+      const apiUrl = constructWpUrl(settings.wp_url, 'wp-json/wp/v2/posts');
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -251,7 +266,8 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     try {
-      const response = await fetch(`${settings.wp_url}/wp-json/wp/v2/posts/${postId}`, {
+      const apiUrl = constructWpUrl(settings.wp_url, `wp-json/wp/v2/posts/${postId}`);
+      const response = await fetch(apiUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
