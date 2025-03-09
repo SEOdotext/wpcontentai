@@ -14,6 +14,7 @@ interface OrganisationContextType {
   hasOrganisation: boolean;
   isLoading: boolean;
   createOrganisation: (name: string) => Promise<boolean>;
+  updateOrganisation: (id: string, updates: Partial<Organisation>) => Promise<boolean>;
 }
 
 const OrganisationContext = createContext<OrganisationContextType>({
@@ -21,6 +22,7 @@ const OrganisationContext = createContext<OrganisationContextType>({
   hasOrganisation: false,
   isLoading: true,
   createOrganisation: async () => false,
+  updateOrganisation: async () => false,
 });
 
 export const useOrganisation = () => useContext(OrganisationContext);
@@ -149,12 +151,75 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
+  // Update an existing organisation
+  const updateOrganisation = async (id: string, updates: Partial<Organisation>): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      
+      // Check if user is authenticated
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast.error("You must be logged in to update the organisation");
+        return false;
+      }
+
+      console.log('Updating organisation:', { id, updates });
+      
+      // First verify the user has access to this organisation
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('organisation_id')
+        .eq('id', sessionData.session.user.id)
+        .single();
+
+      if (profileError) {
+        console.error("Error verifying user access:", profileError);
+        toast.error("Failed to verify user access");
+        return false;
+      }
+
+      if (profileData.organisation_id !== id) {
+        console.error("User does not have access to this organisation");
+        toast.error("You don't have permission to update this organisation");
+        return false;
+      }
+      
+      // Update organisation
+      const { data: orgData, error: orgError } = await supabase
+        .from('organisations')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (orgError) {
+        console.error("Error updating organisation:", orgError);
+        console.error("Full error details:", JSON.stringify(orgError, null, 2));
+        toast.error("Failed to update organisation");
+        return false;
+      }
+      
+      console.log('Organisation updated successfully:', orgData);
+      setOrganisation(orgData as Organisation);
+      toast.success("Organisation updated successfully");
+      return true;
+    } catch (error) {
+      console.error("Error in updateOrganisation:", error);
+      console.error("Full error details:", JSON.stringify(error, null, 2));
+      toast.error("Failed to update organisation");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <OrganisationContext.Provider value={{ 
       organisation, 
       hasOrganisation, 
       isLoading, 
-      createOrganisation 
+      createOrganisation,
+      updateOrganisation
     }}>
       {children}
     </OrganisationContext.Provider>

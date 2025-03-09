@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -15,8 +14,10 @@ interface Website {
 interface WebsitesContextType {
   websites: Website[];
   currentWebsite: Website | null;
-  setCurrentWebsite: (website: Website) => void;
+  setCurrentWebsite: (website: Website | null) => void;
   addWebsite: (name: string, url: string) => Promise<boolean>;
+  deleteWebsite: (id: string) => Promise<boolean>;
+  updateWebsite: (id: string, updates: { name: string; url: string }) => Promise<boolean>;
   isLoading: boolean;
 }
 
@@ -25,6 +26,8 @@ const WebsitesContext = createContext<WebsitesContextType>({
   currentWebsite: null,
   setCurrentWebsite: () => {},
   addWebsite: async () => false,
+  deleteWebsite: async () => false,
+  updateWebsite: async () => false,
   isLoading: false,
 });
 
@@ -126,11 +129,24 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return false;
       }
 
+      // Get user's organisation_id
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('organisation_id')
+        .eq('id', sessionData.session.user.id)
+        .single();
+
+      if (profileError || !profileData?.organisation_id) {
+        toast.error('Failed to get organization information');
+        return false;
+      }
+
       const { data, error } = await supabase
         .from('websites')
         .insert({
           name,
-          url
+          url,
+          organisation_id: profileData.organisation_id
         })
         .select()
         .single();
@@ -157,6 +173,128 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.setItem('currentWebsiteId', website.id);
   };
 
+  // Add delete website function
+  const deleteWebsite = async (id: string): Promise<boolean> => {
+    try {
+      // Check authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast.error('You must be logged in to delete a website');
+        return false;
+      }
+
+      // First verify the user has access to this website through their organization
+      const website = websites.find(w => w.id === id);
+      if (!website) {
+        toast.error('Website not found');
+        return false;
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('organisation_id')
+        .eq('id', sessionData.session.user.id)
+        .single();
+
+      if (profileError || !profileData?.organisation_id) {
+        toast.error('Failed to verify access');
+        return false;
+      }
+
+      if (website.organisation_id !== profileData.organisation_id) {
+        toast.error('You do not have permission to delete this website');
+        return false;
+      }
+
+      // Delete the website
+      const { error } = await supabase
+        .from('websites')
+        .delete()
+        .eq('id', id);
+        
+      if (error) throw error;
+      
+      setWebsites(prev => prev.filter(website => website.id !== id));
+      if (currentWebsite?.id === id) {
+        const remainingWebsites = websites.filter(w => w.id !== id);
+        setCurrentWebsite(remainingWebsites.length > 0 ? remainingWebsites[0] : null);
+      }
+      
+      toast.success('Website deleted successfully');
+      return true;
+    } catch (error) {
+      console.error('Error deleting website:', error);
+      toast.error('Failed to delete website');
+      return false;
+    }
+  };
+
+  // Add update website function
+  const updateWebsite = async (id: string, updates: { name: string; url: string }): Promise<boolean> => {
+    try {
+      // Check authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast.error('You must be logged in to update a website');
+        return false;
+      }
+
+      // First verify the user has access to this website through their organization
+      const website = websites.find(w => w.id === id);
+      if (!website) {
+        toast.error('Website not found');
+        return false;
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('organisation_id')
+        .eq('id', sessionData.session.user.id)
+        .single();
+
+      if (profileError || !profileData?.organisation_id) {
+        toast.error('Failed to verify access');
+        return false;
+      }
+
+      if (website.organisation_id !== profileData.organisation_id) {
+        toast.error('You do not have permission to update this website');
+        return false;
+      }
+
+      // Update the website
+      const { data, error } = await supabase
+        .from('websites')
+        .update({
+          name: updates.name,
+          url: updates.url,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+        
+      if (error) throw error;
+      
+      if (data) {
+        setWebsites(prev => prev.map(website => 
+          website.id === id ? { ...website, ...data } : website
+        ));
+        if (currentWebsite?.id === id) {
+          setCurrentWebsite({ ...currentWebsite, ...data });
+        }
+        toast.success('Website updated successfully');
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error updating website:', error);
+      toast.error('Failed to update website');
+      return false;
+    }
+  };
+
   return (
     <WebsitesContext.Provider 
       value={{ 
@@ -164,6 +302,8 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         currentWebsite, 
         setCurrentWebsite: handleSetCurrentWebsite, 
         addWebsite,
+        deleteWebsite,
+        updateWebsite,
         isLoading
       }}
     >

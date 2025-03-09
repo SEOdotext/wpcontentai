@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -14,9 +13,9 @@ interface SettingsContextType {
   isLoading: boolean;
 }
 
-const defaultSettings: Omit<SettingsContextType, 'setPublicationFrequency' | 'setWritingStyle' | 'setSubjectMatters' | 'isLoading'> = {
+const defaultSettings = {
   publicationFrequency: 7, // Default to weekly
-  writingStyle: 'Informative', // Default writing style
+  writingStyle: 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through.', // Default writing style
   subjectMatters: ['Technology', 'Business'], // Default subjects
 };
 
@@ -42,6 +41,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     const fetchSettings = async () => {
       if (!currentWebsite) {
+        console.log("No website selected, using default settings");
+        setPublicationFrequency(defaultSettings.publicationFrequency);
+        setWritingStyle(defaultSettings.writingStyle);
+        setSubjectMatters(defaultSettings.subjectMatters);
         setIsLoading(false);
         return;
       }
@@ -79,15 +82,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           // Convert subject_matters to string[] ensuring type safety
           if (settings.subject_matters) {
             const subjects = settings.subject_matters as unknown;
-            // Ensure we're dealing with an array and all elements are strings
             if (Array.isArray(subjects)) {
               const stringSubjects = subjects.map(item => 
-                // Convert any non-string values to strings
                 typeof item === 'string' ? item : String(item)
               );
               setSubjectMatters(stringSubjects);
             } else {
-              // Fallback to default if subject_matters isn't an array
               setSubjectMatters(defaultSettings.subjectMatters);
             }
           } else {
@@ -102,17 +102,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               publication_frequency: defaultSettings.publicationFrequency,
               writing_style: defaultSettings.writingStyle,
               subject_matters: defaultSettings.subjectMatters,
-              website_id: currentWebsite.id
+              website_id: currentWebsite.id,
+              organisation_id: currentWebsite.organisation_id
             })
             .select()
             .single();
             
-          if (insertError) throw insertError;
+          if (insertError) {
+            console.error("Error creating default settings:", insertError);
+            throw insertError;
+          }
           
           if (newSettings) {
             console.log("Created new settings:", newSettings);
             setSettingsId(newSettings.id);
-            // Reset to default values for the new website
             setPublicationFrequency(defaultSettings.publicationFrequency);
             setWritingStyle(defaultSettings.writingStyle);
             setSubjectMatters(defaultSettings.subjectMatters);
@@ -120,21 +123,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       } catch (error) {
         console.error('Error fetching settings:', error);
-        // Fall back to localStorage if database fetch fails
-        const savedFrequency = localStorage.getItem('publicationFrequency');
-        const savedStyle = localStorage.getItem('writingStyle');
-        const savedSubjects = localStorage.getItem('subjectMatters');
-        
-        if (savedFrequency) setPublicationFrequency(parseInt(savedFrequency, 10));
-        if (savedStyle) setWritingStyle(savedStyle);
-        if (savedSubjects) setSubjectMatters(JSON.parse(savedSubjects));
-        
-        toast.error('Failed to load settings from database, using local storage instead.');
+        toast.error('Failed to load settings from database, using defaults instead.');
+        setPublicationFrequency(defaultSettings.publicationFrequency);
+        setWritingStyle(defaultSettings.writingStyle);
+        setSubjectMatters(defaultSettings.subjectMatters);
       } finally {
         setIsLoading(false);
       }
     };
-
+    
     fetchSettings();
   }, [currentWebsite]);
 
@@ -144,15 +141,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     style: string, 
     subjects: string[]
   ) => {
-    if (!settingsId || !currentWebsite) {
-      console.error("Cannot update settings: No settingsId or currentWebsite");
-      // Save to localStorage as fallback
-      localStorage.setItem('publicationFrequency', frequency.toString());
-      localStorage.setItem('writingStyle', style);
-      localStorage.setItem('subjectMatters', JSON.stringify(subjects));
+    if (!currentWebsite) {
+      console.error("Cannot update settings: No website selected");
+      toast.error("Please select a website to save settings");
       return;
     }
-    
+
     try {
       // Check if user is authenticated
       const { data: sessionData } = await supabase.auth.getSession();
@@ -161,29 +155,51 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
       
-      console.log("Updating settings in database:", { frequency, style, subjects, settingsId });
-      
-      const { error } = await supabase
-        .from('publication_settings')
-        .update({
-          publication_frequency: frequency,
-          writing_style: style,
-          subject_matters: subjects,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', settingsId);
+      // If we don't have a settingsId, we need to create new settings
+      if (!settingsId) {
+        const { data: newSettings, error: insertError } = await supabase
+          .from('publication_settings')
+          .insert({
+            publication_frequency: frequency,
+            writing_style: style,
+            subject_matters: subjects,
+            website_id: currentWebsite.id,
+            organisation_id: currentWebsite.organisation_id
+          })
+          .select()
+          .single();
+          
+        if (insertError) {
+          console.error("Error creating settings:", insertError);
+          throw insertError;
+        }
         
-      if (error) throw error;
-      
-      console.log("Settings updated successfully");
+        if (newSettings) {
+          setSettingsId(newSettings.id);
+          toast.success("Settings created successfully");
+        }
+      } else {
+        // Update existing settings
+        const { error: updateError } = await supabase
+          .from('publication_settings')
+          .update({
+            publication_frequency: frequency,
+            writing_style: style,
+            subject_matters: subjects,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', settingsId);
+          
+        if (updateError) {
+          console.error("Error updating settings:", updateError);
+          throw updateError;
+        }
+        
+        toast.success("Settings updated successfully");
+      }
     } catch (error) {
-      console.error('Error updating settings in database:', error);
-      toast.error('Failed to save settings to database. Changes will only be stored locally.');
-      
-      // Save to localStorage as fallback
-      localStorage.setItem('publicationFrequency', frequency.toString());
-      localStorage.setItem('writingStyle', style);
-      localStorage.setItem('subjectMatters', JSON.stringify(subjects));
+      console.error('Error saving settings:', error);
+      toast.error('Failed to save settings. Please try again.');
     }
   };
 

@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { ChevronDown, Menu, LogOut } from 'lucide-react';
+import { ChevronDown, Menu, LogOut, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -9,16 +8,19 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
 } from '@/components/ui/dropdown-menu';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
+import { useOrganisation } from '@/context/OrganisationContext';
 
 const Header: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { organisation } = useOrganisation();
   const [user, setUser] = useState<{ email: string; provider?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   
@@ -61,6 +63,10 @@ const Header: React.FC = () => {
     if (path === '/calendar') return 'Content Calendar';
     if (path === '/') return 'Dashboard';
     if (path === '/create') return 'Content Creation';
+    if (path === '/sitemap') return 'Website Content';
+    if (path === '/settings') return 'Publication Settings';
+    if (path === '/websites') return 'Websites';
+    if (path === '/organization') return 'Organization';
     return '';
   };
 
@@ -126,8 +132,23 @@ const Header: React.FC = () => {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/settings')}>Settings</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/websites')}>Websites</DropdownMenuItem>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => navigate('/settings')}>Website Settings</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/websites')}>Websites</DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    Organization
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem className="text-xs text-muted-foreground">
+                    {organisation?.name || 'Loading...'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/organization')}>
+                    Manage Organization
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
                   <LogOut className="h-4 w-4 mr-2" />

@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { X, Plus, Loader2, Globe } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
 
 const Settings = () => {
   const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, isLoading } = useSettings();
@@ -63,10 +64,6 @@ const Settings = () => {
         <Header />
         <main className="flex-1 overflow-auto p-6">
           <div className="space-y-6 max-w-6xl mx-auto">
-            <div className="flex items-center justify-between">
-              <h1 className="text-3xl font-bold">Publication Settings</h1>
-            </div>
-            
             {currentWebsite && (
               <Alert className="bg-muted/50 border-muted">
                 <Globe className="h-4 w-4" />
@@ -80,45 +77,11 @@ const Settings = () => {
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-4 w-1/2 mt-2" />
+                    <Skeleton className="h-8 w-1/3" />
+                    <Skeleton className="h-4 w-2/3 mt-2" />
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
-                      <Skeleton className="h-4 w-1/4" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader>
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-4 w-1/2 mt-2" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <Skeleton className="h-4 w-1/4" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader>
-                    <Skeleton className="h-6 w-3/4" />
-                    <Skeleton className="h-4 w-1/2 mt-2" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <Skeleton className="h-4 w-1/4" />
-                      <Skeleton className="h-10 w-full" />
-                      <div className="flex flex-wrap gap-2">
-                        <Skeleton className="h-8 w-24 rounded-full" />
-                        <Skeleton className="h-8 w-32 rounded-full" />
-                        <Skeleton className="h-8 w-28 rounded-full" />
-                      </div>
-                    </div>
+                    <Skeleton className="h-10 w-full" />
                   </CardContent>
                 </Card>
               </div>
@@ -152,18 +115,22 @@ const Settings = () => {
                   <CardHeader>
                     <CardTitle>Content Style</CardTitle>
                     <CardDescription>
-                      Define the writing style for your content
+                      Define the writing style and tone for your content. Be descriptive about how you want your content to sound and feel.
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="writingStyle">Writing Style</Label>
-                      <Input 
+                      <Label htmlFor="writingStyle">Writing Style Guidelines</Label>
+                      <Textarea 
                         id="writingStyle" 
                         value={styleInput} 
                         onChange={(e) => setStyleInput(e.target.value)}
-                        placeholder="Enter your preferred writing style"
+                        placeholder="Describe how you want your content to be written..."
+                        className="min-h-[150px] resize-y"
                       />
+                      <p className="text-sm text-muted-foreground">
+                        Tip: Be specific about tone, language style, and any particular phrases or approaches you want to use or avoid.
+                      </p>
                     </div>
                   </CardContent>
                 </Card>

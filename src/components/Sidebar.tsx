@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Calendar, FileText, Globe, Home, Map, PlusCircle, Settings } from 'lucide-react';
 import {
@@ -122,7 +121,7 @@ export function AppSidebar() {
             >
               <Link to="/settings">
                 <Settings className="h-4 w-4" />
-                <span>Settings</span>
+                <span>Website Settings</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
