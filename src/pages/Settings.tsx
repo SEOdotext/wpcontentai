@@ -8,28 +8,43 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useSettings } from '@/context/SettingsContext';
 import { useWebsites } from '@/context/WebsitesContext';
+import { useWordPress } from '@/context/WordPressContext';
 import { toast } from 'sonner';
-import { X, Plus, Loader2, Globe } from 'lucide-react';
+import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const Settings = () => {
-  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, isLoading } = useSettings();
+  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, isLoading: settingsLoading } = useSettings();
   const { currentWebsite } = useWebsites();
+  const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
   const [frequency, setFrequency] = useState(publicationFrequency);
   const [styleInput, setStyleInput] = useState(writingStyle);
   const [subjects, setSubjects] = useState<string[]>(subjectMatters);
   const [newSubject, setNewSubject] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [wpUrl, setWpUrl] = useState('');
+  const [wpUsername, setWpUsername] = useState('');
+  const [wpPassword, setWpPassword] = useState('');
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!settingsLoading) {
       setFrequency(publicationFrequency);
       setStyleInput(writingStyle);
       setSubjects(subjectMatters);
     }
-  }, [isLoading, publicationFrequency, writingStyle, subjectMatters]);
+  }, [settingsLoading, publicationFrequency, writingStyle, subjectMatters]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -57,6 +72,42 @@ const Settings = () => {
     setSubjects(subjects.filter(s => s !== subject));
   };
 
+  const handleStartWordPressAuth = () => {
+    if (!currentWebsite?.url) {
+      toast.error('Please enter your WordPress website URL first');
+      return;
+    }
+    initiateWordPressAuth(currentWebsite.url);
+    setShowAuthDialog(true);
+  };
+
+  const handleCompleteWordPressAuth = async () => {
+    if (!wpUsername || !wpPassword) {
+      toast.error('Please enter both username and application password');
+      return;
+    }
+
+    setIsAuthenticating(true);
+    try {
+      const success = await completeWordPressAuth(currentWebsite!.url, wpUsername, wpPassword);
+      if (success) {
+        setShowAuthDialog(false);
+        setWpUsername('');
+        setWpPassword('');
+      }
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  const handleDisconnectWordPress = async () => {
+    if (await disconnect()) {
+      setWpUrl('');
+      setWpUsername('');
+      setWpPassword('');
+    }
+  };
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar />
@@ -73,7 +124,7 @@ const Settings = () => {
               </Alert>
             )}
             
-            {isLoading ? (
+            {settingsLoading || wpLoading ? (
               <div className="space-y-6">
                 <Card>
                   <CardHeader>
@@ -87,6 +138,94 @@ const Settings = () => {
               </div>
             ) : (
               <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>WordPress Integration</CardTitle>
+                    <CardDescription>
+                      Connect your WordPress website to automatically publish content. We'll guide you through the process.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {wpSettings ? (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">Connected to WordPress</p>
+                            <p className="text-sm text-muted-foreground">
+                              Logged in as {wpSettings.wp_username}
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            onClick={handleDisconnectWordPress}
+                            className="text-destructive hover:text-destructive-foreground hover:bg-destructive"
+                          >
+                            <Link2Off className="h-4 w-4 mr-2" />
+                            Disconnect
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        <div className="rounded-lg border bg-card p-4">
+                          <h4 className="font-medium mb-2">Before you start:</h4>
+                          <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
+                            <li>Make sure you have admin access to your WordPress site</li>
+                            <li>You'll need to create a secure connection for WP Content AI</li>
+                            <li>We'll guide you through each step of the process</li>
+                          </ul>
+                        </div>
+
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label>Step 1: Access WordPress Admin</Label>
+                            <Button 
+                              variant="outline" 
+                              className="w-full justify-start" 
+                              onClick={() => window.open(`${currentWebsite?.url}/wp-admin/user-new.php`, '_blank')}
+                            >
+                              <Globe className="h-4 w-4 mr-2" />
+                              Open WordPress Admin
+                            </Button>
+                            <p className="text-sm text-muted-foreground">
+                              First, create a new WordPress user for WP Content AI (if you haven't already)
+                            </p>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Step 2: Create Application Password</Label>
+                            <Button 
+                              variant="outline" 
+                              className="w-full justify-start"
+                              onClick={handleStartWordPressAuth}
+                            >
+                              <Key className="h-4 w-4 mr-2" />
+                              Generate Application Password
+                            </Button>
+                            <p className="text-sm text-muted-foreground">
+                              We'll help you create a secure connection key for WP Content AI
+                            </p>
+                          </div>
+
+                          <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+                            <p className="text-sm font-medium">Need help?</p>
+                            <p className="text-sm text-muted-foreground">
+                              Check out our guide on {" "}
+                              <Button 
+                                variant="link" 
+                                className="h-auto p-0 text-sm"
+                                onClick={() => window.open('https://docs.wpcontentai.com/wordpress-integration', '_blank')}
+                              >
+                                how to connect WordPress
+                              </Button>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
                 <Card>
                   <CardHeader>
                     <CardTitle>Publication Settings</CardTitle>
@@ -201,6 +340,83 @@ const Settings = () => {
           </div>
         </main>
       </div>
+
+      <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Connect to WordPress</DialogTitle>
+            <DialogDescription>
+              Follow these steps to securely connect WP Content AI with your WordPress site
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="rounded-lg border bg-muted/50 p-4 space-y-4">
+              <div className="space-y-2">
+                <h4 className="font-medium">How to generate an Application Password:</h4>
+                <ol className="list-decimal pl-4 space-y-2 text-sm text-muted-foreground">
+                  <li>Go to your WordPress profile page</li>
+                  <li>Scroll down to "Application Passwords" section</li>
+                  <li>Enter "WP Content AI" as the name</li>
+                  <li>Click "Add New Application Password"</li>
+                  <li>Copy the generated password (it looks like: xxxx xxxx xxxx xxxx)</li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="wpUsername">WordPress Username</Label>
+                <Input
+                  id="wpUsername"
+                  value={wpUsername}
+                  onChange={(e) => setWpUsername(e.target.value)}
+                  placeholder="Enter your WordPress username"
+                />
+                <p className="text-sm text-muted-foreground">
+                  This is the username you use to log in to WordPress
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="wpPassword">Application Password</Label>
+                <Input
+                  id="wpPassword"
+                  type="password"
+                  value={wpPassword}
+                  onChange={(e) => setWpPassword(e.target.value)}
+                  placeholder="Paste the generated password here"
+                />
+                <p className="text-sm text-muted-foreground">
+                  This is the application password you just generated, not your regular WordPress password
+                </p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAuthDialog(false)}
+              disabled={isAuthenticating}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCompleteWordPressAuth}
+              disabled={isAuthenticating}
+            >
+              {isAuthenticating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Connecting...
+                </>
+              ) : (
+                'Complete Connection'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Toaster />
     </div>
   );
