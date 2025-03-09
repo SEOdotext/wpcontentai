@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -55,6 +54,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         
         if (profileError) {
           console.error("Error fetching user profile:", profileError);
+          console.error("Full error details:", JSON.stringify(profileError, null, 2));
           setIsLoading(false);
           return;
         }
@@ -75,6 +75,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         
         if (orgError) {
           console.error("Error fetching organisation:", orgError);
+          console.error("Full error details:", JSON.stringify(orgError, null, 2));
           setHasOrganisation(false);
           setIsLoading(false);
           return;
