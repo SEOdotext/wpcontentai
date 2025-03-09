@@ -19,6 +19,7 @@ import { OrganisationProvider } from "./context/OrganisationContext";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 import { SidebarProvider } from "./components/ui/sidebar";
+import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient();
 
@@ -29,16 +30,21 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const checkAuth = async () => {
       try {
-        setIsChecking(true);
-        
+        console.log('Checking auth...');
         // Check if user is logged in
         const { data: sessionData } = await supabase.auth.getSession();
         const isLoggedIn = !!sessionData.session;
+        console.log('Is logged in:', isLoggedIn);
+        
+        if (!isMounted) return;
         setIsAuthenticated(isLoggedIn);
         
         if (isLoggedIn && requireOrg) {
+          console.log('Checking organization...');
           // Check if user has an organisation
           const { data: userData, error } = await supabase
             .from('user_profiles')
@@ -46,16 +52,26 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
             .eq('id', sessionData.session!.user.id)
             .single();
           
+          if (!isMounted) return;
+          
           if (error) {
             console.error("Error checking user profile:", error);
             setHasOrganisation(false);
           } else {
-            setHasOrganisation(!!userData.organisation_id);
+            const hasOrg = !!userData?.organisation_id;
+            console.log('Has organization:', hasOrg);
+            setHasOrganisation(hasOrg);
           }
+        } else if (!requireOrg) {
+          setHasOrganisation(true);
         }
       } catch (error) {
         console.error("Error in auth check:", error);
+        if (!isMounted) return;
+        setIsAuthenticated(false);
+        setHasOrganisation(false);
       } finally {
+        if (!isMounted) return;
         setIsChecking(false);
       }
     };
@@ -63,6 +79,8 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
     checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!isMounted) return;
+      console.log('Auth state changed:', !!session);
       setIsAuthenticated(!!session);
       
       if (session && requireOrg) {
@@ -73,31 +91,49 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
             .eq('id', session.user.id)
             .single();
           
+          if (!isMounted) return;
+          
           if (error) {
             console.error("Error checking user profile:", error);
             setHasOrganisation(false);
           } else {
-            setHasOrganisation(!!data.organisation_id);
+            const hasOrg = !!data?.organisation_id;
+            console.log('Has organization (after auth change):', hasOrg);
+            setHasOrganisation(hasOrg);
           }
         } catch (error) {
           console.error("Error in auth state change:", error);
+          if (!isMounted) return;
           setHasOrganisation(false);
         }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [requireOrg]);
 
+  // Only show loading state for a brief moment
   if (isChecking) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
+    console.log('Not authenticated, redirecting to /auth');
     return <Navigate to="/auth" replace />;
   }
 
   if (requireOrg && !hasOrganisation) {
+    console.log('No organization, redirecting to /setup');
     return <Navigate to="/setup" replace />;
   }
 
