@@ -1,5 +1,5 @@
 import React, { useEffect, useState, forwardRef, useCallback } from 'react';
-import { useWebsiteContent } from '@/context/WebsiteContentContext';
+import { useWebsiteContent, WebsiteContent } from '@/context/WebsiteContentContext';
 import { useWebsites } from '@/context/WebsitesContext';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -10,11 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
+import ContentViewModal from './ContentViewModal';
 
 // Custom styled switch component with forwardRef to fix the ref warning
 const VisibleSwitch = forwardRef<HTMLDivElement, {
@@ -52,17 +48,12 @@ VisibleSwitch.displayName = 'VisibleSwitch';
  * Uses local state to avoid reloading the entire table when toggling cornerstone content
  */
 const WebsiteContentManager: React.FC = () => {
-  const { websiteContent, loading: globalLoading, error, fetchWebsiteContent, setCornerstone, importPages } = useWebsiteContent();
+  const { websiteContent, loading: globalLoading, error, fetchWebsiteContent, setCornerstone } = useWebsiteContent();
   const { currentWebsite } = useWebsites();
 
   const [activeTab, setActiveTab] = useState<string>('all');
   const [settingCornerstone, setSettingCornerstone] = useState<string | null>(null);
   const [showCornerstoneOnly, setShowCornerstoneOnly] = useState<boolean>(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [customSitemapUrl, setCustomSitemapUrl] = useState('');
-  const [maxPages, setMaxPages] = useState(50);
-  const [useSitemap, setUseSitemap] = useState(true);
   
   // Initialize localContent with websiteContent
   const [localContent, setLocalContent] = useState<typeof websiteContent>(websiteContent);
@@ -70,6 +61,7 @@ const WebsiteContentManager: React.FC = () => {
   const [lastLoadedWebsiteId, setLastLoadedWebsiteId] = useState<string | null>(null);
   // Local loading state to avoid using the global loading state
   const [localLoading, setLocalLoading] = useState<boolean>(false);
+  const [selectedContent, setSelectedContent] = useState<typeof websiteContent[0] | null>(null);
 
   // Use the local loading state or global loading state only for initial load
   const loading = localLoading || globalLoading;
@@ -161,27 +153,6 @@ const WebsiteContentManager: React.FC = () => {
     setShowCornerstoneOnly(value);
   };
 
-  const handleImportPages = async () => {
-    if (!currentWebsite) return;
-    
-    setIsImporting(true);
-    try {
-      await importPages(currentWebsite.id, {
-        customSitemapUrl: customSitemapUrl || undefined,
-        maxPages: useSitemap ? undefined : maxPages,
-        useSitemap
-      });
-      setShowImportDialog(false);
-    } finally {
-      setIsImporting(false);
-    }
-  };
-
-  const handleImportDialogSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleImportPages();
-  };
-
   return (
     <div className="container mx-auto py-4">
       <div className="flex justify-between items-center mb-4">
@@ -204,7 +175,7 @@ const WebsiteContentManager: React.FC = () => {
                     onCheckedChange={toggleCornerstoneOnly}
                   />
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent side="bottom">
                   {showCornerstoneOnly 
                     ? "Currently showing only key content" 
                     : "Toggle to show only key content"}
@@ -238,7 +209,7 @@ const WebsiteContentManager: React.FC = () => {
           }
           icon={showCornerstoneOnly ? <Star className="h-6 w-6" /> : <Download className="h-6 w-6" />}
           actionLabel={showCornerstoneOnly ? "Show All Content" : "Import Pages"}
-          onAction={showCornerstoneOnly ? () => setShowCornerstoneOnly(false) : () => setShowImportDialog(true)}
+          onAction={showCornerstoneOnly ? () => setShowCornerstoneOnly(false) : () => {}}
         />
       ) : (
         <Table>
@@ -256,10 +227,20 @@ const WebsiteContentManager: React.FC = () => {
               <TableRow key={content.id} className={content.is_cornerstone ? "bg-green-50" : ""}>
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
-                    {content.title}
+                    <button
+                      onClick={() => setSelectedContent(content)}
+                      className={cn(
+                        "text-left hover:text-blue-600 transition-colors",
+                        content.content ? "cursor-pointer" : "cursor-not-allowed opacity-80"
+                      )}
+                      disabled={!content.content}
+                      title={content.content ? "Click to view content" : "No content available"}
+                    >
+                      {content.title}
+                    </button>
                     {content.is_cornerstone && (
                       <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 border-green-200 text-xs">
-                        Cornerstone
+                        Key Content
                       </Badge>
                     )}
                   </div>
@@ -286,7 +267,7 @@ const WebsiteContentManager: React.FC = () => {
                           className={settingCornerstone === content.id ? "opacity-50" : ""}
                         />
                       </TooltipTrigger>
-                      <TooltipContent side="left" align="center">
+                      <TooltipContent sideOffset={5} side="left">
                         {content.is_cornerstone 
                           ? "Click to remove from key content" 
                           : "Click to mark as key content"}
@@ -300,106 +281,15 @@ const WebsiteContentManager: React.FC = () => {
         </Table>
       )}
 
-      {/* Import Pages Dialog */}
-      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle>Import Website Pages</DialogTitle>
-            <DialogDescription>
-              Choose how you want to discover and import pages from your website.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleImportDialogSubmit}>
-            <div className="grid gap-6 py-4">
-              {/* Import Method Selection */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between space-x-4 p-4 rounded-lg border bg-muted/50">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="useSitemap" className="text-base">Import Method</Label>
-                    <div className="text-sm text-muted-foreground">
-                      {useSitemap ? 
-                        "Using sitemap for faster and more accurate page discovery" :
-                        "Crawling the website to find pages (slower but works without a sitemap)"}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Label htmlFor="useSitemap" className={!useSitemap ? "text-muted-foreground" : ""}>
-                      Crawl
-                    </Label>
-                    <Switch
-                      id="useSitemap"
-                      checked={!useSitemap}
-                      onCheckedChange={(checked) => setUseSitemap(!checked)}
-                    />
-                    <Label htmlFor="useSitemap" className={useSitemap ? "text-muted-foreground" : ""}>
-                      Sitemap
-                    </Label>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Sitemap URL Input */}
-              {useSitemap && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="sitemapUrl">Sitemap URL (Optional)</Label>
-                    <Input
-                      id="sitemapUrl"
-                      placeholder="https://example.com/sitemap.xml"
-                      value={customSitemapUrl}
-                      onChange={(e) => setCustomSitemapUrl(e.target.value)}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Leave empty to automatically detect your website's sitemap location.
-                      Only provide a URL if auto-detection fails.
-                    </p>
-                  </div>
-                </div>
-              )}
-              
-              {/* Crawl Settings */}
-              {!useSitemap && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <Label htmlFor="maxPages">Number of Pages to Crawl</Label>
-                      <span className="text-sm font-medium">{maxPages} pages</span>
-                    </div>
-                    <Slider
-                      id="maxPages"
-                      min={10}
-                      max={100}
-                      step={10}
-                      value={[maxPages]}
-                      onValueChange={(value) => setMaxPages(value[0])}
-                      className="py-2"
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Higher numbers will take longer but provide more comprehensive results.
-                      Start with a lower number to test the import process.
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowImportDialog(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isImporting}>
-                {isImporting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Importing...
-                  </>
-                ) : (
-                  'Start Import'
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {selectedContent && (
+        <ContentViewModal
+          isOpen={!!selectedContent}
+          onClose={() => setSelectedContent(null)}
+          title={selectedContent.title}
+          content={selectedContent.content}
+          lastFetched={selectedContent.last_fetched}
+        />
+      )}
     </div>
   );
 };

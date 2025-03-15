@@ -3,27 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useWebsites } from './WebsitesContext';
 import { toast } from 'sonner';
 import { useToast } from '@/components/ui/use-toast';
+import { Database } from '@/integrations/supabase/types';
 
-// Define the website content type
-export interface WebsiteContent {
-  id: string;
-  website_id: string;
-  url: string;
-  title: string;
-  content: string;
-  content_type: 'page' | 'post' | 'sitemap' | 'other' | 'crawled';
-  last_fetched: string;
-  created_at: string;
-  updated_at: string;
-  metadata: Record<string, any>;
-  is_cornerstone?: boolean; // Field that allows multiple cornerstone content
-  // The following fields are not in the database schema but are used in the UI
-  // They should be removed when inserting into the database
+// Define the website content type based on the database schema
+export type WebsiteContent = Database['public']['Tables']['website_content']['Row'] & {
+  // Additional UI-only fields
   type?: 'page' | 'post' | 'custom';
   status?: 'published' | 'draft';
-  meta_description?: string;
-  meta_keywords?: string;
-}
+};
 
 // Define the context type
 interface WebsiteContentContextType {
@@ -901,81 +888,104 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
     try {
       setLoading(true);
       setError(null);
-      
-      console.log(`Scraping content from cornerstone pages for website ID: ${websiteId}`);
-      
-      // Get all cornerstone pages for this website
-      const { data: cornerstonePages, error: fetchError } = await supabase
-        .from('website_content')
-        .select('id, url')
-        .eq('website_id', websiteId)
-        .eq('is_cornerstone', true);
-      
-      if (fetchError) {
-        console.error('Error fetching cornerstone pages:', fetchError);
-        setError(fetchError.message);
-        return 0;
-      }
-      
-      if (!cornerstonePages || cornerstonePages.length === 0) {
-        console.log('No cornerstone pages found to scrape');
+
+      // Call the Supabase Edge Function to scrape content
+      const { data, error } = await supabase.functions.invoke('scrape-content', {
+        body: { website_id: websiteId }
+      });
+
+      if (error) {
+        console.error('Error scraping content:', error);
         toast({
-          title: 'Info',
-          description: 'No cornerstone pages found to scrape. Mark some pages as cornerstone first.',
+          title: 'Error',
+          description: 'Failed to analyze key content',
+          variant: 'destructive'
         });
         return 0;
       }
-      
-      console.log(`Found ${cornerstonePages.length} cornerstone pages to scrape`);
-      let scrapedCount = 0;
-      
-      // Scrape content from each cornerstone page
-      for (const page of cornerstonePages) {
-        try {
-          // Call your scraping function here
-          const scrapedContent = await fetchPageContent(page.url);
-          
-          if (scrapedContent) {
-            // Update the page with the scraped content
-            const { error: updateError } = await supabase
-              .from('website_content')
-              .update({ 
-                content: scrapedContent.content,
-                title: scrapedContent.title || page.url,
-                last_fetched: new Date().toISOString()
-              })
-              .eq('id', page.id);
-            
-            if (updateError) {
-              console.error(`Error updating content for ${page.url}:`, updateError);
-            } else {
-              scrapedCount++;
-            }
-          }
-        } catch (err) {
-          console.error(`Error scraping content from ${page.url}:`, err);
-        }
+
+      if (!data.processed) {
+        toast({
+          title: 'No Content',
+          description: data.message || 'No key content pages found to analyze'
+        });
+        return 0;
       }
-      
-      console.log(`Successfully scraped content from ${scrapedCount} cornerstone pages`);
+
+      // Refresh the website content to get the updated content
+      await fetchWebsiteContent(websiteId);
+
+      // Show success message
       toast({
         title: 'Success',
-        description: `Successfully scraped content from ${scrapedCount} cornerstone pages`,
+        description: data.message,
+        variant: data.processed === data.total ? 'default' : 'warning'
       });
-      
-      return scrapedCount;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Exception scraping cornerstone content:', errorMessage);
-      setError(errorMessage);
+
+      return data.processed;
+    } catch (error) {
+      console.error('Error in scrapeCornerstone:', error);
       toast({
         title: 'Error',
-        description: `Failed to scrape cornerstone content: ${errorMessage}`,
-        variant: 'destructive',
+        description: 'Failed to analyze key content',
+        variant: 'destructive'
       });
       return 0;
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Extracts the main content from an HTML string
+   * This is a basic implementation that should be enhanced based on specific needs
+   */
+  const extractMainContent = (html: string): string => {
+    try {
+      // Create a DOM parser
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      // Remove unwanted elements
+      const elementsToRemove = [
+        'script',
+        'style',
+        'iframe',
+        'nav',
+        'header',
+        'footer',
+        'aside',
+        'form',
+        '.sidebar',
+        '.comments',
+        '.advertisement',
+        '#sidebar',
+        '#comments',
+        '#footer',
+        '#header'
+      ];
+
+      elementsToRemove.forEach(selector => {
+        doc.querySelectorAll(selector).forEach(el => el.remove());
+      });
+
+      // Try to find the main content container
+      const mainContent = 
+        doc.querySelector('article') || 
+        doc.querySelector('main') || 
+        doc.querySelector('.content') || 
+        doc.querySelector('.post-content') ||
+        doc.querySelector('.entry-content');
+
+      if (mainContent) {
+        return mainContent.textContent?.trim() || '';
+      }
+
+      // Fallback to body content if no main content container is found
+      return doc.body.textContent?.trim() || '';
+    } catch (error) {
+      console.error('Error extracting content:', error);
+      return '';
     }
   };
 

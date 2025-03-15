@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const WebsiteSitemap = () => {
   const { currentWebsite } = useWebsites();
@@ -84,28 +85,33 @@ const WebsiteSitemap = () => {
                         </>
                       )}
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={handleScrapeCornerstone}
-                      disabled={isImporting || isScrapingCornerstone}
-                      className="group relative"
-                    >
-                      {isScrapingCornerstone ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Analyzing...
-                        </>
-                      ) : (
-                        <>
-                          <FileText className="h-4 w-4 mr-2" />
-                          Update Key Content
-                        </>
-                      )}
-                      <div className="absolute bg-popover text-popover-foreground shadow-md rounded-md p-3 text-sm max-w-[300px] -mt-16 right-0 hidden group-hover:block">
-                        Analyzes your key content to understand its style and structure.
-                        This analysis will be used as a reference when generating new content.
-                      </div>
-                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            onClick={handleScrapeCornerstone}
+                            disabled={isImporting || isScrapingCornerstone}
+                          >
+                            {isScrapingCornerstone ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Analyzing...
+                              </>
+                            ) : (
+                              <>
+                                <FileText className="h-4 w-4 mr-2" />
+                                Update Key Content
+                              </>
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" align="end" sideOffset={5}>
+                          Analyzes your key content to understand its style and structure.
+                          This analysis will be used as a reference when generating new content.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </>
                 )}
               </div>
@@ -116,7 +122,7 @@ const WebsiteSitemap = () => {
                   <DialogHeader>
                     <DialogTitle>Import Website Pages</DialogTitle>
                     <DialogDescription>
-                      Choose how you want to discover and import pages from your website.
+                      Let's discover and import your website's content - choose your preferred method below.
                     </DialogDescription>
                   </DialogHeader>
                   <form onSubmit={handleImportDialogSubmit}>
@@ -127,7 +133,7 @@ const WebsiteSitemap = () => {
                           <div className="space-y-0.5">
                             <Label htmlFor="useSitemap" className="text-base">Import Method</Label>
                             <div className="text-sm text-muted-foreground">
-                              {useSitemap ? 
+                              {!useSitemap ? 
                                 "Using sitemap for faster and more accurate page discovery" :
                                 "Crawling the website to find pages (slower but works without a sitemap)"}
                             </div>
@@ -138,8 +144,8 @@ const WebsiteSitemap = () => {
                             </Label>
                             <Switch
                               id="useSitemap"
-                              checked={useSitemap}
-                              onCheckedChange={setUseSitemap}
+                              checked={!useSitemap}
+                              onCheckedChange={(checked) => setUseSitemap(!checked)}
                             />
                             <Label htmlFor="useSitemap" className={useSitemap ? "text-muted-foreground" : ""}>
                               Crawl

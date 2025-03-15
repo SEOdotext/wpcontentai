@@ -1,44 +1,40 @@
-
 import React from 'react';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface EmptyStateProps {
-  icon?: React.ReactNode;
   title: string;
-  description?: string;
+  description: string;
+  icon?: React.ReactNode;
   actionLabel?: string;
   onAction?: () => void;
-  className?: string;
 }
 
 const EmptyState: React.FC<EmptyStateProps> = ({
-  icon,
   title,
   description,
+  icon,
   actionLabel,
   onAction,
-  className,
 }) => {
   return (
-    <div className={cn(
-      'flex flex-col items-center justify-center p-8 text-center rounded-lg border border-dashed animate-fade-in',
-      className
-    )}>
-      {icon && (
-        <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-primary mb-4">
-          {icon}
-        </div>
-      )}
-      
-      <h3 className="text-lg font-medium mb-2">{title}</h3>
-      
-      {description && (
-        <p className="text-muted-foreground mb-4 max-w-md">{description}</p>
-      )}
-      
+    <div className="flex flex-col items-center justify-center p-8 text-center">
+      {icon && <div className="mb-4">{icon}</div>}
+      <h3 className="text-lg font-semibold">{title}</h3>
+      <p className="text-sm text-muted-foreground mt-2 mb-4">{description}</p>
       {actionLabel && onAction && (
-        <Button onClick={onAction}>{actionLabel}</Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button onClick={onAction} variant="default">
+                {actionLabel}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="center" sideOffset={5}>
+              Click to {actionLabel.toLowerCase()}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
     </div>
   );
