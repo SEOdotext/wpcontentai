@@ -113,6 +113,53 @@ export type Database = {
           },
         ]
       }
+      website_content: {
+        Row: {
+          id: string
+          website_id: string
+          url: string
+          title: string
+          content: string
+          content_type: string
+          last_fetched: string
+          created_at: string
+          updated_at: string
+          metadata: Json
+        }
+        Insert: {
+          id?: string
+          website_id: string
+          url: string
+          title?: string
+          content: string
+          content_type: string
+          last_fetched?: string
+          created_at?: string
+          updated_at?: string
+          metadata?: Json
+        }
+        Update: {
+          id?: string
+          website_id?: string
+          url?: string
+          title?: string
+          content?: string
+          content_type?: string
+          last_fetched?: string
+          created_at?: string
+          updated_at?: string
+          metadata?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "website_content_website_id_fkey"
+            columns: ["website_id"]
+            isOneToOne: false
+            referencedRelation: "websites"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       websites: {
         Row: {
           created_at: string
@@ -181,6 +228,18 @@ export type Database = {
           last_name: string | null
           organisation_id: string | null
           role: string
+        }[]
+      }
+      get_website_sitemap_pages: {
+        Args: {
+          website_id: string
+        }
+        Returns: {
+          id: string
+          website_id: string
+          url: string
+          title: string
+          last_fetched: string
         }[]
       }
     }

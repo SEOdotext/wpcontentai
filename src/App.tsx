@@ -17,6 +17,8 @@ import Organization from "./pages/Organization";
 import { SettingsProvider } from "./context/SettingsContext";
 import { WebsitesProvider } from "./context/WebsitesContext";
 import { OrganisationProvider } from "./context/OrganisationContext";
+import { PostThemesProvider } from "./context/PostThemesContext";
+import { WebsiteContentProvider } from "./context/WebsiteContentContext";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 import { SidebarProvider } from "./components/ui/sidebar";
@@ -148,69 +150,73 @@ const App = () => (
               <OrganisationProvider>
                 <WebsitesProvider>
                   <SettingsProvider>
-                    <TooltipProvider>
-                      <Toaster />
-                      <Sonner />
-                      <Routes>
-                        <Route path="/setup" element={
-                          <ProtectedRoute requireOrg={false}>
-                            <SidebarProvider>
-                              <OrganisationSetup />
-                            </SidebarProvider>
-                          </ProtectedRoute>
-                        } />
-                        <Route path="/" element={
-                          <ProtectedRoute>
-                            <SidebarProvider>
-                              <Index />
-                            </SidebarProvider>
-                          </ProtectedRoute>
-                        } />
-                        <Route path="/calendar" element={
-                          <ProtectedRoute>
-                            <SidebarProvider>
-                              <ContentCalendar />
-                            </SidebarProvider>
-                          </ProtectedRoute>
-                        } />
-                        <Route path="/create" element={
-                          <ProtectedRoute>
-                            <SidebarProvider>
-                              <ContentCreation />
-                            </SidebarProvider>
-                          </ProtectedRoute>
-                        } />
-                        <Route path="/settings" element={
-                          <ProtectedRoute>
-                            <SidebarProvider>
-                              <Settings />
-                            </SidebarProvider>
-                          </ProtectedRoute>
-                        } />
-                        <Route path="/organization" element={
-                          <ProtectedRoute>
-                            <SidebarProvider>
-                              <Organization />
-                            </SidebarProvider>
-                          </ProtectedRoute>
-                        } />
-                        <Route path="/websites" element={
-                          <ProtectedRoute>
-                            <SidebarProvider>
-                              <WebsiteManager />
-                            </SidebarProvider>
-                          </ProtectedRoute>
-                        } />
-                        <Route path="/sitemap" element={
-                          <ProtectedRoute>
-                            <SidebarProvider>
-                              <WebsiteSitemap />
-                            </SidebarProvider>
-                          </ProtectedRoute>
-                        } />
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
-                    </TooltipProvider>
+                    <PostThemesProvider>
+                      <WebsiteContentProvider>
+                        <TooltipProvider>
+                          <Toaster />
+                          <Sonner />
+                          <Routes>
+                            <Route path="/setup" element={
+                              <ProtectedRoute requireOrg={false}>
+                                <SidebarProvider>
+                                  <OrganisationSetup />
+                                </SidebarProvider>
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/" element={
+                              <ProtectedRoute>
+                                <SidebarProvider>
+                                  <Index />
+                                </SidebarProvider>
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/calendar" element={
+                              <ProtectedRoute>
+                                <SidebarProvider>
+                                  <ContentCalendar />
+                                </SidebarProvider>
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/create" element={
+                              <ProtectedRoute>
+                                <SidebarProvider>
+                                  <ContentCreation />
+                                </SidebarProvider>
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/settings" element={
+                              <ProtectedRoute>
+                                <SidebarProvider>
+                                  <Settings />
+                                </SidebarProvider>
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/organization" element={
+                              <ProtectedRoute>
+                                <SidebarProvider>
+                                  <Organization />
+                                </SidebarProvider>
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/websites" element={
+                              <ProtectedRoute>
+                                <SidebarProvider>
+                                  <WebsiteManager />
+                                </SidebarProvider>
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/sitemap" element={
+                              <ProtectedRoute>
+                                <SidebarProvider>
+                                  <WebsiteSitemap />
+                                </SidebarProvider>
+                              </ProtectedRoute>
+                            } />
+                            <Route path="*" element={<NotFound />} />
+                          </Routes>
+                        </TooltipProvider>
+                      </WebsiteContentProvider>
+                    </PostThemesProvider>
                   </SettingsProvider>
                 </WebsitesProvider>
               </OrganisationProvider>

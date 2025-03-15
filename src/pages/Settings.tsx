@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { useSettings } from '@/context/SettingsContext';
 import { useWebsites } from '@/context/WebsitesContext';
 import { useWordPress } from '@/context/WordPressContext';
+import { usePostThemes } from '@/context/PostThemesContext';
 import { toast } from 'sonner';
-import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key } from 'lucide-react';
+import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,11 +23,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { supabase } from '@/integrations/supabase/client';
 
 const Settings = () => {
   const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, isLoading: settingsLoading } = useSettings();
   const { currentWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
+  const { createPostTheme } = usePostThemes();
   const [frequency, setFrequency] = useState(publicationFrequency);
   const [styleInput, setStyleInput] = useState(writingStyle);
   const [subjects, setSubjects] = useState<string[]>(subjectMatters);
@@ -37,6 +40,7 @@ const Settings = () => {
   const [wpUrl, setWpUrl] = useState('');
   const [wpUsername, setWpUsername] = useState('');
   const [wpPassword, setWpPassword] = useState('');
+  const [generatingSubject, setGeneratingSubject] = useState<string | null>(null);
 
   useEffect(() => {
     if (!settingsLoading) {
@@ -106,6 +110,65 @@ const Settings = () => {
       setWpUsername('');
       setWpPassword('');
     }
+  };
+
+  const handleGenerateContent = async (subject: string) => {
+    if (!currentWebsite) {
+      toast.error('Please select a website first');
+      return;
+    }
+    
+    setGeneratingSubject(subject);
+    try {
+      // Import the AI service endpoints
+      const { fetchWebsiteContent } = await import('@/api/aiEndpoints');
+      const { generateTitleSuggestions } = await import('@/services/aiService');
+      
+      // Fetch website content
+      let content;
+      try {
+        content = await fetchWebsiteContent(currentWebsite.url);
+        console.log(`Fetched website content for ${currentWebsite.url} (${content.length} characters)`);
+      } catch (error) {
+        console.error('Error fetching website content:', error);
+        toast.error('Failed to fetch website content');
+        return;
+      }
+      
+      // Generate title suggestions using AI
+      const result = await generateTitleSuggestions(
+        content,
+        [subject], // Use the subject as the main keyword
+        styleInput, // Use the current writing style
+        [subject]  // Focus on this specific subject
+      );
+      
+      // Calculate a scheduled date based on publication frequency
+      const scheduledDate = new Date();
+      scheduledDate.setDate(scheduledDate.getDate() + frequency);
+      
+      // Create post themes for each title
+      const creationPromises = result.titles.map(title => 
+        createPostTheme(title, result.keywords)
+      );
+      
+      await Promise.all(creationPromises);
+      
+      toast.success(`${result.titles.length} content ideas for "${subject}" have been scheduled for ${scheduledDate.toLocaleDateString()}`);
+    } catch (error) {
+      console.error('Error generating content:', error);
+      toast.error(`Failed to schedule content for "${subject}"`);
+    } finally {
+      setGeneratingSubject(null);
+    }
+  };
+  
+  // Helper function to generate keywords for a subject (fallback if AI service fails)
+  const generateKeywordsForSubject = (subject: string): string[] => {
+    // In a real implementation, you might use an AI service to generate relevant keywords
+    // For now, we'll just create some placeholder keywords based on the subject
+    const baseKeywords = ['guide', 'tips', 'best practices', 'how to', 'introduction'];
+    return baseKeywords.map(keyword => `${subject} ${keyword}`);
   };
 
   return (
@@ -302,8 +365,21 @@ const Settings = () => {
                         >
                           {subject}
                           <button 
+                            onClick={() => handleGenerateContent(subject)}
+                            className="text-primary hover:text-primary-foreground ml-1"
+                            disabled={generatingSubject === subject}
+                            title="Generate content for this subject"
+                          >
+                            {generatingSubject === subject ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Zap className="h-3 w-3" />
+                            )}
+                          </button>
+                          <button 
                             onClick={() => handleRemoveSubject(subject)}
                             className="text-secondary-foreground/70 hover:text-secondary-foreground"
+                            title="Remove subject"
                           >
                             <X className="h-3 w-3" />
                           </button>

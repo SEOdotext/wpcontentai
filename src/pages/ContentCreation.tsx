@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import AppSidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
@@ -7,6 +6,7 @@ import ContentStructureView from '@/components/ContentStructureView';
 import { Toaster } from "@/components/ui/sonner";
 import { useWebsites } from '@/context/WebsitesContext';
 import { useSettings } from '@/context/SettingsContext';
+import { usePostThemes } from '@/context/PostThemesContext';
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Info } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -17,57 +17,58 @@ import { Link } from 'react-router-dom';
 const ContentCreation = () => {
   const { currentWebsite, isLoading: websitesLoading } = useWebsites();
   const { writingStyle, subjectMatters, isLoading: settingsLoading } = useSettings();
+  const { isLoading: themesLoading } = usePostThemes();
   const [hasError, setHasError] = useState<boolean>(false);
   const [missingOrganisation, setMissingOrganisation] = useState<boolean>(false);
-
-  // Adding a console log to help with debugging
-  console.log('ContentCreation rendering, currentWebsite:', currentWebsite?.name);
+  const initialCheckDone = useRef(false);
   
+  // Check for errors in the context data
   useEffect(() => {
-    // Check for errors in the context data
-    const checkErrors = () => {
-      if (!websitesLoading && !settingsLoading) {
-        // Check if we're missing required data
-        if (!currentWebsite || !writingStyle || !subjectMatters) {
-          setHasError(true);
-          console.log('Content creation detected missing data:', { 
-            hasWebsite: !!currentWebsite, 
-            hasStyle: !!writingStyle, 
-            hasSubjects: !!(subjectMatters && subjectMatters.length) 
-          });
-        } else {
-          setHasError(false);
-        }
-
-        // Check specifically for missing organisation
-        if (currentWebsite && !currentWebsite.organisation_id) {
-          console.log('Website missing organisation_id:', currentWebsite);
-          setMissingOrganisation(true);
-          // Only show toast once when detected
-          toast.info("No organisation associated with this website. Some features may be limited.", {
-            id: "missing-organisation-warning",
-            duration: 5000,
-          });
-        } else {
-          setMissingOrganisation(false);
-        }
-      }
-    };
+    if (websitesLoading || settingsLoading) return;
     
-    checkErrors();
+    // Check if we're missing required data
+    if (!currentWebsite || !writingStyle || !subjectMatters) {
+      setHasError(true);
+      console.log('Content creation detected missing data:', { 
+        hasWebsite: !!currentWebsite, 
+        hasStyle: !!writingStyle, 
+        hasSubjects: !!(subjectMatters && subjectMatters.length) 
+      });
+    } else {
+      setHasError(false);
+    }
+
+    // Check specifically for missing organisation
+    if (currentWebsite && !currentWebsite.organisation_id) {
+      console.log('Website missing organisation_id:', currentWebsite);
+      setMissingOrganisation(true);
+      // Only show toast once when detected
+      if (!initialCheckDone.current) {
+        toast.info("No organisation associated with this website. Some features may be limited.", {
+          id: "missing-organisation-warning",
+          duration: 5000,
+        });
+      }
+    } else {
+      setMissingOrganisation(false);
+    }
+    
+    initialCheckDone.current = true;
   }, [currentWebsite, writingStyle, subjectMatters, websitesLoading, settingsLoading]);
 
+  // Determine if we're in a loading state
   const isLoading = websitesLoading || settingsLoading;
 
-  return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-background">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col">
-          <Header />
-          <main className="flex-1 px-4 py-6 overflow-y-auto">
-            <div className="max-w-6xl mx-auto space-y-8">
-              {isLoading ? (
+  // If we're loading, show a skeleton
+  if (isLoading) {
+    return (
+      <SidebarProvider>
+        <div className="min-h-screen flex w-full bg-background">
+          <AppSidebar />
+          <div className="flex-1 flex flex-col">
+            <Header />
+            <main className="flex-1 px-4 py-6 overflow-y-auto">
+              <div className="max-w-6xl mx-auto space-y-8">
                 <Card>
                   <CardHeader>
                     <Skeleton className="h-8 w-3/4" />
@@ -77,7 +78,24 @@ const ContentCreation = () => {
                     <Skeleton className="h-[500px] w-full" />
                   </CardContent>
                 </Card>
-              ) : hasError ? (
+              </div>
+            </main>
+          </div>
+        </div>
+        <Toaster />
+      </SidebarProvider>
+    );
+  }
+
+  return (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar />
+        <div className="flex-1 flex flex-col">
+          <Header />
+          <main className="flex-1 px-4 py-6 overflow-y-auto">
+            <div className="max-w-6xl mx-auto space-y-8">
+              {hasError ? (
                 <Alert variant="destructive" className="mb-6">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Error Loading Data</AlertTitle>
