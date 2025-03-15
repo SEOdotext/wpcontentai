@@ -3,7 +3,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { useWebsiteContent } from '@/context/WebsiteContentContext';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
-import { Map, Download, Loader2, Link, Search } from 'lucide-react';
+import { Map, Download, Loader2, Link, Search, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/EmptyState';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -12,63 +12,48 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 
 const WebsiteSitemap = () => {
   const { currentWebsite } = useWebsites();
-  const { importSitemapPages, importCrawledPages } = useWebsiteContent();
+  const { importPages, scrapeCornerstone } = useWebsiteContent();
   const [isImporting, setIsImporting] = useState(false);
-  const [isCrawling, setIsCrawling] = useState(false);
-  const [showCustomUrlDialog, setShowCustomUrlDialog] = useState(false);
-  const [showCrawlDialog, setShowCrawlDialog] = useState(false);
+  const [isScrapingCornerstone, setIsScrapingCornerstone] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [customSitemapUrl, setCustomSitemapUrl] = useState('');
-  const [websiteUrl, setWebsiteUrl] = useState('');
   const [maxPages, setMaxPages] = useState(50);
+  const [useSitemap, setUseSitemap] = useState(true);
 
-  const handleImportSitemap = async (customUrl?: string) => {
+  const handleImportPages = async () => {
     if (!currentWebsite) return;
     
     setIsImporting(true);
     try {
-      // If a custom URL is provided, use it directly
-      if (customUrl) {
-        await importSitemapPages(currentWebsite.id, customUrl);
-        setShowCustomUrlDialog(false);
-        return;
-      }
-      
-      // Otherwise, try automatic detection first
-      const result = await importSitemapPages(currentWebsite.id);
-      
-      // If no pages were imported and we have a website URL, show the custom URL dialog
-      if (result === 0 && currentWebsite.url) {
-        setWebsiteUrl(currentWebsite.url);
-        setShowCustomUrlDialog(true);
-      }
+      await importPages(currentWebsite.id, {
+        customSitemapUrl: customSitemapUrl || undefined,
+        maxPages: useSitemap ? undefined : maxPages,
+        useSitemap
+      });
+      setShowImportDialog(false);
     } finally {
       setIsImporting(false);
     }
   };
 
-  const handleCustomUrlSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    handleImportSitemap(customSitemapUrl);
-  };
-
-  const handleCrawlWebsite = async () => {
+  const handleScrapeCornerstone = async () => {
     if (!currentWebsite) return;
     
-    setIsCrawling(true);
+    setIsScrapingCornerstone(true);
     try {
-      await importCrawledPages(currentWebsite.id, maxPages);
-      setShowCrawlDialog(false);
+      await scrapeCornerstone(currentWebsite.id);
     } finally {
-      setIsCrawling(false);
+      setIsScrapingCornerstone(false);
     }
   };
 
-  const handleCrawlDialogSubmit = (e: React.FormEvent) => {
+  const handleImportDialogSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    handleCrawlWebsite();
+    handleImportPages();
   };
 
   return (
@@ -84,8 +69,8 @@ const WebsiteSitemap = () => {
                   <>
                     <Button 
                       variant="outline" 
-                      onClick={() => handleImportSitemap()}
-                      disabled={isImporting || isCrawling}
+                      onClick={() => setShowImportDialog(true)}
+                      disabled={isImporting || isScrapingCornerstone}
                     >
                       {isImporting ? (
                         <>
@@ -95,59 +80,120 @@ const WebsiteSitemap = () => {
                       ) : (
                         <>
                           <Download className="h-4 w-4 mr-2" />
-                          Import from Sitemap
+                          Import Pages
                         </>
                       )}
                     </Button>
                     <Button 
                       variant="outline" 
-                      onClick={() => setShowCrawlDialog(true)}
-                      disabled={isImporting || isCrawling}
+                      onClick={handleScrapeCornerstone}
+                      disabled={isImporting || isScrapingCornerstone}
+                      className="group relative"
                     >
-                      {isCrawling ? (
+                      {isScrapingCornerstone ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Crawling...
+                          Analyzing...
                         </>
                       ) : (
                         <>
-                          <Search className="h-4 w-4 mr-2" />
-                          Crawl Website Pages
+                          <FileText className="h-4 w-4 mr-2" />
+                          Update Key Content
                         </>
                       )}
+                      <div className="absolute bg-popover text-popover-foreground shadow-md rounded-md p-3 text-sm max-w-[300px] -mt-16 right-0 hidden group-hover:block">
+                        Analyzes your key content to understand its style and structure.
+                        This analysis will be used as a reference when generating new content.
+                      </div>
                     </Button>
                   </>
                 )}
               </div>
 
-              {/* Custom Sitemap URL Dialog */}
-              <Dialog open={showCustomUrlDialog} onOpenChange={setShowCustomUrlDialog}>
-                <DialogContent className="sm:max-w-[425px]">
+              {/* Import Pages Dialog */}
+              <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+                <DialogContent className="sm:max-w-[525px]">
                   <DialogHeader>
-                    <DialogTitle>Sitemap Not Found</DialogTitle>
+                    <DialogTitle>Import Website Pages</DialogTitle>
                     <DialogDescription>
-                      No sitemap was found at common paths for {websiteUrl}. 
-                      Please provide a direct URL to your website's sitemap.
+                      Choose how you want to discover and import pages from your website.
                     </DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleCustomUrlSubmit}>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="sitemapUrl" className="text-right">
-                          Sitemap URL
-                        </Label>
-                        <Input
-                          id="sitemapUrl"
-                          placeholder="https://example.com/sitemap.xml"
-                          className="col-span-3"
-                          value={customSitemapUrl}
-                          onChange={(e) => setCustomSitemapUrl(e.target.value)}
-                          required
-                        />
+                  <form onSubmit={handleImportDialogSubmit}>
+                    <div className="grid gap-6 py-4">
+                      {/* Import Method Selection */}
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between space-x-4 p-4 rounded-lg border bg-muted/50">
+                          <div className="space-y-0.5">
+                            <Label htmlFor="useSitemap" className="text-base">Import Method</Label>
+                            <div className="text-sm text-muted-foreground">
+                              {useSitemap ? 
+                                "Using sitemap for faster and more accurate page discovery" :
+                                "Crawling the website to find pages (slower but works without a sitemap)"}
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Label htmlFor="useSitemap" className={!useSitemap ? "text-muted-foreground" : ""}>
+                              Sitemap
+                            </Label>
+                            <Switch
+                              id="useSitemap"
+                              checked={useSitemap}
+                              onCheckedChange={setUseSitemap}
+                            />
+                            <Label htmlFor="useSitemap" className={useSitemap ? "text-muted-foreground" : ""}>
+                              Crawl
+                            </Label>
+                          </div>
+                        </div>
                       </div>
+                      
+                      {/* Sitemap URL Input */}
+                      {useSitemap && (
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="sitemapUrl">Sitemap URL (Optional)</Label>
+                            <Input
+                              id="sitemapUrl"
+                              placeholder="https://example.com/sitemap.xml"
+                              value={customSitemapUrl}
+                              onChange={(e) => setCustomSitemapUrl(e.target.value)}
+                            />
+                            <p className="text-sm text-muted-foreground">
+                              Leave empty to automatically detect your website's sitemap location.
+                              Only provide a URL if auto-detection fails.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Crawl Settings */}
+                      {!useSitemap && (
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <Label htmlFor="maxPages">Number of Pages to Crawl</Label>
+                              <span className="text-sm font-medium">{maxPages} pages</span>
+                            </div>
+                            <Slider
+                              id="maxPages"
+                              min={10}
+                              max={100}
+                              step={10}
+                              value={[maxPages]}
+                              onValueChange={(value) => setMaxPages(value[0])}
+                              className="py-2"
+                            />
+                            <p className="text-sm text-muted-foreground">
+                              Higher numbers will take longer but provide more comprehensive results.
+                              Start with a lower number to test the import process.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setShowCustomUrlDialog(false)}>
+                      <Button type="button" variant="outline" onClick={() => setShowImportDialog(false)}>
                         Cancel
                       </Button>
                       <Button type="submit" disabled={isImporting}>
@@ -157,59 +203,7 @@ const WebsiteSitemap = () => {
                             Importing...
                           </>
                         ) : (
-                          'Import'
-                        )}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
-
-              {/* Crawl Website Dialog */}
-              <Dialog open={showCrawlDialog} onOpenChange={setShowCrawlDialog}>
-                <DialogContent className="sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle>Crawl Website Pages</DialogTitle>
-                    <DialogDescription>
-                      This will crawl your website to discover pages when no sitemap is available.
-                      Adjust the maximum number of pages to crawl below.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleCrawlDialogSubmit}>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="maxPages" className="text-right">
-                          Max Pages
-                        </Label>
-                        <div className="col-span-3 flex items-center gap-4">
-                          <Slider
-                            id="maxPages"
-                            min={10}
-                            max={100}
-                            step={10}
-                            value={[maxPages]}
-                            onValueChange={(value) => setMaxPages(value[0])}
-                            className="flex-1"
-                          />
-                          <span className="w-12 text-center">{maxPages}</span>
-                        </div>
-                      </div>
-                      <div className="col-span-4 text-sm text-muted-foreground">
-                        Note: Crawling more pages will take longer but provide more comprehensive results.
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setShowCrawlDialog(false)}>
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={isCrawling}>
-                        {isCrawling ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Crawling...
-                          </>
-                        ) : (
-                          'Start Crawling'
+                          'Start Import'
                         )}
                       </Button>
                     </DialogFooter>

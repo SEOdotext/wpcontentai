@@ -10,6 +10,7 @@ A content management and generation system for WordPress websites.
 - Content calendar
 - Post themes management
 - Sitemap parsing and content import
+- Key content analysis and reference
 
 ## Primary Content Feature
 
@@ -25,6 +26,54 @@ The application now supports designating a piece of content as "primary" for eac
 - The `website_content` table has an `is_primary` boolean column (default: false)
 - A database trigger ensures only one content item per website can be marked as primary
 - The SQL script to add this feature is available in `add_is_primary_column.sql`
+
+## Key Content System
+
+### What is Key Content?
+Key content represents the most important, high-quality pages on your website. These pages serve as:
+- Foundation for your website's content strategy
+- Examples of your ideal content style and structure
+- Reference material for AI-generated content
+
+### How It Works
+
+1. **Marking Key Content**
+   - In the content manager, mark your best pages as key content
+   - These should be well-written, comprehensive pages that represent your desired content quality
+
+2. **Updating Key Content**
+   When you click "Update Key Content", the system:
+   - Extracts and analyzes the writing style, tone, and structure from your key pages
+   - Identifies patterns in content organization, vocabulary, and formatting
+   - Creates a content profile that will guide future content generation
+
+3. **Content Generation**
+   The analyzed key content influences new content by:
+   - Matching the writing style and tone
+   - Following similar content structure patterns
+   - Maintaining consistent terminology and industry-specific language
+   - Ensuring new content aligns with your established content quality
+
+### Best Practices
+
+- Choose 3-5 pages as key content
+- Select content that best represents your desired style and quality
+- Update key content regularly to maintain freshness
+- Ensure key pages cover your main topics or services
+
+### Tips for Selecting Key Content
+
+1. Look for pages that:
+   - Are comprehensive and well-written
+   - Represent your brand voice accurately
+   - Cover core topics in your niche
+   - Have performed well with your audience
+
+2. Common types of key content:
+   - Detailed guides or tutorials
+   - Core service/product pages
+   - Key industry resources
+   - Foundational topic overviews
 
 ## Setup
 

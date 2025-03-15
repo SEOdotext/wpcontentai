@@ -40,6 +40,12 @@ interface WebsiteContentContextType {
   importCrawledPages: (websiteId: string, maxPages?: number) => Promise<number>;
   setCornerstone: (contentId: string | null, websiteId: string) => Promise<boolean>;
   fixCornerstoneContent: () => Promise<string>;
+  importPages: (websiteId: string, options: { 
+    maxPages?: number, 
+    customSitemapUrl?: string,
+    useSitemap?: boolean 
+  }) => Promise<number>;
+  scrapeCornerstone: (websiteId: string) => Promise<number>;
 }
 
 // Create the context
@@ -798,6 +804,181 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
     }
   };
 
+  // Import pages from sitemap or crawl
+  const importPages = async (websiteId: string, options: { 
+    maxPages?: number, 
+    customSitemapUrl?: string,
+    useSitemap?: boolean 
+  }): Promise<number> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log(`Importing pages for website ID: ${websiteId}`, options);
+      
+      // Try sitemap first if not explicitly disabled
+      let pages: { url: string; title?: string; content?: string }[] = [];
+      
+      if (options.useSitemap !== false) {
+        pages = await fetchSitemapPages(websiteId, options.customSitemapUrl);
+        console.log(`Found ${pages.length} sitemap pages`);
+      }
+      
+      // If no pages found from sitemap and maxPages is set, try crawling
+      if (pages.length === 0 && options.maxPages) {
+        pages = await crawlWebsitePages(websiteId, options.maxPages);
+        console.log(`Found ${pages.length} crawled pages`);
+      }
+      
+      if (pages.length === 0) {
+        console.log('No pages found to import');
+        return 0;
+      }
+      
+      // Prepare the pages for insertion
+      const pagesToInsert = pages.map(page => ({
+        website_id: websiteId,
+        url: page.url,
+        title: page.title || page.url,
+        content: page.content || '',
+        content_type: options.useSitemap !== false ? 'sitemap' : 'crawled',
+        last_fetched: new Date().toISOString(),
+        metadata: {},
+        is_cornerstone: false // Default to not cornerstone
+      }));
+      
+      // Insert the pages in batches to avoid hitting size limits
+      const batchSize = 50;
+      let insertedCount = 0;
+      
+      for (let i = 0; i < pagesToInsert.length; i += batchSize) {
+        const batch = pagesToInsert.slice(i, i + batchSize);
+        
+        const { data, error } = await supabase
+          .from('website_content')
+          .upsert(batch, { 
+            onConflict: 'website_id,url',
+            ignoreDuplicates: false
+          });
+        
+        if (error) {
+          console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
+          setError(error.message);
+          toast({
+            title: 'Error',
+            description: `Failed to import pages: ${error.message}`,
+            variant: 'destructive',
+          });
+        } else {
+          insertedCount += batch.length;
+        }
+      }
+      
+      console.log(`Successfully imported ${insertedCount} pages`);
+      toast({
+        title: 'Success',
+        description: `Successfully imported ${insertedCount} pages`,
+      });
+      
+      return insertedCount;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Exception importing pages:', errorMessage);
+      setError(errorMessage);
+      toast({
+        title: 'Error',
+        description: `Failed to import pages: ${errorMessage}`,
+        variant: 'destructive',
+      });
+      return 0;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Scrape content from cornerstone pages
+  const scrapeCornerstone = async (websiteId: string): Promise<number> => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log(`Scraping content from cornerstone pages for website ID: ${websiteId}`);
+      
+      // Get all cornerstone pages for this website
+      const { data: cornerstonePages, error: fetchError } = await supabase
+        .from('website_content')
+        .select('id, url')
+        .eq('website_id', websiteId)
+        .eq('is_cornerstone', true);
+      
+      if (fetchError) {
+        console.error('Error fetching cornerstone pages:', fetchError);
+        setError(fetchError.message);
+        return 0;
+      }
+      
+      if (!cornerstonePages || cornerstonePages.length === 0) {
+        console.log('No cornerstone pages found to scrape');
+        toast({
+          title: 'Info',
+          description: 'No cornerstone pages found to scrape. Mark some pages as cornerstone first.',
+        });
+        return 0;
+      }
+      
+      console.log(`Found ${cornerstonePages.length} cornerstone pages to scrape`);
+      let scrapedCount = 0;
+      
+      // Scrape content from each cornerstone page
+      for (const page of cornerstonePages) {
+        try {
+          // Call your scraping function here
+          const scrapedContent = await fetchPageContent(page.url);
+          
+          if (scrapedContent) {
+            // Update the page with the scraped content
+            const { error: updateError } = await supabase
+              .from('website_content')
+              .update({ 
+                content: scrapedContent.content,
+                title: scrapedContent.title || page.url,
+                last_fetched: new Date().toISOString()
+              })
+              .eq('id', page.id);
+            
+            if (updateError) {
+              console.error(`Error updating content for ${page.url}:`, updateError);
+            } else {
+              scrapedCount++;
+            }
+          }
+        } catch (err) {
+          console.error(`Error scraping content from ${page.url}:`, err);
+        }
+      }
+      
+      console.log(`Successfully scraped content from ${scrapedCount} cornerstone pages`);
+      toast({
+        title: 'Success',
+        description: `Successfully scraped content from ${scrapedCount} cornerstone pages`,
+      });
+      
+      return scrapedCount;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('Exception scraping cornerstone content:', errorMessage);
+      setError(errorMessage);
+      toast({
+        title: 'Error',
+        description: `Failed to scrape cornerstone content: ${errorMessage}`,
+        variant: 'destructive',
+      });
+      return 0;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Create the context value
   const contextValue: WebsiteContentContextType = {
     websiteContent,
@@ -812,7 +993,9 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
     crawlWebsitePages,
     importCrawledPages,
     setCornerstone,
-    fixCornerstoneContent
+    fixCornerstoneContent,
+    importPages,
+    scrapeCornerstone
   };
 
   return (
