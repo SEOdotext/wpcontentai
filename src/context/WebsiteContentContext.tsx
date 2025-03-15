@@ -55,6 +55,8 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
 
   // Fetch website content for a specific website
   const fetchWebsiteContent = async (websiteId: string) => {
+    console.log(`fetchWebsiteContent called for website ID: ${websiteId}`);
+    
     try {
       setLoading(true);
       setError(null);
@@ -93,6 +95,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         status: item.status || 'published'
       }));
       
+      console.log('Setting websiteContent state with', contentWithDefaults.length, 'items');
       setWebsiteContent(contentWithDefaults as WebsiteContent[]);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
@@ -649,8 +652,11 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
 
   // Set a piece of content as cornerstone
   const setCornerstone = async (contentId: string | null, websiteId: string): Promise<boolean> => {
+    console.log('setCornerstone called with contentId:', contentId, 'websiteId:', websiteId);
+    
     try {
-      setLoading(true);
+      // Don't set loading state to avoid causing re-renders in components
+      // setLoading(true);
       setError(null);
       
       // If contentId is null, we're unsetting cornerstone status
@@ -695,19 +701,10 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         return false;
       }
       
-      console.log('Database update successful, updating local state');
+      console.log('Database update successful');
       
-      // Update local state to reflect the change without affecting other content
-      setWebsiteContent(prevContent => {
-        const updatedContent = prevContent.map(content => {
-          if (content.id === contentId) {
-            return { ...content, is_cornerstone: newIsCornerstone };
-          }
-          return content;
-        });
-        console.log(`Updated content item ${contentId} in local state to is_cornerstone: ${newIsCornerstone}`);
-        return updatedContent;
-      });
+      // We don't need to update the global state here since the component is managing its own state
+      // This prevents unnecessary re-renders of the entire content list
       
       toast({
         title: 'Success',
@@ -726,7 +723,8 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       });
       return false;
     } finally {
-      setLoading(false);
+      // Don't set loading state to avoid causing re-renders in components
+      // setLoading(false);
     }
   };
 
@@ -774,10 +772,10 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         console.log('Current cornerstone content counts by website:', counts);
       }
       
-      // Refresh all website content for all websites
-      for (const website of websites) {
-        await fetchWebsiteContent(website.id);
-      }
+      // Don't automatically refresh all website content - let the component handle this if needed
+      // for (const website of websites) {
+      //   await fetchWebsiteContent(website.id);
+      // }
       
       toast({
         title: 'Success',

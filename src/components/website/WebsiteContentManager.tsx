@@ -1,4 +1,4 @@
-import React, { useEffect, useState, forwardRef } from 'react';
+import React, { useEffect, useState, forwardRef, useCallback } from 'react';
 import { useWebsiteContent } from '@/context/WebsiteContentContext';
 import { useWebsites } from '@/context/WebsitesContext';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -44,7 +44,7 @@ VisibleSwitch.displayName = 'VisibleSwitch';
  * Uses local state to avoid reloading the entire table when toggling cornerstone content
  */
 const WebsiteContentManager: React.FC = () => {
-  const { websiteContent, loading, error, fetchWebsiteContent, setCornerstone } = useWebsiteContent();
+  const { websiteContent, loading: globalLoading, error, fetchWebsiteContent, setCornerstone } = useWebsiteContent();
   const { currentWebsite } = useWebsites();
 
   const [activeTab, setActiveTab] = useState<string>('all');
@@ -53,6 +53,13 @@ const WebsiteContentManager: React.FC = () => {
   
   // Initialize localContent with websiteContent
   const [localContent, setLocalContent] = useState<typeof websiteContent>(websiteContent);
+  // Flag to prevent unnecessary reloads
+  const [contentInitialized, setContentInitialized] = useState<boolean>(false);
+  // Local loading state to avoid using the global loading state
+  const [localLoading, setLocalLoading] = useState<boolean>(false);
+
+  // Use the local loading state or global loading state only for initial load
+  const loading = localLoading || (globalLoading && !contentInitialized);
 
   // Calculate cornerstone content count
   const cornerstoneContentCount = localContent.filter(content => content.is_cornerstone).length;
@@ -64,9 +71,11 @@ const WebsiteContentManager: React.FC = () => {
     return content.type === activeTab;
   });
 
-  const handleSetCornerstone = async (contentId: string, isCurrentlyCornerstone: boolean) => {
+  // Memoize the handleSetCornerstone function to avoid recreating it on every render
+  const handleSetCornerstone = useCallback(async (contentId: string, isCurrentlyCornerstone: boolean) => {
     try {
       setSettingCornerstone(contentId);
+      setLocalLoading(true);
       
       // Update the local state immediately for a responsive UI
       setLocalContent(prevContent => 
@@ -78,8 +87,20 @@ const WebsiteContentManager: React.FC = () => {
       );
       
       // Use setCornerstone which now properly handles toggling
+      // This will update the database but we don't need to reload the content
       if (currentWebsite?.id) {
-        await setCornerstone(contentId, currentWebsite.id);
+        // Fire and forget - we've already updated the local state
+        setCornerstone(contentId, currentWebsite.id).catch(error => {
+          console.error('Error toggling cornerstone content:', error);
+          // If there was an error, revert the local state change
+          setLocalContent(prevContent => 
+            prevContent.map(content => 
+              content.id === contentId 
+                ? { ...content, is_cornerstone: isCurrentlyCornerstone } 
+                : content
+            )
+          );
+        });
       }
       
     } catch (error) {
@@ -94,8 +115,9 @@ const WebsiteContentManager: React.FC = () => {
       );
     } finally {
       setSettingCornerstone(null);
+      setLocalLoading(false);
     }
-  };
+  }, [currentWebsite?.id, setCornerstone]);
 
   const toggleCornerstoneOnly = (value: boolean) => {
     setShowCornerstoneOnly(value);
@@ -103,18 +125,36 @@ const WebsiteContentManager: React.FC = () => {
 
   // Load content when website changes - only load once when the website changes
   useEffect(() => {
-    if (currentWebsite?.id && websiteContent.length === 0) {
-      console.log('Initial content load for website:', currentWebsite.id);
-      fetchWebsiteContent(currentWebsite.id);
-    }
-  }, [currentWebsite?.id, fetchWebsiteContent, websiteContent.length]);
+    const loadContent = async () => {
+      if (currentWebsite?.id && (websiteContent.length === 0 || !contentInitialized)) {
+        console.log('Initial content load for website:', currentWebsite.id);
+        setLocalLoading(true);
+        try {
+          await fetchWebsiteContent(currentWebsite.id);
+        } finally {
+          setLocalLoading(false);
+        }
+      }
+    };
+    
+    loadContent();
+  }, [currentWebsite?.id, fetchWebsiteContent, websiteContent.length, contentInitialized]);
 
-  // Update local content when websiteContent changes
+  // Update local content when websiteContent changes, but only if we haven't initialized yet
+  // or if the content length has changed (indicating new content was added/removed)
   useEffect(() => {
     if (websiteContent.length > 0) {
-      setLocalContent(websiteContent);
+      console.log('websiteContent changed, length:', websiteContent.length, 'initialized:', contentInitialized, 'localContent length:', localContent.length);
+      
+      if (!contentInitialized || localContent.length !== websiteContent.length) {
+        console.log('Updating local content from context');
+        setLocalContent(websiteContent);
+        setContentInitialized(true);
+      } else {
+        console.log('Skipping local content update - no changes detected');
+      }
     }
-  }, [websiteContent]);
+  }, [websiteContent, contentInitialized, localContent.length]);
 
   return (
     <div className="container mx-auto py-4">
@@ -206,7 +246,7 @@ const WebsiteContentManager: React.FC = () => {
                         <VisibleSwitch
                           checked={content.is_cornerstone}
                           onCheckedChange={() => handleSetCornerstone(content.id, content.is_cornerstone)}
-                          disabled={settingCornerstone === content.id || loading}
+                          disabled={settingCornerstone === content.id}
                           className={settingCornerstone === content.id ? "opacity-50" : ""}
                         />
                       </TooltipTrigger>
