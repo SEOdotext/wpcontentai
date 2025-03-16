@@ -134,6 +134,17 @@ serve(async (req) => {
   }
 });
 
+/**
+ * Formats plain text content by adding paragraph tags and preserving line breaks
+ */
+function formatPlainText(text: string): string {
+  return text
+    .split(/\n\s*\n/)
+    .filter(p => p.trim().length > 0)
+    .map(p => `<p>${p.trim().replace(/\n/g, '<br />')}</p>`)
+    .join('\n');
+}
+
 function extractMainContent(html: string): string {
   try {
     // Create a DOM parser
@@ -145,6 +156,7 @@ function extractMainContent(html: string): string {
       'script',
       'style',
       'iframe',
+      'noscript',
       'nav',
       'header',
       'footer',
@@ -156,7 +168,21 @@ function extractMainContent(html: string): string {
       '#sidebar',
       '#comments',
       '#footer',
-      '#header'
+      '#header',
+      '.header',
+      '.footer',
+      '.navigation',
+      '.menu',
+      '.cart',
+      '.shopping-cart',
+      '.search',
+      '.social',
+      '.cookie',
+      '.popup',
+      '.modal',
+      '.banner',
+      '.ad',
+      '.widget'
     ];
 
     elementsToRemove.forEach(selector => {
@@ -173,16 +199,110 @@ function extractMainContent(html: string): string {
       doc.querySelector('main') || 
       doc.querySelector('.content') || 
       doc.querySelector('.post-content') ||
-      doc.querySelector('.entry-content');
+      doc.querySelector('.entry-content') ||
+      doc.querySelector('.page-content') ||
+      doc.querySelector('#content') ||
+      doc.querySelector('[role="main"]');
 
+    // If we found a main content container, use it
     if (mainContent) {
-      return mainContent.textContent?.trim() || '';
+      // Clean up the content before returning
+      return cleanAndStructureContent(mainContent);
     }
 
-    // Fallback to body content if no main content container is found
-    return doc.body.textContent?.trim() || '';
+    // If no main content container is found, try to extract content from the body
+    // but first remove common non-content sections
+    const body = doc.body;
+    
+    // Extract text content from paragraphs and headings
+    const contentElements = Array.from(body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote'));
+    
+    if (contentElements.length > 0) {
+      // Create a new div to hold our extracted content
+      const extractedContent = doc.createElement('div');
+      
+      // Add each content element to our container
+      contentElements.forEach(el => {
+        extractedContent.appendChild(el.cloneNode(true));
+      });
+      
+      return cleanAndStructureContent(extractedContent);
+    }
+    
+    // Last resort: just clean up the body content
+    return cleanAndStructureContent(body);
   } catch (error) {
     console.error('Error extracting content:', error);
     return '';
   }
+}
+
+/**
+ * Cleans and structures HTML content to ensure proper formatting
+ */
+function cleanAndStructureContent(element: Element): string {
+  // Get the HTML content
+  let html = element.innerHTML || '';
+  
+  // Remove excessive whitespace
+  html = html.replace(/\s+/g, ' ');
+  
+  // Replace consecutive <br> tags with paragraph breaks
+  html = html.replace(/(<br\s*\/?>\s*){2,}/gi, '</p><p>');
+  
+  // Wrap plain text nodes in paragraphs
+  const tempDoc = new DOMParser().parseFromString(html, 'text/html');
+  if (!tempDoc) return html;
+  
+  // Process text nodes
+  const processNode = (node: Node) => {
+    if (node.nodeType === 3 && node.textContent?.trim()) { // Text node
+      const parent = node.parentElement;
+      if (parent && parent.tagName !== 'P' && parent.tagName !== 'DIV' && 
+          parent.tagName !== 'H1' && parent.tagName !== 'H2' && 
+          parent.tagName !== 'H3' && parent.tagName !== 'H4' && 
+          parent.tagName !== 'H5' && parent.tagName !== 'H6' && 
+          parent.tagName !== 'LI' && parent.tagName !== 'TD' &&
+          parent.tagName !== 'SPAN' && parent.tagName !== 'A' &&
+          parent.tagName !== 'STRONG' && parent.tagName !== 'EM' &&
+          parent.tagName !== 'B' && parent.tagName !== 'I') {
+        
+        // Create a paragraph element
+        const p = tempDoc.createElement('p');
+        // Replace the text node with the paragraph
+        parent.replaceChild(p, node);
+        // Add the text to the paragraph
+        p.appendChild(node);
+      }
+    }
+    
+    // Process child nodes
+    const childNodes = Array.from(node.childNodes);
+    childNodes.forEach(child => {
+      if (child.nodeType === 1 || child.nodeType === 3) { // Element or text node
+        processNode(child);
+      }
+    });
+  };
+  
+  processNode(tempDoc.body);
+  
+  // Get the processed HTML
+  html = tempDoc.body.innerHTML;
+  
+  // Ensure paragraphs have proper spacing
+  html = html.replace(/<\/p>\s*<p>/g, '</p>\n<p>');
+  
+  // Ensure headings have proper spacing
+  html = html.replace(/<\/h([1-6])>\s*<([^>]+)>/g, '</h$1>\n<$2>');
+  
+  // Ensure lists have proper spacing
+  html = html.replace(/<\/(ul|ol)>\s*<([^>]+)>/g, '</$1>\n<$2>');
+  
+  // If the content still doesn't have proper HTML formatting, add it
+  if (!html.includes('<p>') && !html.includes('<div>')) {
+    html = formatPlainText(html);
+  }
+  
+  return html;
 } 

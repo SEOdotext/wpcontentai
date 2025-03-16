@@ -919,7 +919,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       toast({
         title: 'Success',
         description: data.message,
-        variant: data.processed === data.total ? 'default' : 'warning'
+        variant: data.processed === data.total ? 'default' : 'destructive'
       });
 
       return data.processed;
@@ -937,6 +937,87 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
   };
 
   /**
+   * Formats plain text content by adding paragraph tags and preserving line breaks
+   */
+  const formatPlainText = (text: string): string => {
+    return text
+      .split(/\n\s*\n/)
+      .filter(p => p.trim().length > 0)
+      .map(p => `<p>${p.trim().replace(/\n/g, '<br />')}</p>`)
+      .join('\n');
+  };
+
+  /**
+   * Cleans and structures HTML content to ensure proper formatting
+   */
+  const cleanAndStructureContent = (element: Element): string => {
+    // Get the HTML content
+    let html = element.innerHTML || '';
+    
+    // Remove excessive whitespace
+    html = html.replace(/\s+/g, ' ');
+    
+    // Replace consecutive <br> tags with paragraph breaks
+    html = html.replace(/(<br\s*\/?>\s*){2,}/gi, '</p><p>');
+    
+    // Wrap plain text nodes in paragraphs
+    const tempDoc = document.createElement('div');
+    tempDoc.innerHTML = html;
+    
+    // Process text nodes
+    const processNode = (node: Node) => {
+      if (node.nodeType === 3 && node.textContent?.trim()) { // Text node
+        const parent = node.parentElement;
+        if (parent && parent.tagName !== 'P' && parent.tagName !== 'DIV' && 
+            parent.tagName !== 'H1' && parent.tagName !== 'H2' && 
+            parent.tagName !== 'H3' && parent.tagName !== 'H4' && 
+            parent.tagName !== 'H5' && parent.tagName !== 'H6' && 
+            parent.tagName !== 'LI' && parent.tagName !== 'TD' &&
+            parent.tagName !== 'SPAN' && parent.tagName !== 'A' &&
+            parent.tagName !== 'STRONG' && parent.tagName !== 'EM' &&
+            parent.tagName !== 'B' && parent.tagName !== 'I') {
+          
+          // Create a paragraph element
+          const p = document.createElement('p');
+          // Replace the text node with the paragraph
+          parent.replaceChild(p, node);
+          // Add the text to the paragraph
+          p.appendChild(node);
+        }
+      }
+      
+      // Process child nodes
+      const childNodes = Array.from(node.childNodes);
+      childNodes.forEach(child => {
+        if (child.nodeType === 1 || child.nodeType === 3) { // Element or text node
+          processNode(child);
+        }
+      });
+    };
+    
+    processNode(tempDoc);
+    
+    // Get the processed HTML
+    html = tempDoc.innerHTML;
+    
+    // Ensure paragraphs have proper spacing
+    html = html.replace(/<\/p>\s*<p>/g, '</p>\n<p>');
+    
+    // Ensure headings have proper spacing
+    html = html.replace(/<\/h([1-6])>\s*<([^>]+)>/g, '</h$1>\n<$2>');
+    
+    // Ensure lists have proper spacing
+    html = html.replace(/<\/(ul|ol)>\s*<([^>]+)>/g, '</$1>\n<$2>');
+    
+    // If the content still doesn't have proper HTML formatting, add it
+    if (!html.includes('<p>') && !html.includes('<div>')) {
+      html = formatPlainText(html);
+    }
+    
+    return html;
+  };
+
+  /**
    * Extracts the main content from an HTML string
    * This is a basic implementation that should be enhanced based on specific needs
    */
@@ -951,6 +1032,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         'script',
         'style',
         'iframe',
+        'noscript',
         'nav',
         'header',
         'footer',
@@ -962,11 +1044,82 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         '#sidebar',
         '#comments',
         '#footer',
-        '#header'
+        '#header',
+        '.header',
+        '.footer',
+        '.navigation',
+        '.menu',
+        '.cart',
+        '.shopping-cart',
+        '.search',
+        '.social',
+        '.cookie',
+        '.popup',
+        '.modal',
+        '.banner',
+        '.ad',
+        '.widget',
+        // Additional elements to remove
+        'button',
+        '.product',
+        '.products',
+        '.woocommerce',
+        '.price',
+        '.add-to-cart',
+        '.checkout',
+        '.related-products',
+        '.carousel',
+        '.slider',
+        '.gallery',
+        '.slideshow',
+        '.breadcrumb',
+        '.breadcrumbs',
+        '.pagination',
+        '.share',
+        '.sharing',
+        '.rating',
+        '.reviews',
+        '.tags',
+        '.categories',
+        '.author',
+        '.date',
+        '.meta',
+        '.newsletter',
+        '.subscribe',
+        '.cta',
+        '.call-to-action'
       ];
 
       elementsToRemove.forEach(selector => {
         doc.querySelectorAll(selector).forEach(el => el.remove());
+      });
+
+      // Remove all images
+      doc.querySelectorAll('img').forEach(el => el.remove());
+
+      // Remove all iframes
+      doc.querySelectorAll('iframe').forEach(el => el.remove());
+
+      // Remove all SVGs
+      doc.querySelectorAll('svg').forEach(el => el.remove());
+
+      // Remove all buttons and links that look like buttons
+      doc.querySelectorAll('a.button, .btn, button, input[type="button"], input[type="submit"]').forEach(el => el.remove());
+
+      // Remove elements with common product-related classes
+      const productClassPatterns = [
+        /product/i, /price/i, /cart/i, /shop/i, /buy/i, /purchase/i, /offer/i, 
+        /discount/i, /sale/i, /promo/i, /deal/i, /stock/i, /delivery/i, /shipping/i
+      ];
+
+      doc.querySelectorAll('*').forEach(el => {
+        const classNames = el.className?.toString() || '';
+        const id = el.id || '';
+        
+        // Check if any class or ID matches product patterns
+        if (productClassPatterns.some(pattern => pattern.test(classNames) || pattern.test(id))) {
+          el.remove();
+        }
       });
 
       // Try to find the main content container
@@ -975,14 +1128,70 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         doc.querySelector('main') || 
         doc.querySelector('.content') || 
         doc.querySelector('.post-content') ||
-        doc.querySelector('.entry-content');
+        doc.querySelector('.entry-content') ||
+        doc.querySelector('.page-content') ||
+        doc.querySelector('#content') ||
+        doc.querySelector('[role="main"]');
 
+      // If we found a main content container, use it
       if (mainContent) {
-        return mainContent.textContent?.trim() || '';
+        // Clean up the content before returning
+        return cleanAndStructureContent(mainContent);
       }
 
-      // Fallback to body content if no main content container is found
-      return doc.body.textContent?.trim() || '';
+      // If no main content container is found, try to extract content from the body
+      // but first remove common non-content sections
+      const body = doc.body;
+      
+      // Extract text content from paragraphs and headings
+      const contentElements = Array.from(body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote'));
+      
+      // Filter out elements that are likely not part of the main content
+      const filteredElements = contentElements.filter(el => {
+        // Skip empty elements
+        if (!el.textContent?.trim()) return false;
+        
+        // Skip very short paragraphs that are likely not main content
+        if (el.tagName === 'P' && el.textContent.trim().length < 20) {
+          // Check if it's part of a larger content block
+          const parent = el.parentElement;
+          if (parent && parent.querySelectorAll('p').length <= 1) {
+            return false;
+          }
+        }
+        
+        // Skip elements with product-related text
+        const text = el.textContent.toLowerCase();
+        if (
+          text.includes('add to cart') || 
+          text.includes('buy now') || 
+          text.includes('price') || 
+          text.includes('checkout') ||
+          text.includes('shipping') ||
+          text.includes('delivery') ||
+          text.includes('product') ||
+          text.includes('shop now')
+        ) {
+          return false;
+        }
+        
+        return true;
+      });
+      
+      if (filteredElements.length > 0) {
+        // Create a new div to hold our extracted content
+        const extractedContent = document.createElement('div');
+        
+        // Add each element to our container
+        filteredElements.forEach(el => {
+          extractedContent.appendChild(el.cloneNode(true));
+        });
+        
+        return cleanAndStructureContent(extractedContent);
+      }
+      
+      // Last resort: just clean up the body content
+      return cleanAndStructureContent(body);
     } catch (error) {
       console.error('Error extracting content:', error);
       return '';

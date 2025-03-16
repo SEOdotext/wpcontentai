@@ -1,4 +1,3 @@
-
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
@@ -158,4 +157,137 @@
   .animation-delay-500 {
     animation-delay: 500ms;
   }
+}
+
+/* Content View Styles */
+.content-view {
+  /* Basic text styling */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Ensure all content is visible and properly formatted */
+.content-view * {
+  max-width: 100%;
+}
+
+/* Add spacing between elements */
+.content-view > * {
+  margin-bottom: 1em;
+}
+
+.content-view h1,
+.content-view h2,
+.content-view h3,
+.content-view h4,
+.content-view h5,
+.content-view h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.content-view h1 { font-size: 2em; }
+.content-view h2 { font-size: 1.5em; }
+.content-view h3 { font-size: 1.25em; }
+
+.content-view p {
+  margin-bottom: 1em;
+  min-height: 1em; /* Ensure empty paragraphs have height */
+}
+
+/* Fix for text without paragraphs */
+.content-view > div {
+  margin-bottom: 1em;
+}
+
+.content-view ul,
+.content-view ol {
+  margin-bottom: 1em;
+  padding-left: 2em;
+}
+
+.content-view ul li {
+  list-style-type: disc;
+  margin-bottom: 0.5em;
+}
+
+.content-view ol li {
+  list-style-type: decimal;
+  margin-bottom: 0.5em;
+}
+
+.content-view a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.content-view img {
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  display: block;
+}
+
+.content-view blockquote {
+  border-left: 4px solid #e5e7eb;
+  padding-left: 1em;
+  margin-left: 0;
+  margin-right: 0;
+  font-style: italic;
+}
+
+.content-view pre,
+.content-view code {
+  background-color: #f3f4f6;
+  border-radius: 0.25em;
+  padding: 0.2em 0.4em;
+  font-family: monospace;
+}
+
+.content-view pre {
+  padding: 1em;
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+
+.content-view pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.content-view table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1em;
+  overflow-x: auto;
+  display: block;
+}
+
+.content-view th,
+.content-view td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5em;
+}
+
+.content-view th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+
+/* Handle nested elements */
+.content-view div > p:last-child,
+.content-view li > p:last-child {
+  margin-bottom: 0;
+}
+
+/* Fix for empty elements */
+.content-view p:empty,
+.content-view div:empty {
+  display: none;
 }
