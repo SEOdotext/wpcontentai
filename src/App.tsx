@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
 import { SidebarProvider } from "./components/ui/sidebar";
 import { Loader2 } from "lucide-react";
+import TeamManagement from "./pages/TeamManagement";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -202,6 +203,13 @@ const App = () => (
                               <ProtectedRoute>
                                 <SidebarProvider>
                                   <WebsiteManager />
+                                </SidebarProvider>
+                              </ProtectedRoute>
+                            } />
+                            <Route path="/team-management" element={
+                              <ProtectedRoute>
+                                <SidebarProvider>
+                                  <TeamManagement />
                                 </SidebarProvider>
                               </ProtectedRoute>
                             } />

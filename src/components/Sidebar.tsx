@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, FileText, Globe, Home, Map, PlusCircle, Settings } from 'lucide-react';
+import { Calendar, FileText, Globe, Home, Map, PlusCircle, Settings, Users } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -130,7 +130,18 @@ export function AppSidebar() {
       
       <SidebarFooter>
         <SidebarMenu>
-          {/* SidebarFooter content */}
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              className="gap-2"
+              isActive={location.pathname.startsWith('/team-management')}
+              asChild
+            >
+              <Link to="/team-management">
+                <Users className="h-4 w-4" />
+                <span>Team Management</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>

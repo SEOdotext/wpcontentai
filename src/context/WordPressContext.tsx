@@ -91,13 +91,52 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Helper function to construct WordPress admin URLs
   const constructWpUrl = (baseUrl: string, path: string = ''): string => {
-    // Remove protocol if present
-    const cleanUrl = baseUrl.replace(/^https?:\/\//, '');
-    // Remove any WordPress-specific paths
-    const baseWpUrl = cleanUrl.replace(/\/(wp-admin|wp-login|wp-content).*$/, '');
-    // Remove trailing slashes
-    const cleanPath = path.replace(/^\/+|\/+$/g, '');
-    return `https://${baseWpUrl}/${cleanPath}`;
+    // Log raw input for debugging
+    console.log('Constructing URL from:', { baseUrl, path });
+    
+    // Ensure we have a protocol
+    let url = baseUrl;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+    
+    try {
+      // Parse the URL to handle it properly
+      const parsedUrl = new URL(url);
+      
+      // Remove WordPress-specific paths
+      const pathname = parsedUrl.pathname;
+      if (pathname.includes('/wp-admin') || pathname.includes('/wp-login') || pathname.includes('/wp-content')) {
+        parsedUrl.pathname = '/';
+      }
+      
+      // Construct the final URL
+      if (path) {
+        // Make sure path doesn't start with a slash if the pathname already ends with one
+        const cleanPath = path.replace(/^\/+/, '');
+        
+        // If pathname already ends with a slash, don't add another
+        if (parsedUrl.pathname.endsWith('/')) {
+          parsedUrl.pathname += cleanPath;
+        } else {
+          parsedUrl.pathname += '/' + cleanPath;
+        }
+      }
+      
+      // Log the constructed URL for debugging
+      console.log('Constructed URL:', parsedUrl.toString());
+      return parsedUrl.toString();
+    } catch (error) {
+      console.error('Error constructing WordPress URL:', error);
+      
+      // Fallback to basic string manipulation if URL parsing fails
+      url = url.replace(/\/+$/, ''); // Remove trailing slashes
+      path = path.replace(/^\/+/, ''); // Remove leading slashes
+      
+      const result = path ? `${url}/${path}` : url;
+      console.log('Fallback constructed URL:', result);
+      return result;
+    }
   };
 
   // Initiate WordPress authentication by opening the application passwords page
@@ -128,35 +167,143 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Complete WordPress authentication with the application password
   const completeWordPressAuth = async (wpUrl: string, username: string, password: string): Promise<boolean> => {
+    console.log('Starting WordPress authentication process');
+    
     if (!currentWebsite) {
+      console.error('No website selected for WordPress authentication');
       toast.error('Please select a website first');
       return false;
     }
 
     try {
       setIsLoading(true);
+      console.log('Using Supabase Edge Function for WordPress authentication');
 
-      // Construct the API URL and clean the base URL
-      const apiUrl = constructWpUrl(wpUrl, 'wp-json/wp/v2/users/me');
-      const cleanWpUrl = constructWpUrl(wpUrl);
+      // Log the payload we're sending to help diagnose issues
+      console.log('Sending to Edge Function:', {
+        url: wpUrl,
+        username: username,
+        // Don't log the actual password, just its length and format
+        passwordLength: password.length,
+        passwordFormat: password.replace(/\S/g, "x"),
+        website_id: currentWebsite.id
+      });
 
-      // Test the credentials first
-      const response = await fetch(apiUrl, {
+      try {
+        const { data, error } = await supabase.functions.invoke('wordpress-connect', {
+          body: {
+            url: wpUrl,
+            username,
+            password,
+            website_id: currentWebsite.id
+          }
+        });
+
+        console.log('Edge Function response received');
+
+        if (error) {
+          console.error('Edge Function error:', error);
+          toast.error(`Connection failed: ${error.message || 'Unknown error'}`);
+          
+          // Fallback to direct API call if Edge Function fails
+          console.log('Falling back to direct API call');
+          return await fallbackDirectWordPressAuth(wpUrl, username, password);
+        }
+
+        // Log the full response for debugging
+        console.log('Full response from Edge Function:', data);
+
+        if (!data || !data.success) {
+          console.error('WordPress connection failed:', data?.error || 'No success response received');
+          toast.error(data?.error || 'WordPress authentication failed with an unknown error');
+          return false;
+        }
+
+        // Set the settings from the response
+        console.log('WordPress connection successful');
+        setSettings(data.settings as WordPressSettings);
+        toast.success(`Successfully connected to WordPress as ${data.wordpress_user}`);
+        return true;
+      } catch (e) {
+        console.error('Exception when calling Edge Function:', e);
+        toast.error('Error connecting to the server. Trying direct connection...');
+        
+        // Fallback to direct API call if Edge Function throws an exception
+        return await fallbackDirectWordPressAuth(wpUrl, username, password);
+      }
+    } catch (error) {
+      console.error('Error in completeWordPressAuth:', error);
+      toast.error('Failed to connect to WordPress. Please check your credentials.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fallback function for direct WordPress authentication
+  const fallbackDirectWordPressAuth = async (wpUrl: string, username: string, password: string): Promise<boolean> => {
+    try {
+      console.log('Attempting direct WordPress authentication');
+      
+      // Construct the API URL
+      let apiUrl = wpUrl;
+      if (!apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
+        apiUrl = 'https://' + apiUrl;
+      }
+      
+      // Clean URL by removing WordPress paths and trailing slashes
+      try {
+        const parsedUrl = new URL(apiUrl);
+        if (parsedUrl.pathname.includes('/wp-admin') || 
+            parsedUrl.pathname.includes('/wp-login') || 
+            parsedUrl.pathname.includes('/wp-content')) {
+          parsedUrl.pathname = '/';
+        }
+        apiUrl = parsedUrl.toString().replace(/\/+$/, '');
+      } catch (e) {
+        console.error('URL parsing error:', e);
+        // Continue with unmodified URL if parsing fails
+      }
+      
+      const wpApiUrl = `${apiUrl}/wp-json/wp/v2/users/me`;
+      console.log('Testing direct WordPress API connection at:', wpApiUrl);
+      
+      // Attempt a direct API call
+      const cors = 'https://corsproxy.io/?';
+      const response = await fetch(cors + encodeURIComponent(wpApiUrl), {
+        method: 'GET',
         headers: {
           'Authorization': 'Basic ' + btoa(`${username}:${password}`)
         }
       });
-
+      
+      console.log('Direct API response status:', response.status);
+      
       if (!response.ok) {
-        throw new Error('Invalid WordPress credentials');
+        let errorMessage = 'Failed to connect to WordPress: ';
+        
+        try {
+          const errorData = await response.json();
+          console.error('WordPress API error details:', errorData);
+          errorMessage += errorData.message || response.statusText;
+        } catch (e) {
+          errorMessage += response.statusText;
+        }
+        
+        toast.error(errorMessage);
+        return false;
       }
-
-      // Save the credentials
+      
+      // Extract user data from response
+      const userData = await response.json();
+      console.log('WordPress authentication successful, user data:', userData);
+      
+      // Save to database
       const { data, error } = await supabase
         .from('wordpress_settings')
         .upsert({
-          website_id: currentWebsite.id,
-          wp_url: cleanWpUrl,
+          website_id: currentWebsite!.id,
+          wp_url: apiUrl,
           wp_username: username,
           wp_application_password: password,
           is_connected: true,
@@ -164,22 +311,20 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         })
         .select()
         .single();
-
-      if (error) throw error;
       
-      if (data) {
-        setSettings(data as WordPressSettings);
-        toast.success('Successfully connected to WordPress');
-        return true;
+      if (error) {
+        console.error('Database error:', error);
+        toast.error('Connected to WordPress but failed to save settings');
+        return false;
       }
-
-      return false;
+      
+      setSettings(data as WordPressSettings);
+      toast.success(`Successfully connected to WordPress as ${userData.name}`);
+      return true;
     } catch (error) {
-      console.error('Error saving WordPress credentials:', error);
-      toast.error('Failed to connect to WordPress. Please check your credentials.');
+      console.error('Error in fallbackDirectWordPressAuth:', error);
+      toast.error('Direct WordPress connection failed');
       return false;
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -192,18 +337,30 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     try {
       setIsLoading(true);
+      console.log('Testing WordPress connection via Edge Function');
 
-      const response = await fetch(`${settings.wp_url}/wp-json/wp/v2/users/me`, {
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${settings.wp_username}:${settings.wp_application_password}`)
+      const { data, error } = await supabase.functions.invoke('wordpress-connect', {
+        body: {
+          url: settings.wp_url,
+          username: settings.wp_username,
+          password: settings.wp_application_password,
+          action: 'test'
         }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to connect to WordPress');
+      if (error) {
+        console.error('Edge Function error:', error);
+        toast.error(error.message || 'Connection test failed');
+        return false;
       }
 
-      toast.success('Successfully connected to WordPress');
+      if (!data.success) {
+        console.error('WordPress connection test failed:', data.error);
+        toast.error(data.error || 'WordPress connection test failed');
+        return false;
+      }
+
+      toast.success(`Successfully connected to WordPress as ${data.wordpress_user}`);
       return true;
     } catch (error) {
       console.error('Error testing WordPress connection:', error);
@@ -220,30 +377,37 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     content: string,
     status: 'draft' | 'publish'
   ): Promise<boolean> => {
-    if (!settings) {
+    if (!settings || !currentWebsite) {
       toast.error('WordPress is not configured');
       return false;
     }
 
     try {
-      const apiUrl = constructWpUrl(settings.wp_url, 'wp-json/wp/v2/posts');
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + btoa(`${settings.wp_username}:${settings.wp_application_password}`)
-        },
-        body: JSON.stringify({
+      console.log('Creating WordPress post via Edge Function');
+      
+      const { data, error } = await supabase.functions.invoke('wordpress-posts', {
+        body: {
+          website_id: currentWebsite.id,
           title,
           content,
-          status
-        })
+          status,
+          action: 'create'
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to create WordPress post');
+      if (error) {
+        console.error('Edge Function error:', error);
+        toast.error(error.message || 'Failed to create WordPress post');
+        return false;
       }
 
+      if (!data.success) {
+        console.error('WordPress post creation failed:', data.error);
+        toast.error(data.error || 'Failed to create WordPress post');
+        return false;
+      }
+
+      console.log('WordPress post created:', data.post);
       toast.success(`Post ${status === 'publish' ? 'published' : 'saved as draft'} successfully`);
       return true;
     } catch (error) {
@@ -260,30 +424,38 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     content: string,
     status: 'draft' | 'publish'
   ): Promise<boolean> => {
-    if (!settings) {
+    if (!settings || !currentWebsite) {
       toast.error('WordPress is not configured');
       return false;
     }
 
     try {
-      const apiUrl = constructWpUrl(settings.wp_url, `wp-json/wp/v2/posts/${postId}`);
-      const response = await fetch(apiUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Basic ' + btoa(`${settings.wp_username}:${settings.wp_application_password}`)
-        },
-        body: JSON.stringify({
+      console.log('Updating WordPress post via Edge Function');
+      
+      const { data, error } = await supabase.functions.invoke('wordpress-posts', {
+        body: {
+          website_id: currentWebsite.id,
+          post_id: postId,
           title,
           content,
-          status
-        })
+          status,
+          action: 'update'
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update WordPress post');
+      if (error) {
+        console.error('Edge Function error:', error);
+        toast.error(error.message || 'Failed to update WordPress post');
+        return false;
       }
 
+      if (!data.success) {
+        console.error('WordPress post update failed:', data.error);
+        toast.error(data.error || 'Failed to update WordPress post');
+        return false;
+      }
+
+      console.log('WordPress post updated:', data.post);
       toast.success(`Post ${status === 'publish' ? 'published' : 'saved as draft'} successfully`);
       return true;
     } catch (error) {

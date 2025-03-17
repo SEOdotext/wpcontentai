@@ -1,5 +1,5 @@
 -- Function to fetch and parse a website's sitemap
-CREATE OR REPLACE FUNCTION get_website_sitemap_pages(website_id UUID)
+CREATE OR REPLACE FUNCTION get_website_sitemap_pages(site_id UUID)
 RETURNS TABLE (
   id UUID,
   website_id UUID,
@@ -21,10 +21,10 @@ DECLARE
   ];
 BEGIN
   -- Get the website URL
-  SELECT url INTO website_url FROM websites WHERE id = website_id;
+  SELECT url INTO website_url FROM websites WHERE id = site_id;
   
   IF website_url IS NULL THEN
-    RAISE EXCEPTION 'Website with ID % not found', website_id;
+    RAISE EXCEPTION 'Website with ID % not found', site_id;
   END IF;
   
   -- Remove trailing slash if present
@@ -36,7 +36,7 @@ BEGIN
   FOREACH sitemap_url IN ARRAY common_sitemap_paths LOOP
     BEGIN
       -- Attempt to fetch the sitemap
-      SELECT content INTO sitemap_content 
+      SELECT content INTO sitemap_content
       FROM http_get(website_url || sitemap_url);
       
       -- If we got here without an exception, we found a sitemap
@@ -59,31 +59,29 @@ BEGIN
   IF sitemap_content LIKE '%<sitemapindex%' THEN
     -- Process sitemap index (get first sitemap in the index)
     WITH sitemap_urls AS (
-      SELECT 
+      SELECT
         unnest(xpath('//sitemap/loc/text()', xmlparse(content sitemap_content))) AS sitemap_loc
     )
-    SELECT content INTO sitemap_content 
-    FROM http_get(sitemap_urls.sitemap_loc::text)
-    FROM sitemap_urls
-    LIMIT 1;
+    SELECT content INTO sitemap_content
+    FROM http_get((SELECT sitemap_loc::text FROM sitemap_urls LIMIT 1));
   END IF;
   
   -- Now process the actual sitemap
   RETURN QUERY
   WITH sitemap_urls AS (
-    SELECT 
+    SELECT
       unnest(xpath('//url/loc/text()', xmlparse(content sitemap_content))) AS url_loc,
       unnest(xpath('//url/lastmod/text()', xmlparse(content sitemap_content))) AS url_lastmod
   )
-  SELECT 
+  SELECT
     uuid_generate_v4() AS id,
-    website_id,
+    site_id,
     url_loc::text AS url,
     -- Extract title from URL (last path segment)
     COALESCE(
       nullif(regexp_replace(
-        split_part(url_loc::text, '/', -1), 
-        '\.html$|\.php$|\.asp$|\.aspx$', 
+        split_part(url_loc::text, '/', -1),
+        '\.html$|\.php$|\.asp$|\.aspx$',
         ''
       ), ''),
       'Homepage'

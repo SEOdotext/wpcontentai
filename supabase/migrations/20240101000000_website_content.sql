@@ -27,8 +27,8 @@ CREATE POLICY select_website_content ON website_content
     website_id IN (
       SELECT id FROM websites
       WHERE organisation_id IN (
-        SELECT organisation_id FROM organisation_members
-        WHERE user_id = auth.uid()
+        SELECT organisation_id FROM user_profiles
+        WHERE id = auth.uid()
       )
     )
   );
@@ -40,8 +40,8 @@ CREATE POLICY insert_website_content ON website_content
     website_id IN (
       SELECT id FROM websites
       WHERE organisation_id IN (
-        SELECT organisation_id FROM organisation_members
-        WHERE user_id = auth.uid()
+        SELECT organisation_id FROM user_profiles
+        WHERE id = auth.uid()
       )
     )
   );
@@ -53,8 +53,8 @@ CREATE POLICY update_website_content ON website_content
     website_id IN (
       SELECT id FROM websites
       WHERE organisation_id IN (
-        SELECT organisation_id FROM organisation_members
-        WHERE user_id = auth.uid()
+        SELECT organisation_id FROM user_profiles
+        WHERE id = auth.uid()
       )
     )
   );
@@ -66,8 +66,8 @@ CREATE POLICY delete_website_content ON website_content
     website_id IN (
       SELECT id FROM websites
       WHERE organisation_id IN (
-        SELECT organisation_id FROM organisation_members
-        WHERE user_id = auth.uid()
+        SELECT organisation_id FROM user_profiles
+        WHERE id = auth.uid()
       )
     )
   );

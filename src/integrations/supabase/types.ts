@@ -198,6 +198,42 @@ export type Database = {
           },
         ]
       }
+      website_access: {
+        Row: {
+          id: string
+          user_id: string
+          website_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          website_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          website_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "website_access_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "website_access_website_id_fkey"
+            columns: ["website_id"]
+            isOneToOne: false
+            referencedRelation: "websites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -244,6 +280,12 @@ export type Database = {
           title: string
           last_fetched: string
         }[]
+      }
+      user_has_website_access: {
+        Args: {
+          website_id: string
+        }
+        Returns: boolean
       }
     }
     Enums: {

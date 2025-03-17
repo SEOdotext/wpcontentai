@@ -160,13 +160,17 @@ const Organization = () => {
                       <CardTitle>Team Members</CardTitle>
                     </div>
                     <CardDescription>
-                      Coming soon - Manage your team members and their roles
+                      Manage your team members and their website access
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      Team management features will be available in a future update.
-                    </p>
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => navigate('/team-management')}
+                    >
+                      Manage Team Members
+                    </Button>
                   </CardContent>
                 </Card>
               </div>
