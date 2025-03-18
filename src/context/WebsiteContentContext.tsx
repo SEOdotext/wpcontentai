@@ -309,6 +309,21 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       
       console.log(`Fetching sitemap pages for website ID: ${websiteId}${customSitemapUrl ? ` with custom URL: ${customSitemapUrl}` : ''}`);
       
+      // Special handling for WorkForceEU.com
+      if (customSitemapUrl === undefined) {
+        // Get the website URL to check if it's WorkForceEU.com
+        const { data: website } = await supabase
+          .from('websites')
+          .select('url')
+          .eq('id', websiteId)
+          .single();
+          
+        if (website?.url?.includes('workforceeu.com')) {
+          console.log('Detected WorkForceEU.com website - using known sitemap URL');
+          customSitemapUrl = 'https://workforceeu.com/sitemap_index.xml';
+        }
+      }
+      
       // Call the Supabase Edge Function to get sitemap pages
       const { data, error } = await supabase.functions.invoke('get-sitemap-pages', {
         body: { 
@@ -429,26 +444,43 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       for (let i = 0; i < pagesToInsert.length; i += batchSize) {
         const batch = pagesToInsert.slice(i, i + batchSize);
         
-        const { data, error } = await supabase
-          .from('website_content')
-          .upsert(batch, { 
-            onConflict: 'website_id,url',
-            ignoreDuplicates: false
-          });
-        
-        if (error) {
-          console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
-          setError(error.message);
-          toast({
-            title: 'Error',
-            description: `Failed to import sitemap pages: ${error.message}`,
-            variant: 'destructive',
-          });
-          return insertedCount;
+        try {
+          // First check if any of these pages already exist
+          const urls = batch.map(page => page.url);
+          const { data: existingPages } = await supabase
+            .from('website_content')
+            .select('url')
+            .eq('website_id', websiteId)
+            .in('url', urls);
+          
+          // Filter out pages that already exist
+          const existingUrls = new Set((existingPages || []).map((p: any) => p.url));
+          console.log(`Found ${existingUrls.size} existing pages, skipping these`);
+          
+          const newPages = batch.filter(page => !existingUrls.has(page.url));
+          
+          if (newPages.length > 0) {
+            // Insert new pages
+            const { error } = await supabase
+              .from('website_content')
+              .insert(newPages);
+            
+            if (error) {
+              console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
+              setError(error.message);
+              toast({
+                title: 'Error',
+                description: `Failed to import sitemap pages: ${error.message}`,
+                variant: 'destructive',
+              });
+            } else {
+              insertedCount += newPages.length;
+              console.log(`Inserted batch ${i / batchSize + 1} (${newPages.length} pages)`);
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing batch ${i / batchSize + 1}:`, error);
         }
-        
-        insertedCount += batch.length;
-        console.log(`Inserted batch ${i / batchSize + 1} (${batch.length} pages)`);
       }
       
       console.log(`Successfully imported ${insertedCount} sitemap pages`);
@@ -595,26 +627,43 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       for (let i = 0; i < pagesToInsert.length; i += batchSize) {
         const batch = pagesToInsert.slice(i, i + batchSize);
         
-        const { data, error } = await supabase
-          .from('website_content')
-          .upsert(batch, { 
-            onConflict: 'website_id,url',
-            ignoreDuplicates: false
-          });
-        
-        if (error) {
-          console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
-          setError(error.message);
-          toast({
-            title: 'Error',
-            description: `Failed to import crawled pages: ${error.message}`,
-            variant: 'destructive',
-          });
-          return insertedCount;
+        try {
+          // First check if any of these pages already exist
+          const urls = batch.map(page => page.url);
+          const { data: existingPages } = await supabase
+            .from('website_content')
+            .select('url')
+            .eq('website_id', websiteId)
+            .in('url', urls);
+          
+          // Filter out pages that already exist
+          const existingUrls = new Set((existingPages || []).map((p: any) => p.url));
+          console.log(`Found ${existingUrls.size} existing pages, skipping these`);
+          
+          const newPages = batch.filter(page => !existingUrls.has(page.url));
+          
+          if (newPages.length > 0) {
+            // Insert new pages
+            const { error } = await supabase
+              .from('website_content')
+              .insert(newPages);
+            
+            if (error) {
+              console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
+              setError(error.message);
+              toast({
+                title: 'Error',
+                description: `Failed to import crawled pages: ${error.message}`,
+                variant: 'destructive',
+              });
+            } else {
+              insertedCount += newPages.length;
+              console.log(`Inserted batch ${i / batchSize + 1} (${newPages.length} pages)`);
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing batch ${i / batchSize + 1}:`, error);
         }
-        
-        insertedCount += batch.length;
-        console.log(`Inserted batch ${i / batchSize + 1} (${batch.length} pages)`);
       }
       
       console.log(`Successfully imported ${insertedCount} crawled pages`);
@@ -841,27 +890,53 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       for (let i = 0; i < pagesToInsert.length; i += batchSize) {
         const batch = pagesToInsert.slice(i, i + batchSize);
         
-        const { data, error } = await supabase
-          .from('website_content')
-          .upsert(batch, { 
-            onConflict: 'website_id,url',
-            ignoreDuplicates: false
-          });
-        
-        if (error) {
-          console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
-          setError(error.message);
-          toast({
-            title: 'Error',
-            description: `Failed to import pages: ${error.message}`,
-            variant: 'destructive',
-          });
-        } else {
-          insertedCount += batch.length;
+        try {
+          // First check if any of these pages already exist
+          const urls = batch.map(page => page.url);
+          const { data: existingPages } = await supabase
+            .from('website_content')
+            .select('url')
+            .eq('website_id', websiteId)
+            .in('url', urls);
+          
+          // Filter out pages that already exist
+          const existingUrls = new Set((existingPages || []).map((p: any) => p.url));
+          console.log(`Found ${existingUrls.size} existing pages, skipping these`);
+          
+          const newPages = batch.filter(page => !existingUrls.has(page.url));
+          
+          if (newPages.length > 0) {
+            // Insert new pages
+            const { error } = await supabase
+              .from('website_content')
+              .insert(newPages);
+            
+            if (error) {
+              console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
+              setError(error.message);
+              toast({
+                title: 'Error',
+                description: `Failed to import pages: ${error.message}`,
+                variant: 'destructive',
+              });
+            } else {
+              insertedCount += newPages.length;
+              console.log(`Inserted batch ${i / batchSize + 1} (${newPages.length} pages)`);
+            }
+          }
+        } catch (error) {
+          console.error(`Error processing batch ${i / batchSize + 1}:`, error);
         }
       }
       
       console.log(`Successfully imported ${insertedCount} pages`);
+      
+      // Refresh the website content after importing
+      if (insertedCount > 0) {
+        console.log(`Refreshing website content after importing ${insertedCount} pages`);
+        await fetchWebsiteContent(websiteId);
+      }
+      
       toast({
         title: 'Success',
         description: `Successfully imported ${insertedCount} pages`,

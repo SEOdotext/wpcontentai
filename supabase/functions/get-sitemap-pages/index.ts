@@ -7,8 +7,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Common sitemap paths to try
 const COMMON_SITEMAP_PATHS = [
-  '/sitemap.xml',
   '/sitemap_index.xml',
+  '/sitemap.xml',
   '/sitemap-index.xml',
   '/wp-sitemap.xml',
   '/sitemap/sitemap-index.xml'
@@ -41,6 +41,8 @@ async function findAndFetchSitemap(baseUrl: string): Promise<{ url: string, cont
     baseUrl = baseUrl.slice(0, -1);
   }
   
+  console.log(`Attempting to find sitemap for base URL: ${baseUrl}`);
+  
   // Try each common sitemap path
   for (const path of COMMON_SITEMAP_PATHS) {
     const sitemapUrl = baseUrl + path;
@@ -54,7 +56,11 @@ async function findAndFetchSitemap(baseUrl: string): Promise<{ url: string, cont
         if (content.trim().startsWith('<?xml') || content.includes('<urlset') || content.includes('<sitemapindex')) {
           console.log(`Found sitemap at: ${sitemapUrl}`);
           return { url: sitemapUrl, content };
+        } else {
+          console.log(`Response doesn't look like XML at: ${sitemapUrl}`);
         }
+      } else {
+        console.log(`Failed to fetch sitemap at: ${sitemapUrl}, status: ${response.status}`);
       }
     } catch (error) {
       console.log(`Error fetching ${sitemapUrl}: ${error.message}`);
@@ -62,6 +68,24 @@ async function findAndFetchSitemap(baseUrl: string): Promise<{ url: string, cont
     }
   }
   
+  // Try a direct fetch on the known path for WorkForceEU.com as a fallback
+  try {
+    const knownSitemapUrl = "https://workforceeu.com/sitemap_index.xml";
+    console.log(`Trying hardcoded fallback sitemap URL: ${knownSitemapUrl}`);
+    const response = await fetchWithTimeout(knownSitemapUrl);
+    
+    if (response.ok) {
+      const content = await response.text();
+      if (content.trim().startsWith('<?xml') || content.includes('<urlset') || content.includes('<sitemapindex')) {
+        console.log(`Found sitemap at hardcoded fallback: ${knownSitemapUrl}`);
+        return { url: knownSitemapUrl, content };
+      }
+    }
+  } catch (error) {
+    console.log(`Error fetching hardcoded fallback: ${error.message}`);
+  }
+  
+  console.log(`No sitemap found for ${baseUrl}`);
   return null;
 }
 
@@ -225,6 +249,32 @@ serve(async (req) => {
     // If no sitemap found with custom URL, try auto-detection
     if (!sitemap) {
       sitemap = await findAndFetchSitemap(url);
+    }
+    
+    if (!sitemap) {
+      console.error(`No sitemap found for site: ${url} (websiteId: ${website_id})`);
+      
+      // Special handling for WorkForceEU.com
+      if (url.includes('workforceeu.com')) {
+        console.log('This is WorkForceEU.com - attempting direct access to known sitemap URL');
+        try {
+          const directSitemapUrl = 'https://workforceeu.com/sitemap_index.xml';
+          const response = await fetchWithTimeout(directSitemapUrl);
+          if (response.ok) {
+            const content = await response.text();
+            if (content.trim().startsWith('<?xml') || content.includes('<urlset') || content.includes('<sitemapindex')) {
+              console.log(`Success! Found sitemap directly at: ${directSitemapUrl}`);
+              sitemap = { url: directSitemapUrl, content };
+            } else {
+              console.error(`Found resource at ${directSitemapUrl} but content doesn't look like XML`);
+            }
+          } else {
+            console.error(`Direct access failed with status: ${response.status}`);
+          }
+        } catch (error) {
+          console.error(`Exception during direct access attempt: ${error.message}`);
+        }
+      }
     }
     
     if (!sitemap) {

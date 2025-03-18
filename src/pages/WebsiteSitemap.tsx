@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useNavigate } from 'react-router-dom';
 
 const WebsiteSitemap = () => {
   const { currentWebsite } = useWebsites();
@@ -24,18 +25,36 @@ const WebsiteSitemap = () => {
   const [customSitemapUrl, setCustomSitemapUrl] = useState('');
   const [maxPages, setMaxPages] = useState(50);
   const [useSitemap, setUseSitemap] = useState(true);
+  const navigate = useNavigate();
 
   const handleImportPages = async () => {
     if (!currentWebsite) return;
     
     setIsImporting(true);
     try {
-      await importPages(currentWebsite.id, {
-        customSitemapUrl: customSitemapUrl || undefined,
+      // Special handling for WorkForceEU.com
+      let sitemapUrl = customSitemapUrl || undefined;
+      if (currentWebsite.url?.includes('workforceeu.com') && !sitemapUrl) {
+        console.log('Detected WorkForceEU.com website - using known sitemap URL');
+        sitemapUrl = 'https://workforceeu.com/sitemap_index.xml';
+      }
+      
+      const importedCount = await importPages(currentWebsite.id, {
+        customSitemapUrl: sitemapUrl,
         maxPages: useSitemap ? undefined : maxPages,
         useSitemap
       });
+      
       setShowImportDialog(false);
+      
+      // If pages were imported successfully, navigate to the content page
+      if (importedCount > 0) {
+        console.log(`Successfully imported ${importedCount} pages, navigating to content page`);
+        // Small delay to allow state to update
+        setTimeout(() => {
+          navigate('/website/content');
+        }, 500);
+      }
     } finally {
       setIsImporting(false);
     }

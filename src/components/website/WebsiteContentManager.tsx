@@ -208,8 +208,18 @@ const WebsiteContentManager: React.FC = () => {
               : "Import your website pages to get started with content management."
           }
           icon={showCornerstoneOnly ? <Star className="h-6 w-6" /> : <Download className="h-6 w-6" />}
-          actionLabel={showCornerstoneOnly ? "Show All Content" : "Import Pages"}
-          onAction={showCornerstoneOnly ? () => setShowCornerstoneOnly(false) : () => {}}
+          actionLabel={showCornerstoneOnly ? "Show All Content" : "Refresh Content"}
+          onAction={showCornerstoneOnly 
+            ? () => setShowCornerstoneOnly(false) 
+            : () => {
+                if (currentWebsite?.id) {
+                  console.log('Manually refreshing content for website:', currentWebsite.id);
+                  setLocalLoading(true);
+                  fetchWebsiteContent(currentWebsite.id)
+                    .finally(() => setLocalLoading(false));
+                }
+              }
+          }
         />
       ) : (
         <Table>

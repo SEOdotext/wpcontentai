@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, FileText, Globe, Home, Map, PlusCircle, Settings, Users } from 'lucide-react';
+import { Calendar, ChevronDown, FileText, Globe, Home, Map, PlusCircle, Settings, Users } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -37,7 +37,7 @@ export function AppSidebar() {
                   <Globe className="h-4 w-4" />
                   <span>{isLoading ? 'Loading...' : (currentWebsite?.name || 'Select Website')}</span>
                 </div>
-                <Globe className="h-4 w-4 ml-2 text-muted-foreground" />
+                <ChevronDown className="h-4 w-4 ml-2 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-[200px]">
@@ -45,7 +45,7 @@ export function AppSidebar() {
                 <DropdownMenuItem 
                   key={website.id}
                   onClick={() => setCurrentWebsite(website)}
-                  className={currentWebsite?.id === website.id ? 'bg-muted' : ''}
+                  className={currentWebsite?.id === website.id ? 'bg-primary/10 font-medium' : ''}
                 >
                   <Globe className="h-4 w-4 mr-2" />
                   <span>{website.name}</span>
@@ -86,19 +86,6 @@ export function AppSidebar() {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-
-          <SidebarMenuItem>
-            <SidebarMenuButton 
-              className="gap-2"
-              isActive={location.pathname.startsWith('/sitemap')}
-              asChild
-            >
-              <Link to="/sitemap">
-                <Map className="h-4 w-4" />
-                <span>Website Content</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
           
           <SidebarMenuItem>
             <SidebarMenuButton 
@@ -109,6 +96,19 @@ export function AppSidebar() {
               <Link to="/calendar">
                 <Calendar className="h-4 w-4" />
                 <span>Content Calendar</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              className="gap-2"
+              isActive={location.pathname.startsWith('/sitemap')}
+              asChild
+            >
+              <Link to="/sitemap">
+                <Map className="h-4 w-4" />
+                <span>Website Content</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
