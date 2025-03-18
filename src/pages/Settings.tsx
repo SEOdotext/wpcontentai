@@ -428,6 +428,11 @@ const Settings = () => {
       toast.warning('Your WordPress password may be in incorrect format. Application passwords should include spaces.', {
         duration: 8000
       });
+    } else if (wpPassword.length < 24) {
+      console.warn('Password length seems short for WordPress application password');
+      toast.warning('Your password seems shorter than typical WordPress application passwords.', {
+        duration: 5000
+      });
     }
     
     // Get current session for authentication
@@ -443,50 +448,79 @@ const Settings = () => {
       headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
     } else {
       console.log('No authentication token available for Edge Function request');
+      toast.error('You must be logged in to test WordPress connections');
+      return false;
     }
     
+    // Try multiple URL formats if main connection fails
+    const cleanUrl = wpUrl.replace(/\/+$/, '');
+    const urlVariations = [
+      cleanUrl,                                                 // Original URL without trailing slashes
+      cleanUrl.replace(/^https?:\/\//i, ''),                    // Without protocol
+      cleanUrl.toLowerCase(),                                   // Lowercase version
+      `https://${cleanUrl.replace(/^https?:\/\//i, '')}`,       // Force HTTPS
+    ];
+    
+    console.log('Will try the following URL variations if needed:', urlVariations);
+    
+    // First try with the cleaned URL
+    console.log(`Using WordPress URL: ${urlVariations[0]}`);
+    
     try {
-      // Clean up URL if needed
-      const cleanUrl = wpUrl.replace(/\/+$/, '');
-      console.log(`Using WordPress URL: ${cleanUrl}`);
+      // Log the exact data we're sending
+      const requestPayload = {
+        wpUrl: urlVariations[0],
+        username: wpUsername,
+        password: wpPassword, // Send password as-is, preserving any spaces
+      };
+      console.log('Sending payload to Edge Function:', {
+        ...requestPayload,
+        password: requestPayload.password.replace(/[^\s]/g, 'x') // Log masked password
+      });
       
       // Send request to Edge Function
       const response = await fetch(WORDPRESS_PROXY_URL, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          wpUrl: cleanUrl,
-          username: wpUsername,
-          password: wpPassword, // Send password as-is, preserving any spaces
-        }),
+        body: JSON.stringify(requestPayload),
       });
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Connection response from Edge Function:", data);
+      console.log(`Edge Function response status: ${response.status} ${response.statusText}`);
+      
+      try {
+        const responseData = await response.json();
+        console.log("Full response from Edge Function:", responseData);
         
-        if (data.success) {
+        if (responseData.success) {
           toast.success("WordPress connection successful!");
-          return;
+          return true;
         } else {
-          console.error("Edge Function connection failed:", data.error);
+          // Get specific error information
+          const errorMsg = responseData.error || 'Unknown error';
+          const statusCode = responseData.statusCode || response.status;
+          
+          console.error(`WordPress connection failed (${statusCode}): ${errorMsg}`);
+          
+          // Show a more user-friendly error message based on status code
+          if (statusCode === 401) {
+            toast.error(`Authentication failed: Invalid WordPress username or application password`);
+          } else if (statusCode === 404) {
+            toast.error(`WordPress API not found: Check if the REST API is enabled on your site`);
+          } else {
+            toast.error(`WordPress connection failed: ${errorMsg}`);
+          }
+          
+          return false;
         }
-      } else {
-        console.error("Edge Function error:", response.status, response.statusText);
-        toast.error(`Edge Function test failed: ${response.status} ${response.statusText}`);
-        
-        // Show more helpful error message
-        if (response.status === 500) {
-          toast.error("Server error in Edge Function. Please try again later.");
-        } else if (response.status === 400) {
-          toast.error("Invalid request to Edge Function. The WordPress URL or credentials might be incorrect.");
-        } else if (response.status === 401) {
-          toast.error("Authentication with Supabase Edge Function failed. Please log out and back in.");
-        }
+      } catch (parseError) {
+        console.error("Could not parse Edge Function response", parseError);
+        toast.error(`Could not parse Edge Function response: ${response.status} ${response.statusText}`);
+        return false;
       }
     } catch (edgeError) {
       console.error("Edge Function error:", edgeError);
       toast.error(`Edge Function error: ${edgeError instanceof Error ? edgeError.message : String(edgeError)}`);
+      return false;
     }
   };
 
