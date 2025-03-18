@@ -3,7 +3,7 @@ import { ArrowLeft, Calendar as CalendarIcon, Edit, RefreshCw, Tag, Trash, X } f
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import KeywordBadge from './KeywordBadge';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Keyword } from './ContentCard';
 import {
@@ -132,11 +132,13 @@ const ContentView: React.FC<ContentViewProps> = ({
                   <h3 className="text-sm font-medium mb-2">Keywords:</h3>
                   <div className="flex flex-wrap gap-2">
                     {keywords.map((keyword, index) => (
-                      <KeywordBadge 
-                        key={index} 
-                        keyword={keyword.text} 
-                        difficulty={keyword.difficulty}
-                      />
+                      <Badge 
+                        key={index}
+                        variant="outline" 
+                        className="bg-blue-50 text-blue-700 border-blue-200 text-xs"
+                      >
+                        {keyword.text}
+                      </Badge>
                     ))}
                   </div>
                 </div>

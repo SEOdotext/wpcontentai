@@ -67,8 +67,8 @@ const ContentCreation = () => {
           <AppSidebar />
           <div className="flex-1 flex flex-col">
             <Header />
-            <main className="flex-1 px-4 py-6 overflow-y-auto">
-              <div className="max-w-6xl mx-auto space-y-8">
+            <main className="flex-1 px-4 py-4 overflow-y-auto">
+              <div className="w-full space-y-4">
                 <Card>
                   <CardHeader>
                     <Skeleton className="h-8 w-3/4" />
@@ -93,8 +93,8 @@ const ContentCreation = () => {
         <AppSidebar />
         <div className="flex-1 flex flex-col">
           <Header />
-          <main className="flex-1 px-4 py-6 overflow-y-auto">
-            <div className="max-w-6xl mx-auto space-y-8">
+          <main className="flex-1 px-4 py-4 overflow-y-auto">
+            <div className="w-full space-y-4">
               {hasError ? (
                 <Alert variant="destructive" className="mb-6">
                   <AlertCircle className="h-4 w-4" />

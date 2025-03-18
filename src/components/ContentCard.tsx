@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { MoreHorizontal, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import KeywordBadge, { KeywordDifficulty } from './KeywordBadge';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +13,6 @@ import {
 
 export interface Keyword {
   text: string;
-  difficulty: KeywordDifficulty;
 }
 
 export interface ContentCardProps {
@@ -111,11 +109,13 @@ const ContentCard: React.FC<ContentCardProps> = ({
       {keywords.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-2">
           {keywords.map((keyword, index) => (
-            <KeywordBadge 
-              key={index} 
-              keyword={keyword.text} 
-              difficulty={keyword.difficulty}
-            />
+            <Badge 
+              key={index}
+              variant="outline" 
+              className="bg-blue-50 text-blue-700 border-blue-200 text-xs"
+            >
+              {keyword.text}
+            </Badge>
           ))}
         </div>
       )}

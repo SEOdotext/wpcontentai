@@ -9,8 +9,8 @@ export interface PostTheme {
   website_id: string;
   subject_matter: string;
   keywords: string[];
-  status: 'pending' | 'generated' | 'published';
-  scheduled_date: string;
+  status: 'pending' | 'approved' | 'published' | 'declined';
+  scheduled_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,8 +22,8 @@ interface PostThemesContextType {
   error: Error | null;
   fetchPostThemes: () => Promise<void>;
   getPostThemesBySubject: (subject: string) => PostTheme[];
-  createPostTheme: (subject: string, keywords: string[]) => Promise<PostTheme | null>;
-  updatePostTheme: (id: string, updates: Partial<PostTheme>) => Promise<boolean>;
+  createPostTheme: (subject: string, keywords: string[], scheduledDateIso?: string, showToast?: boolean) => Promise<PostTheme | null>;
+  updatePostTheme: (id: string, updates: Partial<PostTheme>, showToast?: boolean) => Promise<boolean>;
   deletePostTheme: (id: string) => Promise<boolean>;
 }
 
@@ -69,7 +69,13 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
 
       if (error) throw error;
 
-      setPostThemes(data || []);
+      // Cast the data to ensure status is compatible with our type
+      const typedData = data?.map(item => ({
+        ...item,
+        status: item.status as 'pending' | 'approved' | 'published' | 'declined'
+      })) || [];
+      
+      setPostThemes(typedData);
       console.log('Fetched post themes:', data);
     } catch (err) {
       console.error('Error fetching post themes:', err);
@@ -86,23 +92,39 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
   };
 
   // Function to create a new post theme
-  const createPostTheme = async (subject: string, keywords: string[]): Promise<PostTheme | null> => {
+  const createPostTheme = async (
+    subject: string, 
+    keywords: string[],
+    scheduledDateIso?: string,
+    showToast: boolean = true
+  ): Promise<PostTheme | null> => {
     if (!currentWebsite?.id) {
-      toast.error('No website selected');
+      if (showToast) {
+        toast.error('No website selected');
+      }
       return null;
     }
 
     try {
-      // Calculate scheduled date (7 days from now by default)
-      const scheduledDate = new Date();
-      scheduledDate.setDate(scheduledDate.getDate() + 7);
+      // Calculate scheduled date (7 days from now by default) if not provided
+      let scheduledDate: string;
+      
+      if (scheduledDateIso) {
+        // Use the provided date
+        scheduledDate = scheduledDateIso;
+      } else {
+        // Default to 7 days from now
+        const defaultDate = new Date();
+        defaultDate.setDate(defaultDate.getDate() + 7);
+        scheduledDate = defaultDate.toISOString();
+      }
 
       const newTheme = {
         website_id: currentWebsite.id,
         subject_matter: subject,
         keywords: keywords,
         status: 'pending' as const,
-        scheduled_date: scheduledDate.toISOString()
+        scheduled_date: scheduledDate
       };
 
       const { data, error } = await supabase
@@ -113,18 +135,28 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
 
       if (error) throw error;
 
-      setPostThemes(prev => [...prev, data]);
-      toast.success(`Post theme for "${subject}" created`);
-      return data;
+      // Cast to ensure status is compatible with our type
+      const typedData = {
+        ...data,
+        status: data.status as 'pending' | 'approved' | 'published' | 'declined'
+      };
+      
+      setPostThemes(prev => [...prev, typedData]);
+      if (showToast) {
+        toast.success(`Post theme for "${subject}" created`);
+      }
+      return typedData;
     } catch (err) {
       console.error('Error creating post theme:', err);
-      toast.error(`Failed to create post theme for "${subject}"`);
+      if (showToast) {
+        toast.error(`Failed to create post theme for "${subject}"`);
+      }
       return null;
     }
   };
 
   // Function to update a post theme
-  const updatePostTheme = async (id: string, updates: Partial<PostTheme>): Promise<boolean> => {
+  const updatePostTheme = async (id: string, updates: Partial<PostTheme>, showToast: boolean = true): Promise<boolean> => {
     try {
       const { error } = await supabase
         .from('post_themes')
@@ -137,11 +169,20 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         prev.map(theme => theme.id === id ? { ...theme, ...updates } : theme)
       );
       
-      toast.success('Post theme updated');
+      // Only show toast if showToast is true
+      if (showToast) {
+        toast.success('Post theme updated');
+      }
+      
       return true;
     } catch (err) {
       console.error('Error updating post theme:', err);
-      toast.error('Failed to update post theme');
+      
+      // Only show toast if showToast is true
+      if (showToast) {
+        toast.error('Failed to update post theme');
+      }
+      
       return false;
     }
   };

@@ -397,7 +397,7 @@ const Settings = () => {
       
       // Create post themes for each title
       const creationPromises = result.titles.map(title => 
-        createPostTheme(title, result.keywords)
+        createPostTheme(title, result.keywords, null)
       );
       
       await Promise.all(creationPromises);

@@ -22,9 +22,11 @@ const VisibleSwitch = forwardRef<HTMLDivElement, {
   return (
     <div 
       ref={ref}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? 'bg-blue-600' : 'bg-gray-300'
-      } ${className || ''}`}
+      className={cn(
+        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+        checked ? 'bg-blue-600' : 'bg-gray-300',
+        className
+      )}
       onClick={() => !disabled && onCheckedChange(!checked)}
       role="switch"
       aria-checked={checked}
@@ -47,7 +49,11 @@ VisibleSwitch.displayName = 'VisibleSwitch';
  * WebsiteContentManager component for managing website content
  * Uses local state to avoid reloading the entire table when toggling cornerstone content
  */
-const WebsiteContentManager: React.FC = () => {
+const WebsiteContentManager: React.FC<{
+  onImportClick?: () => void; // Add a prop for handling import click
+}> = ({
+  onImportClick
+}) => {
   const { websiteContent, loading: globalLoading, error, fetchWebsiteContent, setCornerstone } = useWebsiteContent();
   const { currentWebsite } = useWebsites();
 
@@ -154,7 +160,7 @@ const WebsiteContentManager: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto py-4">
+    <div className="w-full">
       <div className="flex justify-between items-center mb-4">
         <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
@@ -170,10 +176,12 @@ const WebsiteContentManager: React.FC = () => {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <VisibleSwitch
-                    checked={showCornerstoneOnly}
-                    onCheckedChange={toggleCornerstoneOnly}
-                  />
+                  <div className="flex justify-center">
+                    <VisibleSwitch
+                      checked={showCornerstoneOnly}
+                      onCheckedChange={toggleCornerstoneOnly}
+                    />
+                  </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                   {showCornerstoneOnly 
@@ -208,28 +216,29 @@ const WebsiteContentManager: React.FC = () => {
               : "Import your website pages to get started with content management."
           }
           icon={showCornerstoneOnly ? <Star className="h-6 w-6" /> : <Download className="h-6 w-6" />}
-          actionLabel={showCornerstoneOnly ? "Show All Content" : "Refresh Content"}
+          actionLabel={showCornerstoneOnly ? "Show All Content" : "Import Pages"}
           onAction={showCornerstoneOnly 
             ? () => setShowCornerstoneOnly(false) 
-            : () => {
+            : onImportClick || (() => {
+                // If no import click handler provided, just refresh content
                 if (currentWebsite?.id) {
-                  console.log('Manually refreshing content for website:', currentWebsite.id);
+                  console.log('No import handler provided, refreshing content for website:', currentWebsite.id);
                   setLocalLoading(true);
                   fetchWebsiteContent(currentWebsite.id)
                     .finally(() => setLocalLoading(false));
                 }
-              }
+              })
           }
         />
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>URL</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Last Updated</TableHead>
-              <TableHead>Key Content</TableHead>
+              <TableHead className="font-semibold">Title</TableHead>
+              <TableHead className="font-semibold">URL</TableHead>
+              <TableHead className="font-semibold">Type</TableHead>
+              <TableHead className="font-semibold">Last Updated</TableHead>
+              <TableHead className="font-semibold text-center">Key Content</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -266,24 +275,26 @@ const WebsiteContentManager: React.FC = () => {
                   </Badge>
                 </TableCell>
                 <TableCell>{new Date(content.updated_at).toLocaleDateString()}</TableCell>
-                <TableCell className="text-center">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <VisibleSwitch
-                          checked={content.is_cornerstone}
-                          onCheckedChange={() => handleSetCornerstone(content.id, content.is_cornerstone)}
-                          disabled={settingCornerstone === content.id}
-                          className={settingCornerstone === content.id ? "opacity-50" : ""}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent sideOffset={5} side="left">
-                        {content.is_cornerstone 
-                          ? "Click to remove from key content" 
-                          : "Click to mark as key content"}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                <TableCell>
+                  <div className="flex justify-center">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <VisibleSwitch
+                            checked={content.is_cornerstone}
+                            onCheckedChange={() => handleSetCornerstone(content.id, content.is_cornerstone)}
+                            disabled={settingCornerstone === content.id}
+                            className={settingCornerstone === content.id ? "opacity-50" : ""}
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={5} side="left">
+                          {content.is_cornerstone 
+                            ? "Click to remove from key content" 
+                            : "Click to mark as key content"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

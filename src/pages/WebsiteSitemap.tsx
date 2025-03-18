@@ -15,10 +15,11 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNavigate } from 'react-router-dom';
+import { Badge } from "@/components/ui/badge";
 
 const WebsiteSitemap = () => {
   const { currentWebsite } = useWebsites();
-  const { importPages, scrapeCornerstone } = useWebsiteContent();
+  const { importPages, scrapeCornerstone, websiteContent } = useWebsiteContent();
   const [isImporting, setIsImporting] = useState(false);
   const [isScrapingCornerstone, setIsScrapingCornerstone] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -26,6 +27,11 @@ const WebsiteSitemap = () => {
   const [maxPages, setMaxPages] = useState(50);
   const [useSitemap, setUseSitemap] = useState(true);
   const navigate = useNavigate();
+  
+  // Check if we have any cornerstone content
+  const hasContent = websiteContent.length > 0;
+  const hasCornerstoneContent = websiteContent.some(content => content.is_cornerstone);
+  const cornerstoneCount = websiteContent.filter(content => content.is_cornerstone).length;
 
   const handleImportPages = async () => {
     if (!currentWebsite) return;
@@ -83,7 +89,7 @@ const WebsiteSitemap = () => {
         <div className="flex-1 flex flex-col">
           <Header />
           <main className="flex-1 px-4 py-6 overflow-y-auto">
-            <div className="max-w-6xl mx-auto space-y-8">
+            <div className="max-w-7xl mx-auto space-y-6">
               <div className="flex justify-end items-center gap-2">
                 {currentWebsite && (
                   <>
@@ -104,33 +110,44 @@ const WebsiteSitemap = () => {
                         </>
                       )}
                     </Button>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            onClick={handleScrapeCornerstone}
-                            disabled={isImporting || isScrapingCornerstone}
-                          >
-                            {isScrapingCornerstone ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Analyzing...
-                              </>
-                            ) : (
-                              <>
-                                <FileText className="h-4 w-4 mr-2" />
-                                Update Key Content
-                              </>
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" align="end" sideOffset={5}>
-                          Analyzes your key content to understand its style and structure.
-                          This analysis will be used as a reference when generating new content.
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                    
+                    {/* Only show Update Key Content button if we have content */}
+                    {hasContent && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button 
+                              // Use primary variant if we have cornerstone content
+                              variant={hasCornerstoneContent ? "default" : "outline"}
+                              onClick={handleScrapeCornerstone}
+                              disabled={isImporting || isScrapingCornerstone}
+                            >
+                              {isScrapingCornerstone ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Analyzing...
+                                </>
+                              ) : (
+                                <>
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Update Key Content
+                                  {cornerstoneCount > 0 && (
+                                    <Badge variant="secondary" className="ml-2 h-5 px-1.5 bg-white/20">
+                                      {cornerstoneCount}
+                                    </Badge>
+                                  )}
+                                </>
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" align="end" sideOffset={5} className="max-w-[300px] text-sm">
+                            This tool visits your website to read and analyze your key content pages.
+                            It extracts writing style, structure, and terminology from your actual live content
+                            to use as a reference when generating new content that matches your brand voice.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
                   </>
                 )}
               </div>
@@ -245,7 +262,7 @@ const WebsiteSitemap = () => {
                   actionLabel="Select Website"
                 />
               ) : (
-                <WebsiteContentManager />
+                <WebsiteContentManager onImportClick={() => setShowImportDialog(true)} />
               )}
             </div>
           </main>

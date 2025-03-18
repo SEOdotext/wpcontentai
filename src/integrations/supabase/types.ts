@@ -27,6 +27,47 @@ export type Database = {
         }
         Relationships: []
       }
+      post_themes: {
+        Row: {
+          id: string
+          website_id: string
+          subject_matter: string
+          keywords: string[]
+          status: string
+          scheduled_date: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          website_id: string
+          subject_matter: string
+          keywords: string[]
+          status?: string
+          scheduled_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          website_id?: string
+          subject_matter?: string
+          keywords?: string[]
+          status?: string
+          scheduled_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_themes_website_id_fkey"
+            columns: ["website_id"]
+            isOneToOne: false
+            referencedRelation: "websites"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       publication_settings: {
         Row: {
           created_at: string

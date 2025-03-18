@@ -127,11 +127,11 @@ const ContentCalendar = () => {
         <AppSidebar />
         <div className="flex-1 flex flex-col">
           <Header />
-          <main className="flex-1 px-4 py-6 overflow-y-auto">
-            <div className="max-w-6xl mx-auto space-y-8">
+          <main className="flex-1 px-4 py-4 overflow-y-auto">
+            <div className="w-full space-y-4">
               <div className="flex flex-col gap-4">
                 <Card className="border-0 shadow-elevation">
-                  <CardHeader className="pb-2">
+                  <CardHeader className="pb-2 pt-4">
                     <div className="flex justify-between items-center">
                       <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
                       <div className="flex items-center space-x-2">
