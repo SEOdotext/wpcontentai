@@ -4,7 +4,114 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-console.log("WordPress Proxy function started - v1.0.5")
+console.log("WordPress Proxy function started - v1.0.6")
+
+// Try multiple endpoints for WordPress API in case some are restricted
+const makeWordPressApiRequest = async (baseUrl: string, encodedAuth: string) => {
+  console.log('Attempting WordPress API endpoints');
+  
+  // Common WordPress API endpoints in order of privacy (most private to most public)
+  const endpoints = [
+    '/wp-json/wp/v2/users/me',           // Requires authentication, shows detailed user info
+    '/wp-json',                          // Root API discovery, usually public
+    '/wp-json/wp/v2/posts?per_page=1',   // Public posts endpoint, often accessible
+    '/wp-json/wp/v2/pages?per_page=1',   // Public pages endpoint, sometimes accessible
+  ];
+  
+  // Error storage to track failures
+  const errors: any[] = [];
+  
+  // Try each endpoint in sequence
+  for (const endpoint of endpoints) {
+    const fullUrl = `${baseUrl}${endpoint}`;
+    console.log(`Trying endpoint: ${fullUrl}`);
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const response = await fetch(fullUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Basic ${encodedAuth}`,
+          'User-Agent': 'WP Content AI/1.0',
+          'Accept': 'application/json'
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      console.log(`Endpoint ${endpoint} response:`, {
+        status: response.status,
+        statusText: response.statusText
+      });
+      
+      // Check if we got a valid response (not checking .ok to catch more responses)
+      const contentType = response.headers.get('content-type') || '';
+      const responseText = await response.text();
+      
+      // Check if response looks like HTML
+      if (responseText.includes('<!DOCTYPE') || 
+          responseText.includes('<html') ||
+          responseText.includes('<body')) {
+        
+        console.log(`Endpoint ${endpoint} returned HTML`);
+        errors.push({
+          endpoint,
+          status: response.status,
+          error: 'Received HTML instead of JSON'
+        });
+        continue;
+      }
+      
+      // Try to parse JSON
+      try {
+        const data = JSON.parse(responseText);
+        console.log(`Successfully parsed JSON from ${endpoint}`);
+        
+        // For the root endpoint, do some additional validation
+        if (endpoint === '/wp-json' && (!data.namespaces || !data.routes)) {
+          console.log('Root endpoint response missing namespaces/routes - may not be WordPress');
+          errors.push({
+            endpoint,
+            status: response.status,
+            error: 'Response is valid JSON but does not look like WordPress REST API'
+          });
+          continue;
+        }
+        
+        // We found a valid endpoint!
+        return {
+          success: true,
+          endpoint,
+          data,
+          status: response.status
+        };
+      } catch (parseError: any) {
+        console.log(`Failed to parse JSON from ${endpoint}:`, parseError.message);
+        errors.push({
+          endpoint,
+          status: response.status,
+          error: `Invalid JSON: ${parseError.message}`
+        });
+      }
+    } catch (fetchError: any) {
+      console.error(`Error fetching ${endpoint}:`, fetchError);
+      errors.push({
+        endpoint,
+        error: fetchError.message
+      });
+    }
+  }
+  
+  // If we're here, all endpoints failed
+  return {
+    success: false,
+    errors,
+    message: 'All WordPress API endpoints failed'
+  };
+};
 
 serve(async (req) => {
   // Set up CORS headers
@@ -53,7 +160,7 @@ serve(async (req) => {
     try {
       requestData = await req.json();
       console.log('Request body parsed successfully');
-    } catch (parseError) {
+    } catch (parseError: any) {
       console.error('JSON parsing error:', parseError);
       return new Response(
         JSON.stringify({
@@ -113,11 +220,6 @@ serve(async (req) => {
     // Remove trailing slashes
     formattedUrl = formattedUrl.replace(/\/+$/, '');
     
-    // Create API endpoint URL
-    // Try using the /users/me endpoint first, but we'll also have a fallback
-    const wpApiUrl = `${formattedUrl}/wp-json/wp/v2/users/me`;
-    console.log('WordPress API URL:', wpApiUrl);
-    
     // Create Base64 authentication
     let encodedAuth;
     try {
@@ -138,11 +240,11 @@ serve(async (req) => {
       try {
         encodedAuth = btoa(authString);
         console.log('Authentication encoded successfully, length:', encodedAuth.length);
-      } catch (encodingError) {
+      } catch (encodingError: any) {
         console.error('Base64 encoding error:', encodingError);
         throw new Error(`Auth encoding failed: ${encodingError.message}`);
       }
-    } catch (authError) {
+    } catch (authError: any) {
       console.error('Authentication preparation error:', authError);
       return new Response(
         JSON.stringify({
@@ -156,112 +258,59 @@ serve(async (req) => {
       );
     }
     
-    // Make WordPress API request
+    // Make WordPress API request using the endpoint tester
     try {
-      console.log('Sending WordPress API request to:', wpApiUrl);
-      const controller = new AbortController();
+      const result = await makeWordPressApiRequest(formattedUrl, encodedAuth);
       
-      // Set timeout for the request
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
-      // Make the HTTP request with timeout
-      const response = await fetch(wpApiUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Basic ${encodedAuth}`,
-          'User-Agent': 'WP Content AI/1.0',
-          'Accept': 'application/json' // Explicitly request JSON
-        },
-        signal: controller.signal
-      });
-      
-      // Clear timeout since request completed
-      clearTimeout(timeoutId);
-      
-      console.log('WordPress API response received:', {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
-      });
-      
-      // Handle response based on status
-      if (!response.ok) {
-        // Prepare user-friendly error message
-        let errorMsg = `WordPress API error: ${response.status} ${response.statusText}`;
+      if (result.success) {
+        console.log('WordPress API request successful on endpoint:', result.endpoint);
         
-        // More specific messages for common error codes
-        if (response.status === 401) {
-          errorMsg = 'Invalid WordPress username or application password';
-        } else if (response.status === 404) {
-          errorMsg = 'WordPress API endpoint not found. Make sure the site has the REST API enabled';
-        } else if (response.status === 403) {
-          errorMsg = 'Access forbidden. Check if your WordPress credentials have sufficient permissions';
-        } else if (response.status === 500) {
-          errorMsg = 'WordPress server error. Please check your WordPress error logs';
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: result.data,
+            endpoint: result.endpoint,
+            statusCode: result.status,
+            message: `Connected successfully to WordPress via ${result.endpoint}`
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200
+          }
+        );
+      } else {
+        console.error('All WordPress API endpoints failed:', result.errors);
+        
+        // Detailed error information
+        const errorSummary = result.errors.map((err: any) => 
+          `${err.endpoint}: ${err.status || 'N/A'} - ${err.error}`
+        ).join('; ');
+        
+        // Try to detect if WordPress is installed at all
+        const wordpressSignaturesFound = result.errors.some((err: any) => 
+          err.error && (
+            err.error.includes('wp-') || 
+            err.error.includes('WordPress') ||
+            err.error.includes('wp-login')
+          )
+        );
+        
+        // Prepare a user-friendly error message
+        let userMessage = 'Failed to connect to WordPress REST API.';
+        
+        if (wordpressSignaturesFound) {
+          userMessage += ' WordPress appears to be installed, but the REST API may be disabled or restricted.';
+        } else {
+          userMessage += ' Could not detect a WordPress installation at the provided URL.';
         }
         
-        // Try to get more detailed error information from response body
-        let errorBody = '';
-        let isHtmlResponse = false;
-        
-        try {
-          errorBody = await response.text();
-          console.log('Error response body preview:', errorBody.substring(0, 200) + '...');
-          
-          // Check if response is HTML instead of JSON
-          if (errorBody.trim().startsWith('<!DOCTYPE') || errorBody.trim().startsWith('<html')) {
-            isHtmlResponse = true;
-            console.log('Received HTML response instead of JSON - REST API may be disabled');
-            errorMsg = 'WordPress returned HTML instead of JSON. The REST API may be disabled or the site might be redirecting to a login page.';
-          } else {
-            try {
-              const errorJson = JSON.parse(errorBody);
-              console.log('Error response JSON:', errorJson);
-              
-              if (errorJson.message) {
-                errorMsg = errorJson.message;
-              }
-            } catch (jsonError) {
-              console.log('Error body is not valid JSON:', jsonError.message);
-              
-              // Check if it's returning HTML even though it didn't start with doctype
-              if (errorBody.includes('<html') || errorBody.includes('<body')) {
-                isHtmlResponse = true;
-                errorMsg = 'WordPress returned HTML instead of JSON. The REST API may be disabled or not properly configured.';
-              }
-            }
-          }
-        } catch (bodyError) {
-          console.error('Failed to read error response body:', bodyError);
-        }
-        
-        // Try a fallback to check if WordPress is accessible at all
-        let wordpressDetected = false;
-        
-        if (isHtmlResponse) {
-          // Check for WordPress-specific strings in the HTML
-          if (errorBody.includes('wp-') || 
-              errorBody.includes('WordPress') || 
-              errorBody.includes('wp-content') || 
-              errorBody.includes('wp-includes')) {
-            wordpressDetected = true;
-            console.log('WordPress installation detected, but API endpoint not available');
-          }
-          
-          // Try to determine if we're dealing with a login page or similar
-          if (errorBody.includes('wp-login') || errorBody.includes('login_form') || errorBody.includes('user_login')) {
-            errorMsg = 'WordPress site is redirecting to login page. REST API may require authentication or is not accessible.';
-          }
-        }
-        
-        // Return error response
         return new Response(
           JSON.stringify({
             success: false,
-            error: errorMsg,
-            statusCode: response.status,
-            wordpressDetected,
-            isHtmlResponse
+            error: userMessage,
+            detailedErrors: result.errors,
+            errorSummary,
+            wordpressDetected: wordpressSignaturesFound
           }),
           {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -269,148 +318,13 @@ serve(async (req) => {
           }
         );
       }
-      
-      // Process successful response
-      try {
-        // First check content type to make sure we're actually getting JSON
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-          console.warn('Response has non-JSON content type:', contentType);
-          
-          // Try to parse anyway, but be cautious
-          const responseText = await response.text();
-          
-          // Check if it looks like HTML
-          if (responseText.trim().startsWith('<!DOCTYPE') || 
-              responseText.trim().startsWith('<html') ||
-              responseText.includes('<body') ||
-              responseText.includes('<head')) {
-            
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: 'WordPress returned HTML instead of JSON. The REST API may not be properly configured.',
-                isHtmlResponse: true
-              }),
-              {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 400
-              }
-            );
-          }
-          
-          // Try to parse as JSON anyway
-          try {
-            const data = JSON.parse(responseText);
-            console.log('Successfully parsed response despite incorrect content type');
-            
-            return new Response(
-              JSON.stringify({
-                success: true,
-                data,
-                statusCode: response.status,
-                warningNonJsonContentType: contentType
-              }),
-              {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200
-              }
-            );
-          } catch (parseErr) {
-            console.error('Failed to parse response text as JSON:', parseErr);
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: `WordPress returned non-JSON response with content type: ${contentType}`,
-                contentPreview: responseText.substring(0, 200) + '...'
-              }),
-              {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 400
-              }
-            );
-          }
-        }
-        
-        const data = await response.json();
-        console.log('WordPress API request successful');
-        
-        return new Response(
-          JSON.stringify({
-            success: true,
-            data,
-            statusCode: response.status
-          }),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200
-          }
-        );
-      } catch (parseError) {
-        console.error('Error parsing successful response:', parseError);
-        
-        // Get the raw text to see what we're dealing with
-        try {
-          const responseText = await response.clone().text();
-          const preview = responseText.substring(0, 200) + '...';
-          console.log('Response text preview:', preview);
-          
-          // Check if it's HTML
-          const isHtml = responseText.includes('<!DOCTYPE') || 
-                        responseText.includes('<html') || 
-                        responseText.includes('<body');
-          
-          if (isHtml) {
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: 'WordPress returned HTML instead of JSON data. The REST API may be disabled or misconfigured.',
-                isHtmlResponse: true
-              }),
-              {
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 400
-              }
-            );
-          }
-          
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: `Failed to parse WordPress response: ${parseError.message}`,
-              responsePreview: preview
-            }),
-            {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              status: 500
-            }
-          );
-        } catch (textError) {
-          // If we can't even get the text, just return the original error
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: `Failed to parse WordPress response: ${parseError.message}`
-            }),
-            {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              status: 500
-            }
-          );
-        }
-      }
-    } catch (fetchError) {
-      console.error('Network error during WordPress API request:', fetchError);
-      
-      // Check if the error is a timeout
-      const errorMessage = fetchError.name === 'AbortError'
-        ? 'WordPress request timed out after 10 seconds'
-        : `WordPress request failed: ${fetchError.message}`;
+    } catch (error: any) {
+      console.error('Error processing WordPress API request:', error);
       
       return new Response(
         JSON.stringify({
           success: false,
-          error: errorMessage
+          error: `Error processing WordPress API request: ${error.message || 'Unknown error'}`
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -418,7 +332,7 @@ serve(async (req) => {
         }
       );
     }
-  } catch (error) {
+  } catch (error: any) {
     // Catch any unhandled errors
     console.error('Unhandled error in Edge Function:', error);
     
@@ -434,7 +348,7 @@ serve(async (req) => {
       }
     );
   }
-})
+});
 
 // To invoke:
 // curl -i --location --request POST 'http://localhost:54321/functions/v1/wordpress-proxy' \

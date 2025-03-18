@@ -190,6 +190,26 @@
     "data_type": "timestamp with time zone"
   },
   {
+    "table_name": "website_access",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "website_access",
+    "column_name": "user_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "website_access",
+    "column_name": "website_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "website_access",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
     "table_name": "website_content",
     "column_name": "id",
     "data_type": "uuid"

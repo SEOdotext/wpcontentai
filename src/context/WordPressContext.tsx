@@ -12,6 +12,8 @@ interface WordPressSettings {
   is_connected: boolean;
   created_at: string;
   updated_at?: string;
+  last_tested_at?: string;
+  last_post_at?: string;
 }
 
 interface WordPressContextType {
@@ -47,10 +49,13 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     const fetchSettings = async () => {
       if (!currentWebsite) {
+        console.log('No current website, setting WordPress settings to null');
         setSettings(null);
         setIsLoading(false);
         return;
       }
+
+      console.log(`Fetching WordPress settings for website ID: ${currentWebsite.id}`);
 
       try {
         setIsLoading(true);
@@ -58,29 +63,46 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         // Check if user is authenticated
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData.session) {
-          console.log("User not authenticated");
+          console.log("User not authenticated, cannot fetch WordPress settings");
+          setIsLoading(false);
           return;
         }
 
         // Fetch WordPress settings for current website
+        console.log(`Making Supabase query for WordPress settings with website_id: ${currentWebsite.id}`);
+        
+        // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
         const { data, error } = await supabase
           .from('wordpress_settings')
           .select('*')
           .eq('website_id', currentWebsite.id)
           .single();
 
-        if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-          throw error;
-        }
-
-        if (data) {
-          setSettings(data as WordPressSettings);
+        if (error) {
+          if (error.code === 'PGRST116') { // PGRST116 is "no rows returned"
+            console.log(`No WordPress settings found for website ID: ${currentWebsite.id}`);
+            setSettings(null);
+          } else {
+            console.error('Error fetching WordPress settings:', error);
+            throw error;
+          }
+        } else if (data) {
+          console.log('WordPress settings found:', { 
+            id: data.id, 
+            website_id: data.website_id, 
+            is_connected: data.is_connected,
+            wp_url: data.wp_url?.substring(0, 30) + '...',
+            wp_username: data.wp_username 
+          });
+          setSettings(data as unknown as WordPressSettings);
         } else {
+          console.log('No WordPress settings returned, but no error either');
           setSettings(null);
         }
       } catch (error) {
-        console.error('Error fetching WordPress settings:', error);
+        console.error('Exception fetching WordPress settings:', error);
         toast.error('Failed to load WordPress settings');
+        setSettings(null);
       } finally {
         setIsLoading(false);
       }
@@ -221,7 +243,7 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
         // Set the settings from the response
         console.log('WordPress connection successful');
-        setSettings(data.settings as WordPressSettings);
+        setSettings(data.settings as unknown as WordPressSettings);
         toast.success(`Successfully connected to WordPress as ${data.wordpress_user}`);
         return true;
       } catch (e) {
@@ -299,6 +321,7 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.log('WordPress authentication successful, user data:', userData);
       
       // Save to database
+      // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
       const { data, error } = await supabase
         .from('wordpress_settings')
         .upsert({
@@ -318,7 +341,7 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return false;
       }
       
-      setSettings(data as WordPressSettings);
+      setSettings(data as unknown as WordPressSettings);
       toast.success(`Successfully connected to WordPress as ${userData.name}`);
       return true;
     } catch (error) {
@@ -409,6 +432,33 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       console.log('WordPress post created:', data.post);
       toast.success(`Post ${status === 'publish' ? 'published' : 'saved as draft'} successfully`);
+      
+      // Update the last_post_at timestamp in the database
+      try {
+        console.log("Updating last_post_at timestamp in WordPress settings");
+        // @ts-ignore - Ignore TypeScript errors for wordpress_settings table
+        const { error: updateError } = await supabase
+          .from('wordpress_settings')
+          .update({ 
+            last_post_at: new Date().toISOString(),
+            is_connected: true // Also ensure connection is marked as active
+          })
+          .eq('website_id', currentWebsite.id);
+          
+        if (updateError) {
+          console.error("Error updating last_post_at:", updateError);
+        } else {
+          console.log("Successfully updated last_post_at timestamp");
+          // Refresh settings to reflect the updated timestamp
+          setSettings({
+            ...settings,
+            last_post_at: new Date().toISOString()
+          } as WordPressSettings);
+        }
+      } catch (updateError) {
+        console.error("Error in last_post_at update:", updateError);
+      }
+      
       return true;
     } catch (error) {
       console.error('Error creating WordPress post:', error);
@@ -472,6 +522,7 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       setIsLoading(true);
 
+      // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
       const { error } = await supabase
         .from('wordpress_settings')
         .delete()

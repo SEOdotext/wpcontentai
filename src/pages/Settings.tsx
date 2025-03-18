@@ -121,6 +121,47 @@ const Settings = () => {
     }
   }, [settingsLoading, publicationFrequency, writingStyle, subjectMatters]);
 
+  // Get the current website ID for direct debugging
+  useEffect(() => {
+    if (currentWebsite) {
+      console.log('Current website ID:', currentWebsite.id);
+      console.log('Checking WordPress settings...');
+      
+      // Direct check in the database
+      const checkWpSettings = async () => {
+        try {
+          // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
+          const { data, error } = await supabase
+            .from('wordpress_settings')
+            .select('*')
+            .eq('website_id', currentWebsite.id)
+            .single();
+            
+          if (error) {
+            console.error('Error checking WordPress settings:', error);
+            setDirectWpSettings(null);
+          } else {
+            console.log('WordPress settings found directly in DB:', data);
+            console.log('WordPress connection state:', data?.is_connected);
+            
+            // Store the WordPress settings directly in state
+            setDirectWpSettings(data);
+          }
+        } catch (e) {
+          console.error('Exception checking WordPress settings:', e);
+          setDirectWpSettings(null);
+        }
+      };
+      
+      checkWpSettings();
+    }
+  }, [currentWebsite]);
+
+  // Explicitly log WordPress settings from context when they change
+  useEffect(() => {
+    console.log('WordPress settings from context changed:', wpSettings);
+  }, [wpSettings]);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -420,7 +461,6 @@ const Settings = () => {
   const testEdgeFunction = async (wpUrl: string, wpUsername: string, wpPassword: string) => {
     console.log(`Testing Edge Function: ${WORDPRESS_PROXY_URL}`);
     console.log(`Using credentials - Username: ${wpUsername}, Password length: ${wpPassword.length}`);
-    console.log(`Password format (x = character, space preserved): ${wpPassword.replace(/[^\s]/g, 'x')}`);
     
     // Check password format - WordPress application passwords typically have spaces
     if (wpPassword.length > 10 && !wpPassword.includes(' ')) {
@@ -493,6 +533,71 @@ const Settings = () => {
         
         if (responseData.success) {
           toast.success("WordPress connection successful!");
+          
+          // Update the connection status in the database
+          if (wpSettings && currentWebsite) {
+            try {
+              console.log("Updating connection status in WordPress settings");
+              
+              // Log current WordPress settings
+              console.log("Current WordPress settings:", {
+                id: wpSettings.id,
+                website_id: wpSettings.website_id,
+                is_connected: wpSettings.is_connected,
+                updated_at: wpSettings.updated_at
+              });
+              
+              // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
+              const { error } = await supabase
+                .from('wordpress_settings')
+                .update({ 
+                  updated_at: new Date().toISOString(),
+                  is_connected: true
+                })
+                .eq('website_id', currentWebsite.id);
+                
+              if (error) {
+                console.error("Error updating connection status:", error);
+                console.error("Database error details:", {
+                  code: error.code,
+                  message: error.message,
+                  details: error.details,
+                  hint: error.hint
+                });
+              } else {
+                console.log("Successfully updated connection status");
+                
+                // Try to fetch and log the updated settings
+                try {
+                  // @ts-ignore
+                  const { data: updatedSettings, error: fetchError } = await supabase
+                    .from('wordpress_settings')
+                    .select('*')
+                    .eq('website_id', currentWebsite.id)
+                    .single();
+                    
+                  if (fetchError) {
+                    console.error("Failed to fetch updated settings:", fetchError);
+                  } else {
+                    console.log("Updated WordPress settings:", {
+                      is_connected: updatedSettings.is_connected,
+                      updated_at: updatedSettings.updated_at
+                    });
+                  }
+                } catch (fetchErr) {
+                  console.error("Exception in fetching updated settings:", fetchErr);
+                }
+                
+                // Refresh the page to show updated data
+                toast.info("Connection status updated. Refreshing page...");
+                setTimeout(() => {
+                  window.location.reload();
+                }, 1500);
+              }
+            } catch (updateError) {
+              console.error("Exception updating connection status:", updateError);
+            }
+          }
           return true;
         } else {
           // Get specific error information
@@ -510,6 +615,31 @@ const Settings = () => {
             toast.error(`WordPress connection failed: ${errorMsg}`);
           }
           
+          // If we have settings but test failed, mark as not connected
+          if (wpSettings && currentWebsite) {
+            try {
+              console.log("Updating connection status to false after failed test");
+              
+              // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
+              const { error: updateError } = await supabase
+                .from('wordpress_settings')
+                .update({ 
+                  is_connected: false,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('website_id', currentWebsite.id);
+                
+              if (updateError) {
+                console.error("Error updating connection status:", updateError);
+              } else {
+                console.log("Successfully marked WordPress connection as inactive");
+                toast.info("The connection has been marked as inactive.");
+              }
+            } catch (updateError) {
+              console.error("Error updating connection status:", updateError);
+            }
+          }
+          
           return false;
         }
       } catch (parseError) {
@@ -521,6 +651,125 @@ const Settings = () => {
       console.error("Edge Function error:", edgeError);
       toast.error(`Edge Function error: ${edgeError instanceof Error ? edgeError.message : String(edgeError)}`);
       return false;
+    }
+  };
+
+  /**
+   * Checks if WordPress is fully connected with all required properties
+   * @returns {boolean} True if WordPress is connected and has valid credentials
+   */
+  const isWordPressConnected = () => {
+    // Log WordPress settings for debugging
+    console.log('Checking WordPress connection status with settings:', wpSettings ? {
+      has_settings: !!wpSettings,
+      has_url: !!wpSettings?.wp_url,
+      has_username: !!wpSettings?.wp_username,
+      has_password: !!(wpSettings?.wp_application_password?.length > 0),
+      is_connected_flag: wpSettings?.is_connected,
+      id: wpSettings?.id,
+      website_id: wpSettings?.website_id
+    } : 'No settings found');
+    
+    // The actual check
+    const isConnected = !!(
+      wpSettings && 
+      wpSettings.wp_url && 
+      wpSettings.wp_username && 
+      wpSettings.wp_application_password &&
+      wpSettings.is_connected
+    );
+    
+    console.log('WordPress connection result:', isConnected);
+    return isConnected;
+  };
+
+  /**
+   * Renders the WordPress connection additional information when connected
+   * Shows last interaction with API without replacing the existing UI
+   */
+  const renderConnectionStatusInfo = () => {
+    if (!wpSettings) return null;
+    
+    return (
+      <div className="mt-4 border rounded-md p-4 bg-muted/30 space-y-3">
+        <h4 className="text-sm font-medium">Connection Status Information</h4>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Last connection test:</span>
+              <span className="text-xs font-medium">
+                {(directWpSettings?.updated_at || wpSettings?.updated_at) ? 
+                  new Date(directWpSettings?.updated_at || wpSettings?.updated_at).toLocaleString() : 
+                  'Unknown'}
+              </span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">First connected on:</span>
+              <span className="text-xs font-medium">
+                {(directWpSettings?.created_at || wpSettings?.created_at) ? 
+                  new Date(directWpSettings?.created_at || wpSettings?.created_at).toLocaleString() : 
+                  'Unknown'}
+              </span>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">API endpoint:</span>
+              <code className="text-xs bg-muted p-1 rounded">
+                {(directWpSettings?.wp_url || wpSettings?.wp_url) ? 
+                  `${directWpSettings?.wp_url || wpSettings?.wp_url}/wp-json/wp/v2/` : 
+                  'Not configured'}
+              </code>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-muted-foreground">Authentication:</span>
+              <span className="text-xs font-medium">Application Password</span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="text-xs text-muted-foreground mt-2">
+          <strong>Tip:</strong> If you experience connection issues, check that your WordPress REST API is enabled and your site is accessible.
+        </div>
+      </div>
+    );
+  };
+
+  // Debug function to directly check the database
+  const debugCheckWordPressSettings = async () => {
+    if (!currentWebsite) {
+      toast.error('No website selected');
+      return;
+    }
+
+    console.log('Directly checking WordPress settings in database...');
+    console.log('Current website ID:', currentWebsite.id);
+
+    try {
+      // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
+      const { data, error } = await supabase
+        .from('wordpress_settings')
+        .select('*')
+        .eq('website_id', currentWebsite.id);
+
+      if (error) {
+        console.error('Error fetching WordPress settings from DB:', error);
+        toast.error('Failed to check WordPress settings in database');
+      } else if (data && data.length > 0) {
+        console.log('WordPress settings found in database:', data);
+        console.log('WordPress connection state:', data[0].is_connected);
+        toast.success('Found WordPress settings in database - check console');
+      } else {
+        console.log('No WordPress settings found in database');
+        toast.info('No WordPress settings found in database');
+      }
+    } catch (e) {
+      console.error('Exception checking WordPress settings:', e);
+      toast.error('Error checking WordPress settings');
     }
   };
 
@@ -558,56 +807,25 @@ const Settings = () => {
                   <CardHeader>
                     <CardTitle>WordPress Integration</CardTitle>
                     <CardDescription>
-                      Connect your WordPress website to automatically publish content. We'll guide you through the process.
+                      {(wpSettings?.is_connected || directWpSettings?.is_connected) ? 
+                        "Manage your WordPress connection and view recent activity." : 
+                        "Connect your WordPress website to automatically publish content. We'll guide you through the process."}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {wpSettings ? (
+                    {(wpSettings?.is_connected || directWpSettings?.is_connected) ? (
                       <div className="space-y-4">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-medium">Connected to WordPress</p>
+                            <div className="flex items-center">
+                              <div className={`h-2 w-2 rounded-full mr-2 bg-green-500`}></div>
+                              <p className="font-medium">Connected to WordPress</p>
+                            </div>
                             <p className="text-sm text-muted-foreground">
-                              Logged in as {wpSettings.wp_username}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              <strong>Note:</strong> Testing uses our Supabase Edge Function to securely connect to your WordPress site.
-                              We've completely rebuilt the connection test for better reliability and password handling.
+                              Logged in as {directWpSettings?.wp_username || wpSettings?.wp_username}
                             </p>
                           </div>
                           <div className="flex space-x-2">
-                            <Button
-                              variant="outline"
-                              onClick={async () => {
-                                try {
-                                  toast.info("Testing WordPress connection...");
-                                  
-                                  // Show notice about development environment
-                                  if (window.location.hostname === 'localhost') {
-                                    toast.info("Note: Connection tests may return detailed errors to help with troubleshooting", {
-                                      duration: 6000, // Show for 6 seconds
-                                    });
-                                  }
-                                  
-                                  // Use our direct test function with the Edge Function
-                                  if (wpSettings && wpSettings.wp_username && wpSettings.wp_application_password) {
-                                    await testEdgeFunction(
-                                      wpSettings.wp_url,
-                                      wpSettings.wp_username,
-                                      wpSettings.wp_application_password
-                                    );
-                                  } else {
-                                    toast.error("WordPress credentials not found");
-                                  }
-                                } catch (error) {
-                                  console.error("Connection test error:", error);
-                                  toast.error(`Connection test failed: ${error instanceof Error ? error.message : String(error)}`);
-                                }
-                              }}
-                            >
-                              <Zap className="h-4 w-4 mr-2" />
-                              Test Connection
-                            </Button>
                             <Button
                               variant="outline"
                               onClick={() => {
@@ -616,7 +834,7 @@ const Settings = () => {
                               }}
                             >
                               <Pencil className="h-4 w-4 mr-2" />
-                              Edit
+                              Manage Connection
                             </Button>
                             <Button
                               variant="outline"
@@ -628,6 +846,9 @@ const Settings = () => {
                             </Button>
                           </div>
                         </div>
+                        
+                        {/* Render additional connection status information */}
+                        {renderConnectionStatusInfo()}
                       </div>
                     ) : (
                       <div className="space-y-6">
@@ -826,6 +1047,19 @@ const Settings = () => {
                     )}
                     Save All Settings
                   </Button>
+                  
+                  {/* Debug button - hidden in production */}
+                  {window.location.hostname === 'localhost' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={debugCheckWordPressSettings}
+                      className="ml-2"
+                    >
+                      <HelpCircle className="h-4 w-4 mr-2" />
+                      Debug WordPress
+                    </Button>
+                  )}
                 </div>
               </>
             )}
