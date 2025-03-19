@@ -291,3 +291,131 @@
 .content-view div:empty {
   display: none;
 }
+
+.blog-content {
+  scroll-behavior: smooth;
+  padding-right: 0.5rem;
+}
+
+.blog-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.blog-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.blog-content::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground)/0.2);
+  border-radius: 9999px;
+}
+
+.blog-content::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground)/0.3);
+}
+
+/* WordPress Content Styles */
+.wordpress-content {
+  /* Ensure proper spacing and readability */
+  line-height: 1.8;
+  color: var(--foreground);
+  padding-right: 1rem;
+}
+
+.wordpress-content h1,
+.wordpress-content h2,
+.wordpress-content h3,
+.wordpress-content h4,
+.wordpress-content h5,
+.wordpress-content h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--foreground);
+}
+
+.wordpress-content h1 { font-size: 2em; }
+.wordpress-content h2 { font-size: 1.5em; margin-top: 1.5em; }
+.wordpress-content h3 { font-size: 1.25em; margin-top: 1.25em; }
+.wordpress-content h4 { font-size: 1.125em; margin-top: 1.1em; }
+
+.wordpress-content p {
+  margin-bottom: 1.5em;
+}
+
+.wordpress-content a {
+  color: hsl(var(--primary));
+  text-decoration: none;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+.wordpress-content a:hover {
+  text-decoration: underline;
+}
+
+.wordpress-content ul,
+.wordpress-content ol {
+  margin-bottom: 1.5em;
+  padding-left: 2em;
+}
+
+.wordpress-content ul li {
+  list-style-type: disc;
+  margin-bottom: 0.5em;
+}
+
+.wordpress-content ol li {
+  list-style-type: decimal;
+  margin-bottom: 0.5em;
+}
+
+.wordpress-content blockquote {
+  border-left: 4px solid hsl(var(--primary));
+  padding-left: 1em;
+  margin-left: 0;
+  margin-right: 0;
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
+.wordpress-content pre {
+  background-color: hsl(var(--secondary));
+  padding: 1em;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin-bottom: 1.5em;
+}
+
+.wordpress-content code {
+  background-color: hsl(var(--secondary));
+  padding: 0.2em 0.4em;
+  border-radius: var(--radius);
+  font-size: 0.9em;
+  font-family: monospace;
+}
+
+.wordpress-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  margin: 1em 0;
+}
+
+.wordpress-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5em;
+}
+
+.wordpress-content table th,
+.wordpress-content table td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.5em;
+}
+
+.wordpress-content table th {
+  background-color: hsl(var(--secondary));
+  font-weight: 600;
+}

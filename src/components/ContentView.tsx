@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Calendar as CalendarIcon, Edit, RefreshCw, Tag, Trash, X } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Edit, RefreshCw, Tag, Trash, X, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -20,6 +20,7 @@ interface ContentViewProps {
   keywords?: Keyword[];
   dateCreated?: string;
   status?: 'draft' | 'published' | 'scheduled';
+  wpSentDate?: string;
   onClose: () => void;
   onDeleteClick?: () => void;
   onEditClick?: () => void;
@@ -33,27 +34,30 @@ const ContentView: React.FC<ContentViewProps> = ({
   keywords = [],
   dateCreated,
   status = 'draft',
+  wpSentDate,
   onClose,
   onDeleteClick,
   onEditClick,
   onRegenerateClick,
 }) => {
-  const defaultContent = `<p>This is the default content. You can replace it with your own content.</p>`;
+  const contentToDisplay = fullContent || description || `<p>This is the default content. You can replace it with your own content.</p>`;
+  
+  const formattedWpSentDate = wpSentDate ? new Date(wpSentDate).toLocaleString() : null;
 
   return (
     <Sheet open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <SheetPortal>
         <SheetOverlay onClick={onClose} />
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8" onClick={(e) => e.stopPropagation()}>
-          <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300">
-            <CardHeader className="p-4 md:p-6 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" onClick={(e) => e.stopPropagation()}>
+          <Card className="w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300 shadow-lg">
+            <CardHeader className="p-3 sm:p-4 md:p-6 flex flex-row items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
-                <CardTitle className="text-xl md:text-2xl">{title}</CardTitle>
+                <CardTitle className="text-lg sm:text-xl md:text-2xl truncate">{title}</CardTitle>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 shrink-0">
                 {onRegenerateClick && (
                   <Button 
                     variant="ghost" 
@@ -93,7 +97,7 @@ const ContentView: React.FC<ContentViewProps> = ({
               </div>
             </CardHeader>
             
-            <div className="px-4 md:px-6 flex flex-wrap gap-3 items-center">
+            <div className="px-3 sm:px-4 md:px-6 flex flex-wrap gap-3 items-center shrink-0">
               {dateCreated && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <CalendarIcon className="h-3 w-3" />
@@ -107,37 +111,51 @@ const ContentView: React.FC<ContentViewProps> = ({
                   <span>{keywords.length} keywords</span>
                 </div>
               )}
+              
+              {wpSentDate && (
+                <Badge 
+                  variant="outline" 
+                  className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs flex items-center gap-1"
+                >
+                  <Send className="h-3 w-3" />
+                  <span>Sent to WordPress</span>
+                </Badge>
+              )}
             </div>
             
-            {description && (
-              <div className="px-4 md:px-6 mt-4">
-                <p className="text-muted-foreground italic">{description}</p>
+            <Separator className="my-3" />
+            
+            <CardContent className="overflow-y-auto p-3 sm:p-4 md:p-6 flex-1 blog-content">
+              <div 
+                className="wordpress-content prose prose-sm md:prose lg:prose-lg max-w-none"
+                dangerouslySetInnerHTML={{ __html: contentToDisplay }} 
+              />
+            </CardContent>
+            
+            {wpSentDate && (
+              <div className="px-3 sm:px-4 md:px-6 py-2 bg-emerald-50 text-emerald-700 text-xs">
+                <div className="flex items-center gap-2">
+                  <Send className="h-3 w-3" />
+                  <span>
+                    Sent to WordPress on {formattedWpSentDate}
+                  </span>
+                </div>
               </div>
             )}
             
-            <Separator className="my-4" />
-            
-            <CardContent className="overflow-y-auto p-4 md:p-6 flex-1">
-              {fullContent ? (
-                <div dangerouslySetInnerHTML={{ __html: fullContent }} />
-              ) : (
-                <div dangerouslySetInnerHTML={{ __html: defaultContent }} />
-              )}
-            </CardContent>
-            
             {keywords.length > 0 && (
               <>
-                <Separator className="my-4" />
-                <div className="px-4 md:px-6 pb-4 md:pb-6">
+                <Separator className="mt-0 mb-3" />
+                <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6 shrink-0">
                   <h3 className="text-sm font-medium mb-2">Keywords:</h3>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 overflow-y-auto max-h-20">
                     {keywords.map((keyword, index) => (
                       <Badge 
                         key={index}
                         variant="outline" 
                         className="bg-blue-50 text-blue-700 border-blue-200 text-xs"
                       >
-                        {keyword.text}
+                        {typeof keyword === 'string' ? keyword : keyword.text}
                       </Badge>
                     ))}
                   </div>

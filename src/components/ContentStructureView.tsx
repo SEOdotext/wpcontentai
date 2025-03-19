@@ -159,11 +159,11 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           setContentFetchAttempted(true);
           
           try {
-            console.log(`Attempting to fetch content for ${currentWebsite.url}`);
-            const content = await fetchWebsiteContent(currentWebsite.url);
+            console.log(`Attempting to fetch content for ${currentWebsite.url} using aiEndpoints.fetchWebsiteContent`);
+            const content = await fetchWebsiteContent(currentWebsite.url, currentWebsite.id);
             if (isMountedRef.current) {
               setWebsiteContent(content);
-              console.log('Website content fetched successfully');
+              console.log('Website content fetched successfully, received', content.length, 'characters');
             }
           } catch (error) {
             console.error('Error fetching website content:', error);

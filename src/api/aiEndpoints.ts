@@ -1,6 +1,8 @@
 import { toast } from 'sonner';
+import { callOpenAI as secureCallOpenAI } from '@/services/openaiService';
 
-// Free fetch proxy service URL
+// Free fetch proxy service URL - Keep for website content fetching
+// Will be replaced with scrape-content function in a future update
 const FREE_FETCH_PROXY = 'https://predicthire-free-fetch.philip-d02.workers.dev/';
 
 /**
@@ -25,44 +27,16 @@ interface OpenAIRequestPayload {
  */
 export const callOpenAI = async (endpoint: string, payload: OpenAIRequestPayload) => {
   try {
-    console.log(`Calling OpenAI API via proxy: ${endpoint}`);
-    console.log('Payload:', {
+    console.log(`Calling OpenAI API via secure edge function (endpoint: ${endpoint})`);
+    console.log('Using payload:', {
       model: payload.model,
       messagesCount: payload.messages.length,
       temperature: payload.temperature,
       max_tokens: payload.max_tokens
     });
     
-    const response = await fetch(FREE_FETCH_PROXY, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        endpoint,
-        payload
-      })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI API Error:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
-      });
-      throw new Error(`API request failed: ${errorText}`);
-    }
-    
-    const data = await response.json();
-    console.log('OpenAI API Response:', {
-      status: 'success',
-      model: data.model,
-      hasChoices: !!data.choices?.length,
-      firstChoiceLength: data.choices?.[0]?.message?.content?.length
-    });
-    
-    return data;
+    // Use the secure implementation via Supabase Edge Function
+    return await secureCallOpenAI(payload);
   } catch (error) {
     console.error('Error calling OpenAI API:', error);
     toast.error('Failed to call AI service. Please try again later.');
@@ -131,9 +105,11 @@ export const generateWordPressContent = async (
  * Fetches website content using the free fetch proxy
  * 
  * @param url The URL to fetch content from
+ * @param websiteId Optional website ID to help with content fetching
  * @returns The website content
  */
-export const fetchWebsiteContent = async (url: string): Promise<string> => {
+export const fetchWebsiteContent = async (url: string, websiteId?: string): Promise<string> => {
+  console.log('[aiEndpoints.fetchWebsiteContent] Starting fetch for URL:', url, websiteId ? `(with websiteId: ${websiteId})` : '');
   try {
     // Clean the URL to ensure it has a protocol
     const cleanUrl = url.startsWith('http') ? url : `https://${url}`;

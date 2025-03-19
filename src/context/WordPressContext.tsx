@@ -400,14 +400,36 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     content: string,
     status: 'draft' | 'publish'
   ): Promise<boolean> => {
+    console.log('WordPressContext.createPost called with:', { 
+      titleLength: title.length, 
+      contentLength: content.length, 
+      status 
+    });
+
     if (!settings || !currentWebsite) {
+      console.error('WordPress createPost failed - settings or currentWebsite missing:', { 
+        hasSettings: !!settings, 
+        hasWebsite: !!currentWebsite 
+      });
       toast.error('WordPress is not configured');
       return false;
     }
 
     try {
-      console.log('Creating WordPress post via Edge Function');
+      console.log('Creating WordPress post via Edge Function for website:', {
+        websiteId: currentWebsite.id,
+        websiteName: currentWebsite.name
+      });
       
+      // Check auth session before making request
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !sessionData.session) {
+        console.error('Auth session error:', sessionError);
+        toast.error('You must be logged in to publish to WordPress');
+        return false;
+      }
+      
+      console.log('Invoking wordpress-posts Edge Function');
       const { data, error } = await supabase.functions.invoke('wordpress-posts', {
         body: {
           website_id: currentWebsite.id,
@@ -424,39 +446,28 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return false;
       }
 
-      if (!data.success) {
-        console.error('WordPress post creation failed:', data.error);
-        toast.error(data.error || 'Failed to create WordPress post');
+      if (!data || !data.success) {
+        console.error('WordPress post creation failed:', data?.error || 'Unknown error');
+        toast.error(data?.error || 'Failed to create WordPress post');
         return false;
       }
 
-      console.log('WordPress post created:', data.post);
+      console.log('WordPress post created successfully:', data.post);
       toast.success(`Post ${status === 'publish' ? 'published' : 'saved as draft'} successfully`);
       
-      // Update the last_post_at timestamp in the database
+      // Update last_post_at in settings
       try {
-        console.log("Updating last_post_at timestamp in WordPress settings");
         // @ts-ignore - Ignore TypeScript errors for wordpress_settings table
         const { error: updateError } = await supabase
           .from('wordpress_settings')
-          .update({ 
-            last_post_at: new Date().toISOString(),
-            is_connected: true // Also ensure connection is marked as active
-          })
-          .eq('website_id', currentWebsite.id);
-          
+          .update({ last_post_at: new Date().toISOString() })
+          .eq('id', settings.id);
+        
         if (updateError) {
-          console.error("Error updating last_post_at:", updateError);
-        } else {
-          console.log("Successfully updated last_post_at timestamp");
-          // Refresh settings to reflect the updated timestamp
-          setSettings({
-            ...settings,
-            last_post_at: new Date().toISOString()
-          } as WordPressSettings);
+          console.warn('Failed to update last_post_at:', updateError);
         }
       } catch (updateError) {
-        console.error("Error in last_post_at update:", updateError);
+        console.warn('Exception updating last_post_at:', updateError);
       }
       
       return true;

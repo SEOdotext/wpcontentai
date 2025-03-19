@@ -1,4 +1,6 @@
 import { toast } from 'sonner';
+import { callOpenAI } from '@/services/openaiService';
+import { supabase } from '@/integrations/supabase/client';
 
 // Define the interface for the AI service response
 interface AIServiceResponse {
@@ -6,9 +8,6 @@ interface AIServiceResponse {
   keywords: string[];
   keywordsByTitle?: { [title: string]: string[] };
 }
-
-// Free fetch proxy service URL
-const FREE_FETCH_PROXY = 'https://predicthire-free-fetch.philip-d02.workers.dev/';
 
 /**
  * Generates title suggestions using AI based on website content and preferences
@@ -57,14 +56,8 @@ export const generateTitleSuggestions = async (
         Format your response as a simple list of titles, one per line.
       `;
       
-      const response = await fetch(FREE_FETCH_PROXY, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          endpoint: 'https://api.openai.com/v1/chat/completions',
-          payload: {
+      // Use the new openaiService instead of direct FREE_FETCH_PROXY
+      const data = await callOpenAI({
             model: 'gpt-3.5-turbo',
             messages: [
               {
@@ -78,15 +71,8 @@ export const generateTitleSuggestions = async (
             ],
             temperature: 0.7,
             max_tokens: 300
-          }
-        })
       });
       
-      if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
-      }
-      
-      const data = await response.json();
       console.log('AI response for titles:', data);
       
       if (data.choices && data.choices.length > 0) {
@@ -124,15 +110,8 @@ export const generateTitleSuggestions = async (
           etc.
         `;
         
-        // Make a second API call to get keywords for each title
-        const keywordsResponse = await fetch(FREE_FETCH_PROXY, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            endpoint: 'https://api.openai.com/v1/chat/completions',
-            payload: {
+        // Second OpenAI call - Replace with openaiService
+        const keywordsData = await callOpenAI({
               model: 'gpt-3.5-turbo',
               messages: [
                 {
@@ -146,13 +125,7 @@ export const generateTitleSuggestions = async (
               ],
               temperature: 0.3,
               max_tokens: 500
-            }
-          })
         });
-        
-        if (keywordsResponse.ok) {
-          const keywordsData = await keywordsResponse.json();
-          console.log('AI response for keywords:', keywordsData);
           
           if (keywordsData.choices && keywordsData.choices.length > 0) {
             const keywordsContent = keywordsData.choices[0].message.content;
@@ -170,7 +143,6 @@ export const generateTitleSuggestions = async (
                 }
               }
             });
-          }
         }
         
         // For any titles without keywords, generate them using our fallback method
@@ -377,53 +349,158 @@ const isCommonWord = (word: string): boolean => {
  * Fetches and analyzes website content
  * 
  * @param url The URL of the website to analyze
+ * @param websiteId Optional website ID to use directly (skips lookup)
  * @returns A promise that resolves to the website content
  */
-export const fetchWebsiteContent = async (url: string): Promise<string> => {
+export const fetchWebsiteContent = async (url: string, websiteId?: string): Promise<string> => {
+  console.log('[aiService.fetchWebsiteContent] Starting fetch for URL:', url, websiteId ? `(with websiteId: ${websiteId})` : '');
   try {
-    // Try to use the free fetch proxy to get real website content
+    // Clean the URL to ensure it has a protocol
+    const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
+    
+    // Try to use the scrape-content edge function
     try {
-      // Clean the URL to ensure it has a protocol
-      const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
+      console.log(`Fetching content from ${cleanUrl} via scrape-content edge function...`);
       
-      // Use the free fetch proxy to get the website content
-      const proxyUrl = `${FREE_FETCH_PROXY}?url=${encodeURIComponent(cleanUrl)}`;
-      
-      console.log(`Fetching content from ${cleanUrl} via proxy...`);
-      
-      const response = await fetch(proxyUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'text/html,application/xhtml+xml,application/xml'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch content: ${response.statusText}`);
+      // Get current session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        console.log('Not authenticated, falling back to mock content');
+        throw new Error('Not authenticated');
       }
       
-      // Get the HTML content
-      const html = await response.text();
+      // Use provided website ID or lookup if not provided
+      let siteId = websiteId;
       
-      // Extract text content from HTML (simple approach)
-      const textContent = extractTextFromHtml(html);
+      if (!siteId) {
+        // First, we need to find the website_id from the URL
+        console.log('No website ID provided, looking up from URL...');
+        
+        // Try to lookup the website based on the URL
+        const { data: websites, error: websiteError } = await supabase
+          .from('websites')
+          .select('id, url')
+          .ilike('url', `%${cleanUrl.replace(/^https?:\/\//i, '')}%`)
+          .limit(1);
+        
+        if (websiteError) {
+          console.error('Error looking up website:', websiteError);
+          throw new Error(`Website lookup error: ${websiteError.message}`);
+        }
+        
+        if (websites && websites.length > 0) {
+          siteId = websites[0].id;
+          console.log(`Found website ID for ${cleanUrl}: ${siteId}`);
+        } else {
+          console.error(`No website found matching URL: ${cleanUrl}`);
+          throw new Error('Website not found in database');
+        }
+      }
       
-      console.log('Website content fetched successfully');
-      return textContent;
+      // Call the scrape-content Edge Function with the correct parameter
+      console.log(`Calling scrape-content with website_id: ${websiteId || siteId}`);
+      try {
+        const response = await supabase.functions.invoke('scrape-content', {
+          body: { website_id: websiteId || siteId }
+        });
+        
+        // Check for errors
+        if (response.error) {
+          console.error('Error from scrape-content function:', response.error);
+          console.log('Full error response:', JSON.stringify(response));
+          throw new Error(`Scraping error: ${response.error.message || 'Unknown error'}`);
+        }
+        
+        // Log full response for debugging
+        console.log('scrape-content raw response:', response);
+        console.log('scrape-content data:', response.data);
+        
+        if (response.data && response.data.content) {
+          const content = response.data.content;
+          console.log('Website content fetched successfully (length:', content.length, 'characters)');
+          console.log('Content preview:', content.substring(0, 100) + '...');
+          return content;
+        } else if (response.data && response.data.message === 'No key content pages found to analyze') {
+          console.log('No cornerstone content found in the response, but it may exist in the database');
+          console.log('Falling back to mock content since scrape-content could not find cornerstone content');
+          // Don't throw an error here, just fall through to the mock content
+        } else {
+          console.error('No content returned from scrape-content function');
+          console.log('Unexpected response format:', response.data);
+          // Don't throw an error here either, just fall through to the mock content
+        }
+      } catch (fetchError) {
+        console.error('Error fetching real website content:', fetchError);
+        console.log('Falling back to mock content');
+      }
     } catch (fetchError) {
       console.error('Error fetching real website content:', fetchError);
       console.log('Falling back to mock content');
     }
     
-    // Fallback to mock content if the fetch fails
+    // Since the Edge Function couldn't return content, try a direct database query
+    try {
+      console.log(`Edge Function didn't return content, attempting direct database query for website_id: ${websiteId || siteId}`);
+      
+      const { data: directContent, error: directError } = await supabase
+        .from('website_content')
+        .select('content, title')
+        .eq('website_id', websiteId || siteId)
+        .eq('is_cornerstone', true)
+        .limit(1)
+        .single();
+      
+      if (directError) {
+        console.error('Error querying content directly:', directError);
+      } else if (directContent && directContent.content) {
+        console.log(`Successfully retrieved cornerstone content directly from database (title: "${directContent.title}")`);
+        console.log('Content preview:', directContent.content.substring(0, 100) + '...');
+        return directContent.content;
+      } else {
+        console.log('No cornerstone content found in direct database query either');
+      }
+    } catch (directQueryError) {
+      console.error('Error in direct database query:', directQueryError);
+    }
+    
+    // Rest of the function (mock content) remains unchanged
     console.log(`Using fallback content for ${url}...`);
+    console.warn('⚠️ NOTE: Using MOCK data instead of real website content. AI generation will be less accurate!');
+    
+    // Extract domain for domain-specific content
+    const domain = url.replace(/https?:\/\//, '').split('.')[0].toLowerCase();
+    console.log(`Extracted domain for fallback content: ${domain}`);
     
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    // Return mock content based on the URL
-    if (url.includes('wordpress')) {
-      return `
+    let mockContent = '';
+    
+    // Domain-specific content fallbacks
+    if (domain === 'workforceu') {
+      console.log('Using WorkForceEU specific mock content');
+      mockContent = `
+        WorkForceEU is a leading platform for workforce management and HR solutions in Europe.
+        We provide comprehensive services for recruitment, talent management, and workforce optimization.
+        Our expertise includes temporary staffing, permanent placement, and workforce consulting.
+        We help businesses find the right talent and manage their workforce efficiently.
+        Topics include recruitment strategies, HR management, talent acquisition, and workforce planning.
+        We specialize in providing flexible staffing solutions for businesses of all sizes.
+        Our workforce consultants have deep expertise in European labor regulations and best practices.
+        Working with WorkForceEU means accessing a wide network of pre-vetted talent.
+      `;
+    } else if (domain === 'predicthire') {
+      console.log('Using PredictHire specific mock content');
+      mockContent = `
+        PredictHire is an AI-powered recruitment platform that helps businesses make better hiring decisions.
+        Our technology uses predictive analytics to identify the best candidates for your organization.
+        We offer solutions for candidate screening, assessment, and selection.
+        Our platform reduces bias in the hiring process and improves the quality of hires.
+        Topics include AI in recruitment, candidate experience, hiring efficiency, and talent analytics.
+      `;
+    } else if (url.includes('wordpress')) {
+      console.log('Using WordPress specific mock content');
+      mockContent = `
         This is a website about WordPress content management.
         We provide tips and guides for optimizing your WordPress site.
         Topics include SEO, content marketing, plugin recommendations, and performance optimization.
@@ -434,16 +511,23 @@ export const fetchWebsiteContent = async (url: string): Promise<string> => {
         SEO optimization helps your WordPress content rank higher in search results.
       `;
     } else {
-      return `
-        This is a website about web development and digital marketing.
-        We cover topics such as web design, SEO, content strategy, and online business.
-        Our articles provide practical advice for improving your online presence.
-        We focus on helping businesses grow through effective digital marketing strategies.
+      console.log(`Using generic mock content for domain: ${domain}`);
+      mockContent = `
+        This is a website about ${domain} and related topics.
+        We provide valuable information, resources, and services in this field.
+        Our content covers best practices, industry trends, and practical advice.
+        Topics include digital marketing, content strategy, SEO, and online presence optimization.
+        Our goal is to help you succeed in the digital landscape with expert guidance.
         Web development trends change rapidly, and we keep you updated on the latest technologies.
         Content creation is a key component of any successful digital marketing strategy.
         SEO best practices help ensure your content reaches your target audience.
       `;
     }
+    
+    console.log(`Generated ${mockContent.length} characters of mock content for ${domain}`);
+    console.log('Mock content preview:', mockContent.substring(0, 100).trim() + '...');
+    
+    return mockContent;
   } catch (error) {
     console.error('Error fetching website content:', error);
     throw new Error('Failed to fetch website content');
@@ -515,4 +599,352 @@ const extractKeywordsFromContent = (content: string): string[] => {
     .map(entry => entry[0]);
   
   return sortedWords.slice(0, 10);
+};
+
+/**
+ * Extracts potential links from website content
+ * 
+ * @param content The website content to extract links from
+ * @returns Array of potential links with titles and URLs
+ */
+const extractPotentialLinks = async (websiteId: string): Promise<{ title: string, url: string }[]> => {
+  try {
+    console.log('Fetching potential internal links for website ID:', websiteId);
+    
+    // Query the website_content table to get actual pages for this website
+    const { data, error } = await supabase
+      .from('website_content')
+      .select('title, url, content_type')
+      .eq('website_id', websiteId)
+      .eq('is_cornerstone', true) // Prioritize cornerstone content
+      .order('last_fetched', { ascending: false })
+      .limit(10);
+    
+    if (error) {
+      console.error('Error fetching website content for internal links:', error);
+      return [];
+    }
+    
+    if (!data || data.length === 0) {
+      console.log('No website content found for internal links');
+      
+      // If no cornerstone content, try getting any content
+      const { data: allContent, error: allError } = await supabase
+        .from('website_content')
+        .select('title, url, content_type')
+        .eq('website_id', websiteId)
+        .order('last_fetched', { ascending: false })
+        .limit(10);
+      
+      if (allError || !allContent || allContent.length === 0) {
+        console.log('No website content found at all');
+        return [];
+      }
+      
+      // Format the content data into the expected format
+      return allContent.map(item => ({
+        title: item.title || 'Untitled page',
+        url: item.url || '#'
+      }));
+    }
+    
+    // Format the content data into the expected format
+    return data.map(item => ({
+      title: item.title || 'Untitled page',
+      url: item.url || '#'
+    }));
+  } catch (error) {
+    console.error('Error extracting potential links:', error);
+    return [];
+  }
+};
+
+/**
+ * Applies a WordPress template to the generated content
+ * 
+ * @param content The raw generated content
+ * @param template The WordPress template to apply
+ * @param title The post title
+ * @returns The formatted content
+ */
+const applyWordPressTemplate = (content: string, template: string, title: string): string => {
+  // Insert the title and content into the template
+  // This is a simple approach - in a real implementation, you might have more sophisticated templating
+  
+  // Replace title placeholder if exists
+  let formattedContent = template.replace(/<h1[^>]*>.*?<\/h1>/i, `<h1 class="entry-title">${title}</h1>`);
+  
+  // Find the main content div to replace
+  const contentMatch = formattedContent.match(/<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+  
+  if (contentMatch) {
+    // Replace only the content inside the entry-content div
+    formattedContent = formattedContent.replace(
+      contentMatch[0],
+      `<div class="entry-content">${content}</div>`
+    );
+  } else {
+    // If no entry-content div found, just use the generated content
+    console.warn('No entry-content div found in template, using generated content directly');
+    formattedContent = content;
+  }
+  
+  return formattedContent;
+};
+
+/**
+ * Generates fallback content when the AI service fails
+ * 
+ * @param title The post title
+ * @param keywords The keywords to include
+ * @param potentialLinks Potential internal links
+ * @returns The generated fallback content
+ */
+const generateFallbackContent = (
+  title: string, 
+  keywords: string[], 
+  potentialLinks: { title: string, url: string }[]
+): string => {
+  const mainKeyword = keywords[0] || 'WordPress';
+  
+  // Create a simple HTML structure for the blog post
+  return `
+    <h2>Introduction to ${title}</h2>
+    <p>Welcome to our guide on ${mainKeyword}. In this article, we'll explore everything you need to know about this topic and provide practical tips you can implement right away.</p>
+    
+    <h2>Why ${mainKeyword} Matters</h2>
+    <p>Understanding ${mainKeyword} is crucial for success in today's digital landscape. It affects everything from user experience to conversion rates and overall business performance.</p>
+    <p>As we discussed in our article <a href="${potentialLinks[0]?.url || '#'}">${potentialLinks[0]?.title || 'previous post'}</a>, the right approach can make a significant difference to your results.</p>
+    
+    <h2>Key Strategies for ${mainKeyword}</h2>
+    <p>Here are some effective strategies to implement:</p>
+    <ul>
+      <li>Research your audience thoroughly</li>
+      <li>Develop a comprehensive plan</li>
+      <li>Implement best practices</li>
+      <li>Measure and adjust your approach</li>
+    </ul>
+    
+    <h2>Common Challenges and Solutions</h2>
+    <p>Many businesses struggle with ${keywords[1] || 'implementation'} challenges. In our experience, the most effective approach is to ${potentialLinks[1] ? `follow the guidance in our <a href="${potentialLinks[1].url}">${potentialLinks[1].title}</a> article` : 'start with small, manageable changes'}.</p>
+    
+    <h2>Conclusion</h2>
+    <p>Implementing effective ${mainKeyword} strategies takes time and effort, but the results are well worth it. Start applying these principles today to see improved outcomes.</p>
+    <p>If you found this article helpful, you might also be interested in our guide on ${potentialLinks[2] ? `<a href="${potentialLinks[2].url}">${potentialLinks[2].title}</a>` : 'related topics'}.</p>
+  `;
+};
+
+/**
+ * Generates a blog post with AI based on title, keywords, writing style and website content
+ * Includes backlinks to existing website content when relevant
+ * 
+ * @param title The post title
+ * @param keywords The keywords to include
+ * @param writingStyle The writing style preferences
+ * @param websiteContent The existing website content to reference and create backlinks to
+ * @param wpTemplate Optional WordPress HTML template to format the content
+ * @returns A promise that resolves to the generated post content
+ */
+export const generatePostContent = async (
+  title: string,
+  keywords: string[],
+  writingStyle: string,
+  websiteContent: string,
+  websiteId: string,
+  wpTemplate?: string
+): Promise<string> => {
+  try {
+    console.log('Generating post content with AI...');
+    console.log('Title:', title);
+    console.log('Keywords:', keywords);
+    console.log('Writing Style:', writingStyle);
+    console.log('Content length:', websiteContent.length);
+    console.log('Website ID:', websiteId);
+    
+    // Extract potential links from website content in the database
+    const potentialLinks = await extractPotentialLinks(websiteId);
+    console.log('Potential backlinks found:', potentialLinks);
+    
+    // Try to use the OpenAI API through the free fetch proxy
+    try {
+      const contentPrompt = `
+        Write a high-quality WordPress blog post with the title:
+        "${title}"
+        
+        Writing Style: ${writingStyle || 'Professional and informative'}
+        Keywords to include: ${keywords.join(', ')}
+        
+        Website Content Summary (to reference and link back to where relevant): 
+        ${websiteContent.substring(0, 1500)}
+        
+        Potential internal links to include (only use if relevant to the content):
+        ${potentialLinks.map(link => `- ${link.title}: ${link.url}`).join('\n')}
+        
+        The content should:
+        1. Have an engaging introduction that hooks the reader
+        2. Include 3-5 main sections with descriptive subheadings
+        3. Incorporate the keywords naturally throughout the text
+        4. Include 2-3 internal links to other content on the website (using the provided potential links)
+        5. End with a conclusion and call to action
+        6. Be approximately 800-1200 words
+        
+        Format the response as HTML with proper heading tags (h2, h3), paragraphs, lists, and link elements.
+        Use internal links with anchor text that flows naturally in the content.
+      `;
+      
+      // Use the new openaiService instead of direct FREE_FETCH_PROXY
+      const data = await callOpenAI({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting.'
+          },
+          {
+            role: 'user',
+            content: contentPrompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
+      });
+      
+      console.log('AI response for content generation:', data);
+      
+      if (data.choices && data.choices.length > 0) {
+        let generatedContent = data.choices[0].message.content;
+        
+        // Apply WordPress template if provided
+        if (wpTemplate && wpTemplate.trim().length > 0) {
+          generatedContent = applyWordPressTemplate(generatedContent, wpTemplate, title);
+        }
+        
+        return generatedContent;
+      } else {
+        throw new Error('No content generated from AI service');
+      }
+    } catch (apiError) {
+      console.error('Error calling OpenAI API:', apiError);
+      console.log('Falling back to mock content generation');
+      
+      // Generate fallback content
+      return generateFallbackContent(title, keywords, potentialLinks);
+    }
+  } catch (error) {
+    console.error('Error generating post content:', error);
+    throw new Error('Failed to generate post content');
+  }
+};
+
+/**
+ * Ensures that cornerstone content exists for a website
+ * If no cornerstone content is found, it will set up default content based on the website URL
+ * 
+ * @param websiteId The ID of the website to check
+ * @param websiteUrl The URL of the website
+ * @returns A promise that resolves when cornerstone content has been checked or set up
+ */
+export const ensureCornerstoneContent = async (websiteId: string, websiteUrl: string): Promise<void> => {
+  console.log(`[aiService.ensureCornerstoneContent] Checking cornerstone content for website ID: ${websiteId}`);
+  
+  try {
+    // First, check if cornerstone content exists
+    const { data: existingContent, error: fetchError } = await supabase
+      .from('website_content')
+      .select('id')
+      .eq('website_id', websiteId)
+      .eq('is_cornerstone', true)
+      .limit(1);
+    
+    if (fetchError) {
+      console.error('Error checking cornerstone content:', fetchError);
+      throw new Error(`Failed to check cornerstone content: ${fetchError.message}`);
+    }
+    
+    // If cornerstone content exists, we're good
+    if (existingContent && existingContent.length > 0) {
+      console.log(`Cornerstone content already exists for website ID: ${websiteId}`);
+      return;
+    }
+    
+    console.log(`No cornerstone content found for website ID: ${websiteId}, creating default content...`);
+    
+    // Clean URL for display
+    const cleanUrl = websiteUrl.startsWith('http') ? websiteUrl : `https://${websiteUrl}`;
+    const domain = cleanUrl.replace(/^https?:\/\//, '').split('.')[0].toLowerCase();
+    
+    // Generate domain-specific content
+    let mockContent = '';
+    let title = '';
+    
+    switch (domain) {
+      case 'workforceu':
+        title = 'WorkForceEU - Workforce Management and HR Solutions';
+        mockContent = `
+          WorkForceEU is a leading platform for workforce management and HR solutions in Europe.
+          We provide comprehensive services for recruitment, talent management, and workforce optimization.
+          Our expertise includes temporary staffing, permanent placement, and workforce consulting.
+          We help businesses find the right talent and manage their workforce efficiently.
+          Topics include recruitment strategies, HR management, talent acquisition, and workforce planning.
+          We specialize in providing flexible staffing solutions for businesses of all sizes.
+          Our workforce consultants have deep expertise in European labor regulations and best practices.
+          Working with WorkForceEU means accessing a wide network of pre-vetted talent.
+        `;
+        break;
+      case 'predicthire':
+        title = 'PredictHire - AI-Powered Recruitment Platform';
+        mockContent = `
+          PredictHire is an AI-powered recruitment platform that helps businesses make better hiring decisions.
+          Our technology uses predictive analytics to identify the best candidates for your organization.
+          We offer solutions for candidate screening, assessment, and selection.
+          Our platform reduces bias in the hiring process and improves the quality of hires.
+          Topics include AI in recruitment, candidate experience, hiring efficiency, and talent analytics.
+          PredictHire helps you save time and resources in your recruitment process.
+          Our data-driven approach ensures you find candidates who are the best fit for your organization.
+          We integrate with your existing HR systems to streamline your hiring workflow.
+        `;
+        break;
+      default:
+        title = `${domain.charAt(0).toUpperCase() + domain.slice(1)} - Digital Solutions`;
+        mockContent = `
+          This is a website about ${domain} and related topics.
+          We provide valuable information, resources, and services in this field.
+          Our content covers best practices, industry trends, and practical advice.
+          Topics include digital marketing, content strategy, SEO, and online presence optimization.
+          Our goal is to help you succeed in the digital landscape with expert guidance.
+          We offer personalized solutions tailored to your specific needs and objectives.
+          Our team of experts has years of experience in digital transformation and innovation.
+          Contact us today to learn how we can help you achieve your goals.
+        `;
+    }
+    
+    // Insert cornerstone content
+    const { error: insertError } = await supabase
+      .from('website_content')
+      .insert({
+        website_id: websiteId,
+        url: cleanUrl,
+        title: title,
+        content: mockContent.trim(),
+        content_type: 'text',
+        is_cornerstone: true,
+        last_fetched: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        metadata: {
+          source: 'auto-generated',
+          importance: 'high'
+        }
+      });
+    
+    if (insertError) {
+      console.error('Error creating cornerstone content:', insertError);
+      throw new Error(`Failed to create cornerstone content: ${insertError.message}`);
+    }
+    
+    console.log(`Successfully created cornerstone content for website ID: ${websiteId}`);
+  } catch (error) {
+    console.error('Error in ensureCornerstoneContent:', error);
+    throw error;
+  }
 }; 

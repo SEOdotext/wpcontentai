@@ -68,6 +68,9 @@ const Settings = () => {
   const [directWpSettings, setDirectWpSettings] = useState<WordPressSettings | null>(null);
   const [wpFormatOpen, setWpFormatOpen] = useState(false);
   const [htmlTemplate, setHtmlTemplate] = useState(wordpressTemplate);
+  const [sendingTestPost, setSendingTestPost] = useState(false);
+  const [testPostId, setTestPostId] = useState<number | null>(null);
+  const [testPostUrl, setTestPostUrl] = useState<string | null>(null);
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -392,7 +395,7 @@ const Settings = () => {
       // Fetch website content
       let content;
       try {
-        content = await fetchWebsiteContent(currentWebsite.url);
+        content = await fetchWebsiteContent(currentWebsite.url, currentWebsite.id);
         console.log(`Fetched website content for ${currentWebsite.url} (${content.length} characters)`);
       } catch (error) {
         console.error('Error fetching website content:', error);
@@ -802,6 +805,142 @@ const Settings = () => {
     }
   };
 
+  // Helper function to get WordPress admin edit URL for a post
+  const getWordPressEditUrl = (postId: number): string => {
+    if (!wpSettings?.wp_url && !directWpSettings?.wp_url) {
+      console.log('No WordPress URL available in settings:', { 
+        wpSettings: wpSettings?.wp_url,
+        directWpSettings: directWpSettings?.wp_url 
+      });
+      return '#';
+    }
+    
+    // Use either direct settings or context settings
+    const baseUrl = wpSettings?.wp_url || directWpSettings?.wp_url || '';
+    console.log('Base URL from settings:', baseUrl);
+    
+    // Make sure URL is properly formatted
+    let formattedUrl = baseUrl;
+    if (!formattedUrl.startsWith('http')) {
+      formattedUrl = 'https://' + formattedUrl;
+      console.log('Added https protocol:', formattedUrl);
+    }
+    formattedUrl = formattedUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    console.log('Formatted URL after removing trailing slashes:', formattedUrl);
+    
+    // Log the constructed URL for debugging
+    const adminUrl = `${formattedUrl}/wp-admin/post.php?post=${postId}&action=edit`;
+    console.log('WordPress Admin URL constructed:', adminUrl);
+    
+    return adminUrl;
+  };
+
+  // Function to check if test post arrived in WordPress
+  const checkTestPost = () => {
+    if (!testPostId) {
+      toast.error('No test post has been sent yet');
+      return;
+    }
+    
+    // Get the admin URL
+    const adminUrl = getWordPressEditUrl(testPostId);
+    if (adminUrl === '#') {
+      toast.error('WordPress URL is missing');
+      return;
+    }
+    
+    // Open WordPress admin edit page in new tab
+    console.log('Opening WordPress admin URL:', adminUrl);
+    window.open(adminUrl, '_blank');
+    
+    toast.info('Opening WordPress post editor. You should see your test post if it was received.');
+  };
+
+  // Function to handle sending a test post to WordPress
+  const handleSendTestPost = async () => {
+    if (!currentWebsite) {
+      toast.error('Please select a website first');
+      return;
+    }
+
+    setSendingTestPost(true);
+    try {
+      console.log('Sending test post to WordPress...');
+      
+      // Get current session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData?.session?.access_token) {
+        toast.error('You must be logged in to send test posts');
+        setSendingTestPost(false);
+        return;
+      }
+
+      // Prepare headers with authentication
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionData.session.access_token}`
+      };
+      
+      // Create test post content using the existing posts endpoint
+      const testPost = {
+        title: `Test Post from WP Content AI - ${new Date().toLocaleTimeString()}`,
+        content: `
+          <h2>This is a test post from WP Content AI</h2>
+          <p>This post was automatically generated on ${new Date().toLocaleString()} to verify your WordPress connection is working correctly.</p>
+          <p>If you can see this post in your WordPress admin, your connection is properly configured!</p>
+          <p>You can safely delete this post after verification.</p>
+        `,
+        status: 'draft', // Send as draft to avoid publishing test content
+        website_id: currentWebsite.id,
+        action: 'create' // Required parameter for the wordpress-posts function
+      };
+      
+      // Send request to existing Edge Function
+      const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/wordpress-posts`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(testPost),
+      });
+      
+      console.log(`Test post response status: ${response.status} ${response.statusText}`);
+      
+      const responseData = await response.json();
+      console.log("Response from test post:", responseData);
+      
+      if (responseData.success) {
+        // Get the post ID
+        const postId = responseData.post.id;
+        
+        // Save the post ID 
+        setTestPostId(postId);
+        
+        // Generate and store the WordPress admin edit URL
+        const adminUrl = getWordPressEditUrl(postId);
+        setTestPostUrl(adminUrl);
+        console.log('Test post created, admin URL:', adminUrl);
+        
+        // Show toast with admin edit link
+        toast.success(
+          <div>
+            Test post sent successfully! <a href={adminUrl} target="_blank" rel="noopener noreferrer" className="underline font-medium">Edit in WordPress</a>
+          </div>,
+          {
+            duration: 8000, // Show for longer to give time to click the link
+          }
+        );
+      } else {
+        console.error('Failed to send test post:', responseData.error);
+        toast.error(`Failed to send test post: ${responseData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error sending test post:', error);
+      toast.error(`Error sending test post: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setSendingTestPost(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar />
@@ -865,6 +1004,26 @@ const Settings = () => {
                               <Pencil className="h-4 w-4 mr-2" />
                               Manage Connection
                             </Button>
+                            
+                            {/* Test Post Button */}
+                            <Button
+                              variant="outline"
+                              onClick={handleSendTestPost}
+                              disabled={sendingTestPost}
+                            >
+                              {sendingTestPost ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Sending...
+                                </>
+                              ) : (
+                                <>
+                                  <Zap className="h-4 w-4 mr-2" />
+                                  Send Test Post
+                                </>
+                              )}
+                            </Button>
+                            
                             <Button
                               variant="outline"
                               onClick={handleDisconnectWordPress}
@@ -875,6 +1034,55 @@ const Settings = () => {
                             </Button>
                           </div>
                         </div>
+                        
+                        {/* Test Post Feedback - Show only when a test post has been created */}
+                        {testPostId && (
+                          <div className="mt-4 border border-green-200 rounded-md p-4 bg-green-50 dark:bg-green-900/20 dark:border-green-800">
+                            <div className="flex items-start">
+                              <div className="flex-shrink-0">
+                                <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center">
+                                  <Zap className="h-4 w-4 text-green-600 dark:text-green-300" />
+                                </div>
+                              </div>
+                              <div className="ml-3">
+                                <h3 className="text-sm font-medium text-green-800 dark:text-green-300">Test Post Sent Successfully</h3>
+                                <div className="mt-2 text-sm text-green-700 dark:text-green-400">
+                                  <p>Post ID: {testPostId}</p>
+                                  {testPostUrl && testPostUrl !== '#' && (
+                                    <p className="mt-1">
+                                      <a 
+                                        href={testPostUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-green-600 dark:text-green-300 underline hover:text-green-800 dark:hover:text-green-200"
+                                        onClick={(e) => {
+                                          // Log click and URL for debugging
+                                          console.log('Clicked WordPress admin link:', testPostUrl);
+                                        }}
+                                      >
+                                        Edit in WordPress Admin
+                                      </a>
+                                    </p>
+                                  )}
+                                  <p className="mt-2">
+                                    This draft post is only visible in your WordPress admin area.
+                                  </p>
+                                </div>
+                                <div className="mt-3">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={checkTestPost}
+                                    className="text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-800/30 border-green-200 dark:border-green-800 hover:bg-green-200 dark:hover:bg-green-800/50"
+                                  >
+                                    <ArrowRight className="h-3 w-3 mr-2" />
+                                    Open in WordPress
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         
                         {/* Render additional connection status information */}
                         {renderConnectionStatusInfo()}
