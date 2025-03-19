@@ -3,6 +3,22 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useWebsites } from '@/context/WebsitesContext';
 
+// Define Json type since @/schema is not found
+type Json = string[] | number[] | boolean[] | {[key: string]: any} | string | number | boolean | null;
+
+// Add type definition for the publication settings table
+interface PublicationSettings {
+  id: string;
+  organisation_id: string;
+  publication_frequency: number;
+  writing_style: string;
+  subject_matters: Json;
+  wordpress_template?: string;
+  website_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface SettingsContextType {
   publicationFrequency: number; // Days between posts
   setPublicationFrequency: (days: number) => void;
@@ -10,6 +26,8 @@ interface SettingsContextType {
   setWritingStyle: (style: string) => void;
   subjectMatters: string[];
   setSubjectMatters: (subjects: string[]) => void;
+  wordpressTemplate: string;
+  setWordpressTemplate: (template: string) => void;
   isLoading: boolean;
 }
 
@@ -17,6 +35,53 @@ const defaultSettings = {
   publicationFrequency: 7, // Default to weekly
   writingStyle: 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through.', // Default writing style
   subjectMatters: ['Technology', 'Business'], // Default subjects
+  wordpressTemplate: `<!-- WordPress Post HTML Structure Example -->
+<article class="post">
+  <header class="entry-header">
+    <h1 class="entry-title">Post Title Goes Here</h1>
+    <div class="entry-meta">
+      <span class="posted-on">Posted on <time>Date</time></span>
+      <span class="byline">by <span class="author">Author Name</span></span>
+    </div>
+  </header>
+
+  <div class="entry-content">
+    <p>First paragraph of the post with an <a href="#">example link</a> goes here.</p>
+    
+    <h2>First Subheading</h2>
+    <p>Content under the first subheading with <strong>bold text</strong> and <em>italic text</em>.</p>
+    
+    <h3>Secondary Subheading</h3>
+    <p>More detailed content explaining the topic.</p>
+    
+    <ul>
+      <li>First bullet point</li>
+      <li>Second bullet point</li>
+      <li>Third bullet point with <a href="#">link</a></li>
+    </ul>
+    
+    <h2>Second Main Subheading</h2>
+    <p>Opening paragraph for this section introducing the next points.</p>
+    
+    <ol>
+      <li>First numbered item</li>
+      <li>Second numbered item</li>
+      <li>Third numbered item</li>
+    </ol>
+    
+    <blockquote>
+      <p>This is an example of a blockquote that might contain a testimonial or important quote related to the content.</p>
+    </blockquote>
+    
+    <h2>Conclusion</h2>
+    <p>Summary paragraph that wraps up the post and may include a call to action.</p>
+  </div>
+  
+  <footer class="entry-footer">
+    <span class="cat-links">Posted in <a href="#">Category</a></span>
+    <span class="tags-links">Tagged <a href="#">tag1</a>, <a href="#">tag2</a></span>
+  </footer>
+</article>`,
 };
 
 const SettingsContext = createContext<SettingsContextType>({
@@ -24,6 +89,7 @@ const SettingsContext = createContext<SettingsContextType>({
   setPublicationFrequency: () => {},
   setWritingStyle: () => {},
   setSubjectMatters: () => {},
+  setWordpressTemplate: () => {},
   isLoading: false,
 });
 
@@ -33,6 +99,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [publicationFrequency, setPublicationFrequency] = useState<number>(defaultSettings.publicationFrequency);
   const [writingStyle, setWritingStyle] = useState<string>(defaultSettings.writingStyle);
   const [subjectMatters, setSubjectMatters] = useState<string[]>(defaultSettings.subjectMatters);
+  const [wordpressTemplate, setWordpressTemplate] = useState<string>(defaultSettings.wordpressTemplate);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const { currentWebsite } = useWebsites();
@@ -45,6 +112,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setPublicationFrequency(defaultSettings.publicationFrequency);
         setWritingStyle(defaultSettings.writingStyle);
         setSubjectMatters(defaultSettings.subjectMatters);
+        setWordpressTemplate(defaultSettings.wordpressTemplate);
         setIsLoading(false);
         return;
       }
@@ -74,23 +142,58 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         if (data && data.length > 0) {
           console.log("Found existing settings:", data[0]);
-          const settings = data[0];
+          const settings = data[0] as PublicationSettings; // Cast to our interface type
           setSettingsId(settings.id);
           setPublicationFrequency(settings.publication_frequency);
           setWritingStyle(settings.writing_style);
           
+          // Set WordPress template if it exists
+          if (settings.wordpress_template) {
+            console.log("Found WordPress template:", settings.wordpress_template);
+            setWordpressTemplate(settings.wordpress_template);
+          } else {
+            console.log("No WordPress template found, using default");
+            setWordpressTemplate(defaultSettings.wordpressTemplate);
+          }
+          
           // Convert subject_matters to string[] ensuring type safety
           if (settings.subject_matters) {
-            const subjects = settings.subject_matters as unknown;
-            if (Array.isArray(subjects)) {
-              const stringSubjects = subjects.map(item => 
-                typeof item === 'string' ? item : String(item)
-              );
-              setSubjectMatters(stringSubjects);
-            } else {
+            console.log("Retrieved subject_matters:", settings.subject_matters, "Type:", typeof settings.subject_matters);
+            
+            try {
+              // Handle different possible formats of subject_matters from the database
+              let subjectsArray: string[] = [];
+              
+              if (Array.isArray(settings.subject_matters)) {
+                // If it's already an array, map to strings
+                subjectsArray = settings.subject_matters.map(item => 
+                  typeof item === 'string' ? item : String(item)
+                );
+              } else if (typeof settings.subject_matters === 'string') {
+                // If it's a JSON string, parse it
+                try {
+                  const parsed = JSON.parse(settings.subject_matters);
+                  subjectsArray = Array.isArray(parsed) ? 
+                    parsed.map(item => typeof item === 'string' ? item : String(item)) : 
+                    [settings.subject_matters];
+                } catch {
+                  // If not valid JSON, treat as a single string
+                  subjectsArray = [settings.subject_matters];
+                }
+              } else if (typeof settings.subject_matters === 'object') {
+                // If it's an object but not an array, get values
+                subjectsArray = Object.values(settings.subject_matters)
+                  .map(item => typeof item === 'string' ? item : String(item));
+              }
+              
+              console.log("Parsed subject matters:", subjectsArray);
+              setSubjectMatters(subjectsArray);
+            } catch (error) {
+              console.error("Error parsing subject_matters:", error);
               setSubjectMatters(defaultSettings.subjectMatters);
             }
           } else {
+            console.log("No subject_matters found, using defaults");
             setSubjectMatters(defaultSettings.subjectMatters);
           }
         } else {
@@ -102,6 +205,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               publication_frequency: defaultSettings.publicationFrequency,
               writing_style: defaultSettings.writingStyle,
               subject_matters: defaultSettings.subjectMatters,
+              wordpress_template: defaultSettings.wordpressTemplate,
               website_id: currentWebsite.id,
               organisation_id: currentWebsite.organisation_id
             })
@@ -119,6 +223,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setPublicationFrequency(defaultSettings.publicationFrequency);
             setWritingStyle(defaultSettings.writingStyle);
             setSubjectMatters(defaultSettings.subjectMatters);
+            setWordpressTemplate(defaultSettings.wordpressTemplate);
           }
         }
       } catch (error) {
@@ -127,6 +232,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setPublicationFrequency(defaultSettings.publicationFrequency);
         setWritingStyle(defaultSettings.writingStyle);
         setSubjectMatters(defaultSettings.subjectMatters);
+        setWordpressTemplate(defaultSettings.wordpressTemplate);
       } finally {
         setIsLoading(false);
       }
@@ -139,7 +245,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const updateSettingsInDatabase = async (
     frequency: number, 
     style: string, 
-    subjects: string[]
+    subjects: string[],
+    template?: string
   ) => {
     if (!currentWebsite) {
       console.error("Cannot update settings: No website selected");
@@ -155,14 +262,23 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
       
+      // Use current template value if not provided
+      const templateToUpdate = template !== undefined ? template : wordpressTemplate;
+      
+      // Ensure subjects is a clean array of strings
+      const cleanSubjects = subjects.filter(s => s && s.trim().length > 0);
+      console.log("Saving subject matters to database:", cleanSubjects);
+      
       // If we don't have a settingsId, we need to create new settings
       if (!settingsId) {
+        console.log("Creating new settings with subjects:", cleanSubjects);
         const { data: newSettings, error: insertError } = await supabase
           .from('publication_settings')
           .insert({
             publication_frequency: frequency,
             writing_style: style,
-            subject_matters: subjects,
+            subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
+            wordpress_template: templateToUpdate,
             website_id: currentWebsite.id,
             organisation_id: currentWebsite.organisation_id
           })
@@ -175,17 +291,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
         
         if (newSettings) {
+          console.log("New settings created:", newSettings);
           setSettingsId(newSettings.id);
           toast.success("Settings created successfully");
         }
       } else {
         // Update existing settings
+        console.log("Updating settings with subjects:", cleanSubjects);
         const { error: updateError } = await supabase
           .from('publication_settings')
           .update({
             publication_frequency: frequency,
             writing_style: style,
-            subject_matters: subjects,
+            subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
+            wordpress_template: templateToUpdate,
             updated_at: new Date().toISOString()
           })
           .eq('id', settingsId);
@@ -195,6 +314,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           throw updateError;
         }
         
+        console.log("Settings updated successfully with subjects:", cleanSubjects);
         toast.success("Settings updated successfully");
       }
     } catch (error) {
@@ -217,8 +337,19 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Handle subject matters changes
   const handleSetSubjectMatters = (subjects: string[]) => {
+    console.log("Setting subject matters:", subjects);
     setSubjectMatters(subjects);
-    updateSettingsInDatabase(publicationFrequency, writingStyle, subjects);
+    // Add a small delay to ensure state is updated before saving to database
+    setTimeout(() => {
+      console.log("Updating database with subject matters:", subjects);
+      updateSettingsInDatabase(publicationFrequency, writingStyle, subjects);
+    }, 100);
+  };
+
+  // Add handler for WordPress template
+  const handleSetWordpressTemplate = (template: string) => {
+    setWordpressTemplate(template);
+    updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, template);
   };
 
   return (
@@ -230,6 +361,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setWritingStyle: handleSetWritingStyle, 
         subjectMatters, 
         setSubjectMatters: handleSetSubjectMatters,
+        wordpressTemplate,
+        setWordpressTemplate: handleSetWordpressTemplate,
         isLoading
       }}
     >

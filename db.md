@@ -155,6 +155,11 @@
     "data_type": "uuid"
   },
   {
+    "table_name": "publication_settings",
+    "column_name": "wordpress_template",
+    "data_type": "text"
+  },
+  {
     "table_name": "user_profiles",
     "column_name": "id",
     "data_type": "uuid"

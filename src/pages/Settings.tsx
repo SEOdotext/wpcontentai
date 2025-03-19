@@ -35,8 +35,20 @@ import {
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
 const WORDPRESS_PROXY_URL = `${SUPABASE_FUNCTIONS_URL}/wordpress-proxy`;
 
+// WordPress settings interface
+interface WordPressSettings {
+  id: string;
+  website_id: string;
+  wp_url: string;
+  wp_username: string;
+  wp_application_password: string;
+  is_connected: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 const Settings = () => {
-  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, isLoading: settingsLoading } = useSettings();
+  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading } = useSettings();
   const { currentWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
   const { createPostTheme } = usePostThemes();
@@ -53,7 +65,9 @@ const Settings = () => {
   const [generatingSubject, setGeneratingSubject] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [connectionDiagnostics, setConnectionDiagnostics] = useState<any>(null);
-  const [directWpSettings, setDirectWpSettings] = useState<any>(null);
+  const [directWpSettings, setDirectWpSettings] = useState<WordPressSettings | null>(null);
+  const [wpFormatOpen, setWpFormatOpen] = useState(false);
+  const [htmlTemplate, setHtmlTemplate] = useState(wordpressTemplate);
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -118,8 +132,9 @@ const Settings = () => {
       setFrequency(publicationFrequency);
       setStyleInput(writingStyle);
       setSubjects(subjectMatters);
+      setHtmlTemplate(wordpressTemplate);
     }
-  }, [settingsLoading, publicationFrequency, writingStyle, subjectMatters]);
+  }, [settingsLoading, publicationFrequency, writingStyle, subjectMatters, wordpressTemplate]);
 
   // Get the current website ID for direct debugging
   useEffect(() => {
@@ -168,6 +183,8 @@ const Settings = () => {
       setPublicationFrequency(frequency);
       setWritingStyle(styleInput);
       setSubjectMatters(subjects);
+      // Also save the HTML template here if needed
+      // You would typically save it to your backend or context
       toast.success("Settings saved successfully");
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -773,6 +790,18 @@ const Settings = () => {
     }
   };
 
+  // Clean up the handleSaveTemplate function
+  const handleSaveTemplate = () => {
+    try {
+      // Save template to context which will persist to database
+      setWordpressTemplate(htmlTemplate);
+      toast.success("WordPress template saved successfully");
+    } catch (error) {
+      console.error('Error saving WordPress HTML template:', error);
+      toast.error("Failed to save WordPress template. Please try again.");
+    }
+  };
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar />
@@ -1004,62 +1033,109 @@ const Settings = () => {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      {subjects.map((subject) => (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {subjects.map((subject, index) => (
                         <div
-                          key={subject}
-                          className="bg-secondary text-secondary-foreground px-3 py-1 rounded-full flex items-center gap-2"
+                          key={index}
+                          className="flex items-center border rounded-full pl-3 pr-2 py-1 text-sm bg-secondary text-secondary-foreground"
                         >
                           {subject}
-                          <button 
-                            onClick={() => handleGenerateContent(subject)}
-                            className="text-primary hover:text-primary-foreground ml-1"
-                            disabled={generatingSubject === subject}
-                            title="Generate content for this subject"
-                          >
-                            {generatingSubject === subject ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Zap className="h-3 w-3" />
-                            )}
-                          </button>
-                          <button 
+                          <button
+                            type="button"
                             onClick={() => handleRemoveSubject(subject)}
-                            className="text-secondary-foreground/70 hover:text-secondary-foreground"
-                            title="Remove subject"
+                            className="ml-1 text-secondary-foreground/70 hover:text-secondary-foreground"
+                            aria-label={`Remove ${subject}`}
                           >
                             <X className="h-3 w-3" />
                           </button>
+                          {generatingSubject === subject ? (
+                            <Loader2 className="h-3 w-3 ml-1 animate-spin" />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateContent(subject)}
+                              className="ml-1 text-secondary-foreground/70 hover:text-secondary-foreground"
+                              aria-label={`Generate content for ${subject}`}
+                            >
+                              <Zap className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
                   </CardContent>
                 </Card>
 
-                <div className="flex justify-end">
-                  <Button 
-                    size="lg" 
+                <Card>
+                  <CardHeader>
+                    <CardTitle>WordPress Post Format</CardTitle>
+                    <CardDescription>
+                      Example WordPress post structure for AI prompt formatting
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center mb-2">
+                        <Label>HTML Structure Template</Label>
+                        <div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setWpFormatOpen(!wpFormatOpen)}
+                          >
+                            {wpFormatOpen ? 'Hide Example' : 'Show Example'}
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div 
+                        className="overflow-hidden transition-all duration-300"
+                        style={{ 
+                          maxHeight: wpFormatOpen ? '2000px' : '0px' 
+                        }}
+                      >
+                        <div className="border rounded-md p-4 space-y-4">
+                          <p className="text-sm text-muted-foreground">
+                            Edit this HTML template to match your WordPress theme's structure. This will be used for AI prompting.
+                          </p>
+                          <Textarea
+                            className="font-mono text-xs h-96"
+                            value={htmlTemplate}
+                            onChange={(e) => setHtmlTemplate(e.target.value)}
+                          />
+                          <div className="flex justify-end">
+                            <Button 
+                              size="sm" 
+                              variant="secondary"
+                              onClick={handleSaveTemplate}
+                            >
+                              Save Template
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Click "Show Example" to view and edit the HTML structure template for WordPress posts. This helps AI generate content that matches your theme.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="flex justify-end space-x-4">
+                  <Button
+                    variant="default"
                     onClick={handleSave}
                     disabled={isSaving}
                   >
-                    {isSaving && (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Settings'
                     )}
-                    Save All Settings
                   </Button>
-                  
-                  {/* Debug button - hidden in production */}
-                  {window.location.hostname === 'localhost' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={debugCheckWordPressSettings}
-                      className="ml-2"
-                    >
-                      <HelpCircle className="h-4 w-4 mr-2" />
-                      Debug WordPress
-                    </Button>
-                  )}
                 </div>
               </>
             )}
@@ -1067,32 +1143,8 @@ const Settings = () => {
         </main>
       </div>
 
-      <Dialog open={showAuthDialog} onOpenChange={(open) => {
-        if (!isAuthenticating || !open) {
-          setShowAuthDialog(open);
-          
-          // Fill in credentials when opening dialog
-          if (open && (wpSettings || directWpSettings)) {
-            console.log('Dialog opening, filling credentials from available data');
-            const settings = directWpSettings || wpSettings;
-            if (settings) {
-              setWpUsername(settings.wp_username || '');
-              setWpPassword(settings.wp_application_password || '');
-              console.log('Credential fields set from:', directWpSettings ? 'direct query' : 'context');
-            }
-          }
-          
-          // Clear form state when closing the dialog
-          if (!open) {
-            setConnectionError(null);
-            setConnectionDiagnostics(null);
-            if (!isAuthenticating) {
-              setWpUsername('');
-              setWpPassword('');
-            }
-          }
-        }
-      }}>
+      {/* WordPress Authentication Dialog */}
+      <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
         <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto" onEscapeKeyDown={(e) => {
           if (isAuthenticating) {
             e.preventDefault();
