@@ -47,6 +47,7 @@ const ContentCalendar = () => {
   const [sendingToWPId, setSendingToWPId] = useState<number | null>(null);
   const { currentWebsite } = useWebsites();
   const { createPost, settings: wpSettings } = useWordPress();
+  const [directWpSettings, setDirectWpSettings] = useState<any>(null);
   
   useEffect(() => {
     try {
@@ -209,6 +210,13 @@ const ContentCalendar = () => {
     console.log('=== WordPress Send Post Debug ===');
     console.log('handleSendToWordPress called with contentId:', contentId);
     
+    // Prevent multiple sends at once
+    if (isSendingToWP) {
+      console.log('Already sending a post to WordPress');
+      toast.info("Already sending a post to WordPress");
+      return;
+    }
+    
     const content = allContent.find(item => item.id === contentId);
     if (!content) {
       console.error('Content not found for ID:', contentId);
@@ -233,28 +241,52 @@ const ContentCalendar = () => {
       url: currentWebsite.url 
     });
     
-    if (!wpSettings) {
-      console.error('WordPress settings not loaded');
+    // Use either direct DB settings or context settings
+    const settings = directWpSettings || wpSettings;
+    
+    if (!settings) {
+      console.error('WordPress settings not available (neither direct nor context)');
       toast.error("WordPress is not configured. Please set up WordPress connection in Settings.");
       return;
     }
     
-    if (!wpSettings.is_connected) {
-      console.error('WordPress not connected:', {
-        wpUrl: wpSettings.wp_url?.substring(0, 30) + '...',
-        isConnected: wpSettings.is_connected,
-        username: wpSettings.wp_username
+    // Check if WordPress is properly configured using our helper function
+    if (!isWordPressConfigured()) {
+      console.error('WordPress not properly configured:', {
+        directSettings: directWpSettings ? {
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          isConnected: directWpSettings.is_connected,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasUrl: !!directWpSettings.wp_url,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasUsername: !!directWpSettings.wp_username,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasPassword: !!directWpSettings.wp_application_password
+        } : 'Not available',
+        contextSettings: wpSettings ? {
+          isConnected: wpSettings.is_connected,
+          hasUrl: !!wpSettings.wp_url,
+          hasUsername: !!wpSettings.wp_username,
+          hasPassword: !!wpSettings.wp_application_password
+        } : 'Not available'
       });
-      toast.error("WordPress is not connected. Please set up WordPress connection in Settings.");
+      toast.error("WordPress is not properly configured. Please check your connection in Settings.");
       return;
     }
     
-    console.log('WordPress settings:', { 
-      id: wpSettings.id, 
-      websiteId: wpSettings.website_id, 
-      isConnected: wpSettings.is_connected,
-      wpUrl: wpSettings.wp_url?.substring(0, 30) + '...',
-      hasPassword: !!wpSettings.wp_application_password
+    console.log('WordPress settings valid, proceeding with send:', { 
+      // @ts-ignore - Accessing fields from the wordpress_settings table
+      id: settings.id, 
+      // @ts-ignore - Accessing fields from the wordpress_settings table
+      websiteId: settings.website_id, 
+      // @ts-ignore - Accessing fields from the wordpress_settings table
+      isConnected: settings.is_connected,
+      // @ts-ignore - Accessing fields from the wordpress_settings table
+      wpUrl: settings.wp_url?.substring(0, 30) + '...',
+      // @ts-ignore - Accessing fields from the wordpress_settings table
+      hasUsername: !!settings.wp_username,
+      // @ts-ignore - Accessing fields from the wordpress_settings table
+      hasPassword: !!settings.wp_application_password
     });
 
     try {
@@ -292,11 +324,71 @@ const ContentCalendar = () => {
       
       // Send to WordPress as a draft post initially
       console.log('Calling createPost from WordPressContext');
-      const success = await createPost(title, htmlContent, 'draft');
-      console.log('createPost result:', success);
       
-      if (success) {
-        console.log('WordPress post created successfully, updating local state');
+      // Add more detailed debugging for Edge Function call
+      try {
+        // Call the Edge Function directly for better error debugging
+        console.log('Making direct Edge Function call to wordpress-posts');
+        // @ts-ignore - Supabase Edge Function types may not match exactly
+        const edgeFunctionResponse = await supabase.functions.invoke('wordpress-posts', {
+          body: {
+            website_id: currentWebsite.id,
+            title,
+            content: htmlContent,
+            status: 'draft',
+            action: 'create'
+          }
+        });
+        
+        console.log('Edge Function response:', JSON.stringify(edgeFunctionResponse, null, 2));
+        
+        if (edgeFunctionResponse.error) {
+          console.error('Edge Function error:', edgeFunctionResponse.error);
+          toast.error(`Failed to send to WordPress: ${edgeFunctionResponse.error.message}`);
+          setIsSendingToWP(false);
+          setSendingToWPId(null);
+          return;
+        }
+        
+        // Enhanced error handling
+        if (!edgeFunctionResponse.data) {
+          console.error('No data returned from Edge Function');
+          toast.error('No response from WordPress service');
+          setIsSendingToWP(false);
+          setSendingToWPId(null);
+          return;
+        }
+        
+        if (!edgeFunctionResponse.data.success) {
+          console.error('WordPress post creation failed:', {
+            error: edgeFunctionResponse.data.error,
+            message: edgeFunctionResponse.data.message,
+            statusCode: edgeFunctionResponse.data.statusCode
+          });
+          
+          let errorMessage = 'Unknown WordPress error';
+          
+          // Try to extract a more specific error message
+          if (edgeFunctionResponse.data.error) {
+            if (typeof edgeFunctionResponse.data.error === 'string') {
+              errorMessage = edgeFunctionResponse.data.error;
+            } else if (edgeFunctionResponse.data.error.message) {
+              errorMessage = edgeFunctionResponse.data.error.message;
+            }
+          } else if (edgeFunctionResponse.data.message) {
+            errorMessage = edgeFunctionResponse.data.message;
+          }
+          
+          // Show a helpful error message
+          toast.error(`WordPress error: ${errorMessage}`);
+          setIsSendingToWP(false);
+          setSendingToWPId(null);
+          return;
+        }
+        
+        // If we get here, the post was created successfully
+        console.log('WordPress post created successfully via direct Edge Function call:', edgeFunctionResponse.data);
+        
         // Update the content status to indicate it's been sent to WordPress
         const updatedContent = allContent.map(item => 
           item.id === contentId 
@@ -319,10 +411,11 @@ const ContentCalendar = () => {
         }
         
         toast.success("Content sent to WordPress successfully");
-      } else {
-        console.error('Failed to create WordPress post');
-        toast.error("Failed to send content to WordPress");
+      } catch (directError) {
+        console.error("Error in direct Edge Function call:", directError);
+        toast.error(`Error sending to WordPress: ${directError instanceof Error ? directError.message : String(directError)}`);
       }
+      
     } catch (error) {
       console.error("Error sending to WordPress:", error);
       toast.error(`Failed to send content to WordPress: ${error instanceof Error ? error.message : String(error)}`);
@@ -331,6 +424,242 @@ const ContentCalendar = () => {
       setIsSendingToWP(false);
       setSendingToWPId(null);
     }
+  };
+
+  // First fix useEffect to fetch WordPress settings with proper @ts-ignore
+  useEffect(() => {
+    const fetchWordPressSettings = async () => {
+      if (!currentWebsite) return;
+      
+      console.log('Directly checking WordPress settings in database for website:', currentWebsite.id);
+      
+      try {
+        // @ts-ignore - Supabase schema doesn't include wordpress_settings in TypeScript types
+        const { data, error } = await supabase
+          .from('wordpress_settings')
+          .select('*')
+          .eq('website_id', currentWebsite.id)
+          .single();
+          
+        if (error) {
+          if (error.code !== 'PGRST116') { // Not the "no rows returned" error
+            console.error('Error fetching WordPress settings from DB:', error);
+          } else {
+            console.log('No WordPress settings found in database for this website');
+          }
+        } else if (data) {
+          console.log('WordPress settings found in database:', {
+            // @ts-ignore - Accessing fields from the wordpress_settings table
+            url: data.wp_url,
+            // @ts-ignore - Accessing fields from the wordpress_settings table
+            isConnected: data.is_connected,
+            // @ts-ignore - Accessing fields from the wordpress_settings table
+            hasUsername: !!data.wp_username,
+            // @ts-ignore - Accessing fields from the wordpress_settings table
+            hasPassword: !!data.wp_application_password
+          });
+          
+          // Store the direct WordPress settings in state
+          setDirectWpSettings(data);
+        }
+      } catch (e) {
+        console.error('Exception checking WordPress settings:', e);
+      }
+    };
+    
+    fetchWordPressSettings();
+  }, [currentWebsite]);
+
+  // Then fix the improved function to check if WordPress is properly configured
+  const isWordPressConfigured = () => {
+    // First check direct DB settings (most accurate)
+    if (directWpSettings) {
+      // @ts-ignore - Accessing fields from the wordpress_settings table
+      const isValid = directWpSettings.is_connected && 
+                    // @ts-ignore - Accessing fields from the wordpress_settings table
+                    !!directWpSettings.wp_url && 
+                    // @ts-ignore - Accessing fields from the wordpress_settings table
+                    !!directWpSettings.wp_username && 
+                    // @ts-ignore - Accessing fields from the wordpress_settings table
+                    !!directWpSettings.wp_application_password;
+      
+      if (Math.random() < 0.1) { // Log only occasionally to avoid spam
+        console.log('WordPress configured check (direct DB):', {
+          result: isValid,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          isConnected: directWpSettings.is_connected,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasUrl: !!directWpSettings.wp_url,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasUsername: !!directWpSettings.wp_username,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasPassword: !!directWpSettings.wp_application_password
+        });
+      }
+      
+      return isValid;
+    }
+    
+    // Fall back to context settings if direct settings not available
+    if (wpSettings) {
+      const isValid = wpSettings.is_connected && 
+                    !!wpSettings.wp_url && 
+                    !!wpSettings.wp_username && 
+                    !!wpSettings.wp_application_password;
+      
+      if (Math.random() < 0.1) { // Log only occasionally
+        console.log('WordPress configured check (context):', {
+          result: isValid,
+          isConnected: wpSettings.is_connected,
+          hasUrl: !!wpSettings.wp_url,
+          hasUsername: !!wpSettings.wp_username,
+          hasPassword: !!wpSettings.wp_application_password
+        });
+      }
+      
+      return isValid;
+    }
+    
+    return false;
+  };
+
+  // Fix the refresh function to manually check WordPress connection
+  const refreshWordPressSettings = async () => {
+    if (!currentWebsite) {
+      toast.error("Please select a website first");
+      return;
+    }
+    
+    toast.info("Checking WordPress connection...");
+    console.log('Manually refreshing WordPress settings for website:', currentWebsite.id);
+    
+    try {
+      // @ts-ignore - Supabase schema doesn't include wordpress_settings in TypeScript types
+      const { data, error } = await supabase
+        .from('wordpress_settings')
+        .select('*')
+        .eq('website_id', currentWebsite.id)
+        .single();
+        
+      if (error) {
+        if (error.code !== 'PGRST116') { // Not the "no rows returned" error
+          console.error('Error fetching WordPress settings from DB:', error);
+          toast.error("Error checking WordPress connection");
+        } else {
+          console.log('No WordPress settings found in database for this website');
+          toast.error("WordPress is not configured for this website");
+        }
+      } else if (data) {
+        console.log('WordPress settings refreshed from database:', {
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          url: data.wp_url,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          isConnected: data.is_connected,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasUsername: !!data.wp_username,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasPassword: !!data.wp_application_password
+        });
+        
+        // Store the WordPress settings
+        setDirectWpSettings(data);
+        
+        // @ts-ignore - Accessing fields from the wordpress_settings table
+        if (data.is_connected) {
+          toast.success("WordPress connection is active");
+        } else {
+          toast.warning("WordPress connection exists but is inactive");
+        }
+      }
+    } catch (e) {
+      console.error('Exception checking WordPress settings:', e);
+      toast.error("Error checking WordPress connection");
+    }
+  };
+
+  // Update the useEffect dependencies to include directWpSettings
+  useEffect(() => {
+    console.log('=== WordPress Integration Status Debug ===');
+    console.log('Component mounted or WordPress settings changed');
+    
+    // Log direct DB settings
+    console.log('WordPress settings (direct DB):', directWpSettings ? {
+      has_settings: true,
+      wp_url: directWpSettings.wp_url?.substring(0, 30) + '...',
+      has_username: !!directWpSettings.wp_username,
+      has_password: !!directWpSettings.wp_application_password,
+      is_connected: directWpSettings.is_connected,
+      website_id: directWpSettings.website_id
+    } : 'No direct settings available');
+    
+    // Log context settings
+    console.log('WordPress settings (context):', wpSettings ? {
+      has_settings: true,
+      wp_url: wpSettings.wp_url?.substring(0, 30) + '...',
+      has_username: !!wpSettings.wp_username,
+      has_password: !!wpSettings.wp_application_password,
+      is_connected: wpSettings.is_connected,
+      website_id: wpSettings.website_id
+    } : 'No settings available');
+    
+    console.log('isWordPressConfigured():', isWordPressConfigured());
+    console.log('Current website:', currentWebsite ? {
+      id: currentWebsite.id,
+      name: currentWebsite.name
+    } : 'No website selected');
+    
+    // Check for any content that might be sendable
+    const sendableContent = allContent.filter(item => 
+      // Simple check without calling the full function to avoid circular dependency
+      isWordPressConfigured() && 
+      !isSendingToWP && 
+      !(item.contentStatus === 'published' && !!item.wpSentDate) &&
+      !!(item.description && item.description.trim().length > 0)
+    );
+    console.log('Sendable content count:', sendableContent.length);
+    console.log('=== End WordPress Integration Status Debug ===');
+  }, [wpSettings, directWpSettings, currentWebsite, allContent, isSendingToWP]);
+
+  // Restore the canSendToWordPress function that was accidentally removed
+  // Add this function to check if a specific content item can be sent to WordPress
+  const canSendToWordPress = (content: CalendarContent) => {
+    const issues = [];
+    
+    // Check if WordPress is configured
+    if (!isWordPressConfigured()) {
+      issues.push('WordPress not configured');
+    }
+    
+    // Check if we're already sending something
+    if (isSendingToWP) {
+      issues.push('Already sending to WordPress');
+    }
+    
+    // Check if the content has already been sent
+    if (content.contentStatus === 'published' && !!content.wpSentDate) {
+      issues.push('Already sent to WordPress');
+    }
+    
+    // Check if the content has actual content to send
+    if (!content.description || content.description.trim().length === 0) {
+      issues.push('No content to send');
+    }
+    
+    // Log detailed debug info when called (but only occasionally)
+    if (Math.random() < 0.1) { // Only log ~10% of the time to avoid console spam
+      console.log(`canSendToWordPress for content ID ${content.id}:`, {
+        result: issues.length === 0,
+        title: content.title,
+        issues: issues.length > 0 ? issues : 'None',
+        wpConfigured: isWordPressConfigured(),
+        hasContent: !!(content.description && content.description.trim().length > 0),
+        status: content.contentStatus || content.status,
+        alreadySent: !!(content.contentStatus === 'published' && content.wpSentDate)
+      });
+    }
+    
+    // All checks passed, can send to WordPress
+    return issues.length === 0;
   };
 
   return (
@@ -345,7 +674,41 @@ const ContentCalendar = () => {
                 <Card className="border-0 shadow-elevation">
                   <CardHeader className="pb-2 pt-4">
                     <div className="flex justify-between items-center">
-                      <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
+                      <div className="flex items-center space-x-3">
+                        <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs"
+                          onClick={refreshWordPressSettings}
+                          title="Check WordPress connection"
+                        >
+                          <svg 
+                            width="12" 
+                            height="12" 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="mr-1"
+                          >
+                            <path 
+                              d="M16.023 9h4.977v-4.977" 
+                              stroke="currentColor" 
+                              strokeWidth="2" 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round"
+                            />
+                            <path 
+                              d="M20.437 14.701c-1.091 4.901-5.619 8.269-10.747 7.705-5.128-.564-9.018-5.047-8.833-10.191.184-5.144 4.392-9.306 9.537-9.422 3.314-.075 6.287 1.55 8.149 4.084l2.444 3.123" 
+                              stroke="currentColor" 
+                              strokeWidth="2" 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                          Refresh WP
+                        </Button>
+                      </div>
                       <div className="flex items-center space-x-2">
                         <Button 
                           variant="ghost" 
@@ -433,16 +796,61 @@ const ContentCalendar = () => {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-7 w-7 text-emerald-600 hover:bg-emerald-100"
+                                      className={`h-7 w-7 relative z-10 ${
+                                        // Apply different styles based on button state
+                                        !isWordPressConfigured() 
+                                          ? 'text-gray-400 cursor-not-allowed' // Not connected
+                                          : content.contentStatus === 'published' && content.wpSentDate 
+                                            ? 'text-emerald-800 bg-emerald-50 cursor-default' // Already sent
+                                            : canSendToWordPress(content)
+                                              ? 'text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700' // Ready to send
+                                              : 'text-gray-400 cursor-not-allowed' // Can't send for other reasons
+                                      }`}
                                       onClick={(e) => {
+                                        // Always stop propagation to prevent table row click
                                         e.stopPropagation();
-                                        handleSendToWordPress(content.id);
+                                        e.preventDefault();
+                                        
+                                        // Log click event to help with debugging
+                                        console.log('WordPress send button clicked for content:', {
+                                          id: content.id,
+                                          title: content.title,
+                                          canSend: canSendToWordPress(content)
+                                        });
+                                        
+                                        // Only call the handler if allowed to send
+                                        if (canSendToWordPress(content)) {
+                                          handleSendToWordPress(content.id);
+                                        } else {
+                                          // Show a helpful message based on why it can't be sent
+                                          if (!isWordPressConfigured()) {
+                                            toast.error("WordPress connection required. Please configure in Settings.");
+                                          } else if (content.contentStatus === 'published' && content.wpSentDate) {
+                                            toast.info(`Already sent to WordPress on ${new Date(content.wpSentDate).toLocaleDateString()}`);
+                                          } else if (!content.description || content.description.trim().length === 0) {
+                                            toast.warning("Generate content first before sending to WordPress");
+                                          } else if (isSendingToWP) {
+                                            toast.info("Already sending a post to WordPress");
+                                          }
+                                        }
                                       }}
-                                      title="Send to WordPress"
-                                      disabled={isSendingToWP || !wpSettings?.is_connected}
+                                      title={
+                                        !isWordPressConfigured()
+                                          ? "WordPress connection required"
+                                          : content.contentStatus === 'published' && content.wpSentDate
+                                            ? `Already sent to WordPress on ${new Date(content.wpSentDate).toLocaleDateString()}`
+                                            : !content.description || content.description.trim().length === 0
+                                              ? "Generate content first"
+                                              : "Send to WordPress"
+                                      }
+                                      disabled={!canSendToWordPress(content)}
+                                      // Add style property with important cursor setting and explicit pointer-events
+                                      style={{ cursor: canSendToWordPress(content) ? 'pointer' : 'not-allowed', pointerEvents: 'auto' }}
                                     >
                                       {isSendingToWP && sendingToWPId === content.id ? (
                                         <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+                                      ) : content.contentStatus === 'published' && content.wpSentDate ? (
+                                        <Send className="h-3.5 w-3.5 fill-emerald-800" /> // Use filled icon for sent posts
                                       ) : (
                                         <Send className="h-3.5 w-3.5" />
                                       )}
