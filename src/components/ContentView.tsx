@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Calendar as CalendarIcon, Edit, RefreshCw, Tag, Trash, X, Send } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Edit, RefreshCw, Tag, Trash, X, Send, FileEdit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -135,18 +135,24 @@ const ContentView: React.FC<ContentViewProps> = ({
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
-                  <p className="text-center mb-2">No content generated yet</p>
-                  {onRegenerateClick && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={onRegenerateClick}
-                      className="mt-2"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                      Generate with AI
-                    </Button>
-                  )}
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="rounded-full bg-blue-50 p-3">
+                      <FileEdit className="h-5 w-5 text-blue-500" />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <p className="font-medium">No content generated yet</p>
+                      <p className="text-sm max-w-md">Generate content with AI to create an optimized blog post based on the title and keywords.</p>
+                    </div>
+                    {onRegenerateClick && (
+                      <Button
+                        onClick={onRegenerateClick}
+                        className="mt-2"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                        Generate with AI
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </CardContent>

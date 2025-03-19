@@ -113,7 +113,7 @@ const ContentCalendar = () => {
   };
 
   const handleRegenerateContent = (contentId: number) => {
-    toast.info("AI regeneration will be implemented soon");
+    handleGenerateContent(contentId);
   };
 
   const handleGenerateContent = async (contentId: number) => {
