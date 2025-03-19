@@ -47,6 +47,24 @@ interface WordPressSettings {
   updated_at: string;
 }
 
+// Add a constant for the clean template at the top of the file
+const CLEAN_WORDPRESS_TEMPLATE = `<article class="post">
+  <header class="entry-header">
+    <h1 class="entry-title">Post Title Goes Here</h1>
+    <div class="entry-meta">
+      <span class="posted-on">Posted on <time class="entry-date">Date</time></span>
+      <span class="byline">by <span class="author">Author</span></span>
+    </div>
+  </header>
+  <div class="entry-content">
+    <!-- Content will be inserted here -->
+  </div>
+  <footer class="entry-footer">
+    <span class="cat-links">Posted in Categories</span>
+    <span class="tags-links">Tagged with Tags</span>
+  </footer>
+</article>`;
+
 const Settings = () => {
   const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading } = useSettings();
   const { currentWebsite } = useWebsites();
@@ -135,7 +153,10 @@ const Settings = () => {
       setFrequency(publicationFrequency);
       setStyleInput(writingStyle);
       setSubjects(subjectMatters);
+      
+      // Use the template from context instead of overriding it
       setHtmlTemplate(wordpressTemplate);
+      console.log('Using WordPress template from context:', wordpressTemplate.substring(0, 50) + '...');
     }
   }, [settingsLoading, publicationFrequency, writingStyle, subjectMatters, wordpressTemplate]);
 
@@ -179,6 +200,25 @@ const Settings = () => {
   useEffect(() => {
     console.log('WordPress settings from context changed:', wpSettings);
   }, [wpSettings]);
+
+  // Add a useEffect to reset htmlTemplate to a clean version when component mounts
+  useEffect(() => {
+    // Set a clean WordPress template without title, author, date, categories
+    const cleanTemplate = `<div class="entry-content">
+    <!-- Content will be inserted here -->
+  </div>`;
+    
+    // Only set if the current template has the entry-title in it
+    if (htmlTemplate && (htmlTemplate.includes('entry-title') || htmlTemplate.includes('Post Title Goes Here'))) {
+      console.log('Setting clean WordPress template without title/author/date elements');
+      setHtmlTemplate(cleanTemplate);
+      
+      // Also save to context if we're initializing with a problematic template
+      if (!settingsLoading && wordpressTemplate && wordpressTemplate.includes('entry-title')) {
+        setWordpressTemplate(cleanTemplate);
+      }
+    }
+  }, [htmlTemplate, wordpressTemplate, settingsLoading]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -796,9 +836,13 @@ const Settings = () => {
   // Clean up the handleSaveTemplate function
   const handleSaveTemplate = () => {
     try {
+      // Save the current template from the editor
+      console.log('Saving WordPress template from editor');
+      
       // Save template to context which will persist to database
       setWordpressTemplate(htmlTemplate);
       toast.success("WordPress template saved successfully");
+      
     } catch (error) {
       console.error('Error saving WordPress HTML template:', error);
       toast.error("Failed to save WordPress template. Please try again.");
@@ -938,6 +982,17 @@ const Settings = () => {
       toast.error(`Error sending test post: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setSendingTestPost(false);
+    }
+  };
+
+  // Update the handleOpenWpFormat function to use the template from context
+  const handleOpenWpFormat = () => {
+    setWpFormatOpen(!wpFormatOpen);
+    
+    if (!wpFormatOpen) {
+      // When opening the editor, use the current template from context
+      console.log('Setting editor to current WordPress template from context');
+      setHtmlTemplate(wordpressTemplate);
     }
   };
 
@@ -1289,7 +1344,7 @@ const Settings = () => {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            onClick={() => setWpFormatOpen(!wpFormatOpen)}
+                            onClick={handleOpenWpFormat}
                           >
                             {wpFormatOpen ? 'Hide Example' : 'Show Example'}
                           </Button>

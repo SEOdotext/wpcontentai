@@ -37,13 +37,6 @@ const defaultSettings = {
   subjectMatters: ['Technology', 'Business'], // Default subjects
   wordpressTemplate: `<!-- WordPress Post HTML Structure Example -->
 <article class="post">
-  <header class="entry-header">
-    <h1 class="entry-title">Post Title Goes Here</h1>
-    <div class="entry-meta">
-      <span class="posted-on">Posted on <time>Date</time></span>
-      <span class="byline">by <span class="author">Author Name</span></span>
-    </div>
-  </header>
 
   <div class="entry-content">
     <p>First paragraph of the post with an <a href="#">example link</a> goes here.</p>
@@ -76,11 +69,7 @@ const defaultSettings = {
     <h2>Conclusion</h2>
     <p>Summary paragraph that wraps up the post and may include a call to action.</p>
   </div>
-  
-  <footer class="entry-footer">
-    <span class="cat-links">Posted in <a href="#">Category</a></span>
-    <span class="tags-links">Tagged <a href="#">tag1</a>, <a href="#">tag2</a></span>
-  </footer>
+
 </article>`,
 };
 

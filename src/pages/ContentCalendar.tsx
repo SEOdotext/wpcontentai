@@ -21,6 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { useWebsites } from '@/context/WebsitesContext';
 import { useWordPress } from '@/context/WordPressContext';
+import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
 
 interface CalendarContent {
@@ -48,6 +49,7 @@ const ContentCalendar = () => {
   const { currentWebsite } = useWebsites();
   const { createPost, settings: wpSettings } = useWordPress();
   const [directWpSettings, setDirectWpSettings] = useState<any>(null);
+  const { writingStyle, wordpressTemplate } = useSettings();
   
   useEffect(() => {
     try {
@@ -117,20 +119,24 @@ const ContentCalendar = () => {
   };
 
   const handleGenerateContent = async (contentId: number) => {
-    const content = allContent.find(item => item.id === contentId);
-    if (!content) {
-      toast.error("Content not found");
-      return;
-    }
-
-    if (!currentWebsite) {
-      toast.error("Please select a website first");
-      return;
-    }
-
     try {
-      setGeneratingContentId(contentId);
       setIsGeneratingContent(true);
+      setGeneratingContentId(contentId);
+      
+      // Find the selected content
+      const content = allContent.find(item => item.id === contentId);
+      if (!content) {
+        toast.error("Content not found");
+        return;
+      }
+      
+      console.log('Generating content for:', content.title);
+      
+      // Get current website
+      if (!currentWebsite) {
+        toast.error("Please select a website first");
+        return;
+      }
       
       // Dynamically import the services to generate content
       const { generatePostContent, fetchWebsiteContent } = await import('@/services/aiService');
@@ -145,21 +151,18 @@ const ContentCalendar = () => {
         ? content.keywords.map(k => typeof k === 'string' ? k : k.text) 
         : ['wordpress', 'content'];
       
-      // Get writing style from localStorage or use default
-      const writingStyle = localStorage.getItem('writingStyle') || 
-        'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone.';
-      
-      // Get WordPress template from localStorage or use default
-      const wpTemplate = localStorage.getItem('wordpressTemplate') || '';
+      // Use the writing style and WordPress template from the settings context
+      console.log('Using writing style from settings:', writingStyle);
+      console.log('Using WordPress template from settings:', wordpressTemplate ? 'Template available' : 'No template');
       
       // Generate post content with websiteId for fetching internal links
       const generatedContent = await generatePostContent(
         content.title,
         keywordsArray,
-        writingStyle,
+        writingStyle, // Use writingStyle from context
         websiteContent,
         currentWebsite.id, // Pass the website ID
-        wpTemplate
+        wordpressTemplate // Use wordpressTemplate from context
       );
       
       // Update the content with the generated post
@@ -170,7 +173,7 @@ const ContentCalendar = () => {
       );
       
       // Save to localStorage
-      localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
+      localStorage.setItem(`contentCalendar_${currentWebsite.id}`, JSON.stringify(updatedContent));
       setAllContent(updatedContent);
       
       // Show the updated content to the user
@@ -426,7 +429,7 @@ const ContentCalendar = () => {
     }
   };
 
-  // First fix useEffect to fetch WordPress settings with proper @ts-ignore
+  // First fix useEffect to fetch WordPress settings with proper table name
   useEffect(() => {
     const fetchWordPressSettings = async () => {
       if (!currentWebsite) return;
@@ -439,7 +442,7 @@ const ContentCalendar = () => {
           .from('wordpress_settings')
           .select('*')
           .eq('website_id', currentWebsite.id)
-          .single();
+          .limit(1);
           
         if (error) {
           if (error.code !== 'PGRST116') { // Not the "no rows returned" error
@@ -447,20 +450,11 @@ const ContentCalendar = () => {
           } else {
             console.log('No WordPress settings found in database for this website');
           }
-        } else if (data) {
-          console.log('WordPress settings found in database:', {
-            // @ts-ignore - Accessing fields from the wordpress_settings table
-            url: data.wp_url,
-            // @ts-ignore - Accessing fields from the wordpress_settings table
-            isConnected: data.is_connected,
-            // @ts-ignore - Accessing fields from the wordpress_settings table
-            hasUsername: !!data.wp_username,
-            // @ts-ignore - Accessing fields from the wordpress_settings table
-            hasPassword: !!data.wp_application_password
-          });
+        } else if (data && data.length > 0) {
+          console.log('WordPress settings found in database:', data[0]);
           
           // Store the direct WordPress settings in state
-          setDirectWpSettings(data);
+          setDirectWpSettings(data[0]);
         }
       } catch (e) {
         console.error('Exception checking WordPress settings:', e);
@@ -472,54 +466,27 @@ const ContentCalendar = () => {
 
   // Then fix the improved function to check if WordPress is properly configured
   const isWordPressConfigured = () => {
-    // First check direct DB settings (most accurate)
-    if (directWpSettings) {
-      // @ts-ignore - Accessing fields from the wordpress_settings table
-      const isValid = directWpSettings.is_connected && 
-                    // @ts-ignore - Accessing fields from the wordpress_settings table
-                    !!directWpSettings.wp_url && 
-                    // @ts-ignore - Accessing fields from the wordpress_settings table
-                    !!directWpSettings.wp_username && 
-                    // @ts-ignore - Accessing fields from the wordpress_settings table
-                    !!directWpSettings.wp_application_password;
-      
-      if (Math.random() < 0.1) { // Log only occasionally to avoid spam
-        console.log('WordPress configured check (direct DB):', {
-          result: isValid,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          isConnected: directWpSettings.is_connected,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          hasUrl: !!directWpSettings.wp_url,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          hasUsername: !!directWpSettings.wp_username,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          hasPassword: !!directWpSettings.wp_application_password
-        });
-      }
-      
-      return isValid;
+    console.log('Checking WordPress configuration with direct settings and context...');
+    
+    // Check if we have direct settings from the database
+    if (directWpSettings && 
+        directWpSettings.wp_url && 
+        directWpSettings.wp_username && 
+        directWpSettings.wp_application_password) {
+      console.log('WordPress is configured based on direct database settings');
+      return true;
     }
     
-    // Fall back to context settings if direct settings not available
-    if (wpSettings) {
-      const isValid = wpSettings.is_connected && 
-                    !!wpSettings.wp_url && 
-                    !!wpSettings.wp_username && 
-                    !!wpSettings.wp_application_password;
-      
-      if (Math.random() < 0.1) { // Log only occasionally
-        console.log('WordPress configured check (context):', {
-          result: isValid,
-          isConnected: wpSettings.is_connected,
-          hasUrl: !!wpSettings.wp_url,
-          hasUsername: !!wpSettings.wp_username,
-          hasPassword: !!wpSettings.wp_application_password
-        });
-      }
-      
-      return isValid;
+    // Fall back to context values if direct settings are not available
+    if (wpSettings && 
+        wpSettings.wp_url && 
+        wpSettings.wp_username && 
+        wpSettings.wp_application_password) {
+      console.log('WordPress is configured based on context values');
+      return true;
     }
     
+    console.log('WordPress is not configured (neither direct settings nor context has values)');
     return false;
   };
 

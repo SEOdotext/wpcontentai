@@ -62,7 +62,7 @@ export const generateTitleSuggestions = async (
             messages: [
               {
                 role: 'system',
-                content: 'You are a helpful assistant that generates engaging blog post titles.'
+                content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself.'
               },
               {
                 role: 'user',
@@ -629,28 +629,56 @@ const extractPotentialLinks = async (websiteId: string): Promise<{ title: string
  * @returns The formatted content
  */
 const applyWordPressTemplate = (content: string, template: string, title: string): string => {
-  // Insert the title and content into the template
-  // This is a simple approach - in a real implementation, you might have more sophisticated templating
+  // If the template is empty or just basic, return the content directly
+  if (!template || template.trim().length === 0 || !template.includes('entry-content')) {
+    console.log('Using raw content without template application');
+    return content;
+  }
   
-  // Replace title placeholder if exists
-  let formattedContent = template.replace(/<h1[^>]*>.*?<\/h1>/i, `<h1 class="entry-title">${title}</h1>`);
+  console.log('Applying WordPress template...');
   
-  // Find the main content div to replace
-  const contentMatch = formattedContent.match(/<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+  // Clean up any extra whitespace from the content
+  const cleanContent = content.trim();
+  
+  // Remove any unwanted WordPress elements that might have been included in the generated content
+  let processedContent = cleanContent;
+  
+  // Look for and remove any accidental post title that might be generated at the beginning
+  if (processedContent.includes(`<h1`) || processedContent.includes(`<H1`)) {
+    console.log('Removing H1 title that was accidentally included in generated content');
+    processedContent = processedContent.replace(/<h1[^>]*>.*?<\/h1>/i, '').trim();
+  }
+  
+  // Remove common WordPress metadata patterns that might be accidentally included
+  const metadataPatterns = [
+    /Posted (on|by)[^<]+/gi,
+    /Posted in[^<]+/gi,
+    /Tagged with[^<]+/gi,
+    /<div[^>]*class="(meta|entry-meta)"[^>]*>.*?<\/div>/gi
+  ];
+  
+  metadataPatterns.forEach(pattern => {
+    if (processedContent.match(pattern)) {
+      console.log(`Removing WordPress metadata pattern: ${pattern}`);
+      processedContent = processedContent.replace(pattern, '').trim();
+    }
+  });
+  
+  // Find the main content div to replace in the template
+  const contentMatch = template.match(/<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
   
   if (contentMatch) {
     // Replace only the content inside the entry-content div
-    formattedContent = formattedContent.replace(
+    console.log('Found entry-content div in template, inserting content');
+    return template.replace(
       contentMatch[0],
-      `<div class="entry-content">${content}</div>`
+      `<div class="entry-content">${processedContent}</div>`
     );
   } else {
     // If no entry-content div found, just use the generated content
-    console.warn('No entry-content div found in template, using generated content directly');
-    formattedContent = content;
+    console.warn('No entry-content div found in template, using processed content directly');
+    return processedContent;
   }
-  
-  return formattedContent;
 };
 
 /**
@@ -748,7 +776,12 @@ export const generatePostContent = async (
         5. End with a conclusion and call to action
         6. Be approximately 800-1200 words
         
-        IMPORTANT: DO NOT include the title as an H1 or H2 at the beginning of the article. The title will already be displayed in the WordPress theme. Start directly with the introduction paragraph.
+        IMPORTANT: 
+        - DO NOT include the title as an H1 or H2 at the beginning of the article. The title will already be displayed in the WordPress theme.
+        - DO NOT include post metadata like date, author, categories, or tags.
+        - DO NOT include phrases like "Posted on", "Posted by", "Posted in", or "Tagged with".
+        - DO NOT include any headers or footers that would typically be handled by the WordPress theme.
+        - Start directly with the introduction paragraph.
         
         Format the response as HTML with proper heading tags (h2, h3), paragraphs, lists, and link elements.
         Use internal links with anchor text that flows naturally in the content.
@@ -760,7 +793,7 @@ export const generatePostContent = async (
         messages: [
           {
             role: 'system',
-            content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting.'
+            content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself.'
           },
           {
             role: 'user',
