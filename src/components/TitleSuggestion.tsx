@@ -126,7 +126,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       const newContent = {
         id: Date.now(),
         title,
-        description: `Generated content for: ${title}`,
+        description: '',
         dateCreated: new Date().toISOString(),
         date: publicationDate.toISOString(),
         status: 'scheduled',

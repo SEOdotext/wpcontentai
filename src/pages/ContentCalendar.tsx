@@ -779,16 +779,41 @@ const ContentCalendar = () => {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-7 w-7 text-primary hover:bg-primary/10"
+                                      className={`h-7 w-7 ${
+                                        // Change the color based on whether content exists
+                                        content.description && content.description.trim().length > 0
+                                          ? 'text-blue-600 hover:bg-blue-100 hover:text-blue-700'
+                                          : 'text-primary hover:bg-primary/10'
+                                      }`}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleGenerateContent(content.id);
                                       }}
-                                      title="Generate content with AI"
+                                      title={
+                                        content.description && content.description.trim().length > 0
+                                          ? "Regenerate content with AI"
+                                          : "Generate content with AI"
+                                      }
                                       disabled={isGeneratingContent}
                                     >
                                       {isGeneratingContent && generatingContentId === content.id ? (
                                         <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                                      ) : content.description && content.description.trim().length > 0 ? (
+                                        // Show a different icon when content already exists
+                                        <svg 
+                                          width="14" 
+                                          height="14" 
+                                          viewBox="0 0 24 24" 
+                                          fill="none" 
+                                          stroke="currentColor" 
+                                          strokeWidth="2" 
+                                          strokeLinecap="round" 
+                                          strokeLinejoin="round"
+                                          className="h-3.5 w-3.5"
+                                        >
+                                          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+                                          <path d="m9 12 2 2 4-4" />
+                                        </svg>
                                       ) : (
                                         <FileEdit className="h-3.5 w-3.5" />
                                       )}

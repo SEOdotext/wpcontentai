@@ -40,8 +40,10 @@ const ContentView: React.FC<ContentViewProps> = ({
   onEditClick,
   onRegenerateClick,
 }) => {
-  const contentToDisplay = fullContent || description || `<p>This is the default content. You can replace it with your own content.</p>`;
+  const contentToDisplay = fullContent || description || '';
   
+  const hasContent = !!(fullContent || description);
+
   const formattedWpSentDate = wpSentDate ? new Date(wpSentDate).toLocaleString() : null;
 
   return (
@@ -126,10 +128,27 @@ const ContentView: React.FC<ContentViewProps> = ({
             <Separator className="my-3" />
             
             <CardContent className="overflow-y-auto p-3 sm:p-4 md:p-6 flex-1 blog-content">
-              <div 
-                className="wordpress-content prose prose-sm md:prose lg:prose-lg max-w-none"
-                dangerouslySetInnerHTML={{ __html: contentToDisplay }} 
-              />
+              {hasContent ? (
+                <div 
+                  className="wordpress-content prose prose-sm md:prose lg:prose-lg max-w-none"
+                  dangerouslySetInnerHTML={{ __html: contentToDisplay }} 
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
+                  <p className="text-center mb-2">No content generated yet</p>
+                  {onRegenerateClick && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onRegenerateClick}
+                      className="mt-2"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                      Generate with AI
+                    </Button>
+                  )}
+                </div>
+              )}
             </CardContent>
             
             {wpSentDate && (
