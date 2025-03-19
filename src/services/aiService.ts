@@ -668,9 +668,8 @@ const generateFallbackContent = (
 ): string => {
   const mainKeyword = keywords[0] || 'WordPress';
   
-  // Create a simple HTML structure for the blog post
+  // Create a simple HTML structure for the blog post without repeating the title
   return `
-    <h2>Introduction to ${title}</h2>
     <p>Welcome to our guide on ${mainKeyword}. In this article, we'll explore everything you need to know about this topic and provide practical tips you can implement right away.</p>
     
     <h2>Why ${mainKeyword} Matters</h2>
@@ -691,7 +690,7 @@ const generateFallbackContent = (
     
     <h2>Conclusion</h2>
     <p>Implementing effective ${mainKeyword} strategies takes time and effort, but the results are well worth it. Start applying these principles today to see improved outcomes.</p>
-    <p>If you found this article helpful, you might also be interested in our guide on ${potentialLinks[2] ? `<a href="${potentialLinks[2].url}">${potentialLinks[2].title}</a>` : 'related topics'}.</p>
+    <p>If you found this article helpful, you might also be interested in exploring more about ${keywords[2] || mainKeyword} on our website.</p>
   `;
 };
 
@@ -748,6 +747,8 @@ export const generatePostContent = async (
         4. Include 2-3 internal links to other content on the website (using the provided potential links)
         5. End with a conclusion and call to action
         6. Be approximately 800-1200 words
+        
+        IMPORTANT: DO NOT include the title as an H1 or H2 at the beginning of the article. The title will already be displayed in the WordPress theme. Start directly with the introduction paragraph.
         
         Format the response as HTML with proper heading tags (h2, h3), paragraphs, lists, and link elements.
         Use internal links with anchor text that flows naturally in the content.
