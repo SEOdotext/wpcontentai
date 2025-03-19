@@ -66,8 +66,22 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           console.log("Websites fetched:", data);
           setWebsites(data as Website[]);
           
-          // Set first website as current if none is selected
-          if (!currentWebsite) {
+          // Check if there's a saved website ID in localStorage
+          const savedWebsiteId = localStorage.getItem('currentWebsiteId');
+          
+          if (savedWebsiteId) {
+            // Find the website with the saved ID
+            const savedWebsite = data.find(website => website.id === savedWebsiteId);
+            if (savedWebsite) {
+              console.log("Restoring previously selected website:", savedWebsite.name);
+              setCurrentWebsite(savedWebsite as Website);
+            } else {
+              // Fallback to first website if saved ID not found
+              console.log("Saved website ID not found, using first website");
+              setCurrentWebsite(data[0] as Website);
+            }
+          } else if (!currentWebsite) {
+            // Set first website as current if none is saved and none is selected
             setCurrentWebsite(data[0] as Website);
           }
         } else {
@@ -113,7 +127,14 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       ];
       
       setWebsites(sampleWebsites);
-      setCurrentWebsite(sampleWebsites[0]);
+      
+      // Check if there's a saved website ID that matches a sample website
+      const savedWebsiteId = localStorage.getItem('currentWebsiteId');
+      const savedWebsite = savedWebsiteId ? 
+        sampleWebsites.find(website => website.id === savedWebsiteId) : null;
+        
+      // Use saved website or default to first sample website
+      setCurrentWebsite(savedWebsite || sampleWebsites[0]);
     };
 
     fetchWebsites();
@@ -169,8 +190,10 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Handle setting the current website
   const handleSetCurrentWebsite = (website: Website) => {
+    console.log("Setting current website:", website.name, "with ID:", website.id);
     setCurrentWebsite(website);
     localStorage.setItem('currentWebsiteId', website.id);
+    console.log("Saved website ID to localStorage:", website.id);
   };
 
   // Add delete website function
