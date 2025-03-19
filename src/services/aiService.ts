@@ -58,7 +58,7 @@ export const generateTitleSuggestions = async (
       
       // Use the new openaiService instead of direct FREE_FETCH_PROXY
       const data = await callOpenAI({
-            model: 'gpt-3.5-turbo',
+            model: 'gpt-4o',
             messages: [
               {
                 role: 'system',
@@ -112,7 +112,7 @@ export const generateTitleSuggestions = async (
         
         // Second OpenAI call - Replace with openaiService
         const keywordsData = await callOpenAI({
-              model: 'gpt-3.5-turbo',
+              model: 'gpt-4o',
               messages: [
                 {
                   role: 'system',
@@ -346,133 +346,94 @@ const isCommonWord = (word: string): boolean => {
 };
 
 /**
- * Fetches and analyzes website content
+ * Fetches website content from the database
  * 
- * @param url The URL of the website to analyze
- * @param websiteId Optional website ID to use directly (skips lookup)
+ * @param url The URL of the website (used for fallback content if DB query fails)
+ * @param websiteId The ID of the website to fetch content for
  * @returns A promise that resolves to the website content
  */
-export const fetchWebsiteContent = async (url: string, websiteId?: string): Promise<string> => {
-  console.log('[aiService.fetchWebsiteContent] Starting fetch for URL:', url, websiteId ? `(with websiteId: ${websiteId})` : '');
+export const fetchWebsiteContent = async (url: string, websiteId: string): Promise<string> => {
+  console.log(`[aiService.fetchWebsiteContent] Fetching content for website ID: ${websiteId}`);
+  
   try {
-    // Clean the URL to ensure it has a protocol
-    const cleanUrl = url.startsWith('http') ? url : `https://${url}`;
-    
-    // Try to use the scrape-content edge function
-    try {
-      console.log(`Fetching content from ${cleanUrl} via scrape-content edge function...`);
-      
-      // Get current session for authentication
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData?.session?.access_token) {
-        console.log('Not authenticated, falling back to mock content');
-        throw new Error('Not authenticated');
-      }
-      
-      // Use provided website ID or lookup if not provided
-      let siteId = websiteId;
-      
-      if (!siteId) {
-        // First, we need to find the website_id from the URL
-        console.log('No website ID provided, looking up from URL...');
-        
-        // Try to lookup the website based on the URL
-        const { data: websites, error: websiteError } = await supabase
-          .from('websites')
-          .select('id, url')
-          .ilike('url', `%${cleanUrl.replace(/^https?:\/\//i, '')}%`)
-          .limit(1);
-        
-        if (websiteError) {
-          console.error('Error looking up website:', websiteError);
-          throw new Error(`Website lookup error: ${websiteError.message}`);
-        }
-        
-        if (websites && websites.length > 0) {
-          siteId = websites[0].id;
-          console.log(`Found website ID for ${cleanUrl}: ${siteId}`);
-        } else {
-          console.error(`No website found matching URL: ${cleanUrl}`);
-          throw new Error('Website not found in database');
-        }
-      }
-      
-      // Call the scrape-content Edge Function with the correct parameter
-      console.log(`Calling scrape-content with website_id: ${websiteId || siteId}`);
-      try {
-        const response = await supabase.functions.invoke('scrape-content', {
-          body: { website_id: websiteId || siteId }
-        });
-        
-        // Check for errors
-        if (response.error) {
-          console.error('Error from scrape-content function:', response.error);
-          console.log('Full error response:', JSON.stringify(response));
-          throw new Error(`Scraping error: ${response.error.message || 'Unknown error'}`);
-        }
-        
-        // Log full response for debugging
-        console.log('scrape-content raw response:', response);
-        console.log('scrape-content data:', response.data);
-        
-        if (response.data && response.data.content) {
-          const content = response.data.content;
-          console.log('Website content fetched successfully (length:', content.length, 'characters)');
-          console.log('Content preview:', content.substring(0, 100) + '...');
-          return content;
-        } else if (response.data && response.data.message === 'No key content pages found to analyze') {
-          console.log('No cornerstone content found in the response, but it may exist in the database');
-          console.log('Falling back to mock content since scrape-content could not find cornerstone content');
-          // Don't throw an error here, just fall through to the mock content
-        } else {
-          console.error('No content returned from scrape-content function');
-          console.log('Unexpected response format:', response.data);
-          // Don't throw an error here either, just fall through to the mock content
-        }
-      } catch (fetchError) {
-        console.error('Error fetching real website content:', fetchError);
-        console.log('Falling back to mock content');
-      }
-    } catch (fetchError) {
-      console.error('Error fetching real website content:', fetchError);
-      console.log('Falling back to mock content');
+    if (!websiteId) {
+      throw new Error('Website ID is required to fetch content');
     }
     
-    // Since the Edge Function couldn't return content, try a direct database query
-    try {
-      console.log(`Edge Function didn't return content, attempting direct database query for website_id: ${websiteId || siteId}`);
-      
-      const { data: directContent, error: directError } = await supabase
-        .from('website_content')
-        .select('content, title')
-        .eq('website_id', websiteId || siteId)
-        .eq('is_cornerstone', true)
-        .limit(1)
-        .single();
-      
-      if (directError) {
-        console.error('Error querying content directly:', directError);
-      } else if (directContent && directContent.content) {
-        console.log(`Successfully retrieved cornerstone content directly from database (title: "${directContent.title}")`);
-        console.log('Content preview:', directContent.content.substring(0, 100) + '...');
-        return directContent.content;
-      } else {
-        console.log('No cornerstone content found in direct database query either');
-      }
-    } catch (directQueryError) {
-      console.error('Error in direct database query:', directQueryError);
+    // Directly query the website_content table for cornerstone content
+    const { data: cornerstoneContent, error: cornerError } = await supabase
+      .from('website_content')
+      .select('content, title, url')
+      .eq('website_id', websiteId)
+      .eq('is_cornerstone', true)
+      .order('updated_at', { ascending: false });
+    
+    if (cornerError) {
+      console.error('Error fetching cornerstone content:', cornerError);
+      throw new Error(`Database error: ${cornerError.message}`);
     }
     
-    // Rest of the function (mock content) remains unchanged
-    console.log(`Using fallback content for ${url}...`);
-    console.warn('⚠️ NOTE: Using MOCK data instead of real website content. AI generation will be less accurate!');
+    // If cornerstone content exists, concatenate it and return
+    if (cornerstoneContent && cornerstoneContent.length > 0) {
+      console.log(`Found ${cornerstoneContent.length} cornerstone content items for website ID: ${websiteId}`);
+      
+      // Combine all cornerstone content
+      const combinedContent = cornerstoneContent
+        .map(item => {
+          return `
+            ## ${item.title || 'Untitled Page'}
+            ${item.content || ''}
+            URL: ${item.url || ''}
+          `.trim();
+        })
+        .join('\n\n');
+      
+      console.log(`Combined cornerstone content (${combinedContent.length} characters)`);
+      console.log('Content preview:', combinedContent.substring(0, 100) + '...');
+      
+      return combinedContent;
+    }
+    
+    // If no cornerstone content, try to get any content
+    console.log('No cornerstone content found, fetching any content for the website');
+    const { data: anyContent, error: anyError } = await supabase
+      .from('website_content')
+      .select('content, title, url')
+      .eq('website_id', websiteId)
+      .order('updated_at', { ascending: false })
+      .limit(5);
+    
+    if (anyError) {
+      console.error('Error fetching any content:', anyError);
+      throw new Error(`Database error: ${anyError.message}`);
+    }
+    
+    if (anyContent && anyContent.length > 0) {
+      console.log(`Found ${anyContent.length} content items for website ID: ${websiteId}`);
+      
+      // Combine all content
+      const combinedContent = anyContent
+        .map(item => {
+          return `
+            ## ${item.title || 'Untitled Page'}
+            ${item.content || ''}
+            URL: ${item.url || ''}
+          `.trim();
+        })
+        .join('\n\n');
+      
+      console.log(`Combined content (${combinedContent.length} characters)`);
+      console.log('Content preview:', combinedContent.substring(0, 100) + '...');
+      
+      return combinedContent;
+    }
+    
+    // If still no content, fall back to mock content
+    console.warn('⚠️ No content found in database, using fallback mock content!');
     
     // Extract domain for domain-specific content
     const domain = url.replace(/https?:\/\//, '').split('.')[0].toLowerCase();
     console.log(`Extracted domain for fallback content: ${domain}`);
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
     
     let mockContent = '';
     
@@ -794,7 +755,7 @@ export const generatePostContent = async (
       
       // Use the new openaiService instead of direct FREE_FETCH_PROXY
       const data = await callOpenAI({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
@@ -806,7 +767,7 @@ export const generatePostContent = async (
           }
         ],
         temperature: 0.7,
-        max_tokens: 2000
+        max_tokens: 3000
       });
       
       console.log('AI response for content generation:', data);
