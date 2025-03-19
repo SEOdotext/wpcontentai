@@ -9,6 +9,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { usePostThemes } from '@/context/PostThemesContext';
+import { useWebsites } from '@/context/WebsitesContext';
 
 // Simplified keyword interface - just text, no difficulty
 export interface Keyword {
@@ -48,17 +49,28 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const [disliked, setDisliked] = useState(false);
   const { publicationFrequency } = useSettings();
   const { updatePostTheme, deletePostTheme } = usePostThemes();
+  const { currentWebsite } = useWebsites();
   
   // Function to get the next publication date
   const getNextPublicationDate = useCallback(() => {
     try {
+      // If no website is selected, use default calculation
+      if (!currentWebsite) {
+        const result = addDays(new Date(), publicationFrequency);
+        console.log('No website selected, using today + frequency:', format(result, 'yyyy-MM-dd'));
+        return result;
+      }
+      
+      // Use website-specific localStorage key
+      const storageKey = `calendarContent_${currentWebsite.id}`;
+      
       // Get calendar content from localStorage
-      const calendarContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
+      const calendarContent = JSON.parse(localStorage.getItem(storageKey) || '[]');
       
       if (!calendarContent || calendarContent.length === 0) {
         // If no calendar content, use today + publication frequency
         const result = addDays(new Date(), publicationFrequency);
-        console.log('No calendar content, using today + frequency:', format(result, 'yyyy-MM-dd'));
+        console.log(`No calendar content for website ${currentWebsite.name}, using today + frequency:`, format(result, 'yyyy-MM-dd'));
         return result;
       }
       
@@ -85,13 +97,13 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       if (latestTimestamp === 0) {
         // No valid dates found, use today + publication frequency
         const result = addDays(new Date(), publicationFrequency);
-        console.log('No valid dates found, using today + frequency:', format(result, 'yyyy-MM-dd'));
+        console.log(`No valid dates found for website ${currentWebsite.name}, using today + frequency:`, format(result, 'yyyy-MM-dd'));
         return result;
       }
       
       // We found a valid latest date, add publication frequency to it
       const latestDate = new Date(latestTimestamp);
-      console.log('Found latest calendar date:', format(latestDate, 'yyyy-MM-dd'));
+      console.log(`Found latest calendar date for website ${currentWebsite.name}:`, format(latestDate, 'yyyy-MM-dd'));
       
       const result = addDays(latestDate, publicationFrequency);
       console.log('Next publication date:', format(result, 'yyyy-MM-dd'));
@@ -101,7 +113,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       // Fallback to today + publication frequency
       return addDays(new Date(), publicationFrequency);
     }
-  }, [publicationFrequency]);
+  }, [currentWebsite, publicationFrequency]);
   
   /**
    * Adds a post to the content calendar
@@ -114,8 +126,35 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
    */
   const addToCalendar = useCallback((title: string, keywords: Keyword[], selectedDate: Date) => {
     try {
+      // Ensure we have a selected website
+      if (!currentWebsite) {
+        console.error('No website selected, cannot add to calendar');
+        toast.error('Please select a website first');
+        return null;
+      }
+      
+      // Use website-specific localStorage key
+      const storageKey = `calendarContent_${currentWebsite.id}`;
+      
       // Get the existing calendar content from localStorage
-      const existingContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
+      // First check for website-specific content
+      let existingContent = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      
+      // If no data exists in the website-specific format, check for legacy data
+      if (existingContent.length === 0) {
+        console.log("No website-specific calendar data found in addToCalendar, checking for legacy data...");
+        const legacyData = localStorage.getItem('calendarContent');
+        
+        if (legacyData) {
+          console.log("Found legacy calendar data, migrating to website-specific storage...");
+          // Migrate legacy data to the new format
+          localStorage.setItem(storageKey, legacyData);
+          existingContent = JSON.parse(legacyData);
+          
+          // Optionally, clear the legacy data after migration
+          // localStorage.removeItem('calendarContent');
+        }
+      }
       
       // The publication date comes from either:
       // 1. A date manually selected by the user from the date picker
@@ -141,9 +180,9 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       updatedContent.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       
       // Save the updated calendar back to localStorage
-      localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
+      localStorage.setItem(storageKey, JSON.stringify(updatedContent));
       
-      console.log('Added content to calendar:', newContent);
+      console.log(`Added content to calendar for website ${currentWebsite.name}:`, newContent);
       console.log('Updated calendar content:', updatedContent);
       
       return newContent;
@@ -151,7 +190,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       console.error('Error adding content to calendar:', error);
       return null;
     }
-  }, []);
+  }, [currentWebsite]);
 
   /**
    * Handles the approval (like) action for a title suggestion

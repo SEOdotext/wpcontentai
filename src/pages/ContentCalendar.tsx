@@ -53,10 +53,57 @@ const ContentCalendar = () => {
   
   useEffect(() => {
     try {
-      const storedContent = localStorage.getItem('calendarContent');
+      // If no website is selected, don't attempt to load calendar content
+      if (!currentWebsite) {
+        console.log("No website selected, not loading calendar content");
+        return;
+      }
+      
+      console.log("=== Calendar Content Loading Debug ===");
+      console.log(`Loading calendar content for website: ${currentWebsite.name} (ID: ${currentWebsite.id})`);
+      
+      // Use website-specific localStorage key
+      const storageKey = `calendarContent_${currentWebsite.id}`;
+      console.log(`Using storage key: ${storageKey}`);
+      
+      // Check for data in the new format first
+      let storedContent = localStorage.getItem(storageKey);
+      
+      // Log all localStorage keys to help with debugging
+      const allKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.includes('calendar')) {
+          allKeys.push(key);
+        }
+      }
+      console.log("All calendar-related localStorage keys:", allKeys);
+      
+      // If no data exists in the new format, check for legacy data
+      if (!storedContent) {
+        console.log("No website-specific calendar data found, checking for legacy data...");
+        const legacyData = localStorage.getItem('calendarContent');
+        
+        if (legacyData) {
+          console.log(`Found legacy calendar data (${legacyData.length} bytes), migrating to website-specific storage...`);
+          // Migrate legacy data to the new format
+          localStorage.setItem(storageKey, legacyData);
+          storedContent = legacyData;
+          
+          // Optionally, clear the legacy data after migration
+          // localStorage.removeItem('calendarContent');
+          
+          toast.success("Calendar data has been migrated to the new format");
+        } else {
+          console.log("No legacy calendar data found either");
+        }
+      } else {
+        console.log(`Found website-specific calendar data (${storedContent.length} bytes)`);
+      }
+      
       if (storedContent) {
         const parsedContent = JSON.parse(storedContent) as CalendarContent[];
-        console.log("Loaded calendar content:", parsedContent);
+        console.log(`Loaded calendar content for website ${currentWebsite.name}: ${parsedContent.length} items`);
         
         const processedContent = parsedContent.map(item => ({
           ...item,
@@ -70,11 +117,17 @@ const ContentCalendar = () => {
         processedContent.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
         setAllContent(processedContent);
+        console.log(`Calendar content processed and sorted. Final count: ${processedContent.length} items`);
+      } else {
+        // Clear content when switching to a website with no calendar data
+        console.log("No calendar content found, clearing any existing content");
+        setAllContent([]);
       }
+      console.log("=== End Calendar Content Loading Debug ===");
     } catch (error) {
       console.error("Error loading calendar content:", error);
     }
-  }, []);
+  }, [currentWebsite]);
   
   const navigateMonth = (direction: 'prev' | 'next') => {
     setDisplayDate(prev => 
@@ -87,8 +140,11 @@ const ContentCalendar = () => {
   };
 
   const handleDeleteContent = (contentId: number) => {
+    if (!currentWebsite) return;
+    
     const updatedContent = allContent.filter(content => content.id !== contentId);
-    localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
+    const storageKey = `calendarContent_${currentWebsite.id}`;
+    localStorage.setItem(storageKey, JSON.stringify(updatedContent));
     setAllContent(updatedContent);
     
     if (selectedContent && selectedContent.id === contentId) {
@@ -99,15 +155,32 @@ const ContentCalendar = () => {
   };
   
   const getContentByMonth = (date: Date) => {
+    // Ensure we have content to filter
+    if (!allContent || allContent.length === 0) {
+      console.log("No content to filter by month");
+      return [];
+    }
+    
     const month = date.getMonth();
     const year = date.getFullYear();
     
-    return allContent.filter(content => {
-      const contentDate = new Date(content.date);
-      const contentMonth = contentDate.getMonth();
-      const contentYear = contentDate.getFullYear();
-      return contentMonth === month && contentYear === year;
+    // Add debug log
+    console.log(`Filtering content for ${month+1}/${year}`);
+    
+    const filteredContent = allContent.filter(content => {
+      try {
+        const contentDate = new Date(content.date);
+        const contentMonth = contentDate.getMonth();
+        const contentYear = contentDate.getFullYear();
+        return contentMonth === month && contentYear === year;
+      } catch (e) {
+        console.error("Error parsing date in getContentByMonth:", e, content);
+        return false;
+      }
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    console.log(`Found ${filteredContent.length} items for ${month+1}/${year}`);
+    return filteredContent;
   };
 
   const handleEditContent = (contentId: number) => {
@@ -173,7 +246,8 @@ const ContentCalendar = () => {
       );
       
       // Save to localStorage
-      localStorage.setItem(`contentCalendar_${currentWebsite.id}`, JSON.stringify(updatedContent));
+      const storageKey = `calendarContent_${currentWebsite.id}`;
+      localStorage.setItem(storageKey, JSON.stringify(updatedContent));
       setAllContent(updatedContent);
       
       // Show the updated content to the user
@@ -193,7 +267,7 @@ const ContentCalendar = () => {
   };
 
   const handleDateChange = (contentId: number, newDate: Date | undefined) => {
-    if (!newDate) return;
+    if (!newDate || !currentWebsite) return;
     
     const updatedContent = allContent.map(content => 
       content.id === contentId 
@@ -202,7 +276,8 @@ const ContentCalendar = () => {
     );
     
     setAllContent(updatedContent);
-    localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
+    const storageKey = `calendarContent_${currentWebsite.id}`;
+    localStorage.setItem(storageKey, JSON.stringify(updatedContent));
     
     toast.success("Publication date updated", {
       description: `Content scheduled for ${format(newDate, 'MMM dd, yyyy')}`
@@ -404,7 +479,8 @@ const ContentCalendar = () => {
         );
         
         // Save to localStorage
-        localStorage.setItem('calendarContent', JSON.stringify(updatedContent));
+        const storageKey = `calendarContent_${currentWebsite.id}`;
+        localStorage.setItem(storageKey, JSON.stringify(updatedContent));
         setAllContent(updatedContent);
         
         // Show the updated content to the user

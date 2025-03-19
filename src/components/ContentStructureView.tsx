@@ -77,13 +77,42 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   // Function to get the next publication date
   const getPublicationDate = useCallback(() => {
     try {
+      // If no website is selected, use default calculation
+      if (!currentWebsite) {
+        const result = addDays(new Date(), publicationFrequency);
+        console.log('No website selected, using today + frequency:', format(result, 'yyyy-MM-dd'));
+        return result;
+      }
+      
+      // Use website-specific localStorage key
+      const storageKey = `calendarContent_${currentWebsite.id}`;
+      
+      // First check for website-specific content
+      let calendarData = localStorage.getItem(storageKey);
+      
+      // If no data exists in the website-specific format, check for legacy data
+      if (!calendarData) {
+        console.log("No website-specific calendar data found in getPublicationDate, checking for legacy data...");
+        const legacyData = localStorage.getItem('calendarContent');
+        
+        if (legacyData) {
+          console.log("Found legacy calendar data, migrating to website-specific storage...");
+          // Migrate legacy data to the new format
+          localStorage.setItem(storageKey, legacyData);
+          calendarData = legacyData;
+          
+          // Optionally, clear the legacy data after migration
+          // localStorage.removeItem('calendarContent');
+        }
+      }
+      
       // Get calendar content from localStorage
-      const calendarContent = JSON.parse(localStorage.getItem('calendarContent') || '[]');
+      const calendarContent = JSON.parse(calendarData || '[]');
       
       if (!calendarContent || calendarContent.length === 0) {
         // If no calendar content, use today + publication frequency
         const result = addDays(new Date(), publicationFrequency);
-        console.log('No calendar content, using today + frequency:', format(result, 'yyyy-MM-dd'));
+        console.log(`No calendar content for website ${currentWebsite.name}, using today + frequency:`, format(result, 'yyyy-MM-dd'));
         return result;
       }
       
@@ -110,13 +139,13 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       if (latestTimestamp === 0) {
         // No valid dates found, use today + publication frequency
         const result = addDays(new Date(), publicationFrequency);
-        console.log('No valid dates found, using today + frequency:', format(result, 'yyyy-MM-dd'));
+        console.log(`No valid dates found for website ${currentWebsite.name}, using today + frequency:`, format(result, 'yyyy-MM-dd'));
         return result;
       }
       
       // We found a valid latest date, add publication frequency to it
       const latestDate = new Date(latestTimestamp);
-      console.log('Found latest calendar date:', format(latestDate, 'yyyy-MM-dd'));
+      console.log(`Found latest calendar date for website ${currentWebsite.name}:`, format(latestDate, 'yyyy-MM-dd'));
       
       const result = addDays(latestDate, publicationFrequency);
       console.log('Next publication date:', format(result, 'yyyy-MM-dd'));
@@ -126,7 +155,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       // Fallback to today + publication frequency
       return addDays(new Date(), publicationFrequency);
     }
-  }, [publicationFrequency]);
+  }, [currentWebsite, publicationFrequency]);
   
   // Cleanup on unmount
   useEffect(() => {
