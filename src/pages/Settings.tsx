@@ -65,6 +65,44 @@ const CLEAN_WORDPRESS_TEMPLATE = `<article class="post">
   </footer>
 </article>`;
 
+// Add default WordPress template constant
+const defaultWordPressTemplate = `<!-- WordPress Post HTML Structure Example -->
+<article class="post">
+
+  <div class="entry-content">
+    <p>First paragraph of the post with an <a href="#">example link</a> goes here.</p>
+    
+    <h2>First Subheading</h2>
+    <p>Content under the first subheading with <strong>bold text</strong> and <em>italic text</em>.</p>
+    
+    <h3>Secondary Subheading</h3>
+    <p>More detailed content explaining the topic.</p>
+    
+    <ul>
+      <li>First bullet point</li>
+      <li>Second bullet point</li>
+      <li>Third bullet point with <a href="#">link</a></li>
+    </ul>
+    
+    <h2>Second Main Subheading</h2>
+    <p>Opening paragraph for this section introducing the next points.</p>
+    
+    <ol>
+      <li>First numbered item</li>
+      <li>Second numbered item</li>
+      <li>Third numbered item</li>
+    </ol>
+    
+    <blockquote>
+      <p>This is an example of a blockquote that might contain a testimonial or important quote related to the content.</p>
+    </blockquote>
+    
+    <h2>Conclusion</h2>
+    <p>Summary paragraph that wraps up the post and may include a call to action.</p>
+  </div>
+
+</article>`;
+
 const Settings = () => {
   const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading } = useSettings();
   const { currentWebsite } = useWebsites();
@@ -996,6 +1034,13 @@ const Settings = () => {
     }
   };
 
+  // Add function to handle restoring the default template
+  const handleRestoreDefaultTemplate = () => {
+    // Set the template back to default
+    setHtmlTemplate(defaultWordPressTemplate);
+    toast.info("Default WordPress template restored");
+  };
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar />
@@ -1366,7 +1411,14 @@ const Settings = () => {
                             value={htmlTemplate}
                             onChange={(e) => setHtmlTemplate(e.target.value)}
                           />
-                          <div className="flex justify-end">
+                          <div className="flex justify-end space-x-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={handleRestoreDefaultTemplate}
+                            >
+                              Restore Default
+                            </Button>
                             <Button 
                               size="sm" 
                               variant="secondary"

@@ -719,38 +719,7 @@ const ContentCalendar = () => {
                     <div className="flex justify-between items-center">
                       <div className="flex items-center space-x-3">
                         <CardTitle className="text-lg font-medium">Content Overview</CardTitle>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs"
-                          onClick={refreshWordPressSettings}
-                          title="Check WordPress connection"
-                        >
-                          <svg 
-                            width="12" 
-                            height="12" 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="mr-1"
-                          >
-                            <path 
-                              d="M16.023 9h4.977v-4.977" 
-                              stroke="currentColor" 
-                              strokeWidth="2" 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round"
-                            />
-                            <path 
-                              d="M20.437 14.701c-1.091 4.901-5.619 8.269-10.747 7.705-5.128-.564-9.018-5.047-8.833-10.191.184-5.144 4.392-9.306 9.537-9.422 3.314-.075 6.287 1.55 8.149 4.084l2.444 3.123" 
-                              stroke="currentColor" 
-                              strokeWidth="2" 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                          Refresh WP
-                        </Button>
+                        {/* Refresh WP button removed - this functionality belongs in WordPress Integration settings */}
                       </div>
                       <div className="flex items-center space-x-2">
                         <Button 
