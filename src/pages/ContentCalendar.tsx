@@ -188,6 +188,11 @@ const ContentCalendar = () => {
   };
 
   const handleRegenerateContent = (contentId: number) => {
+    // First set the generating state to show spinners immediately
+    setIsGeneratingContent(true);
+    setGeneratingContentId(contentId);
+    
+    // Then call the generation function
     handleGenerateContent(contentId);
   };
 
@@ -799,7 +804,7 @@ const ContentCalendar = () => {
                                       }`}
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleGenerateContent(content.id);
+                                        handleRegenerateContent(content.id);
                                       }}
                                       title={
                                         content.description && content.description.trim().length > 0
@@ -939,6 +944,7 @@ const ContentCalendar = () => {
           onRegenerateClick={() => handleRegenerateContent(selectedContent.id)}
           fullContent={selectedContent.description}
           wpSentDate={selectedContent.wpSentDate}
+          isGeneratingContent={isGeneratingContent && generatingContentId === selectedContent.id}
         />
       )}
     </SidebarProvider>

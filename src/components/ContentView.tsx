@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Calendar as CalendarIcon, Edit, RefreshCw, Tag, Trash, X, Send, FileEdit } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Edit, RefreshCw, Tag, Trash, X, Send, FileEdit, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -25,6 +25,7 @@ interface ContentViewProps {
   onDeleteClick?: () => void;
   onEditClick?: () => void;
   onRegenerateClick?: () => void;
+  isGeneratingContent?: boolean;
 }
 
 const ContentView: React.FC<ContentViewProps> = ({
@@ -39,6 +40,7 @@ const ContentView: React.FC<ContentViewProps> = ({
   onDeleteClick,
   onEditClick,
   onRegenerateClick,
+  isGeneratingContent = false,
 }) => {
   const contentToDisplay = fullContent || description || '';
   
@@ -57,7 +59,15 @@ const ContentView: React.FC<ContentViewProps> = ({
                 <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
                   <ArrowLeft className="h-5 w-5" />
                 </Button>
-                <CardTitle className="text-lg sm:text-xl md:text-2xl truncate">{title}</CardTitle>
+                <div className="flex flex-col overflow-hidden">
+                  <CardTitle className="text-lg sm:text-xl md:text-2xl truncate">{title}</CardTitle>
+                  {isGeneratingContent && (
+                    <span className="text-xs text-blue-600 flex items-center mt-1">
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Generating content with AI...
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 {onRegenerateClick && (
@@ -66,9 +76,14 @@ const ContentView: React.FC<ContentViewProps> = ({
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-primary"
                     onClick={onRegenerateClick}
-                    title="Regenerate with AI"
+                    title={isGeneratingContent ? "Generating content..." : "Regenerate with AI"}
+                    disabled={isGeneratingContent}
                   >
-                    <RefreshCw className="h-4 w-4" />
+                    {isGeneratingContent ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
                   </Button>
                 )}
                 {onEditClick && (
@@ -147,9 +162,19 @@ const ContentView: React.FC<ContentViewProps> = ({
                       <Button
                         onClick={onRegenerateClick}
                         className="mt-2"
+                        disabled={isGeneratingContent}
                       >
-                        <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                        Generate with AI
+                        {isGeneratingContent ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                            Generate with AI
+                          </>
+                        )}
                       </Button>
                     )}
                   </div>
