@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Calendar as CalendarIcon, Edit, RefreshCw, Tag, Trash, X, Send, FileEdit, Loader2 } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, RefreshCw, Tag, Trash, X, Send, FileEdit, Loader2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -21,11 +21,14 @@ interface ContentViewProps {
   dateCreated?: string;
   status?: 'draft' | 'published' | 'scheduled';
   wpSentDate?: string;
+  wpPostUrl?: string;
   onClose: () => void;
   onDeleteClick?: () => void;
-  onEditClick?: () => void;
   onRegenerateClick?: () => void;
+  onSendToWordPress?: () => void;
   isGeneratingContent?: boolean;
+  isSendingToWP?: boolean;
+  canSendToWordPress?: boolean;
 }
 
 const ContentView: React.FC<ContentViewProps> = ({
@@ -36,17 +39,26 @@ const ContentView: React.FC<ContentViewProps> = ({
   dateCreated,
   status = 'draft',
   wpSentDate,
+  wpPostUrl,
   onClose,
   onDeleteClick,
-  onEditClick,
   onRegenerateClick,
+  onSendToWordPress,
   isGeneratingContent = false,
+  isSendingToWP = false,
+  canSendToWordPress = false,
 }) => {
   const contentToDisplay = fullContent || description || '';
   
   const hasContent = !!(fullContent || description);
 
   const formattedWpSentDate = wpSentDate ? new Date(wpSentDate).toLocaleString() : null;
+
+  // Determine if we should show WordPress link
+  const shouldShowWpLink = wpSentDate && (wpPostUrl || status === 'published');
+  
+  // Determine if the content has already been sent to WordPress
+  const alreadySentToWP = status === 'published' && !!wpSentDate;
 
   return (
     <Sheet open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -70,6 +82,7 @@ const ContentView: React.FC<ContentViewProps> = ({
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                {/* Regenerate Content Button */}
                 {onRegenerateClick && (
                   <Button 
                     variant="ghost" 
@@ -86,17 +99,38 @@ const ContentView: React.FC<ContentViewProps> = ({
                     )}
                   </Button>
                 )}
-                {onEditClick && (
+                
+                {/* Send to WordPress Button */}
+                {onSendToWordPress && hasContent && (
                   <Button 
                     variant="ghost" 
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-primary"
-                    onClick={onEditClick}
-                    title="Edit"
+                    className={`h-8 w-8 ${
+                      alreadySentToWP
+                        ? 'text-emerald-800 bg-emerald-50 cursor-default'
+                        : canSendToWordPress
+                          ? 'text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700'
+                          : 'text-gray-400 cursor-not-allowed'
+                    }`}
+                    onClick={canSendToWordPress ? onSendToWordPress : undefined}
+                    title={
+                      alreadySentToWP
+                        ? `Already sent to WordPress${wpSentDate ? ` on ${new Date(wpSentDate).toLocaleDateString()}` : ''}`
+                        : "Send to WordPress"
+                    }
+                    disabled={!canSendToWordPress || isSendingToWP}
                   >
-                    <Edit className="h-4 w-4" />
+                    {isSendingToWP ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+                    ) : alreadySentToWP ? (
+                      <Send className="h-4 w-4 fill-emerald-800" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
                   </Button>
                 )}
+                
+                {/* Delete Button */}
                 {onDeleteClick && (
                   <Button 
                     variant="ghost" 
@@ -108,12 +142,15 @@ const ContentView: React.FC<ContentViewProps> = ({
                     <Trash className="h-4 w-4" />
                   </Button>
                 )}
+                
+                {/* Close Button */}
                 <Button variant="ghost" size="icon" onClick={onClose}>
                   <X className="h-5 w-5" />
                 </Button>
               </div>
             </CardHeader>
             
+            {/* Meta Information */}
             <div className="px-3 sm:px-4 md:px-6 flex flex-wrap gap-3 items-center shrink-0">
               {dateCreated && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -142,6 +179,7 @@ const ContentView: React.FC<ContentViewProps> = ({
             
             <Separator className="my-3" />
             
+            {/* Content Area */}
             <CardContent className="overflow-y-auto p-3 sm:p-4 md:p-6 flex-1 blog-content">
               {hasContent ? (
                 <div 
@@ -182,17 +220,41 @@ const ContentView: React.FC<ContentViewProps> = ({
               )}
             </CardContent>
             
+            {/* WordPress Integration Footer */}
             {wpSentDate && (
-              <div className="px-3 sm:px-4 md:px-6 py-2 bg-emerald-50 text-emerald-700 text-xs">
-                <div className="flex items-center gap-2">
-                  <Send className="h-3 w-3" />
-                  <span>
-                    Sent to WordPress on {formattedWpSentDate}
-                  </span>
+              <div className="px-3 sm:px-4 md:px-6 py-3 bg-emerald-50 text-emerald-700 text-xs">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Send className="h-3 w-3 fill-emerald-700" />
+                    <span className="font-medium">
+                      Published to WordPress {formattedWpSentDate ? `on ${formattedWpSentDate}` : ''}
+                    </span>
+                  </div>
+                  {shouldShowWpLink && (
+                    wpPostUrl ? (
+                      <a 
+                        href={wpPostUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-200 hover:text-emerald-800 transition-colors font-medium"
+                        onClick={(e) => e.stopPropagation()}
+                        title="View this content in WordPress"
+                      >
+                        <span>View Post</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span className="text-emerald-600 flex items-center gap-1">
+                        <span>Published to WordPress</span>
+                        <Send className="h-3 w-3" />
+                      </span>
+                    )
+                  )}
                 </div>
               </div>
             )}
             
+            {/* Keywords Section */}
             {keywords.length > 0 && (
               <>
                 <Separator className="mt-0 mb-3" />

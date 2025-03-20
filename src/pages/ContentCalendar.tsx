@@ -36,6 +36,8 @@ interface CalendarContent {
   status?: 'published' | 'draft' | 'scheduled';
   // Add new field for WordPress sent date
   wpSentDate?: string;
+  // Add new field for WordPress post URL
+  wpPostUrl?: string;
 }
 
 const ContentCalendar = () => {
@@ -472,13 +474,75 @@ const ContentCalendar = () => {
         // If we get here, the post was created successfully
         console.log('WordPress post created successfully via direct Edge Function call:', edgeFunctionResponse.data);
         
+        // Extract post URL from response if available
+        let wpPostUrl = undefined;
+        
+        console.log('Extracting WordPress post URL from response:', edgeFunctionResponse.data);
+        
+        // Handle multiple potential response formats
+        if (edgeFunctionResponse.data.post) {
+          // Modern format with post object
+          if (edgeFunctionResponse.data.post.link) {
+            // Direct link to the post
+            wpPostUrl = edgeFunctionResponse.data.post.link;
+            console.log('WordPress post URL from post.link:', wpPostUrl);
+          } else if (edgeFunctionResponse.data.post.id) {
+            // If we have post ID but no link, construct admin URL
+            // @ts-ignore - Accessing wp_url field from settings
+            const wpAdminBaseUrl = settings.wp_url?.replace(/\/$/, '') || '';
+            if (wpAdminBaseUrl) {
+              wpPostUrl = `${wpAdminBaseUrl}/wp-admin/post.php?post=${edgeFunctionResponse.data.post.id}&action=edit`;
+              console.log('Constructed WordPress admin URL from post ID:', wpPostUrl);
+            }
+          }
+        } else if (edgeFunctionResponse.data.link) {
+          // Direct link in response root
+          wpPostUrl = edgeFunctionResponse.data.link;
+          console.log('WordPress post URL from response.link:', wpPostUrl);
+        } else if (edgeFunctionResponse.data.id) {
+          // ID in response root
+          // @ts-ignore - Accessing wp_url field from settings
+          const wpAdminBaseUrl = settings.wp_url?.replace(/\/$/, '') || '';
+          if (wpAdminBaseUrl) {
+            wpPostUrl = `${wpAdminBaseUrl}/wp-admin/post.php?post=${edgeFunctionResponse.data.id}&action=edit`;
+            console.log('Constructed WordPress admin URL from response ID:', wpPostUrl);
+          }
+        } else if (edgeFunctionResponse.data.data && edgeFunctionResponse.data.data.post) {
+          // Handle nested post object format
+          if (edgeFunctionResponse.data.data.post.link) {
+            wpPostUrl = edgeFunctionResponse.data.data.post.link;
+            console.log('WordPress post URL from data.post.link:', wpPostUrl);
+          } else if (edgeFunctionResponse.data.data.post.id) {
+            // @ts-ignore - Accessing wp_url field from settings
+            const wpAdminBaseUrl = settings.wp_url?.replace(/\/$/, '') || '';
+            if (wpAdminBaseUrl) {
+              wpPostUrl = `${wpAdminBaseUrl}/wp-admin/post.php?post=${edgeFunctionResponse.data.data.post.id}&action=edit`;
+              console.log('Constructed WordPress admin URL from nested post ID:', wpPostUrl);
+            }
+          }
+        } else if (edgeFunctionResponse.data.url) {
+          // Direct URL property
+          wpPostUrl = edgeFunctionResponse.data.url;
+          console.log('WordPress post URL from response.url:', wpPostUrl);
+        }
+        
+        // Add a fallback URL to WordPress admin if nothing else is available
+        // @ts-ignore - Accessing wp_url field from settings
+        if (!wpPostUrl && settings.wp_url) {
+          // @ts-ignore - Accessing wp_url field from settings
+          const wpAdminBaseUrl = settings.wp_url.replace(/\/$/, '');
+          wpPostUrl = `${wpAdminBaseUrl}/wp-admin/edit.php`;
+          console.log('Fallback to WordPress admin posts list:', wpPostUrl);
+        }
+        
         // Update the content status to indicate it's been sent to WordPress
         const updatedContent = allContent.map(item => 
           item.id === contentId 
             ? { 
                 ...item, 
                 contentStatus: 'published' as const,
-                wpSentDate: new Date().toISOString() 
+                wpSentDate: new Date().toISOString(),
+                wpPostUrl: wpPostUrl // Store the WordPress post URL
               } 
             : item
         );
@@ -940,11 +1004,14 @@ const ContentCalendar = () => {
           status={selectedContent.contentStatus || 'scheduled'}
           onClose={() => setSelectedContent(null)}
           onDeleteClick={() => handleDeleteContent(selectedContent.id)}
-          onEditClick={() => handleEditContent(selectedContent.id)}
           onRegenerateClick={() => handleRegenerateContent(selectedContent.id)}
+          onSendToWordPress={() => handleSendToWordPress(selectedContent.id)}
           fullContent={selectedContent.description}
           wpSentDate={selectedContent.wpSentDate}
+          wpPostUrl={selectedContent.wpPostUrl}
           isGeneratingContent={isGeneratingContent && generatingContentId === selectedContent.id}
+          isSendingToWP={isSendingToWP && sendingToWPId === selectedContent.id}
+          canSendToWordPress={canSendToWordPress(selectedContent)}
         />
       )}
     </SidebarProvider>
