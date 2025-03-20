@@ -52,6 +52,8 @@ const ContentCalendar = () => {
   const { createPost, settings: wpSettings } = useWordPress();
   const [directWpSettings, setDirectWpSettings] = useState<any>(null);
   const { writingStyle, wordpressTemplate } = useSettings();
+  // Add memoized state for WordPress configuration
+  const [wpConfigured, setWpConfigured] = useState<boolean>(false);
   
   useEffect(() => {
     try {
@@ -335,26 +337,9 @@ const ContentCalendar = () => {
       return;
     }
     
-    // Check if WordPress is properly configured using our helper function
-    if (!isWordPressConfigured()) {
-      console.error('WordPress not properly configured:', {
-        directSettings: directWpSettings ? {
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          isConnected: directWpSettings.is_connected,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          hasUrl: !!directWpSettings.wp_url,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          hasUsername: !!directWpSettings.wp_username,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          hasPassword: !!directWpSettings.wp_application_password
-        } : 'Not available',
-        contextSettings: wpSettings ? {
-          isConnected: wpSettings.is_connected,
-          hasUrl: !!wpSettings.wp_url,
-          hasUsername: !!wpSettings.wp_username,
-          hasPassword: !!wpSettings.wp_application_password
-        } : 'Not available'
-      });
+    // Check if WordPress is properly configured using cached state
+    if (!wpConfigured) {
+      console.error('WordPress not properly configured');
       toast.error("WordPress is not properly configured. Please check your connection in Settings.");
       return;
     }
@@ -420,7 +405,7 @@ const ContentCalendar = () => {
             website_id: currentWebsite.id,
             title,
             content: htmlContent,
-            status: 'draft',
+            // Note: Not specifying status - the Edge Function will use the publish_status setting from the database
             action: 'create'
           }
         });
@@ -563,10 +548,9 @@ const ContentCalendar = () => {
         console.error("Error in direct Edge Function call:", directError);
         toast.error(`Error sending to WordPress: ${directError instanceof Error ? directError.message : String(directError)}`);
       }
-      
-    } catch (error) {
-      console.error("Error sending to WordPress:", error);
-      toast.error(`Failed to send content to WordPress: ${error instanceof Error ? error.message : String(error)}`);
+    } catch (e) {
+      console.error('Exception in sendToWordPress:', e);
+      toast.error('Error sending to WordPress');
     } finally {
       console.log('=== End WordPress Send Post Debug ===');
       setIsSendingToWP(false);
@@ -579,8 +563,6 @@ const ContentCalendar = () => {
     const fetchWordPressSettings = async () => {
       if (!currentWebsite) return;
       
-      console.log('Directly checking WordPress settings in database for website:', currentWebsite.id);
-      
       try {
         // @ts-ignore - Supabase schema doesn't include wordpress_settings in TypeScript types
         const { data, error } = await supabase
@@ -592,12 +574,8 @@ const ContentCalendar = () => {
         if (error) {
           if (error.code !== 'PGRST116') { // Not the "no rows returned" error
             console.error('Error fetching WordPress settings from DB:', error);
-          } else {
-            console.log('No WordPress settings found in database for this website');
           }
         } else if (data && data.length > 0) {
-          console.log('WordPress settings found in database:', data[0]);
-          
           // Store the direct WordPress settings in state
           setDirectWpSettings(data[0]);
         }
@@ -611,14 +589,11 @@ const ContentCalendar = () => {
 
   // Then fix the improved function to check if WordPress is properly configured
   const isWordPressConfigured = () => {
-    console.log('Checking WordPress configuration with direct settings and context...');
-    
     // Check if we have direct settings from the database
     if (directWpSettings && 
         directWpSettings.wp_url && 
         directWpSettings.wp_username && 
         directWpSettings.wp_application_password) {
-      console.log('WordPress is configured based on direct database settings');
       return true;
     }
     
@@ -627,11 +602,9 @@ const ContentCalendar = () => {
         wpSettings.wp_url && 
         wpSettings.wp_username && 
         wpSettings.wp_application_password) {
-      console.log('WordPress is configured based on context values');
       return true;
     }
     
-    console.log('WordPress is not configured (neither direct settings nor context has values)');
     return false;
   };
 
@@ -643,7 +616,6 @@ const ContentCalendar = () => {
     }
     
     toast.info("Checking WordPress connection...");
-    console.log('Manually refreshing WordPress settings for website:', currentWebsite.id);
     
     try {
       // @ts-ignore - Supabase schema doesn't include wordpress_settings in TypeScript types
@@ -658,21 +630,9 @@ const ContentCalendar = () => {
           console.error('Error fetching WordPress settings from DB:', error);
           toast.error("Error checking WordPress connection");
         } else {
-          console.log('No WordPress settings found in database for this website');
           toast.error("WordPress is not configured for this website");
         }
       } else if (data) {
-        console.log('WordPress settings refreshed from database:', {
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          url: data.wp_url,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          isConnected: data.is_connected,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          hasUsername: !!data.wp_username,
-          // @ts-ignore - Accessing fields from the wordpress_settings table
-          hasPassword: !!data.wp_application_password
-        });
-        
         // Store the WordPress settings
         setDirectWpSettings(data);
         
@@ -689,47 +649,20 @@ const ContentCalendar = () => {
     }
   };
 
-  // Update the useEffect dependencies to include directWpSettings
+  // Update the useEffect to cache the configuration result
   useEffect(() => {
-    console.log('=== WordPress Integration Status Debug ===');
-    console.log('Component mounted or WordPress settings changed');
+    // Store the result in state to avoid recalculating it repeatedly
+    setWpConfigured(isWordPressConfigured());
     
-    // Log direct DB settings
-    console.log('WordPress settings (direct DB):', directWpSettings ? {
-      has_settings: true,
-      wp_url: directWpSettings.wp_url?.substring(0, 30) + '...',
-      has_username: !!directWpSettings.wp_username,
-      has_password: !!directWpSettings.wp_application_password,
-      is_connected: directWpSettings.is_connected,
-      website_id: directWpSettings.website_id
-    } : 'No direct settings available');
-    
-    // Log context settings
-    console.log('WordPress settings (context):', wpSettings ? {
-      has_settings: true,
-      wp_url: wpSettings.wp_url?.substring(0, 30) + '...',
-      has_username: !!wpSettings.wp_username,
-      has_password: !!wpSettings.wp_application_password,
-      is_connected: wpSettings.is_connected,
-      website_id: wpSettings.website_id
-    } : 'No settings available');
-    
-    console.log('isWordPressConfigured():', isWordPressConfigured());
-    console.log('Current website:', currentWebsite ? {
-      id: currentWebsite.id,
-      name: currentWebsite.name
-    } : 'No website selected');
-    
+    // WordPress integration status monitoring
     // Check for any content that might be sendable
     const sendableContent = allContent.filter(item => 
-      // Simple check without calling the full function to avoid circular dependency
-      isWordPressConfigured() && 
+      // Use the cached value instead of calling the function
+      wpConfigured && 
       !isSendingToWP && 
       !(item.contentStatus === 'published' && !!item.wpSentDate) &&
       !!(item.description && item.description.trim().length > 0)
     );
-    console.log('Sendable content count:', sendableContent.length);
-    console.log('=== End WordPress Integration Status Debug ===');
   }, [wpSettings, directWpSettings, currentWebsite, allContent, isSendingToWP]);
 
   // Restore the canSendToWordPress function that was accidentally removed
@@ -737,8 +670,8 @@ const ContentCalendar = () => {
   const canSendToWordPress = (content: CalendarContent) => {
     const issues = [];
     
-    // Check if WordPress is configured
-    if (!isWordPressConfigured()) {
+    // Check if WordPress is configured - use the cached value
+    if (!wpConfigured) {
       issues.push('WordPress not configured');
     }
     
@@ -755,19 +688,6 @@ const ContentCalendar = () => {
     // Check if the content has actual content to send
     if (!content.description || content.description.trim().length === 0) {
       issues.push('No content to send');
-    }
-    
-    // Log detailed debug info when called (but only occasionally)
-    if (Math.random() < 0.1) { // Only log ~10% of the time to avoid console spam
-      console.log(`canSendToWordPress for content ID ${content.id}:`, {
-        result: issues.length === 0,
-        title: content.title,
-        issues: issues.length > 0 ? issues : 'None',
-        wpConfigured: isWordPressConfigured(),
-        hasContent: !!(content.description && content.description.trim().length > 0),
-        status: content.contentStatus || content.status,
-        alreadySent: !!(content.contentStatus === 'published' && content.wpSentDate)
-      });
     }
     
     // All checks passed, can send to WordPress
@@ -904,7 +824,7 @@ const ContentCalendar = () => {
                                       size="icon"
                                       className={`h-7 w-7 relative z-10 ${
                                         // Apply different styles based on button state
-                                        !isWordPressConfigured() 
+                                        !wpConfigured 
                                           ? 'text-gray-400 cursor-not-allowed' // Not connected
                                           : content.contentStatus === 'published' && content.wpSentDate 
                                             ? 'text-emerald-800 bg-emerald-50 cursor-default' // Already sent
@@ -917,19 +837,12 @@ const ContentCalendar = () => {
                                         e.stopPropagation();
                                         e.preventDefault();
                                         
-                                        // Log click event to help with debugging
-                                        console.log('WordPress send button clicked for content:', {
-                                          id: content.id,
-                                          title: content.title,
-                                          canSend: canSendToWordPress(content)
-                                        });
-                                        
                                         // Only call the handler if allowed to send
                                         if (canSendToWordPress(content)) {
                                           handleSendToWordPress(content.id);
                                         } else {
                                           // Show a helpful message based on why it can't be sent
-                                          if (!isWordPressConfigured()) {
+                                          if (!wpConfigured) {
                                             toast.error("WordPress connection required. Please configure in Settings.");
                                           } else if (content.contentStatus === 'published' && content.wpSentDate) {
                                             toast.info(`Already sent to WordPress on ${new Date(content.wpSentDate).toLocaleDateString()}`);
@@ -941,7 +854,7 @@ const ContentCalendar = () => {
                                         }
                                       }}
                                       title={
-                                        !isWordPressConfigured()
+                                        !wpConfigured
                                           ? "WordPress connection required"
                                           : content.contentStatus === 'published' && content.wpSentDate
                                             ? `Already sent to WordPress on ${new Date(content.wpSentDate).toLocaleDateString()}`

@@ -46,6 +46,7 @@ interface WordPressSettings {
   is_connected: boolean;
   created_at: string;
   updated_at: string;
+  publish_status?: string;
 }
 
 // Add a constant for the clean template at the top of the file
@@ -132,6 +133,7 @@ const Settings = () => {
   const [websiteLanguage, setWebsiteLanguage] = useState<string>(currentWebsite?.language || 'en');
   const [customLanguageModalOpen, setCustomLanguageModalOpen] = useState(false);
   const [customLanguageInput, setCustomLanguageInput] = useState("");
+  const [wpPublishStatus, setWpPublishStatus] = useState<string>('draft');
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -228,6 +230,11 @@ const Settings = () => {
             
             // Store the WordPress settings directly in state
             setDirectWpSettings(data);
+            
+            // Set publish status if it exists
+            if (data?.publish_status) {
+              setWpPublishStatus(data.publish_status);
+            }
           }
         } catch (e) {
           console.error('Exception checking WordPress settings:', e);
@@ -1127,6 +1134,40 @@ const Settings = () => {
     }
   }, [currentWebsite]);
 
+  // Update WordPress publish status
+  const updateWordPressPublishStatus = async (status: string) => {
+    if (!currentWebsite) {
+      toast.error('No website selected');
+      return;
+    }
+
+    setWpPublishStatus(status);
+    
+    try {
+      console.log('Updating WordPress publish status to:', status);
+      
+      // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
+      const { error } = await supabase
+        .from('wordpress_settings')
+        .update({ 
+          publish_status: status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('website_id', currentWebsite.id);
+        
+      if (error) {
+        console.error('Error updating WordPress publish status:', error);
+        toast.error('Failed to update WordPress publish status');
+        return;
+      }
+      
+      toast.success('WordPress publish status updated successfully');
+    } catch (e) {
+      console.error('Exception updating WordPress publish status:', e);
+      toast.error('Failed to update WordPress publish status');
+    }
+  };
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar />
@@ -1219,6 +1260,48 @@ const Settings = () => {
                               Disconnect
                             </Button>
                           </div>
+                        </div>
+                        
+                        {/* Add WordPress Publish Status selector */}
+                        <div className="space-y-2">
+                          <Label htmlFor="publishStatus">Default Publish Status</Label>
+                          <div className="flex space-x-4">
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="radio" 
+                                id="draft" 
+                                name="publishStatus"
+                                checked={wpPublishStatus === 'draft'}
+                                onChange={() => updateWordPressPublishStatus('draft')}
+                                className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                              />
+                              <Label 
+                                htmlFor="draft"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                Draft
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="radio" 
+                                id="publish" 
+                                name="publishStatus"
+                                checked={wpPublishStatus === 'publish'}
+                                onChange={() => updateWordPressPublishStatus('publish')}
+                                className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                              />
+                              <Label 
+                                htmlFor="publish"
+                                className="text-sm font-normal cursor-pointer"
+                              >
+                                Published
+                              </Label>
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Choose whether content should be saved as draft or published immediately when sent to WordPress.
+                          </p>
                         </div>
                         
                         {/* Test Post Feedback - Show only when a test post has been created */}

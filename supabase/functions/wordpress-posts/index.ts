@@ -11,7 +11,7 @@ interface PostRequest {
   website_id: string
   title: string
   content: string
-  status: 'draft' | 'publish'
+  status?: 'draft' | 'publish' // Make status optional
   post_id?: number // Include for updates
   action: 'create' | 'update'
 }
@@ -52,7 +52,7 @@ serve(async (req) => {
     const { website_id, title, content, status, post_id, action } = await req.json() as PostRequest
     
     // Validate input
-    if (!website_id || !title || !content || !status || !action) {
+    if (!website_id || !title || !content || !action) {
       throw new Error('Missing required fields')
     }
     
@@ -80,6 +80,11 @@ serve(async (req) => {
     let apiUrl
     let method
     
+    // Determine post status - use the one from the request if provided,
+    // otherwise use the setting from wordpress_settings (defaulting to 'draft' if not set)
+    const postStatus = status || wpSettings.publish_status || 'draft'
+    console.log(`Using WordPress post status: ${postStatus}`)
+    
     if (action === 'create') {
       apiUrl = `${wpSettings.wp_url}/wp-json/wp/v2/posts`
       method = 'POST'
@@ -93,7 +98,7 @@ serve(async (req) => {
     const postData = {
       title,
       content,
-      status
+      status: postStatus
     }
     
     // Make the API request to WordPress
