@@ -239,6 +239,50 @@ export type Database = {
           },
         ]
       }
+      wordpress_settings: {
+        Row: {
+          id: string
+          website_id: string
+          wp_url: string
+          wp_username: string
+          wp_application_password: string
+          is_connected: boolean
+          created_at: string
+          updated_at: string
+          publish_status?: string
+        }
+        Insert: {
+          id?: string
+          website_id: string
+          wp_url: string
+          wp_username: string
+          wp_application_password: string
+          is_connected?: boolean
+          created_at?: string
+          updated_at?: string
+          publish_status?: string
+        }
+        Update: {
+          id?: string
+          website_id?: string
+          wp_url?: string
+          wp_username?: string
+          wp_application_password?: string
+          is_connected?: boolean
+          created_at?: string
+          updated_at?: string
+          publish_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wordpress_settings_website_id_fkey"
+            columns: ["website_id"]
+            isOneToOne: false
+            referencedRelation: "websites"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       website_access: {
         Row: {
           id: string

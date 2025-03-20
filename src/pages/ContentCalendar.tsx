@@ -399,22 +399,35 @@ const ContentCalendar = () => {
       try {
         // Call the Edge Function directly for better error debugging
         console.log('Making direct Edge Function call to wordpress-posts');
+        
+        // Add status field explicitly to avoid relying on publish_status
+        const postStatus = 'draft'; // Default to draft for safety
+        console.log('Using post status:', postStatus);
+        
         // @ts-ignore - Supabase Edge Function types may not match exactly
         const edgeFunctionResponse = await supabase.functions.invoke('wordpress-posts', {
           body: {
             website_id: currentWebsite.id,
             title,
             content: htmlContent,
-            // Note: Not specifying status - the Edge Function will use the publish_status setting from the database
+            status: postStatus, // Explicitly set status
             action: 'create'
           }
         });
         
+        console.log('Edge Function request payload:', {
+          website_id: currentWebsite.id,
+          title: title.substring(0, 30) + '...',
+          contentLength: htmlContent.length,
+          status: postStatus,
+          action: 'create'
+        });
         console.log('Edge Function response:', JSON.stringify(edgeFunctionResponse, null, 2));
         
         if (edgeFunctionResponse.error) {
           console.error('Edge Function error:', edgeFunctionResponse.error);
-          toast.error(`Failed to send to WordPress: ${edgeFunctionResponse.error.message}`);
+          const errorMsg = edgeFunctionResponse.error.message || 'Unknown error occurred';
+          toast.error(`Failed to send to WordPress: ${errorMsg}`);
           setIsSendingToWP(false);
           setSendingToWPId(null);
           return;
@@ -564,7 +577,7 @@ const ContentCalendar = () => {
       if (!currentWebsite) return;
       
       try {
-        // @ts-ignore - Supabase schema doesn't include wordpress_settings in TypeScript types
+        // Use proper typing for wordpress_settings
         const { data, error } = await supabase
           .from('wordpress_settings')
           .select('*')
@@ -618,7 +631,7 @@ const ContentCalendar = () => {
     toast.info("Checking WordPress connection...");
     
     try {
-      // @ts-ignore - Supabase schema doesn't include wordpress_settings in TypeScript types
+      // Use proper typing for wordpress_settings
       const { data, error } = await supabase
         .from('wordpress_settings')
         .select('*')
@@ -636,7 +649,7 @@ const ContentCalendar = () => {
         // Store the WordPress settings
         setDirectWpSettings(data);
         
-        // @ts-ignore - Accessing fields from the wordpress_settings table
+        // Use proper typing for wordpress_settings fields
         if (data.is_connected) {
           toast.success("WordPress connection is active");
         } else {
