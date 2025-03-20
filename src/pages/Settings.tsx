@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, FormEvent } from 'react';
 import AppSidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { Toaster } from "@/components/ui/sonner";
@@ -30,6 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { languages } from '@/data/languages';
 
 // Configuration
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
@@ -105,7 +106,7 @@ const defaultWordPressTemplate = `<!-- WordPress Post HTML Structure Example -->
 
 const Settings = () => {
   const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading } = useSettings();
-  const { currentWebsite } = useWebsites();
+  const { currentWebsite, updateWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
   const { createPostTheme } = usePostThemes();
   const [frequency, setFrequency] = useState(publicationFrequency);
@@ -127,6 +128,10 @@ const Settings = () => {
   const [sendingTestPost, setSendingTestPost] = useState(false);
   const [testPostId, setTestPostId] = useState<number | null>(null);
   const [testPostUrl, setTestPostUrl] = useState<string | null>(null);
+  // Add state for website language
+  const [websiteLanguage, setWebsiteLanguage] = useState<string>(currentWebsite?.language || 'en');
+  const [customLanguageModalOpen, setCustomLanguageModalOpen] = useState(false);
+  const [customLanguageInput, setCustomLanguageInput] = useState("");
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -1041,6 +1046,87 @@ const Settings = () => {
     toast.info("Default WordPress template restored");
   };
 
+  // Handle language change
+  const handleLanguageChange = async (language: string) => {
+    if (!currentWebsite) {
+      toast.error("Please select a website first");
+      return;
+    }
+
+    // If they selected "other", show the modal for custom language code
+    if (language === 'other') {
+      setCustomLanguageInput(""); // Clear previous input
+      setCustomLanguageModalOpen(true);
+      return;
+    }
+
+    setWebsiteLanguage(language);
+    
+    try {
+      // Update website language in database
+      const success = await updateWebsite(currentWebsite.id, { language });
+      if (success) {
+        const languageName = languages.find(l => l.code === language)?.name || language;
+        toast.success(`Website language updated to ${languageName}`);
+      }
+    } catch (error) {
+      console.error('Failed to update website language:', error);
+      toast.error('Failed to update website language');
+    }
+  };
+
+  // Handle custom language submission
+  const handleCustomLanguageSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    if (!customLanguageInput.trim()) {
+      toast.error("Please enter a language code");
+      return;
+    }
+    
+    // Use the custom code, trimmed and lowercased
+    const customCode = customLanguageInput.trim().toLowerCase();
+    
+    // Close modal
+    setCustomLanguageModalOpen(false);
+    
+    // Apply the custom language
+    setWebsiteLanguage(customCode);
+    
+    try {
+      // Update website language in database
+      const success = await updateWebsite(currentWebsite!.id, { language: customCode });
+      if (success) {
+        toast.success(`Website language updated to custom code: ${customCode}`);
+      }
+    } catch (error) {
+      console.error('Failed to update website language:', error);
+      toast.error('Failed to update website language');
+    }
+  };
+  
+  // Function to open the custom language modal for existing custom language
+  const handleEditCustomLanguage = () => {
+    setCustomLanguageInput(websiteLanguage);
+    setCustomLanguageModalOpen(true);
+  };
+
+  // Add a function to display the current language name
+  const getCurrentLanguageName = (): string => {
+    const language = languages.find(l => l.code === websiteLanguage);
+    if (language) return language.name;
+    return websiteLanguage; // If it's a custom language code, display the code itself
+  };
+
+  // Effect to sync language state with current website
+  useEffect(() => {
+    if (currentWebsite?.language) {
+      setWebsiteLanguage(currentWebsite.language);
+    } else {
+      setWebsiteLanguage('en'); // Default to English
+    }
+  }, [currentWebsite]);
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar />
@@ -1289,148 +1375,44 @@ const Settings = () => {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Content Style</CardTitle>
+                    <CardTitle>Website Language</CardTitle>
                     <CardDescription>
-                      Define the writing style and tone for your content. Be descriptive about how you want your content to sound and feel.
+                      Set the primary language for your website content
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="writingStyle">Writing Style Guidelines</Label>
-                      <Textarea 
-                        id="writingStyle" 
-                        value={styleInput} 
-                        onChange={(e) => setStyleInput(e.target.value)}
-                        placeholder="Describe how you want your content to be written..."
-                        className="min-h-[150px] resize-y"
-                      />
-                      <p className="text-sm text-muted-foreground">
-                        Tip: Be specific about tone, language style, and any particular phrases or approaches you want to use or avoid.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Subject Matters</CardTitle>
-                    <CardDescription>
-                      Define the topics and subject areas for your content
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="subjectMatters">Add Subject Matters</Label>
+                      <Label htmlFor="language">Content Language</Label>
                       <div className="flex gap-2">
-                        <Input 
-                          id="subjectMatters" 
-                          value={newSubject}
-                          onChange={(e) => setNewSubject(e.target.value)}
-                          placeholder="Enter a subject matter"
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleAddSubject();
-                            }
-                          }}
-                        />
-                        <Button onClick={handleAddSubject}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {subjects.map((subject, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center border rounded-full pl-3 pr-2 py-1 text-sm bg-secondary text-secondary-foreground"
+                        <select
+                          id="language"
+                          value={languages.some(l => l.code === websiteLanguage) ? websiteLanguage : 'other'}
+                          onChange={(e) => handleLanguageChange(e.target.value)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {subject}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSubject(subject)}
-                            className="ml-1 text-secondary-foreground/70 hover:text-secondary-foreground"
-                            aria-label={`Remove ${subject}`}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                          {generatingSubject === subject ? (
-                            <Loader2 className="h-3 w-3 ml-1 animate-spin" />
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleGenerateContent(subject)}
-                              className="ml-1 text-secondary-foreground/70 hover:text-secondary-foreground"
-                              aria-label={`Generate content for ${subject}`}
-                            >
-                              <Zap className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>WordPress Post Format</CardTitle>
-                    <CardDescription>
-                      Example WordPress post structure for AI prompt formatting
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center mb-2">
-                        <Label>HTML Structure Template</Label>
-                        <div>
+                          {languages.map(lang => (
+                            <option key={lang.code} value={lang.code}>
+                              {lang.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {!languages.some(l => l.code === websiteLanguage) && (
+                        <div className="mt-2 p-3 border rounded-md bg-muted/30">
+                          <p>Using custom language code: <span className="font-medium">{websiteLanguage}</span></p>
                           <Button 
                             variant="outline" 
-                            size="sm" 
-                            onClick={handleOpenWpFormat}
+                            size="sm"
+                            className="mt-2 h-8 text-xs"
+                            onClick={handleEditCustomLanguage}
                           >
-                            {wpFormatOpen ? 'Hide Example' : 'Show Example'}
+                            <Pencil className="h-3 w-3 mr-1" />
+                            Edit Custom Language Code
                           </Button>
                         </div>
-                      </div>
-                      
-                      <div 
-                        className="overflow-hidden transition-all duration-300"
-                        style={{ 
-                          maxHeight: wpFormatOpen ? '2000px' : '0px' 
-                        }}
-                      >
-                        <div className="border rounded-md p-4 space-y-4">
-                          <p className="text-sm text-muted-foreground">
-                            Edit this HTML template to match your WordPress theme's structure. This will be used for AI prompting.
-                          </p>
-                          <Textarea
-                            className="font-mono text-xs h-96"
-                            value={htmlTemplate}
-                            onChange={(e) => setHtmlTemplate(e.target.value)}
-                          />
-                          <div className="flex justify-end space-x-2">
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={handleRestoreDefaultTemplate}
-                            >
-                              Restore Default
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="secondary"
-                              onClick={handleSaveTemplate}
-                            >
-                              Save Template
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
+                      )}
                       <p className="text-sm text-muted-foreground">
-                        Click "Show Example" to view and edit the HTML structure template for WordPress posts. This helps AI generate content that matches your theme.
+                        This affects how content is generated, including capitalization rules for headings and language-specific formatting.
                       </p>
                     </div>
                   </CardContent>
@@ -1654,6 +1636,46 @@ const Settings = () => {
                   'Save Connection'
                 )}
               </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom Language Input Modal */}
+      <Dialog open={customLanguageModalOpen} onOpenChange={setCustomLanguageModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <form onSubmit={handleCustomLanguageSubmit}>
+            <DialogHeader>
+              <DialogTitle>Custom Language Code</DialogTitle>
+              <DialogDescription>
+                Enter a valid ISO language code (e.g., 'is' for Icelandic, 'uk' for Ukrainian).
+                <a 
+                  href="https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline ml-1"
+                >
+                  View ISO 639-1 codes
+                </a>
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-4">
+              <Input
+                id="customLanguage"
+                className="w-full"
+                placeholder="Enter language code (e.g., is, uk)"
+                value={customLanguageInput}
+                onChange={(e) => setCustomLanguageInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+            
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCustomLanguageModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save Language</Button>
             </DialogFooter>
           </form>
         </DialogContent>

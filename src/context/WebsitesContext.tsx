@@ -9,6 +9,7 @@ interface Website {
   organisation_id?: string | null;
   created_at: string;
   updated_at?: string;
+  language?: string;
 }
 
 interface WebsitesContextType {
@@ -17,7 +18,7 @@ interface WebsitesContextType {
   setCurrentWebsite: (website: Website | null) => void;
   addWebsite: (name: string, url: string) => Promise<boolean>;
   deleteWebsite: (id: string) => Promise<boolean>;
-  updateWebsite: (id: string, updates: { name: string; url: string }) => Promise<boolean>;
+  updateWebsite: (id: string, updates: { name?: string; url?: string; language?: string }) => Promise<boolean>;
   isLoading: boolean;
 }
 
@@ -115,26 +116,31 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     const provideSampleData = () => {
-      // Fall back to sample data if database fetch fails
-      const sampleWebsites: Website[] = [
-        { 
-          id: '1', 
-          name: 'My Tech Blog', 
-          url: 'https://mytechblog.com',
+      const sampleData: Website[] = [
+        {
+          id: '1',
+          name: 'Sample Website 1',
+          url: 'https://example.com',
+          organisation_id: '1',
           created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          language: 'en'
+        },
+        {
+          id: '2',
+          name: 'Sample Website 2',
+          url: 'https://example2.com',
+          organisation_id: '1',
+          created_at: new Date().toISOString(),
+          language: 'da'
         }
       ];
       
-      setWebsites(sampleWebsites);
+      setWebsites(sampleData);
+      setCurrentWebsite(sampleData[0]);
+      setIsLoading(false);
       
-      // Check if there's a saved website ID that matches a sample website
-      const savedWebsiteId = localStorage.getItem('currentWebsiteId');
-      const savedWebsite = savedWebsiteId ? 
-        sampleWebsites.find(website => website.id === savedWebsiteId) : null;
-        
-      // Use saved website or default to first sample website
-      setCurrentWebsite(savedWebsite || sampleWebsites[0]);
+      // Persist the selected website in localStorage
+      localStorage.setItem('currentWebsite', JSON.stringify(sampleData[0]));
     };
 
     fetchWebsites();
@@ -252,8 +258,11 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  // Add update website function
-  const updateWebsite = async (id: string, updates: { name: string; url: string }): Promise<boolean> => {
+  // Update website function should be modified to accept language
+  const updateWebsite = async (
+    id: string, 
+    updates: { name?: string; url?: string; language?: string }
+  ): Promise<boolean> => {
     try {
       // Check authentication
       const { data: sessionData } = await supabase.auth.getSession();
@@ -285,14 +294,19 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return false;
       }
 
+      // Create update object, only including provided fields
+      const updateData: Record<string, any> = {
+        updated_at: new Date().toISOString()
+      };
+      
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.url !== undefined) updateData.url = updates.url;
+      if (updates.language !== undefined) updateData.language = updates.language;
+
       // Update the website
       const { data, error } = await supabase
         .from('websites')
-        .update({
-          name: updates.name,
-          url: updates.url,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
@@ -300,12 +314,17 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (error) throw error;
       
       if (data) {
-        setWebsites(prev => prev.map(website => 
-          website.id === id ? { ...website, ...data } : website
-        ));
-        if (currentWebsite?.id === id) {
-          setCurrentWebsite({ ...currentWebsite, ...data });
+        // Update local state with the new data
+        setWebsites(websites.map(w => w.id === id ? data : w));
+        
+        // If the current website was updated, update it too
+        if (currentWebsite && currentWebsite.id === id) {
+          setCurrentWebsite(data);
+          
+          // Update localStorage if it exists
+          localStorage.setItem('currentWebsite', JSON.stringify(data));
         }
+        
         toast.success('Website updated successfully');
         return true;
       }

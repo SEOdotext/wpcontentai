@@ -300,6 +300,11 @@
     "data_type": "timestamp with time zone"
   },
   {
+    "table_name": "websites",
+    "column_name": "language",
+    "data_type": "text"
+  },
+  {
     "table_name": "wordpress_settings",
     "column_name": "id",
     "data_type": "uuid"

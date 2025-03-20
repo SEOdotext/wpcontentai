@@ -1,6 +1,7 @@
 import { toast } from 'sonner';
 import { callOpenAI } from '@/services/openaiService';
 import { supabase } from '@/integrations/supabase/client';
+import { languages } from '@/data/languages';
 
 // Define the interface for the AI service response
 interface AIServiceResponse {
@@ -62,7 +63,7 @@ export const generateTitleSuggestions = async (
             messages: [
               {
                 role: 'system',
-                content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself.'
+                content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself. When writing in Danish, follow Danish language rules - headers (h2, h3, etc.) should only capitalize the first word and proper nouns, not every word.'
               },
               {
                 role: 'user',
@@ -749,6 +750,171 @@ export const generatePostContent = async (
     console.log('Content length:', websiteContent.length);
     console.log('Website ID:', websiteId);
     
+    // Basic language detection for various languages
+    const languageDetectors = {
+      'da': { // Danish
+        words: ['og', 'at', 'en', 'den', 'til', 'er', 'det', 'som', 'på', 'med', 'har', 'af', 'for', 'ikke', 'der', 'var'],
+        characters: ['æ', 'ø', 'å', 'Æ', 'Ø', 'Å'],
+        phrases: ['danmark', 'københavn', 'dansk']
+      },
+      'es': { // Spanish
+        words: ['y', 'el', 'la', 'de', 'en', 'que', 'es', 'por', 'un', 'una', 'para', 'con', 'no', 'está'],
+        characters: ['ñ', 'á', 'é', 'í', 'ó', 'ú', 'ü', '¿', '¡'],
+        phrases: ['españa', 'méxico', 'español']
+      },
+      'fr': { // French
+        words: ['et', 'le', 'la', 'les', 'un', 'une', 'des', 'en', 'dans', 'est', 'sont', 'pour', 'avec', 'nous'],
+        characters: ['é', 'è', 'ê', 'à', 'â', 'ç', 'ù', 'û', 'ï', 'œ'],
+        phrases: ['france', 'français', 'paris']
+      },
+      'de': { // German
+        words: ['und', 'der', 'die', 'das', 'in', 'ist', 'für', 'mit', 'nicht', 'auch', 'von', 'zu', 'eine', 'ich'],
+        characters: ['ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü'],
+        phrases: ['deutschland', 'deutsch', 'berlin']
+      },
+      'it': { // Italian
+        words: ['e', 'il', 'la', 'di', 'che', 'in', 'un', 'una', 'non', 'per', 'sono', 'con', 'come', 'questo'],
+        characters: ['à', 'è', 'é', 'ì', 'í', 'ò', 'ó', 'ù', 'ú'],
+        phrases: ['italia', 'italiano', 'roma', 'milano']
+      },
+      'nl': { // Dutch
+        words: ['en', 'het', 'de', 'van', 'een', 'in', 'is', 'op', 'dat', 'niet', 'voor', 'zijn', 'met', 'ook'],
+        characters: ['ij', 'é', 'ë', 'ö', 'ü', 'ä'],
+        phrases: ['nederland', 'amsterdam', 'nederlands']
+      },
+      'pt': { // Portuguese
+        words: ['e', 'o', 'a', 'de', 'que', 'em', 'um', 'uma', 'não', 'para', 'com', 'se', 'como', 'os'],
+        characters: ['á', 'à', 'â', 'ã', 'ç', 'é', 'ê', 'í', 'ó', 'ô', 'õ', 'ú'],
+        phrases: ['brasil', 'portugal', 'português']
+      },
+      'sv': { // Swedish
+        words: ['och', 'att', 'det', 'i', 'en', 'är', 'på', 'för', 'med', 'som', 'inte', 'av', 'till', 'den'],
+        characters: ['å', 'ä', 'ö', 'Å', 'Ä', 'Ö'],
+        phrases: ['sverige', 'stockholm', 'svenska']
+      },
+      'no': { // Norwegian
+        words: ['og', 'i', 'det', 'er', 'på', 'at', 'en', 'for', 'som', 'med', 'til', 'av', 'ikke', 'å'],
+        characters: ['æ', 'ø', 'å', 'Æ', 'Ø', 'Å'],
+        phrases: ['norge', 'oslo', 'norsk']
+      },
+      'fi': { // Finnish
+        words: ['ja', 'on', 'että', 'ei', 'se', 'hän', 'ovat', 'mitä', 'tämä', 'mutta', 'ole', 'kun', 'minä', 'sinä'],
+        characters: ['ä', 'ö', 'å', 'Ä', 'Ö', 'Å'],
+        phrases: ['suomi', 'helsinki', 'suomalainen']
+      },
+      'pl': { // Polish
+        words: ['i', 'w', 'na', 'z', 'do', 'że', 'to', 'nie', 'się', 'jest', 'o', 'a', 'jak', 'po'],
+        characters: ['ą', 'ć', 'ę', 'ł', 'ń', 'ó', 'ś', 'ź', 'ż', 'Ą', 'Ć', 'Ę', 'Ł', 'Ń', 'Ó', 'Ś', 'Ź', 'Ż'],
+        phrases: ['polska', 'warszawa', 'polski']
+      },
+      'ru': { // Russian
+        words: ['и', 'в', 'на', 'с', 'не', 'что', 'это', 'я', 'он', 'а', 'то', 'все', 'как', 'но'],
+        characters: ['а', 'б', 'в', 'г', 'д', 'е', 'ё', 'ж', 'з', 'и', 'й', 'к', 'л', 'м', 'н', 'о', 'п', 'р', 'с', 'т', 'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'ъ', 'ы', 'ь', 'э', 'ю', 'я'],
+        phrases: ['россия', 'москва', 'русский']
+      },
+      'ar': { // Arabic
+        words: ['و', 'في', 'من', 'إلى', 'على', 'أن', 'هذا', 'هي', 'هو', 'لا', 'ما', 'مع', 'كان', 'عن'],
+        characters: ['ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي', 'ء', 'ة'],
+        phrases: ['العربية', 'السعودية', 'مصر', 'القاهرة']
+      },
+      'zh': { // Chinese
+        words: ['的', '是', '在', '不', '了', '有', '和', '人', '这', '中', '大', '为', '上', '个'],
+        characters: ['中', '国', '人', '我', '的', '是', '在', '了', '有', '和', '不', '这', '他', '你'],
+        phrases: ['中国', '北京', '上海', '汉语']
+      },
+      'ja': { // Japanese
+        words: ['の', 'に', 'は', 'を', 'た', 'が', 'で', 'て', 'と', 'し', 'れ', 'さ', 'ある', 'いる'],
+        characters: ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ', 'さ', 'し', 'す', 'せ', 'そ', '日', '本', '人', '私', '見'],
+        phrases: ['日本', '東京', '日本語']
+      },
+      'ko': { // Korean
+        words: ['이', '가', '은', '는', '을', '를', '에', '의', '로', '와', '과', '한', '하다', '있다'],
+        characters: ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', '한', '국', '어', '서', '울'],
+        phrases: ['한국', '서울', '한국어']
+      },
+      'hi': { // Hindi
+        words: ['और', 'का', 'की', 'एक', 'में', 'है', 'यह', 'से', 'हैं', 'के', 'पर', 'इस', 'को', 'जो'],
+        characters: ['अ', 'आ', 'इ', 'ई', 'उ', 'ऊ', 'ए', 'ऐ', 'ओ', 'औ', 'क', 'ख', 'ग', 'घ'],
+        phrases: ['भारत', 'हिंदी', 'दिल्ली', 'मुंबई']
+      }
+    };
+
+    // Helper function to detect language from text
+    const detectLanguageFromText = (text: string): string | null => {
+      // Convert text to lowercase for easier matching
+      const lowerText = text.toLowerCase();
+      
+      // Check each language's markers
+      for (const [langCode, detector] of Object.entries(languageDetectors)) {
+        // Check for words
+        if (detector.words.some(word => {
+          // Match whole words only using word boundaries
+          const regex = new RegExp(`\\b${word}\\b`, 'i');
+          return regex.test(lowerText);
+        })) {
+          return langCode;
+        }
+        
+        // Check for special characters
+        if (detector.characters.some(char => lowerText.includes(char))) {
+          return langCode;
+        }
+        
+        // Check for phrases
+        if (detector.phrases.some(phrase => lowerText.includes(phrase))) {
+          return langCode;
+        }
+      }
+      
+      return null; // No confident match
+    };
+    
+    // Try to get website language from the database
+    let websiteLanguage = 'unknown';
+    try {
+      // Check if websites table is accessible (handle type checking issues)
+      const { data: tablesData } = await supabase
+        .from('websites')
+        .select('id')
+        .limit(1);
+      
+      if (tablesData) {
+        // Table exists and is accessible
+        const { data: websiteData } = await supabase
+          .from('websites')
+          .select('*')
+          .eq('id', websiteId)
+          .single();
+          
+        if (websiteData) {
+          // Try to get language field if it exists
+          // @ts-ignore - Handle potential missing language field
+          const language = websiteData.language || websiteData.default_language;
+          if (language) {
+            websiteLanguage = language.toLowerCase();
+            console.log(`Website language from database: ${websiteLanguage}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.log('Could not retrieve website language from database:', err);
+    }
+    
+    // Auto-detect language from text if no language is set in the database
+    const detectedLanguage = websiteLanguage === 'unknown' ? detectLanguageFromText(title + ' ' + websiteContent.slice(0, 500)) : null;
+    
+    // Determine final language, defaulting to English if we can't detect
+    const contentLanguage = websiteLanguage !== 'unknown' ? websiteLanguage : (detectedLanguage || 'en');
+    
+    console.log('Language detection results:', {
+      websiteLanguage,
+      detectedFromText: detectedLanguage,
+      finalDetermination: contentLanguage
+    });
+    
+    // Flag for Danish-specific formatting (and potentially other languages)
+    const isDanish = contentLanguage === 'da' || contentLanguage === 'danish' || contentLanguage === 'dansk';
+    
     // Extract potential links from website content in the database
     const potentialLinks = await extractPotentialLinks(websiteId);
     console.log('Potential backlinks found:', potentialLinks);
@@ -761,6 +927,7 @@ export const generatePostContent = async (
         
         Writing Style: ${writingStyle || 'Professional and informative'}
         Keywords to include: ${keywords.join(', ')}
+        Language: ${contentLanguage}
         
         Website Content Summary (to reference and link back to where relevant): 
         ${websiteContent.substring(0, 1500)}
@@ -781,10 +948,56 @@ export const generatePostContent = async (
         - DO NOT include post metadata like date, author, categories, or tags.
         - DO NOT include phrases like "Posted on", "Posted by", "Posted in", or "Tagged with".
         - DO NOT include any headers or footers that would typically be handled by the WordPress theme.
+        - For Danish content: Do NOT capitalize every word in headers (h2, h3, etc.). Danish headers should only capitalize the first word and proper nouns.
         - Start directly with the introduction paragraph.
         
         Format the response as HTML with proper heading tags (h2, h3), paragraphs, lists, and link elements.
         Use internal links with anchor text that flows naturally in the content.
+        
+        ${(() => {
+          // Select language-specific instructions
+          switch(contentLanguage) {
+            case 'da':
+              return `Since this content is in Danish, follow Danish capitalization rules for headers:
+              - Only capitalize the first word and proper nouns in headings
+              - Do NOT capitalize every word in headers as is common in English`;
+            case 'de':
+              return `Since this content is in German, follow German capitalization rules for headers:
+              - Capitalize nouns and the first word of headlines
+              - Follow German grammar rules for compound words`;
+            case 'es':
+            case 'fr':
+            case 'it':
+            case 'pt':
+              return `Since this content is in ${languages.find(l => l.code === contentLanguage)?.name || contentLanguage}, follow appropriate capitalization rules:
+              - Only capitalize the first word and proper nouns in headings
+              - Do NOT capitalize every word in headers as is common in English`;
+            case 'en':
+              return `Since this content is in English, follow standard English capitalization for headers:
+              - Capitalize all major words in headings (nouns, verbs, adjectives, adverbs)
+              - Do not capitalize articles (a, an, the), coordinating conjunctions, or prepositions unless they are the first word`;
+            case 'other':
+              // Handle custom language code
+              return `For this content in the specified language (${contentLanguage}), follow appropriate capitalization rules:
+              - If you know the standard conventions for this language, follow those conventions
+              - Otherwise, only capitalize the first word and proper nouns in headings
+              - Ensure the content follows the grammatical rules of the target language`;
+            default:
+              // Check if this is one of our defined languages first
+              const languageName = languages.find(l => l.code === contentLanguage)?.name;
+              if (languageName) {
+                return `For this content in ${languageName}, follow appropriate capitalization rules for the target language:
+                - Follow standard conventions for ${languageName}
+                - Ensure proper use of any special characters or grammatical rules specific to this language`;
+              }
+              
+              // Truly unknown language code
+              return `For this content, follow appropriate capitalization rules for the target language (${contentLanguage}):
+              - If the language is like English, capitalize major words in headings
+              - If the language is like most European languages, only capitalize the first word and proper nouns in headings
+              - Follow any special capitalization rules specific to this language`;
+          }
+        })()}
       `;
       
       // Use the new openaiService instead of direct FREE_FETCH_PROXY
@@ -793,7 +1006,7 @@ export const generatePostContent = async (
         messages: [
           {
             role: 'system',
-            content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself.'
+            content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself. When writing in Danish, follow Danish language rules - headers (h2, h3, etc.) should only capitalize the first word and proper nouns, not every word.'
           },
           {
             role: 'user',
