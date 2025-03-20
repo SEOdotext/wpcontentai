@@ -64,8 +64,16 @@ const ContentView: React.FC<ContentViewProps> = ({
     <Sheet open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <SheetPortal>
         <SheetOverlay onClick={onClose} />
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" onClick={(e) => e.stopPropagation()}>
-          <Card className="w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col animate-in fade-in zoom-in duration-300 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4" 
+             onClick={(e) => {
+               e.stopPropagation();
+               onClose();
+             }}>
+          <Card 
+            className="w-full max-w-4xl h-[85vh] flex flex-col shadow-lg animate-in fade-in zoom-in duration-300 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
             <CardHeader className="p-3 sm:p-4 md:p-6 flex flex-row items-center justify-between shrink-0">
               <div className="flex items-center gap-2 overflow-hidden">
                 <Button variant="ghost" size="icon" onClick={onClose} className="shrink-0">
@@ -177,17 +185,20 @@ const ContentView: React.FC<ContentViewProps> = ({
               )}
             </div>
             
-            <Separator className="my-3" />
+            <Separator className="my-3 shrink-0" />
             
             {/* Content Area */}
-            <CardContent className="overflow-y-auto p-3 sm:p-4 md:p-6 flex-1 blog-content">
+            <div 
+              className="overflow-y-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6 flex-1" 
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {hasContent ? (
                 <div 
                   className="wordpress-content prose prose-sm md:prose lg:prose-lg max-w-none"
                   dangerouslySetInnerHTML={{ __html: contentToDisplay }} 
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-12">
+                <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground py-12">
                   <div className="flex flex-col items-center space-y-4">
                     <div className="rounded-full bg-blue-50 p-3">
                       <FileEdit className="h-5 w-5 text-blue-500" />
@@ -198,7 +209,10 @@ const ContentView: React.FC<ContentViewProps> = ({
                     </div>
                     {onRegenerateClick && (
                       <Button
-                        onClick={onRegenerateClick}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRegenerateClick();
+                        }}
                         className="mt-2"
                         disabled={isGeneratingContent}
                       >
@@ -218,11 +232,11 @@ const ContentView: React.FC<ContentViewProps> = ({
                   </div>
                 </div>
               )}
-            </CardContent>
+            </div>
             
             {/* WordPress Integration Footer */}
             {wpSentDate && (
-              <div className="px-3 sm:px-4 md:px-6 py-3 bg-emerald-50 text-emerald-700 text-xs">
+              <div className="px-3 sm:px-4 md:px-6 py-3 bg-emerald-50 text-emerald-700 text-xs shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Send className="h-3 w-3 fill-emerald-700" />
@@ -257,10 +271,10 @@ const ContentView: React.FC<ContentViewProps> = ({
             {/* Keywords Section */}
             {keywords.length > 0 && (
               <>
-                <Separator className="mt-0 mb-3" />
+                <Separator className="mt-0 mb-3 shrink-0" />
                 <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6 shrink-0">
                   <h3 className="text-sm font-medium mb-2">Keywords:</h3>
-                  <div className="flex flex-wrap gap-2 overflow-y-auto max-h-20">
+                  <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
                     {keywords.map((keyword, index) => (
                       <Badge 
                         key={index}
