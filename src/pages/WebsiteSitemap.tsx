@@ -53,12 +53,12 @@ const WebsiteSitemap = () => {
       
       setShowImportDialog(false);
       
-      // If pages were imported successfully, navigate to the content page
+      // If pages were imported successfully, stay on the sitemap page
       if (importedCount > 0) {
-        console.log(`Successfully imported ${importedCount} pages, navigating to content page`);
+        console.log(`Successfully imported ${importedCount} pages, refreshing sitemap view`);
         // Small delay to allow state to update
         setTimeout(() => {
-          navigate('/website/content');
+          navigate('/sitemap');
         }, 500);
       }
     } finally {
