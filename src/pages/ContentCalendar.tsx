@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, FileEdit, Send } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, FileEdit, Send, Loader2, RefreshCw, Trash } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentView from '@/components/ContentView';
@@ -48,6 +48,7 @@ const ContentCalendar = () => {
   const [generatingContentId, setGeneratingContentId] = useState<number | null>(null);
   const [isSendingToWP, setIsSendingToWP] = useState<boolean>(false);
   const [sendingToWPId, setSendingToWPId] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<'all' | 'not-generated' | 'not-sent'>('all');
   const { currentWebsite } = useWebsites();
   const { createPost, settings: wpSettings } = useWordPress();
   const [directWpSettings, setDirectWpSettings] = useState<any>(null);
@@ -708,6 +709,41 @@ const ContentCalendar = () => {
     return issues.length === 0;
   };
 
+  // Add a function to filter content based on view mode
+  const getFilteredContent = (content: CalendarContent[]) => {
+    switch (viewMode) {
+      case 'not-generated':
+        return content.filter(item => !item.description);
+      case 'not-sent':
+        return content.filter(item => !item.wpSentDate);
+      default:
+        return content;
+    }
+  };
+
+  // Get the appropriate view title and description
+  const getViewInfo = () => {
+    switch (viewMode) {
+      case 'not-generated':
+        return {
+          title: "Not Generated",
+          description: "Content items that haven't been generated yet."
+        };
+      case 'not-sent':
+        return {
+          title: "Not Sent",
+          description: "Content that hasn't been sent to WordPress yet."
+        };
+      default:
+        return {
+          title: "All Content",
+          description: "Showing all calendar content."
+        };
+    }
+  };
+
+  const viewInfo = getViewInfo();
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -748,6 +784,37 @@ const ContentCalendar = () => {
                     </div>
                   </CardHeader>
                   <CardContent>
+                    <div className="mb-4 flex justify-between items-center">
+                      <div></div>
+                      
+                      <div className="flex gap-2">
+                        <Button
+                          variant={viewMode === 'all' ? "default" : "ghost"}
+                          size="sm"
+                          className="text-xs h-7 px-2"
+                          onClick={() => setViewMode('all')}
+                        >
+                          All
+                        </Button>
+                        <Button
+                          variant={viewMode === 'not-generated' ? "default" : "ghost"}
+                          size="sm"
+                          className="text-xs h-7 px-2"
+                          onClick={() => setViewMode('not-generated')}
+                        >
+                          Not Generated
+                        </Button>
+                        <Button
+                          variant={viewMode === 'not-sent' ? "default" : "ghost"}
+                          size="sm"
+                          className="text-xs h-7 px-2"
+                          onClick={() => setViewMode('not-sent')}
+                        >
+                          Not Sent
+                        </Button>
+                      </div>
+                    </div>
+                    
                     <div className="rounded-md border">
                       <Table>
                         <TableHeader>
@@ -758,32 +825,32 @@ const ContentCalendar = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {getContentByMonth(displayDate).length > 0 ? (
-                            getContentByMonth(displayDate).map((content, index) => (
+                          {getFilteredContent(getContentByMonth(displayDate)).length > 0 ? (
+                            getFilteredContent(getContentByMonth(displayDate)).map((content, index) => (
                               <TableRow 
-                                key={index} 
+                                key={content.id || index} 
                                 className="cursor-pointer hover:bg-accent/30"
                               >
                                 <TableCell className="font-medium">
                                   <Popover>
                                     <PopoverTrigger asChild>
-                                      <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        className="flex items-center text-xs p-0 h-auto font-medium hover:bg-transparent hover:text-primary"
-                                        onClick={(e) => e.stopPropagation()}
+                                      <Button
+                                        variant="ghost"
+                                        className={cn(
+                                          "justify-start text-left font-normal",
+                                          !content.date && "text-muted-foreground"
+                                        )}
                                       >
-                                        <CalendarIcon className="h-3 w-3 mr-1" />
-                                        <span>{format(parseISO(content.date), 'd MMM yyyy')}</span>
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {content.date ? format(new Date(content.date), 'PPP') : <span>Pick a date</span>}
                                       </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
+                                    <PopoverContent className="w-auto p-0">
                                       <Calendar
                                         mode="single"
-                                        selected={parseISO(content.date)}
+                                        selected={content.date ? new Date(content.date) : undefined}
                                         onSelect={(date) => handleDateChange(content.id, date)}
                                         initialFocus
-                                        className={cn("p-3 pointer-events-auto")}
                                       />
                                     </PopoverContent>
                                   </Popover>
@@ -794,111 +861,62 @@ const ContentCalendar = () => {
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className={`h-7 w-7 ${
-                                        // Change the color based on whether content exists
-                                        content.description && content.description.trim().length > 0
-                                          ? 'text-blue-600 hover:bg-blue-100 hover:text-blue-700'
-                                          : 'text-primary hover:bg-primary/10'
-                                      }`}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleRegenerateContent(content.id);
                                       }}
-                                      title={
-                                        content.description && content.description.trim().length > 0
-                                          ? "Regenerate content with AI"
-                                          : "Generate content with AI"
-                                      }
-                                      disabled={isGeneratingContent}
+                                      disabled={isGeneratingContent && generatingContentId === content.id}
+                                      className="h-8 w-8 text-slate-500 hover:text-primary"
+                                      title={isGeneratingContent && generatingContentId === content.id ? "Generating content..." : "Generate content with AI"}
                                     >
                                       {isGeneratingContent && generatingContentId === content.id ? (
-                                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                                      ) : content.description && content.description.trim().length > 0 ? (
-                                        // Show a different icon when content already exists
-                                        <svg 
-                                          width="14" 
-                                          height="14" 
-                                          viewBox="0 0 24 24" 
-                                          fill="none" 
-                                          stroke="currentColor" 
-                                          strokeWidth="2" 
-                                          strokeLinecap="round" 
-                                          strokeLinejoin="round"
-                                          className="h-3.5 w-3.5"
-                                        >
-                                          <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
-                                          <path d="m9 12 2 2 4-4" />
-                                        </svg>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
                                       ) : (
-                                        <FileEdit className="h-3.5 w-3.5" />
+                                        <RefreshCw className="h-4 w-4" />
                                       )}
                                     </Button>
+                                    
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className={`h-7 w-7 relative z-10 ${
-                                        // Apply different styles based on button state
-                                        !wpConfigured 
-                                          ? 'text-gray-400 cursor-not-allowed' // Not connected
-                                          : content.contentStatus === 'published' && content.wpSentDate 
-                                            ? 'text-emerald-800 bg-emerald-50 cursor-default' // Already sent
-                                            : canSendToWordPress(content)
-                                              ? 'text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700' // Ready to send
-                                              : 'text-gray-400 cursor-not-allowed' // Can't send for other reasons
-                                      }`}
                                       onClick={(e) => {
-                                        // Always stop propagation to prevent table row click
                                         e.stopPropagation();
-                                        e.preventDefault();
-                                        
-                                        // Only call the handler if allowed to send
-                                        if (canSendToWordPress(content)) {
-                                          handleSendToWordPress(content.id);
-                                        } else {
-                                          // Show a helpful message based on why it can't be sent
-                                          if (!wpConfigured) {
-                                            toast.error("WordPress connection required. Please configure in Settings.");
-                                          } else if (content.contentStatus === 'published' && content.wpSentDate) {
-                                            toast.info(`Already sent to WordPress on ${new Date(content.wpSentDate).toLocaleDateString()}`);
-                                          } else if (!content.description || content.description.trim().length === 0) {
-                                            toast.warning("Generate content first before sending to WordPress");
-                                          } else if (isSendingToWP) {
-                                            toast.info("Already sending a post to WordPress");
-                                          }
-                                        }
+                                        handleSendToWordPress(content.id);
                                       }}
+                                      disabled={!canSendToWordPress(content) || (isSendingToWP && sendingToWPId === content.id)}
+                                      className={`h-8 w-8 ${
+                                        content.contentStatus === 'published' && !!content.wpSentDate
+                                          ? 'text-emerald-800 bg-emerald-50'
+                                          : canSendToWordPress(content)
+                                            ? 'text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700'
+                                            : 'text-slate-300 cursor-not-allowed'
+                                      }`}
                                       title={
-                                        !wpConfigured
-                                          ? "WordPress connection required"
-                                          : content.contentStatus === 'published' && content.wpSentDate
-                                            ? `Already sent to WordPress on ${new Date(content.wpSentDate).toLocaleDateString()}`
-                                            : !content.description || content.description.trim().length === 0
-                                              ? "Generate content first"
-                                              : "Send to WordPress"
+                                        content.contentStatus === 'published' && !!content.wpSentDate
+                                          ? `Sent to WordPress${content.wpSentDate ? ` on ${format(new Date(content.wpSentDate), 'PPP')}` : ''}`
+                                          : "Send to WordPress"
                                       }
-                                      disabled={!canSendToWordPress(content)}
-                                      // Add style property with important cursor setting and explicit pointer-events
-                                      style={{ cursor: canSendToWordPress(content) ? 'pointer' : 'not-allowed', pointerEvents: 'auto' }}
                                     >
                                       {isSendingToWP && sendingToWPId === content.id ? (
-                                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
-                                      ) : content.contentStatus === 'published' && content.wpSentDate ? (
-                                        <Send className="h-3.5 w-3.5 fill-emerald-800" /> // Use filled icon for sent posts
+                                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+                                      ) : content.contentStatus === 'published' && !!content.wpSentDate ? (
+                                        <Send className="h-4 w-4 fill-emerald-800" />
                                       ) : (
-                                        <Send className="h-3.5 w-3.5" />
+                                        <Send className="h-4 w-4" />
                                       )}
                                     </Button>
+                                    
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleDeleteContent(content.id);
                                       }}
-                                      title="Remove from calendar"
+                                      className="h-8 w-8 text-slate-500 hover:text-destructive"
+                                      title="Delete content"
                                     >
-                                      <X className="h-3.5 w-3.5" />
+                                      <Trash className="h-4 w-4" />
                                     </Button>
                                   </div>
                                 </TableCell>
@@ -907,7 +925,7 @@ const ContentCalendar = () => {
                           ) : (
                             <TableRow>
                               <TableCell colSpan={3} className="h-24 text-center">
-                                No content scheduled for this month
+                                No content {viewMode !== 'all' ? `matching "${viewInfo.title}" filter` : ''} scheduled for this month
                               </TableCell>
                             </TableRow>
                           )}
