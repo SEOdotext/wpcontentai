@@ -400,9 +400,10 @@ const ContentCalendar = () => {
         // Call the Edge Function directly for better error debugging
         console.log('Making direct Edge Function call to wordpress-posts');
         
-        // Add status field explicitly to avoid relying on publish_status
-        const postStatus = 'draft'; // Default to draft for safety
-        console.log('Using post status:', postStatus);
+        // Get publish status from WordPress settings instead of hardcoding to 'draft'
+        // @ts-ignore - Accessing publish_status field from settings
+        const postStatus = settings.publish_status || 'draft'; // Fall back to draft if not set
+        console.log(`Using WordPress post status from settings: ${postStatus}`);
         
         // @ts-ignore - Supabase Edge Function types may not match exactly
         const edgeFunctionResponse = await supabase.functions.invoke('wordpress-posts', {
@@ -410,7 +411,7 @@ const ContentCalendar = () => {
             website_id: currentWebsite.id,
             title,
             content: htmlContent,
-            status: postStatus, // Explicitly set status
+            status: postStatus, // Use the status from settings
             action: 'create'
           }
         });
