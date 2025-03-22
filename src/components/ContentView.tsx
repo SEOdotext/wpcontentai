@@ -89,21 +89,27 @@ const ContentView: React.FC<ContentViewProps> = ({
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {/* Regenerate Content Button */}
-                {onRegenerateClick && (
+              <div className="flex items-center justify-end gap-1 shrink-0">
+                {/* Regenerate Content Button - Only show when content hasn't been sent to WordPress */}
+                {onRegenerateClick && !alreadySentToWP && (
                   <Button 
                     variant="ghost" 
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-primary"
                     onClick={onRegenerateClick}
-                    title={isGeneratingContent ? "Generating content..." : "Regenerate with AI"}
+                    title={isGeneratingContent 
+                      ? "Generating content..." 
+                      : hasContent 
+                        ? "Regenerate with AI" 
+                        : "Generate with AI"}
                     disabled={isGeneratingContent}
                   >
                     {isGeneratingContent ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
+                    ) : hasContent ? (
                       <RefreshCw className="h-4 w-4" />
+                    ) : (
+                      <FileEdit className="h-4 w-4" />
                     )}
                   </Button>
                 )}
@@ -223,7 +229,7 @@ const ContentView: React.FC<ContentViewProps> = ({
                           </>
                         ) : (
                           <>
-                            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                            <FileEdit className="h-3.5 w-3.5 mr-1.5" />
                             Generate with AI
                           </>
                         )}

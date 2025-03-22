@@ -857,24 +857,33 @@ const ContentCalendar = () => {
                                 </TableCell>
                                 <TableCell onClick={() => handleContentClick(content)}>{content.title}</TableCell>
                                 <TableCell>
-                                  <div className="flex items-center space-x-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleRegenerateContent(content.id);
-                                      }}
-                                      disabled={isGeneratingContent && generatingContentId === content.id}
-                                      className="h-8 w-8 text-slate-500 hover:text-primary"
-                                      title={isGeneratingContent && generatingContentId === content.id ? "Generating content..." : "Generate content with AI"}
-                                    >
-                                      {isGeneratingContent && generatingContentId === content.id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <RefreshCw className="h-4 w-4" />
-                                      )}
-                                    </Button>
+                                  <div className="flex items-center justify-end gap-1">
+                                    {/* Only show Generate/Regenerate button when content hasn't been sent to WordPress */}
+                                    {!(content.contentStatus === 'published' && !!content.wpSentDate) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRegenerateContent(content.id);
+                                        }}
+                                        disabled={isGeneratingContent && generatingContentId === content.id}
+                                        className="h-8 w-8 text-slate-500 hover:text-primary"
+                                        title={isGeneratingContent && generatingContentId === content.id 
+                                          ? "Generating content..." 
+                                          : content.description && content.description.trim().length > 0
+                                            ? "Regenerate content with AI"
+                                            : "Generate content with AI"}
+                                      >
+                                        {isGeneratingContent && generatingContentId === content.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : content.description && content.description.trim().length > 0 ? (
+                                          <RefreshCw className="h-4 w-4" />
+                                        ) : (
+                                          <FileEdit className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    )}
                                     
                                     <Button
                                       variant="ghost"
