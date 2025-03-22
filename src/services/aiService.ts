@@ -709,47 +709,6 @@ const applyWordPressTemplate = (content: string, template: string, title: string
 };
 
 /**
- * Generates fallback content when the AI service fails
- * 
- * @param title The post title
- * @param keywords The keywords to include
- * @param potentialLinks Potential internal links
- * @returns The generated fallback content
- */
-const generateFallbackContent = (
-  title: string, 
-  keywords: string[], 
-  potentialLinks: { title: string, url: string }[]
-): string => {
-  const mainKeyword = keywords[0] || 'WordPress';
-  
-  // Create a simple HTML structure for the blog post without repeating the title
-  return `
-    <p>Welcome to our guide on ${mainKeyword}. In this article, we'll explore everything you need to know about this topic and provide practical tips you can implement right away.</p>
-    
-    <h2>Why ${mainKeyword} Matters</h2>
-    <p>Understanding ${mainKeyword} is crucial for success in today's digital landscape. It affects everything from user experience to conversion rates and overall business performance.</p>
-    <p>As we discussed in our article <a href="${potentialLinks[0]?.url || '#'}">${potentialLinks[0]?.title || 'previous post'}</a>, the right approach can make a significant difference to your results.</p>
-    
-    <h2>Key Strategies for ${mainKeyword}</h2>
-    <p>Here are some effective strategies to implement:</p>
-    <ul>
-      <li>Research your audience thoroughly</li>
-      <li>Develop a comprehensive plan</li>
-      <li>Implement best practices</li>
-      <li>Measure and adjust your approach</li>
-    </ul>
-    
-    <h2>Common Challenges and Solutions</h2>
-    <p>Many businesses struggle with ${keywords[1] || 'implementation'} challenges. In our experience, the most effective approach is to ${potentialLinks[1] ? `follow the guidance in our <a href="${potentialLinks[1].url}">${potentialLinks[1].title}</a> article` : 'start with small, manageable changes'}.</p>
-    
-    <h2>Conclusion</h2>
-    <p>Implementing effective ${mainKeyword} strategies takes time and effort, but the results are well worth it. Start applying these principles today to see improved outcomes.</p>
-    <p>If you found this article helpful, you might also be interested in exploring more about ${keywords[2] || mainKeyword} on our website.</p>
-  `;
-};
-
-/**
  * Generates a blog post with AI based on title, keywords, writing style and website content
  * Includes backlinks to existing website content when relevant
  * 
@@ -1104,10 +1063,7 @@ export const generatePostContent = async (
       }
     } catch (apiError) {
       console.error('Error calling OpenAI API:', apiError);
-      console.log('Falling back to mock content generation');
-      
-      // Generate fallback content
-      return generateFallbackContent(title, keywords, potentialLinks);
+      throw new Error('Failed to generate content with AI. Please try again later.');
     }
   } catch (error) {
     console.error('Error generating post content:', error);

@@ -66,7 +66,7 @@ const defaultSettings = {
       <p>This is an example of a blockquote that might contain a testimonial or important quote related to the content.</p>
     </blockquote>
     
-    <h2>Conclusion</h2>
+    <h2>Subheading 3</h2>
     <p>Summary paragraph that wraps up the post and may include a call to action.</p>
   </div>
 
