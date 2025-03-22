@@ -205,7 +205,47 @@ const Settings = () => {
     }
   }, [settingsLoading, publicationFrequency, writingStyle, subjectMatters, wordpressTemplate]);
 
-  // Get the current website ID for direct debugging
+  // First fix useEffect to fetch WordPress settings with proper table name
+  useEffect(() => {
+    const fetchWordPressSettings = async () => {
+      if (!currentWebsite) return;
+      
+      console.log('Directly checking WordPress settings in database for website:', currentWebsite.id);
+      
+      try {
+        // @ts-ignore - Supabase schema doesn't include wordpress_settings in TypeScript types
+        const { data, error } = await supabase
+          .from('wordpress_settings')
+          .select('*')
+          .eq('website_id', currentWebsite.id)
+          .limit(1);
+          
+        if (error) {
+          if (error.code !== 'PGRST116') { // Not the "no rows returned" error
+            console.error('Error fetching WordPress settings from DB:', error);
+          } else {
+            console.log('No WordPress settings found in database for this website');
+          }
+        } else if (data && data.length > 0) {
+          console.log('WordPress settings found in database:', data[0]);
+          
+          // Store the direct WordPress settings in state
+          setDirectWpSettings(data[0]);
+          
+          // Set publish status if it exists
+          if (data[0]?.publish_status) {
+            setWpPublishStatus(data[0].publish_status);
+          }
+        }
+      } catch (e) {
+        console.error('Exception checking WordPress settings:', e);
+      }
+    };
+    
+    fetchWordPressSettings();
+  }, [currentWebsite]);
+
+  // Replace with the original useEffect for getting the current website ID
   useEffect(() => {
     if (currentWebsite) {
       console.log('Current website ID:', currentWebsite.id);
@@ -246,6 +286,120 @@ const Settings = () => {
     }
   }, [currentWebsite]);
 
+  // Then fix the improved function to check if WordPress is properly configured
+  const isWordPressConfigured = () => {
+    console.log('Checking WordPress configuration with direct settings and context...');
+    
+    // Check if we have direct settings from the database
+    if (directWpSettings && 
+        directWpSettings.wp_url && 
+        directWpSettings.wp_username && 
+        directWpSettings.wp_application_password) {
+      console.log('WordPress is configured based on direct database settings');
+      return true;
+    }
+    
+    // Fall back to context values if direct settings are not available
+    if (wpSettings && 
+        wpSettings.wp_url && 
+        wpSettings.wp_username && 
+        wpSettings.wp_application_password) {
+      console.log('WordPress is configured based on context values');
+      return true;
+    }
+    
+    console.log('WordPress is not configured (neither direct settings nor context has values)');
+    return false;
+  };
+
+  // Fix the refresh function to manually check WordPress connection
+  const refreshWordPressSettings = async () => {
+    if (!currentWebsite) {
+      toast.error("Please select a website first");
+      return;
+    }
+    
+    toast.info("Checking WordPress connection...");
+    console.log('Manually refreshing WordPress settings for website:', currentWebsite.id);
+    
+    try {
+      // @ts-ignore - Supabase schema doesn't include wordpress_settings in TypeScript types
+      const { data, error } = await supabase
+        .from('wordpress_settings')
+        .select('*')
+        .eq('website_id', currentWebsite.id)
+        .single();
+        
+      if (error) {
+        if (error.code !== 'PGRST116') { // Not the "no rows returned" error
+          console.error('Error fetching WordPress settings from DB:', error);
+          toast.error("Error checking WordPress connection");
+        } else {
+          console.log('No WordPress settings found in database for this website');
+          toast.error("WordPress is not configured for this website");
+        }
+      } else if (data) {
+        console.log('WordPress settings refreshed from database:', {
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          url: data.wp_url,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          isConnected: data.is_connected,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasUsername: !!data.wp_username,
+          // @ts-ignore - Accessing fields from the wordpress_settings table
+          hasPassword: !!data.wp_application_password
+        });
+        
+        // Store the WordPress settings
+        setDirectWpSettings(data);
+        
+        // @ts-ignore - Accessing fields from the wordpress_settings table
+        if (data.is_connected) {
+          toast.success("WordPress connection is active");
+        } else {
+          toast.warning("WordPress connection exists but is inactive");
+        }
+      }
+    } catch (e) {
+      console.error('Exception checking WordPress settings:', e);
+      toast.error("Error checking WordPress connection");
+    }
+  };
+
+  // Update the useEffect dependencies to include directWpSettings
+  useEffect(() => {
+    console.log('=== WordPress Integration Status Debug ===');
+    console.log('Component mounted or WordPress settings changed');
+    
+    // Log direct DB settings
+    console.log('WordPress settings (direct DB):', directWpSettings ? {
+      has_settings: true,
+      wp_url: directWpSettings.wp_url?.substring(0, 30) + '...',
+      has_username: !!directWpSettings.wp_username,
+      has_password: !!directWpSettings.wp_application_password,
+      is_connected: directWpSettings.is_connected,
+      website_id: directWpSettings.website_id
+    } : 'No direct settings available');
+    
+    // Log context settings
+    console.log('WordPress settings (context):', wpSettings ? {
+      has_settings: true,
+      wp_url: wpSettings.wp_url?.substring(0, 30) + '...',
+      has_username: !!wpSettings.wp_username,
+      has_password: !!wpSettings.wp_application_password,
+      is_connected: wpSettings.is_connected,
+      website_id: wpSettings.website_id
+    } : 'No settings available');
+    
+    console.log('isWordPressConfigured():', isWordPressConfigured());
+    console.log('Current website:', currentWebsite ? {
+      id: currentWebsite.id,
+      name: currentWebsite.name
+    } : 'No website selected');
+    
+    console.log('=== End WordPress Integration Status Debug ===');
+  }, [wpSettings, directWpSettings, currentWebsite]);
+
   // Explicitly log WordPress settings from context when they change
   useEffect(() => {
     console.log('WordPress settings from context changed:', wpSettings);
@@ -261,11 +415,13 @@ const Settings = () => {
     // Only set if the current template has the entry-title in it
     if (htmlTemplate && (htmlTemplate.includes('entry-title') || htmlTemplate.includes('Post Title Goes Here'))) {
       console.log('Setting clean WordPress template without title/author/date elements');
-      setHtmlTemplate(cleanTemplate);
+      // Log the template being used to verify it matches user's expectations
+      console.log('Using default WordPress template:', defaultWordPressTemplate.substring(0, 50) + '...');
+      setHtmlTemplate(defaultWordPressTemplate);
       
       // Also save to context if we're initializing with a problematic template
       if (!settingsLoading && wordpressTemplate && wordpressTemplate.includes('entry-title')) {
-        setWordpressTemplate(cleanTemplate);
+        setWordpressTemplate(defaultWordPressTemplate);
       }
     }
   }, [htmlTemplate, wordpressTemplate, settingsLoading]);
@@ -1232,6 +1388,15 @@ const Settings = () => {
                               Manage Connection
                             </Button>
                             
+                            {/* Check connection button */}
+                            <Button
+                              variant="outline"
+                              onClick={refreshWordPressSettings}
+                            >
+                              <span className="h-4 w-4 mr-2">🔄</span>
+                              Check Connection
+                            </Button>
+                            
                             {/* Test Post Button */}
                             <Button
                               variant="outline"
@@ -1329,7 +1494,7 @@ const Settings = () => {
                                           console.log('Clicked WordPress admin link:', testPostUrl);
                                         }}
                                       >
-                                        Edit in WordPress Admin
+                                        Edit in WordPress
                                       </a>
                                     </p>
                                   )}
@@ -1452,6 +1617,73 @@ const Settings = () => {
                           onChange={(e) => setFrequency(parseInt(e.target.value || "7", 10))}
                         />
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* WordPress HTML Template Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>WordPress HTML Template</CardTitle>
+                    <CardDescription>
+                      Customize the HTML structure used for generated WordPress content
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <Label htmlFor="wpTemplate">Content Structure</Label>
+                        <div className="space-x-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={handleOpenWpFormat}
+                          >
+                            {wpFormatOpen ? "Close Editor" : "Edit Template"}
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={handleRestoreDefaultTemplate}
+                            disabled={!wpFormatOpen}
+                          >
+                            Restore Default
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {wpFormatOpen ? (
+                        <div className="mt-2 border rounded-md p-3 bg-muted/30">
+                          <p className="text-sm mb-2">Edit the HTML template that will be used for WordPress posts:</p>
+                          <Textarea
+                            id="wpTemplate"
+                            value={htmlTemplate}
+                            onChange={(e) => setHtmlTemplate(e.target.value)}
+                            className="font-mono h-60 text-sm"
+                          />
+                          <div className="mt-3 flex justify-end">
+                            <Button 
+                              size="sm"
+                              onClick={handleSaveTemplate}
+                            >
+                              Save Template
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2 border rounded-md p-3 bg-muted/30">
+                          <p className="text-sm text-muted-foreground mb-2">Current WordPress post structure:</p>
+                          <div className="font-mono text-xs p-3 bg-muted rounded border overflow-auto max-h-32">
+                            <pre className="whitespace-pre-wrap break-all text-muted-foreground">{htmlTemplate}</pre>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Click "Edit Template" to customize how content is structured in WordPress
+                          </p>
+                        </div>
+                      )}
+                      <p className="text-sm text-muted-foreground mt-2">
+                        This template defines the HTML structure of posts sent to WordPress. Your content will be inserted where <code>{'<!-- Content will be inserted here -->'}</code> appears.
+                      </p>
                     </div>
                   </CardContent>
                 </Card>

@@ -192,7 +192,33 @@ export const generateTitleSuggestions = async (
       if (isDanish) {
         // For Danish: only capitalize first letter and proper nouns
         // This is a simple implementation - proper nouns detection would require NLP
-        return title.charAt(0).toUpperCase() + title.slice(1).toLowerCase();
+        // Split the title into words and capitalize only the first word
+        const words = title.split(' ');
+        
+        // Capitalize first word
+        if (words.length > 0) {
+          words[0] = words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase();
+        }
+        
+        // Keep the rest lowercase (proper nouns would need more sophisticated NLP)
+        for (let i = 1; i < words.length; i++) {
+          // Skip empty words
+          if (!words[i]) continue;
+          
+          // Keep words lowercase unless they appear to be proper nouns
+          // This is a simple heuristic - true NLP would be better
+          const isPotentialProperNoun = (
+            // Common proper noun markers for Danish
+            words[i] === 'Danmark' || 
+            words[i] === 'Dansk' || 
+            words[i].endsWith('ske') || // For words like "danske"
+            words[i].match(/^[A-ZÆØÅ]/) !== null // Already capitalized
+          );
+          
+          words[i] = isPotentialProperNoun ? words[i] : words[i].toLowerCase();
+        }
+        
+        return words.join(' ');
       } else {
         // Keep as is for English (already formatted in title case)
         return title;
@@ -913,7 +939,49 @@ export const generatePostContent = async (
     });
     
     // Flag for Danish-specific formatting (and potentially other languages)
-    const isDanish = contentLanguage === 'da' || contentLanguage === 'danish' || contentLanguage === 'dansk';
+    const isDanish = contentLanguage === 'da' || contentLanguage === 'danish' || contentLanguage === 'dansk' || 
+                    // Additional checks for Danish content detection
+                    (title && (
+                      title.includes('ø') || title.includes('æ') || title.includes('å') ||
+                      title.includes('Ø') || title.includes('Æ') || title.includes('Å') ||
+                      // Common Danish words that might appear in titles
+                      title.includes(' og ') || title.includes(' i ') || title.includes(' til ') ||
+                      title.includes(' af ') || title.includes(' med ') || title.includes(' på ')
+                    ));
+    
+    console.log('Danish content detection:', isDanish);
+    
+    // If Danish is detected, ensure the title follows Danish capitalization rules
+    if (isDanish && title) {
+      // Log the original title
+      console.log('Original title:', title);
+      
+      // Apply Danish capitalization rules (only first word capitalized)
+      const words = title.split(' ');
+      if (words.length > 0) {
+        words[0] = words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase();
+        
+        // Keep proper nouns capitalized, everything else lowercase
+        for (let i = 1; i < words.length; i++) {
+          if (!words[i]) continue;
+          
+          // Check if potentially a proper noun (very simple heuristic)
+          const isPotentialProperNoun = (
+            words[i] === 'Danmark' || 
+            words[i] === 'Dansk' || 
+            words[i].endsWith('ske') || // For words like "danske"
+            words[i].match(/^[A-ZÆØÅ]/) !== null // Already capitalized
+          );
+          
+          words[i] = isPotentialProperNoun ? words[i] : words[i].toLowerCase();
+        }
+        
+        title = words.join(' ');
+      }
+      
+      // Log the corrected title
+      console.log('Corrected Danish title:', title);
+    }
     
     // Extract potential links from website content in the database
     const potentialLinks = await extractPotentialLinks(websiteId);
@@ -958,9 +1026,12 @@ export const generatePostContent = async (
           // Select language-specific instructions
           switch(contentLanguage) {
             case 'da':
-              return `Since this content is in Danish, follow Danish capitalization rules for headers:
-              - Only capitalize the first word and proper nouns in headings
-              - Do NOT capitalize every word in headers as is common in English`;
+              return `Since this content is in Danish, strictly follow Danish capitalization rules for headers:
+              - Only capitalize the first word and proper nouns in headings (h2, h3, etc.)
+              - NEVER capitalize every word in headers as is common in English
+              - Proper nouns (like "Danmark", "København", etc.) should be capitalized
+              - Common words like "og", "i", "til", "af", "med", "på" should NOT be capitalized unless they start a heading
+              - Example correct heading: "De bedste metoder til at optimere din hjemmeside" (NOT "De Bedste Metoder Til At Optimere Din Hjemmeside")`;
             case 'de':
               return `Since this content is in German, follow German capitalization rules for headers:
               - Capitalize nouns and the first word of headlines
