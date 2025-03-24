@@ -383,7 +383,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         url: page.url,
         title: page.title,
         content: '', // Empty content initially
-        content_type: 'sitemap', // This indicates it was sourced from a sitemap
+        content_type: page.content_type || 'page', // Use the content type from sitemap
         last_fetched: page.last_fetched,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -431,7 +431,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         url: page.url,
         title: page.title || page.url,
         content: page.content || '',
-        content_type: 'sitemap',
+        content_type: page.content_type || 'page', // Use the content type from sitemap
         last_fetched: new Date().toISOString(),
         metadata: {},
         is_cornerstone: false // Default to not cornerstone

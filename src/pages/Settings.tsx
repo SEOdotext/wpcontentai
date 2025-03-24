@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/tooltip"
 import { languages } from '@/data/languages';
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 // Configuration
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
@@ -1780,6 +1781,94 @@ const Settings = () => {
                       <p className="text-sm text-muted-foreground">
                         This affects how content is generated, including capitalization rules for headings and language-specific formatting.
                       </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>AI Image Generation</CardTitle>
+                    <CardDescription>
+                      Configure AI-powered image generation for your posts
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Enable AI Image Generation</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Automatically generate preview images for your posts using AI
+                          </p>
+                        </div>
+                        <Switch
+                          checked={currentWebsite?.enable_ai_image_generation || false}
+                          onCheckedChange={async (checked) => {
+                            if (!currentWebsite) {
+                              toast.error("Please select a website first");
+                              return;
+                            }
+                            try {
+                              const success = await updateWebsite(currentWebsite.id, {
+                                enable_ai_image_generation: checked
+                              });
+                              if (success) {
+                                toast.success(checked ? "AI image generation enabled" : "AI image generation disabled");
+                              }
+                            } catch (error) {
+                              console.error('Failed to update AI image generation setting:', error);
+                              toast.error('Failed to update AI image generation setting');
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {currentWebsite?.enable_ai_image_generation && (
+                        <div className="space-y-2 mt-4">
+                          <Label htmlFor="image-prompt">
+                            Image Generation Prompt
+                            <span className="block text-sm text-muted-foreground">
+                              Customize how images are generated. Use {'{title}'} for the content title and {'{content}'} for the content description.
+                            </span>
+                          </Label>
+                          <Input
+                            id="image-prompt"
+                            type="text"
+                            defaultValue={currentWebsite?.image_prompt || 'Create a modern, professional image that represents: {title}. Context: {content}'}
+                            onBlur={async (e) => {
+                              if (!currentWebsite) {
+                                toast.error("Please select a website first");
+                                return;
+                              }
+                              try {
+                                const success = await updateWebsite(currentWebsite.id, {
+                                  image_prompt: e.target.value
+                                });
+                                if (success) {
+                                  toast.success("Image generation prompt updated");
+                                }
+                              } catch (error) {
+                                console.error('Failed to update image prompt:', error);
+                                toast.error('Failed to update image prompt');
+                              }
+                            }}
+                            placeholder="Create a modern, professional image that represents: {title}. Context: {content}"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Example: "Create a photorealistic {'{title}'} in the style of {'{content}'}"
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="rounded-lg border bg-muted/30 p-4">
+                        <h4 className="font-medium mb-2">About AI Image Generation:</h4>
+                        <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
+                          <li>Generates unique preview images for each post</li>
+                          <li>Uses post content to create relevant images</li>
+                          <li>Images are automatically optimized for your website</li>
+                          <li>Requires valid content to generate images</li>
+                        </ul>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

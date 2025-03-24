@@ -11,7 +11,8 @@ const COMMON_SITEMAP_PATHS = [
   '/sitemap.xml',
   '/sitemap-index.xml',
   '/wp-sitemap.xml',
-  '/sitemap/sitemap-index.xml'
+  '/sitemap/sitemap-index.xml',
+  '/post-sitemap.xml'
 ];
 
 // Function to fetch a URL with error handling
@@ -68,30 +69,27 @@ async function findAndFetchSitemap(baseUrl: string): Promise<{ url: string, cont
     }
   }
   
-  // Try a direct fetch on the known path for WorkForceEU.com as a fallback
-  try {
-    const knownSitemapUrl = "https://workforceeu.com/sitemap_index.xml";
-    console.log(`Trying hardcoded fallback sitemap URL: ${knownSitemapUrl}`);
-    const response = await fetchWithTimeout(knownSitemapUrl);
-    
-    if (response.ok) {
-      const content = await response.text();
-      if (content.trim().startsWith('<?xml') || content.includes('<urlset') || content.includes('<sitemapindex')) {
-        console.log(`Found sitemap at hardcoded fallback: ${knownSitemapUrl}`);
-        return { url: knownSitemapUrl, content };
-      }
-    }
-  } catch (error) {
-    console.log(`Error fetching hardcoded fallback: ${error.message}`);
-  }
-  
   console.log(`No sitemap found for ${baseUrl}`);
   return null;
 }
 
-// Function to parse sitemap XML and extract URLs
-function parseSitemap(content: string): Array<{ url: string, lastmod?: string }> {
-  const urls: Array<{ url: string, lastmod?: string }> = [];
+// Function to parse sitemap XML and extract URLs with content types
+function parseSitemap(content: string, sitemapUrl: string): Array<{ url: string, lastmod?: string, content_type: string }> {
+  const urls: Array<{ url: string, lastmod?: string, content_type: string }> = [];
+  
+  // Determine content type from sitemap URL
+  let content_type = 'page'; // Default to page
+  if (sitemapUrl.includes('post-sitemap')) {
+    content_type = 'post';
+  } else if (sitemapUrl.includes('category-sitemap')) {
+    content_type = 'category';
+  } else if (sitemapUrl.includes('post-category-sitemap')) {
+    content_type = 'post_category';
+  } else if (sitemapUrl.includes('product-sitemap')) {
+    content_type = 'product';
+  } else if (sitemapUrl.includes('product-category-sitemap')) {
+    content_type = 'product_category';
+  }
   
   // Check if it's a sitemap index
   if (content.includes('<sitemapindex')) {
@@ -99,10 +97,10 @@ function parseSitemap(content: string): Array<{ url: string, lastmod?: string }>
     // Extract sitemap URLs from the index
     const sitemapMatches = content.match(/<loc>([^<]+)<\/loc>/g) || [];
     
-    // Return the sitemap URLs (to be processed later)
+    // Return the sitemap URLs with type 'sitemap'
     return sitemapMatches.map(match => {
       const url = match.replace(/<loc>|<\/loc>/g, '');
-      return { url };
+      return { url, content_type: 'sitemap' };
     });
   }
   
@@ -118,7 +116,7 @@ function parseSitemap(content: string): Array<{ url: string, lastmod?: string }>
       const lastmodMatch = urlBlock.match(/<lastmod>([^<]+)<\/lastmod>/);
       const lastmod = lastmodMatch ? lastmodMatch[1] : undefined;
       
-      urls.push({ url, lastmod });
+      urls.push({ url, lastmod, content_type });
     }
   }
   
@@ -181,6 +179,11 @@ serve(async (req) => {
       );
     }
     
+    // Create a Supabase client
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
     // Get the request body
     const body = await req.json();
     const { website_id, website_url, custom_sitemap_url } = body;
@@ -199,11 +202,6 @@ serve(async (req) => {
       url = website_url;
       console.log(`Using provided sample URL: ${url}`);
     } else {
-      // Create a Supabase client
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
       // Get the website URL from the database
       const { data: website, error: websiteError } = await supabase
         .from('websites')
@@ -252,28 +250,15 @@ serve(async (req) => {
     }
     
     if (!sitemap) {
-      console.error(`No sitemap found for site: ${url} (websiteId: ${website_id})`);
-      
-      // Special handling for WorkForceEU.com
-      if (url.includes('workforceeu.com')) {
-        console.log('This is WorkForceEU.com - attempting direct access to known sitemap URL');
-        try {
-          const directSitemapUrl = 'https://workforceeu.com/sitemap_index.xml';
-          const response = await fetchWithTimeout(directSitemapUrl);
-          if (response.ok) {
-            const content = await response.text();
-            if (content.trim().startsWith('<?xml') || content.includes('<urlset') || content.includes('<sitemapindex')) {
-              console.log(`Success! Found sitemap directly at: ${directSitemapUrl}`);
-              sitemap = { url: directSitemapUrl, content };
-            } else {
-              console.error(`Found resource at ${directSitemapUrl} but content doesn't look like XML`);
-            }
-          } else {
-            console.error(`Direct access failed with status: ${response.status}`);
-          }
-        } catch (error) {
-          console.error(`Exception during direct access attempt: ${error.message}`);
-        }
+      // Get the website URL from the database
+      const { data: website } = await supabase
+        .from('websites')
+        .select('url')
+        .eq('id', website_id)
+        .single();
+          
+      if (website?.url) {
+        sitemap = await findAndFetchSitemap(website.url);
       }
     }
     
@@ -290,12 +275,12 @@ serve(async (req) => {
     }
     
     // Parse the sitemap
-    let pages = parseSitemap(sitemap.content);
+    let pages = parseSitemap(sitemap.content, sitemap.url);
     
     // If we got sitemap URLs instead of page URLs, fetch and parse all sitemaps
-    if (pages.length > 0 && pages[0].url.includes('sitemap')) {
+    if (pages.length > 0 && pages[0].content_type === 'sitemap') {
       console.log('Found sitemap index with child sitemaps, processing all child sitemaps');
-      const allPageUrls: Array<{ url: string, lastmod?: string }> = [];
+      const allPageUrls: Array<{ url: string, lastmod?: string, content_type: string }> = [];
       
       // Process each sitemap URL (up to 5 to avoid too many requests)
       const sitemapsToProcess = pages.slice(0, 5);
@@ -308,11 +293,11 @@ serve(async (req) => {
           if (response.ok) {
             const content = await response.text();
             // Parse this sitemap and add its URLs to our collection
-            const sitemapPages = parseSitemap(content);
+            const sitemapPages = parseSitemap(content, sitemapInfo.url);
             console.log(`Found ${sitemapPages.length} URLs in child sitemap`);
             
             // Only add if these are actual page URLs, not more sitemap URLs
-            if (sitemapPages.length > 0 && !sitemapPages[0].url.includes('sitemap')) {
+            if (sitemapPages.length > 0 && sitemapPages[0].content_type !== 'sitemap') {
               allPageUrls.push(...sitemapPages);
             } else if (sitemapPages.length > 0) {
               // Handle nested sitemap indexes (though this is rare)
@@ -320,7 +305,7 @@ serve(async (req) => {
               const nestedResponse = await fetchWithTimeout(sitemapPages[0].url);
               if (nestedResponse.ok) {
                 const nestedContent = await nestedResponse.text();
-                const nestedPages = parseSitemap(nestedContent);
+                const nestedPages = parseSitemap(nestedContent, sitemapPages[0].url);
                 console.log(`Found ${nestedPages.length} URLs in nested sitemap`);
                 allPageUrls.push(...nestedPages);
               }
@@ -341,19 +326,44 @@ serve(async (req) => {
       }
     }
     
+    // Get existing pages from the database first
+    const { data: existingPages, error: existingPagesError } = await supabase
+      .from('website_content')
+      .select('url')
+      .eq('website_id', website_id);
+
+    if (existingPagesError) {
+      console.error('Error fetching existing pages:', existingPagesError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to check existing pages' }),
+        { status: 500, headers: { ...headers, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create a Set of existing URLs for faster lookup
+    const existingUrls = new Set(existingPages?.map(page => page.url) || []);
+    
     // Process the pages
     const processedPages = pages.map(page => ({
       id: crypto.randomUUID(),
       website_id,
       url: page.url,
       title: extractTitleFromUrl(page.url),
-      last_fetched: new Date().toISOString()
+      last_fetched: new Date().toISOString(),
+      content_type: page.content_type // Use the content type from sitemap
     }));
-    
+
+    // Filter out pages that already exist
+    const newPages = processedPages.filter(page => !existingUrls.has(page.url));
+
+    console.log(`Found ${newPages.length} new pages out of ${processedPages.length} total pages`);
+
     return new Response(
       JSON.stringify({ 
         sitemap_url: sitemap.url,
-        pages: processedPages
+        pages: newPages,
+        total_pages: processedPages.length,
+        new_pages: newPages.length
       }),
       { headers: { ...headers, "Content-Type": "application/json" } }
     );

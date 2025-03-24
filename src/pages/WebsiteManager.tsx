@@ -21,13 +21,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const WebsiteManager = () => {
   const { websites, currentWebsite, setCurrentWebsite, addWebsite, deleteWebsite, updateWebsite, isLoading } = useWebsites();
   const [newWebsiteName, setNewWebsiteName] = useState('');
   const [newWebsiteUrl, setNewWebsiteUrl] = useState('');
   const [isAdding, setIsAdding] = useState(false);
-  const [editingWebsite, setEditingWebsite] = useState<{ id: string; name: string; url: string } | null>(null);
+  const [editingWebsite, setEditingWebsite] = useState<{ 
+    id: string; 
+    name: string; 
+    url: string;
+    enable_ai_image_generation?: boolean;
+    image_prompt?: string;
+  } | null>(null);
   const [deleteConfirmWebsite, setDeleteConfirmWebsite] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -64,7 +79,9 @@ const WebsiteManager = () => {
     try {
       const success = await updateWebsite(editingWebsite.id, {
         name: editingWebsite.name,
-        url: editingWebsite.url
+        url: editingWebsite.url,
+        enable_ai_image_generation: editingWebsite.enable_ai_image_generation,
+        image_prompt: editingWebsite.image_prompt
       });
       
       if (success) {
@@ -304,6 +321,76 @@ const WebsiteManager = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!editingWebsite} onOpenChange={(open) => !open && setEditingWebsite(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Website</DialogTitle>
+            <DialogDescription>
+              Update the details of your website.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Website Name</Label>
+              <Input
+                id="edit-name"
+                value={editingWebsite?.name || ''}
+                onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, name: e.target.value } : null)}
+                placeholder="Enter website name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-url">Website URL</Label>
+              <Input
+                id="edit-url"
+                value={editingWebsite?.url || ''}
+                onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, url: e.target.value } : null)}
+                placeholder="Enter website URL"
+              />
+            </div>
+            <div className="flex items-center justify-between space-x-2">
+              <Label htmlFor="ai-image-generation">Enable AI Image Generation</Label>
+              <Switch
+                id="ai-image-generation"
+                checked={editingWebsite?.enable_ai_image_generation || false}
+                onCheckedChange={(checked) => setEditingWebsite(prev => prev ? { ...prev, enable_ai_image_generation: checked } : null)}
+              />
+            </div>
+            {editingWebsite?.enable_ai_image_generation && (
+              <div className="space-y-2">
+                <Label htmlFor="image-prompt">
+                  Image Generation Prompt
+                  <span className="block text-sm text-muted-foreground">
+                    Customize how images are generated. Use "{'{'}title{'}'}" for the content title and "{'{'}content{'}'}" for the content description.
+                  </span>
+                </Label>
+                <Input
+                  id="image-prompt"
+                  value={editingWebsite?.image_prompt || `Create a modern, professional image that represents: {title}. Context: {content}`}
+                  onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, image_prompt: e.target.value } : null)}
+                  placeholder="Create a modern, professional image that represents: {title}. Context: {content}"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Example: "Create a photorealistic {'{'}title{'}'} in the style of {'{'}content{'}'}"
+                </p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button onClick={handleEditWebsite} disabled={isEditing}>
+                {isEditing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Toaster />
     </SidebarProvider>

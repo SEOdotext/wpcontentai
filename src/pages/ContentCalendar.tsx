@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, FileEdit, Send, Loader2, RefreshCw, Trash } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, FileEdit, Send, Loader2, RefreshCw, Trash, Image } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentView from '@/components/ContentView';
@@ -23,6 +23,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { useWordPress } from '@/context/WordPressContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
+import { generateImage } from '@/services/imageGeneration';
 
 interface CalendarContent {
   id: number;
@@ -38,6 +39,8 @@ interface CalendarContent {
   wpSentDate?: string;
   // Add new field for WordPress post URL
   wpPostUrl?: string;
+  // Add new field for preview image URL
+  preview_image_url?: string;
 }
 
 const ContentCalendar = () => {
@@ -55,6 +58,8 @@ const ContentCalendar = () => {
   const { writingStyle, wordpressTemplate } = useSettings();
   // Add memoized state for WordPress configuration
   const [wpConfigured, setWpConfigured] = useState<boolean>(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
+  const [generatingImageId, setGeneratingImageId] = useState<number | null>(null);
   
   useEffect(() => {
     try {
@@ -744,6 +749,74 @@ const ContentCalendar = () => {
 
   const viewInfo = getViewInfo();
 
+  const handleGenerateImage = async (contentId: number) => {
+    if (!currentWebsite?.enable_ai_image_generation) {
+      toast.error('AI image generation is not enabled for this website');
+      return;
+    }
+
+    try {
+      setIsGeneratingImage(true);
+      setGeneratingImageId(contentId);
+
+      const content = allContent.find(item => item.id === contentId);
+      if (!content) {
+        toast.error('Content not found');
+        return;
+      }
+
+      // Create a temporary post ID for image storage
+      const tempPostId = `temp_${Date.now()}`;
+
+      // Use custom prompt if available, otherwise use default
+      const defaultPrompt = `${content.title}\n\n${content.description || ''}`;
+      const customPrompt = currentWebsite.image_prompt
+        ?.replace('{title}', content.title)
+        ?.replace('{content}', content.description || '');
+      
+      const result = await generateImage({
+        content: customPrompt || defaultPrompt,
+        postId: tempPostId,
+        websiteId: currentWebsite.id
+      });
+
+      console.log('Image generation result:', result);
+      console.log('Image URL from result:', result.imageUrl);
+
+      // Update the content with the image URL
+      const updatedContent = allContent.map(item =>
+        item.id === contentId
+          ? { ...item, preview_image_url: result.imageUrl }
+          : item
+      );
+
+      // Log the updated content item
+      const updatedItem = updatedContent.find(item => item.id === contentId);
+      console.log('Updated content item:', updatedItem);
+      console.log('Preview image URL in updated item:', updatedItem?.preview_image_url);
+
+      setAllContent(updatedContent);
+
+      // Update selected content if this is the currently selected item
+      if (selectedContent?.id === contentId) {
+        console.log('Updating selected content with new image URL');
+        setSelectedContent(updatedItem!);
+      }
+
+      // Save to localStorage
+      const storageKey = `calendarContent_${currentWebsite.id}`;
+      localStorage.setItem(storageKey, JSON.stringify(updatedContent));
+
+      toast.success('Image generated successfully');
+    } catch (error) {
+      console.error('Error generating image:', error);
+      toast.error('Failed to generate image');
+    } finally {
+      setIsGeneratingImage(false);
+      setGeneratingImageId(null);
+    }
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -884,6 +957,41 @@ const ContentCalendar = () => {
                                         )}
                                       </Button>
                                     )}
+
+                                    {/* Image Status Icon */}
+                                    {!(content.contentStatus === 'published' && !!content.wpSentDate) && 
+                                     content.description && 
+                                     currentWebsite?.enable_ai_image_generation && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleGenerateImage(content.id);
+                                        }}
+                                        disabled={isGeneratingImage && generatingImageId === content.id}
+                                        className={`h-8 w-8 ${
+                                          content.preview_image_url
+                                            ? 'text-purple-800 bg-purple-50 cursor-default'
+                                            : 'text-purple-600 hover:bg-purple-100 hover:text-purple-700'
+                                        }`}
+                                        title={
+                                          content.preview_image_url
+                                            ? "Image generated"
+                                            : isGeneratingImage && generatingImageId === content.id
+                                              ? "Generating image..."
+                                              : "Generate image"
+                                        }
+                                      >
+                                        {isGeneratingImage && generatingImageId === content.id ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : content.preview_image_url ? (
+                                          <Image className="h-4 w-4 fill-purple-800" />
+                                        ) : (
+                                          <Image className="h-4 w-4 text-purple-600" />
+                                        )}
+                                      </Button>
+                                    )}
                                     
                                     <Button
                                       variant="ghost"
@@ -959,13 +1067,17 @@ const ContentCalendar = () => {
           onClose={() => setSelectedContent(null)}
           onDeleteClick={() => handleDeleteContent(selectedContent.id)}
           onRegenerateClick={() => handleRegenerateContent(selectedContent.id)}
+          onGenerateImage={() => handleGenerateImage(selectedContent.id)}
           onSendToWordPress={() => handleSendToWordPress(selectedContent.id)}
           fullContent={selectedContent.description}
           wpSentDate={selectedContent.wpSentDate}
           wpPostUrl={selectedContent.wpPostUrl}
+          preview_image_url={selectedContent.preview_image_url}
           isGeneratingContent={isGeneratingContent && generatingContentId === selectedContent.id}
+          isGeneratingImage={isGeneratingImage && generatingImageId === selectedContent.id}
           isSendingToWP={isSendingToWP && sendingToWPId === selectedContent.id}
           canSendToWordPress={canSendToWordPress(selectedContent)}
+          canGenerateImage={!!currentWebsite?.enable_ai_image_generation && !selectedContent.preview_image_url}
         />
       )}
     </SidebarProvider>

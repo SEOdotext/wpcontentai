@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useWebsites } from '@/context/WebsitesContext';
+import { generateImage } from '@/services/imageGeneration';
 
 interface WordPressSettings {
   id: string;
@@ -416,6 +417,28 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     try {
+      let imageUrl: string | undefined;
+
+      // Generate image first if enabled for the website
+      if (currentWebsite.enable_ai_image_generation) {
+        try {
+          console.log('Generating image before creating post');
+          // Create a temporary post ID for image storage
+          const tempPostId = `temp_${Date.now()}`;
+          const imageResult = await generateImage({
+            content: `${title}\n\n${content}`,
+            postId: tempPostId,
+            websiteId: currentWebsite.id
+          });
+          imageUrl = imageResult.imageUrl;
+          console.log('Image generated successfully:', imageUrl);
+        } catch (imageError) {
+          console.error('Error generating image:', imageError);
+          // Don't fail the post creation if image generation fails
+          toast.error('Failed to generate image, proceeding with post creation');
+        }
+      }
+
       console.log('Creating WordPress post via Edge Function for website:', {
         websiteId: currentWebsite.id,
         websiteName: currentWebsite.name
@@ -430,11 +453,17 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       
       console.log('Invoking wordpress-posts Edge Function');
+
+      // Add the image to the content if available
+      const contentWithImage = imageUrl
+        ? `<img src="${imageUrl}" alt="${title}" class="wp-post-header-image" />\n\n${content}`
+        : content;
+
       const { data, error } = await supabase.functions.invoke('wordpress-posts', {
         body: {
           website_id: currentWebsite.id,
           title,
-          content,
+          content: contentWithImage,
           status,
           action: 'create'
         }
@@ -453,6 +482,7 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
 
       console.log('WordPress post created successfully:', data.post);
+      
       toast.success(`Post ${status === 'publish' ? 'published' : 'saved as draft'} successfully`);
       
       // Update last_post_at in settings

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Calendar as CalendarIcon, RefreshCw, Tag, Trash, X, Send, FileEdit, Loader2, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, RefreshCw, Tag, Trash, X, Send, FileEdit, Loader2, ExternalLink, Image } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -22,13 +22,17 @@ interface ContentViewProps {
   status?: 'draft' | 'published' | 'scheduled';
   wpSentDate?: string;
   wpPostUrl?: string;
+  preview_image_url?: string;
   onClose: () => void;
   onDeleteClick?: () => void;
   onRegenerateClick?: () => void;
+  onGenerateImage?: () => void;
   onSendToWordPress?: () => void;
   isGeneratingContent?: boolean;
+  isGeneratingImage?: boolean;
   isSendingToWP?: boolean;
   canSendToWordPress?: boolean;
+  canGenerateImage?: boolean;
 }
 
 const ContentView: React.FC<ContentViewProps> = ({
@@ -40,13 +44,17 @@ const ContentView: React.FC<ContentViewProps> = ({
   status = 'draft',
   wpSentDate,
   wpPostUrl,
+  preview_image_url,
   onClose,
   onDeleteClick,
   onRegenerateClick,
+  onGenerateImage,
   onSendToWordPress,
   isGeneratingContent = false,
+  isGeneratingImage = false,
   isSendingToWP = false,
   canSendToWordPress = false,
+  canGenerateImage = false,
 }) => {
   const contentToDisplay = fullContent || description || '';
   
@@ -110,6 +118,38 @@ const ContentView: React.FC<ContentViewProps> = ({
                       <RefreshCw className="h-4 w-4" />
                     ) : (
                       <FileEdit className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+                
+                {/* Generate Image Button - Only show when content exists and hasn't been sent to WordPress */}
+                {onGenerateImage && hasContent && !alreadySentToWP && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    className={`h-8 w-8 ${
+                      preview_image_url
+                        ? 'text-purple-800 bg-purple-50 cursor-default'
+                        : canGenerateImage
+                          ? 'text-purple-600 hover:bg-purple-100 hover:text-purple-700'
+                          : 'text-gray-400 cursor-not-allowed'
+                    }`}
+                    onClick={canGenerateImage ? onGenerateImage : undefined}
+                    title={
+                      preview_image_url
+                        ? "Image already generated"
+                        : isGeneratingImage
+                          ? "Generating image..."
+                          : "Generate image with AI"
+                    }
+                    disabled={!canGenerateImage || isGeneratingImage || !!preview_image_url}
+                  >
+                    {isGeneratingImage ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
+                    ) : preview_image_url ? (
+                      <Image className="h-4 w-4 fill-purple-800" />
+                    ) : (
+                      <Image className="h-4 w-4" />
                     )}
                   </Button>
                 )}
@@ -199,10 +239,38 @@ const ContentView: React.FC<ContentViewProps> = ({
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {hasContent ? (
-                <div 
-                  className="wordpress-content prose prose-sm md:prose lg:prose-lg max-w-none"
-                  dangerouslySetInnerHTML={{ __html: contentToDisplay }} 
-                />
+                <div className="space-y-6">
+                  {/* Preview Image */}
+                  {(() => {
+                    if (preview_image_url) {
+                      console.log('Attempting to display image:', preview_image_url);
+                      return (
+                        <div className="relative w-full aspect-[16/9] rounded-lg overflow-hidden bg-muted">
+                          <img 
+                            src={preview_image_url} 
+                            alt={`Preview image for ${title}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              console.error('Image failed to load:', e);
+                              const img = e.target as HTMLImageElement;
+                              console.error('Failed URL:', img.src);
+                            }}
+                            onLoad={() => console.log('Image loaded successfully')}
+                          />
+                        </div>
+                      );
+                    } else {
+                      console.log('No preview_image_url available');
+                      return null;
+                    }
+                  })()}
+                  
+                  {/* Content */}
+                  <div 
+                    className="wordpress-content prose prose-sm md:prose lg:prose-lg max-w-none"
+                    dangerouslySetInnerHTML={{ __html: contentToDisplay }} 
+                  />
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground py-12">
                   <div className="flex flex-col items-center space-y-4">

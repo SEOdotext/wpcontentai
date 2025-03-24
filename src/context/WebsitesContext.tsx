@@ -10,6 +10,8 @@ interface Website {
   created_at: string;
   updated_at?: string;
   language?: string;
+  enable_ai_image_generation?: boolean;
+  image_prompt?: string;
 }
 
 interface WebsitesContextType {
@@ -18,7 +20,13 @@ interface WebsitesContextType {
   setCurrentWebsite: (website: Website | null) => void;
   addWebsite: (name: string, url: string) => Promise<boolean>;
   deleteWebsite: (id: string) => Promise<boolean>;
-  updateWebsite: (id: string, updates: { name?: string; url?: string; language?: string }) => Promise<boolean>;
+  updateWebsite: (id: string, updates: { 
+    name?: string; 
+    url?: string; 
+    language?: string; 
+    enable_ai_image_generation?: boolean;
+    image_prompt?: string;
+  }) => Promise<boolean>;
   isLoading: boolean;
 }
 
@@ -261,7 +269,13 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Update website function should be modified to accept language
   const updateWebsite = async (
     id: string, 
-    updates: { name?: string; url?: string; language?: string }
+    updates: { 
+      name?: string; 
+      url?: string; 
+      language?: string; 
+      enable_ai_image_generation?: boolean;
+      image_prompt?: string;
+    }
   ): Promise<boolean> => {
     try {
       // Check authentication
@@ -302,6 +316,8 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.url !== undefined) updateData.url = updates.url;
       if (updates.language !== undefined) updateData.language = updates.language;
+      if (updates.enable_ai_image_generation !== undefined) updateData.enable_ai_image_generation = updates.enable_ai_image_generation;
+      if (updates.image_prompt !== undefined) updateData.image_prompt = updates.image_prompt;
 
       // Update the website
       const { data, error } = await supabase
