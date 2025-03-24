@@ -31,6 +31,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { languages } from '@/data/languages';
+import { Badge } from "@/components/ui/badge";
 
 // Configuration
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
@@ -1616,6 +1617,56 @@ const Settings = () => {
                           value={frequency} 
                           onChange={(e) => setFrequency(parseInt(e.target.value || "7", 10))}
                         />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Keyword Management</CardTitle>
+                    <CardDescription>
+                      Configure default keywords and tags for your content
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Default Keywords</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {subjects.map((subject, index) => (
+                          <Badge 
+                            key={index}
+                            variant="outline" 
+                            className="bg-blue-50 text-blue-700 border-blue-200"
+                          >
+                            {subject}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-4 w-4 rounded-full p-0 ml-1 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
+                              onClick={() => handleRemoveSubject(subject)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <Input
+                          placeholder="Add a new keyword"
+                          value={newSubject}
+                          onChange={(e) => setNewSubject(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddSubject();
+                            }
+                          }}
+                        />
+                        <Button onClick={handleAddSubject}>
+                          <Plus className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </CardContent>

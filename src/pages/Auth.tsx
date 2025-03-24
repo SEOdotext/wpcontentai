@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Separator } from "@/components/ui/separator";
-import { Mail, Loader2 } from 'lucide-react';
+import { Mail, Loader2, ArrowLeft } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -16,7 +16,8 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -94,6 +95,45 @@ const Auth = () => {
     }
   };
 
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetLoading(true);
+    setAuthError(null);
+
+    if (!email) {
+      setAuthError('Please enter your email address');
+      setResetLoading(false);
+      return;
+    }
+    
+    try {
+      // Log the reset attempt for debugging
+      console.log(`Attempting password reset for: ${email}`);
+      
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: import.meta.env.DEV 
+          ? 'http://localhost:8081/auth/reset-password' 
+          : `${window.location.origin}/auth/reset-password`,
+      });
+      
+      if (error) throw error;
+      
+      toast.success('Password reset email sent', {
+        description: 'Check your email for the password reset link',
+      });
+      
+      // Return to login mode after successful request
+      setMode('login');
+    } catch (error) {
+      console.error('Password reset error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Password reset failed';
+      setAuthError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     try {
       setGoogleLoading(true);
@@ -122,6 +162,66 @@ const Auth = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Password reset view
+  if (mode === 'reset') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Reset Password</CardTitle>
+            <CardDescription>
+              Enter your email address and we'll send you a link to reset your password
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {authError && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertDescription>{authError}</AlertDescription>
+                </Alert>
+              )}
+              
+              <form onSubmit={handlePasswordReset} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="reset-email">Email</Label>
+                  <Input
+                    id="reset-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                  />
+                </div>
+                <Button 
+                  type="submit" 
+                  className="w-full flex items-center gap-2" 
+                  disabled={resetLoading}
+                >
+                  {resetLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Mail className="h-4 w-4" />
+                  )}
+                  {resetLoading ? 'Sending...' : 'Send Reset Link'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full flex items-center gap-2"
+                  onClick={() => setMode('login')}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Login
+                </Button>
+              </form>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -193,6 +293,18 @@ const Auth = () => {
                   placeholder="Enter your password"
                   required
                 />
+                {mode === 'login' && (
+                  <div className="text-right">
+                    <Button 
+                      type="button" 
+                      variant="link" 
+                      className="text-xs p-0 h-auto"
+                      onClick={() => setMode('reset')}
+                    >
+                      Forgot your password?
+                    </Button>
+                  </div>
+                )}
               </div>
               <Button 
                 type="submit" 
