@@ -1,0 +1,421 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 50% 99%;
+    --foreground: 224 71% 4%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 71% 4%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71% 4%;
+
+    --primary: 211 96% 62%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 46%;
+
+    --accent: 220 14% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 211 96% 62%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 211 96% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 211 96% 62%;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 6%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 6%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 211 96% 62%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 211 96% 62%;
+
+    --sidebar-background: 222 47% 6%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 211 96% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 17%;
+    --sidebar-ring: 211 96% 62%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/30;
+  }
+
+  /* Focus styles */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background transition-all;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border border-gray-200/50 dark:border-gray-700/50;
+  }
+  
+  .content-card {
+    @apply bg-white dark:bg-gray-900 shadow-card rounded-lg border border-border/50 transition-all duration-200 hover:shadow-elevation;
+  }
+
+  .badge-keyword {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer utilities {
+  .animation-delay-100 {
+    animation-delay: 100ms;
+  }
+  
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+  
+  .animation-delay-300 {
+    animation-delay: 300ms;
+  }
+  
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+  
+  .animation-delay-500 {
+    animation-delay: 500ms;
+  }
+}
+
+/* Content View Styles */
+.content-view {
+  /* Basic text styling */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  color: #333;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Ensure all content is visible and properly formatted */
+.content-view * {
+  max-width: 100%;
+}
+
+/* Add spacing between elements */
+.content-view > * {
+  margin-bottom: 1em;
+}
+
+.content-view h1,
+.content-view h2,
+.content-view h3,
+.content-view h4,
+.content-view h5,
+.content-view h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.content-view h1 { font-size: 2em; }
+.content-view h2 { font-size: 1.5em; }
+.content-view h3 { font-size: 1.25em; }
+
+.content-view p {
+  margin-bottom: 1em;
+  min-height: 1em; /* Ensure empty paragraphs have height */
+}
+
+/* Fix for text without paragraphs */
+.content-view > div {
+  margin-bottom: 1em;
+}
+
+.content-view ul,
+.content-view ol {
+  margin-bottom: 1em;
+  padding-left: 2em;
+}
+
+.content-view ul li {
+  list-style-type: disc;
+  margin-bottom: 0.5em;
+}
+
+.content-view ol li {
+  list-style-type: decimal;
+  margin-bottom: 0.5em;
+}
+
+.content-view a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.content-view img {
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  display: block;
+}
+
+.content-view blockquote {
+  border-left: 4px solid #e5e7eb;
+  padding-left: 1em;
+  margin-left: 0;
+  margin-right: 0;
+  font-style: italic;
+}
+
+.content-view pre,
+.content-view code {
+  background-color: #f3f4f6;
+  border-radius: 0.25em;
+  padding: 0.2em 0.4em;
+  font-family: monospace;
+}
+
+.content-view pre {
+  padding: 1em;
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+
+.content-view pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.content-view table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1em;
+  overflow-x: auto;
+  display: block;
+}
+
+.content-view th,
+.content-view td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5em;
+}
+
+.content-view th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+
+/* Handle nested elements */
+.content-view div > p:last-child,
+.content-view li > p:last-child {
+  margin-bottom: 0;
+}
+
+/* Fix for empty elements */
+.content-view p:empty,
+.content-view div:empty {
+  display: none;
+}
+
+.blog-content {
+  scroll-behavior: smooth;
+  padding-right: 0.5rem;
+}
+
+.blog-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.blog-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.blog-content::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground)/0.2);
+  border-radius: 9999px;
+}
+
+.blog-content::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground)/0.3);
+}
+
+/* WordPress Content Styles */
+.wordpress-content {
+  /* Ensure proper spacing and readability */
+  line-height: 1.8;
+  color: var(--foreground);
+  padding-right: 1rem;
+}
+
+.wordpress-content h1,
+.wordpress-content h2,
+.wordpress-content h3,
+.wordpress-content h4,
+.wordpress-content h5,
+.wordpress-content h6 {
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--foreground);
+}
+
+.wordpress-content h1 { font-size: 2em; }
+.wordpress-content h2 { font-size: 1.5em; margin-top: 1.5em; }
+.wordpress-content h3 { font-size: 1.25em; margin-top: 1.25em; }
+.wordpress-content h4 { font-size: 1.125em; margin-top: 1.1em; }
+
+.wordpress-content p {
+  margin-bottom: 1.5em;
+}
+
+.wordpress-content a {
+  color: hsl(var(--primary));
+  text-decoration: none;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+.wordpress-content a:hover {
+  text-decoration: underline;
+}
+
+.wordpress-content ul,
+.wordpress-content ol {
+  margin-bottom: 1.5em;
+  padding-left: 2em;
+}
+
+.wordpress-content ul li {
+  list-style-type: disc;
+  margin-bottom: 0.5em;
+}
+
+.wordpress-content ol li {
+  list-style-type: decimal;
+  margin-bottom: 0.5em;
+}
+
+.wordpress-content blockquote {
+  border-left: 4px solid hsl(var(--primary));
+  padding-left: 1em;
+  margin-left: 0;
+  margin-right: 0;
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
+.wordpress-content pre {
+  background-color: hsl(var(--secondary));
+  padding: 1em;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  margin-bottom: 1.5em;
+}
+
+.wordpress-content code {
+  background-color: hsl(var(--secondary));
+  padding: 0.2em 0.4em;
+  border-radius: var(--radius);
+  font-size: 0.9em;
+  font-family: monospace;
+}
+
+.wordpress-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  margin: 1em 0;
+}
+
+.wordpress-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.5em;
+}
+
+.wordpress-content table th,
+.wordpress-content table td {
+  border: 1px solid hsl(var(--border));
+  padding: 0.5em;
+}
+
+.wordpress-content table th {
+  background-color: hsl(var(--secondary));
+  font-weight: 600;
+}
