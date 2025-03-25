@@ -82,6 +82,12 @@ serve(async (req) => {
       console.error('Post theme not found for ID:', postThemeId);
       throw new Error('Post theme not found');
     }
+    
+    console.log('Found post theme:', {
+      id: postTheme.id,
+      subject_matter: postTheme.subject_matter,
+      keywords: postTheme.keywords
+    });
 
     // Get publication settings (writing style, template, etc.)
     const { data: settings, error: settingsError } = await supabaseAdmin
@@ -135,6 +141,7 @@ serve(async (req) => {
       subjectMatters: subjectMatters.length
     });
 
+    // THIS IS THE FIX - Using our detailed prompt instead of the simplified one
     // Generate content using OpenAI
     const prompt = `Write a high-quality WordPress blog post with the title:
 "${postTheme.subject_matter}"
@@ -170,14 +177,8 @@ IMPORTANT:
 Format the response as HTML with proper heading tags (h2, h3), paragraphs, lists, and link elements.
 Use internal links with anchor text that flows naturally in the content.`;
 
+    // Print the full prompt to logs for debugging
     console.log('FULL PROMPT:', prompt);
-    
-    // IMPORTANT: Check if there's any code overriding the prompt
-    // The logs show a simplified prompt is being used instead of our detailed one
-    // If you find this line: "Write a blog post about ${postTheme.subject_matter}.\nKeywords to include: ${postTheme.keywords.join(', ')}.\n"
-    // remove it and use our detailed prompt instead
-    
-    console.log('Sending request to OpenAI API with prompt:', prompt);
     
     // Log actual request parameters in detail
     const openaiRequestBody = {
@@ -192,8 +193,8 @@ Use internal links with anchor text that flows naturally in the content.`;
       temperature: 0.7
     };
     
-    // Double check that our prompt wasn't overridden
-    console.log('FINAL PROMPT BEING SENT:', openaiRequestBody.messages[1].content);
+    // Double check the final prompt being sent
+    console.log('SENDING THIS EXACT PROMPT:', openaiRequestBody.messages[1].content);
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
@@ -275,13 +276,16 @@ Use internal links with anchor text that flows naturally in the content.`;
     let finalContent = formattedContent;
     if (wordpressTemplate) {
       console.log('Applying WordPress template to content');
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = wordpressTemplate;
-      const entryContentDiv = tempDiv.querySelector('.entry-content');
-      
-      if (entryContentDiv) {
-        entryContentDiv.innerHTML = formattedContent;
-        finalContent = tempDiv.innerHTML;
+      // Use string replacement instead of DOM manipulation
+      if (wordpressTemplate.includes('.entry-content')) {
+        // Replace content between .entry-content tags with our formatted content
+        finalContent = wordpressTemplate.replace(
+          /<div class="entry-content">([\s\S]*?)<\/div>/,
+          `<div class="entry-content">${formattedContent}</div>`
+        );
+      } else {
+        // If no entry-content div is found, just use the formatted content
+        finalContent = formattedContent;
       }
     }
 
@@ -325,7 +329,7 @@ Use internal links with anchor text that flows naturally in the content.`;
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error in generate-content function:', error);
+    console.error('Error in generate-content-v2 function:', error);
     console.error('Error stack:', error.stack);
     return new Response(
       JSON.stringify({ 

@@ -68,6 +68,17 @@ const ContentView: React.FC<ContentViewProps> = ({
   // Determine if the content has already been sent to WordPress
   const alreadySentToWP = status === 'published' && !!wpSentDate;
 
+  // Add effect to handle content updates
+  React.useEffect(() => {
+    if (isGeneratingContent) {
+      // Show loading state while generating
+      console.log('Content generation in progress...');
+    } else if (hasContent) {
+      // Content has been generated
+      console.log('Content generation complete, displaying new content');
+    }
+  }, [isGeneratingContent, hasContent]);
+
   return (
     <Sheet open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <SheetPortal>
@@ -238,7 +249,19 @@ const ContentView: React.FC<ContentViewProps> = ({
               className="overflow-y-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6 flex-1" 
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
-              {hasContent ? (
+              {isGeneratingContent ? (
+                <div className="flex flex-col items-center justify-center min-h-[300px] text-muted-foreground py-12">
+                  <div className="flex flex-col items-center space-y-4">
+                    <div className="rounded-full bg-blue-50 p-3">
+                      <Loader2 className="h-5 w-5 text-blue-500 animate-spin" />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <p className="font-medium">Generating content...</p>
+                      <p className="text-sm max-w-md">Please wait while we generate optimized content for your post.</p>
+                    </div>
+                  </div>
+                </div>
+              ) : hasContent ? (
                 <div className="space-y-6">
                   {/* Preview Image */}
                   {(() => {

@@ -273,6 +273,16 @@ const ContentCalendar = () => {
         setPostThemes(prev => 
           prev.map(t => t.id === theme.id ? updatedTheme : t)
         );
+
+        // Update selectedContent if this is the currently selected item
+        if (selectedContent?.id === contentId) {
+          setSelectedContent(prev => ({
+            ...prev!,
+            description: updatedTheme.post_content || '',
+            contentStatus: updatedTheme.status === 'generated' ? 'scheduled' : 'draft',
+            status: updatedTheme.status
+          }));
+        }
         
         toast.success('Content generated successfully');
       } else {
