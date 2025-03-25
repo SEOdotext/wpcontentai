@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Plus, Loader2, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import TitleSuggestion, { Keyword } from './TitleSuggestion';
+import TitleSuggestion from './TitleSuggestion';
 import EmptyState from './EmptyState';
 import { cn } from '@/lib/utils';
 import { addDays, format } from 'date-fns';
@@ -16,6 +16,21 @@ import { generateTitleSuggestions } from '@/services/aiService';
 
 interface ContentStructureViewProps {
   className?: string;
+}
+
+interface TitleSuggestionProps {
+  id: string;
+  title: string;
+  keywords: string[];
+  selected: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+  date: string;
+  onUpdateDate: (newDate: string) => void;
+  onLiked: () => void;
+  status: 'pending' | 'generated' | 'published';
+  onUpdateKeywords: (keywords: string[]) => void;
+  isGeneratingContent: boolean;
 }
 
 // Helper function to format titles with proper Danish capitalization
@@ -46,13 +61,6 @@ const formatDanishTitle = (title: string): string => {
   return words.join(' ');
 };
 
-// Simplified helper function to convert keywords array to Keyword objects
-const convertToKeywords = (keywords: string[]): Keyword[] => {
-  return keywords.map(keyword => ({
-    text: keyword
-  }));
-};
-
 // Default topics to use when generating initial content
 const DEFAULT_TOPICS = [
   'WordPress Content Management',
@@ -67,95 +75,20 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   const [websiteContent, setWebsiteContent] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [contentFetchAttempted, setContentFetchAttempted] = useState(false);
-  const [viewMode, setViewMode] = useState<'pending' | 'approved' | 'declined'>('pending');
+  const [viewMode, setViewMode] = useState<'pending' | 'generated' | 'published'>('pending');
   const generationAttemptedRef = useRef(false);
   const isMountedRef = useRef(true);
   const { publicationFrequency, subjectMatters, writingStyle } = useSettings();
   const { currentWebsite } = useWebsites();
-  const { postThemes, isLoading: themesLoading, fetchPostThemes, createPostTheme, updatePostTheme } = usePostThemes();
-  
-  // Function to get the next publication date
-  const getPublicationDate = useCallback(() => {
-    try {
-      // If no website is selected, use default calculation
-      if (!currentWebsite) {
-        const result = addDays(new Date(), publicationFrequency);
-        console.log('No website selected, using today + frequency:', format(result, 'yyyy-MM-dd'));
-        return result;
-      }
-      
-      // Use website-specific localStorage key
-      const storageKey = `calendarContent_${currentWebsite.id}`;
-      
-      // First check for website-specific content
-      let calendarData = localStorage.getItem(storageKey);
-      
-      // If no data exists in the website-specific format, check for legacy data
-      if (!calendarData) {
-        console.log("No website-specific calendar data found in getPublicationDate, checking for legacy data...");
-        const legacyData = localStorage.getItem('calendarContent');
-        
-        if (legacyData) {
-          console.log("Found legacy calendar data, migrating to website-specific storage...");
-          // Migrate legacy data to the new format
-          localStorage.setItem(storageKey, legacyData);
-          calendarData = legacyData;
-          
-          // Optionally, clear the legacy data after migration
-          // localStorage.removeItem('calendarContent');
-        }
-      }
-      
-      // Get calendar content from localStorage
-      const calendarContent = JSON.parse(calendarData || '[]');
-      
-      if (!calendarContent || calendarContent.length === 0) {
-        // If no calendar content, use today + publication frequency
-        const result = addDays(new Date(), publicationFrequency);
-        console.log(`No calendar content for website ${currentWebsite.name}, using today + frequency:`, format(result, 'yyyy-MM-dd'));
-        return result;
-      }
-      
-      // Find the absolute latest date through a simple loop
-      let latestTimestamp = 0;
-      let latestDateString = '';
-      
-      for (const item of calendarContent) {
-        if (!item.date) continue;
-        
-        try {
-          const dateObj = new Date(item.date);
-          const timestamp = dateObj.getTime();
-          
-          if (timestamp > latestTimestamp) {
-            latestTimestamp = timestamp;
-            latestDateString = item.date;
-          }
-        } catch (e) {
-          console.error('Error parsing date:', item.date, e);
-        }
-      }
-      
-      if (latestTimestamp === 0) {
-        // No valid dates found, use today + publication frequency
-        const result = addDays(new Date(), publicationFrequency);
-        console.log(`No valid dates found for website ${currentWebsite.name}, using today + frequency:`, format(result, 'yyyy-MM-dd'));
-        return result;
-      }
-      
-      // We found a valid latest date, add publication frequency to it
-      const latestDate = new Date(latestTimestamp);
-      console.log(`Found latest calendar date for website ${currentWebsite.name}:`, format(latestDate, 'yyyy-MM-dd'));
-      
-      const result = addDays(latestDate, publicationFrequency);
-      console.log('Next publication date:', format(result, 'yyyy-MM-dd'));
-      return result;
-    } catch (error) {
-      console.error('Error in getPublicationDate:', error);
-      // Fallback to today + publication frequency
-      return addDays(new Date(), publicationFrequency);
-    }
-  }, [currentWebsite, publicationFrequency]);
+  const { 
+    postThemes, 
+    isLoading: themesLoading, 
+    fetchPostThemes, 
+    addPostTheme,
+    updatePostTheme,
+    isGeneratingContent,
+    getNextPublicationDate
+  } = usePostThemes();
   
   // Cleanup on unmount
   useEffect(() => {
@@ -254,7 +187,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         let successCount = 0;
         
         // Get a single publication date for all posts
-        const publicationDate = getPublicationDate();
+        const publicationDate = getNextPublicationDate();
         
         for (let i = 0; i < topics.length; i++) {
           const topic = topics[i];
@@ -289,12 +222,15 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               // Create a post theme for the first title with the same publication date for all
               // Use showToast: false for all but the last one to avoid toast spam
               const isLastPost = i === topics.length - 1;
-              await createPostTheme(
-                formattedTitle, 
-                result.keywords, 
-                publicationDate.toISOString(),
-                isLastPost // Only show toast for the last post
-              );
+              await addPostTheme({
+                website_id: currentWebsite?.id || '',
+                subject_matter: formattedTitle,
+                keywords: result.keywords,
+                status: 'pending',
+                scheduled_date: publicationDate.toISOString(),
+                post_content: null,
+                image: null
+              });
               console.log(`Generated initial post for topic: ${topic}`);
               successCount++;
             }
@@ -330,10 +266,10 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     websiteContent, 
     subjectMatters, 
     writingStyle, 
-    createPostTheme, 
+    addPostTheme, 
     fetchPostThemes,
     inputValue,
-    getPublicationDate
+    getNextPublicationDate
   ]);
   
   // Modify the existing function to handle empty input
@@ -390,7 +326,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       );
       
       // Get a single publication date for all posts
-      const publicationDate = getPublicationDate();
+      const publicationDate = getNextPublicationDate();
       console.log('Setting all posts to publish on:', format(publicationDate, 'MMM dd, yyyy'));
       
       // Create post themes for each title with the same publication date
@@ -410,12 +346,15 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         // Only show toast for the last post to avoid toast spam
         const isLastPost = index === result.titles.length - 1;
         
-        return createPostTheme(
-          formattedTitle,
-          titleKeywords,
-          publicationDate.toISOString(),
-          isLastPost
-        );
+        return addPostTheme({
+          website_id: currentWebsite?.id || '',
+          subject_matter: formattedTitle,
+          keywords: titleKeywords,
+          status: 'pending',
+          scheduled_date: publicationDate.toISOString(),
+          post_content: null,
+          image: null
+        });
       });
       
       await Promise.all(creationPromises);
@@ -437,40 +376,27 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
 
   // Update the function to generate suggestions using subject matters
   const handleGenerateFromSubjects = async () => {
-    if (!currentWebsite?.url) {
-      toast.error('Please select a website first');
+    if (!subjectMatters.length) {
+      toast.error('Please add at least one subject matter first');
       return;
     }
-    
-    if (!websiteContent) {
-      toast.error('Website content not available. Please try again later');
-      return;
-    }
-    
-    if (!subjectMatters || subjectMatters.length === 0) {
-      toast.error('No subject matters defined. Please add some in Settings');
-      return;
-    }
-    
+
     setIsGenerating(true);
-    
     try {
-      // Use subject matters directly as keywords
-      const keywords = subjectMatters.slice(0, 3); // Use up to 3 subject matters
-      
-      console.log(`Using website content (${websiteContent.length} characters) for title generation`);
-      console.log('Using subject matters as keywords:', keywords);
-      
-      // Generate title suggestions using AI
+      // Use subject matters as keywords and content
       const result = await generateTitleSuggestions(
-        websiteContent,
-        keywords,
+        websiteContent || '', // Use empty string as fallback if no content
+        subjectMatters, // Use subject matters as keywords
         writingStyle || 'Professional and informative',
         subjectMatters
       );
       
-      // Get a single publication date for all posts
-      const publicationDate = getPublicationDate();
+      if (!result || !result.titles || result.titles.length === 0) {
+        toast.error('No title suggestions were generated');
+        return;
+      }
+
+      const publicationDate = getNextPublicationDate();
       console.log('Setting all posts to publish on:', format(publicationDate, 'MMM dd, yyyy'));
       
       // Create post themes for each title with the same publication date
@@ -490,12 +416,15 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         // Only show toast for the last post to avoid toast spam
         const isLastPost = index === result.titles.length - 1;
         
-        return createPostTheme(
-          formattedTitle,
-          titleKeywords,
-          publicationDate.toISOString(),
-          isLastPost
-        );
+        return addPostTheme({
+          website_id: currentWebsite?.id || '',
+          subject_matter: formattedTitle,
+          keywords: titleKeywords,
+          status: 'pending',
+          scheduled_date: publicationDate.toISOString(),
+          post_content: null,
+          image: null
+        });
       });
       
       await Promise.all(creationPromises);
@@ -526,32 +455,37 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
 
   /**
    * Handler called when a title suggestion is approved (liked)
-   * When a post is approved, this function updates all remaining pending posts
-   * to be scheduled for a new future date based on the latest calendar date plus publication frequency
+   * This function:
+   * 1. Updates the status of the liked post to 'generated'
+   * 2. Increments the dates of all other pending posts by one day
    * 
-   * @param approvedDate The date of the post that was just approved
+   * @param id The ID of the post that was liked
    */
-  const handleTitleLiked = () => {
-    // Find all pending posts
-    const pendingPosts = postThemes.filter(theme => theme.status === 'pending');
+  const handleTitleLiked = (id: string) => {
+    // Find the specific post that was liked
+    const likedPost = postThemes.find(theme => theme.id === id);
     
-    if (pendingPosts.length === 0) {
-      return; // No pending posts to update
+    if (!likedPost) {
+      return; // Post not found
     }
     
-    // Calculate the next publication date based on the calendar
-    const nextPublicationDate = getPublicationDate();
+    // Update the liked post to 'generated' status
+    updatePostTheme(id, { status: 'generated' });
     
-    console.log(`Updating ${pendingPosts.length} pending posts to ${format(nextPublicationDate, 'MMM dd, yyyy')}`);
+    // Find all other pending posts
+    const otherPendingPosts = postThemes.filter(theme => 
+      theme.status === 'pending' && theme.id !== id
+    );
     
-    // Update all pending posts to the same future date
-    pendingPosts.forEach(post => {
-      // Use false to avoid toast spam
-      updatePostTheme(post.id, { scheduled_date: nextPublicationDate.toISOString() }, false);
+    // Update each pending post's date to be one day later
+    otherPendingPosts.forEach(post => {
+      const currentDate = new Date(post.scheduled_date);
+      const nextDate = addDays(currentDate, 1);
+      updatePostTheme(post.id, { scheduled_date: nextDate.toISOString() }, false);
     });
     
-    // Show one summary toast instead of individual ones
-    toast.info(`Updated ${pendingPosts.length} pending posts to ${format(nextPublicationDate, 'MMM dd, yyyy')}`);
+    // Show success toast
+    toast.success(`"${likedPost.subject_matter}" has been added to your calendar`);
   };
 
   const handleUpdateKeywords = (id: string, keywords: string[]) => {
@@ -565,37 +499,37 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     .filter(theme => {
       if (viewMode === 'pending') {
         return theme.status === 'pending';
-      } else if (viewMode === 'approved') {
-        return theme.status === 'approved' || theme.status === 'published';
-      } else if (viewMode === 'declined') {
-        return theme.status === 'declined';
+      } else if (viewMode === 'generated') {
+        return theme.status === 'generated';
+      } else if (viewMode === 'published') {
+        return theme.status === 'published';
       }
       return false;
     })
     // Sort by created_at date, newest first
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .map(theme => ({
-    id: theme.id,
-    title: theme.subject_matter,
-    keywords: convertToKeywords(theme.keywords),
-      date: theme.scheduled_date ? new Date(theme.scheduled_date) : new Date(),
-    status: theme.status
-  }));
+      id: theme.id,
+      title: theme.subject_matter,
+      keywords: theme.keywords,
+      date: new Date(theme.scheduled_date),
+      status: theme.status as 'pending' | 'generated' | 'published'
+    }));
 
   // Get the appropriate view title and description
   const getViewInfo = () => {
     switch (viewMode) {
-      case 'approved':
+      case 'generated':
         return {
-          title: "Approved Suggestions",
-          description: "These suggestions have been approved and added to your calendar.",
+          title: "Generated Suggestions",
+          description: "These suggestions have been generated and added to your calendar.",
           alertClass: "bg-green-50 border-green-200"
         };
-      case 'declined':
+      case 'published':
         return {
-          title: "Declined Suggestions",
-          description: "These suggestions have been previously declined.",
-          alertClass: "bg-red-50 border-red-200"
+          title: "Published Suggestions",
+          description: "These suggestions have been published and added to your calendar.",
+          alertClass: "bg-green-50 border-green-200"
         };
       default:
         return {
@@ -610,6 +544,9 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
 
   // Determine if we're in a loading state
   const isLoading = isInitializing || themesLoading || isGenerating;
+  
+  // Separate loading state for input/button disabling
+  const isInputDisabled = isGenerating || !currentWebsite;
 
   return (
     <div className={className}>
@@ -635,11 +572,11 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                 handleGenerateTitleSuggestions();
               }
             }}
-            disabled={isLoading}
+            disabled={isInputDisabled}
           />
           <Button 
             onClick={handleGenerateTitleSuggestions} 
-            disabled={isGenerating || !currentWebsite || isLoading}
+            disabled={isInputDisabled}
           >
             {isGenerating ? (
               <>
@@ -674,33 +611,63 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               Pending
             </Button>
             <Button
-              variant={viewMode === 'approved' ? "default" : "ghost"}
+              variant={viewMode === 'generated' ? "default" : "ghost"}
               size="sm"
               className="text-xs h-7 px-2"
-              onClick={() => setViewMode('approved')}
+              onClick={() => setViewMode('generated')}
             >
-              Approved
+              Generated
             </Button>
             <Button
-              variant={viewMode === 'declined' ? "default" : "ghost"}
+              variant={viewMode === 'published' ? "default" : "ghost"}
               size="sm"
               className="text-xs h-7 px-2"
-              onClick={() => setViewMode('declined')}
+              onClick={() => setViewMode('published')}
             >
-              Declined
+              Published
             </Button>
           </div>
         </div>
       </div>
       
       {isLoading ? (
-        <div className="flex justify-center items-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <span className="ml-2 text-muted-foreground">
-            {isGenerating ? 'Generating content suggestions...' : 
-             isInitializing ? 'Initializing content...' : 
-             'Loading title suggestions...'}
-          </span>
+        <div className="space-y-4">
+          {filteredTitleSuggestions.length > 0 && (
+            <div className="grid gap-4">
+              {viewMode !== 'pending' && (
+                <Alert className={`mb-2 ${viewInfo.alertClass}`}>
+                  <AlertDescription>
+                    {viewInfo.description}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {filteredTitleSuggestions.map((title) => (
+                <TitleSuggestion
+                  key={title.id}
+                  id={title.id}
+                  title={title.title}
+                  keywords={title.keywords}
+                  selected={selectedTitleId === title.id}
+                  onSelect={() => handleSelectTitle(title.id)}
+                  onRemove={() => handleRemoveTitle(title.id)}
+                  date={title.date}
+                  onUpdateDate={handleUpdateTitleDate}
+                  onLiked={() => handleTitleLiked(title.id)}
+                  status={title.status}
+                  onUpdateKeywords={handleUpdateKeywords}
+                  isGeneratingContent={isGeneratingContent(title.id)}
+                />
+              ))}
+            </div>
+          )}
+          <div className="flex justify-center items-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">
+              {isGenerating ? 'Generating content suggestions...' : 
+               isInitializing ? 'Initializing content...' : 
+               'Loading title suggestions...'}
+            </span>
+          </div>
         </div>
       ) : filteredTitleSuggestions.length > 0 ? (
         <div className="grid gap-4">
@@ -721,10 +688,11 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               onSelect={() => handleSelectTitle(title.id)}
               onRemove={() => handleRemoveTitle(title.id)}
               date={title.date}
-              onUpdateDate={(newDate) => handleUpdateTitleDate(title.id, newDate)}
-              onLiked={handleTitleLiked}
+              onUpdateDate={handleUpdateTitleDate}
+              onLiked={() => handleTitleLiked(title.id)}
               status={title.status}
-              onUpdateKeywords={(keywords) => handleUpdateKeywords(title.id, keywords)}
+              onUpdateKeywords={handleUpdateKeywords}
+              isGeneratingContent={isGeneratingContent(title.id)}
             />
           ))}
         </div>
@@ -733,25 +701,29 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           icon={<Globe className="h-8 w-8 text-muted-foreground" />}
           title={
             viewMode === 'pending' ? "No Pending Suggestions" :
-            viewMode === 'approved' ? "No Approved Suggestions" :
-            "No Declined Suggestions"
+            viewMode === 'generated' ? "No Generated Suggestions" :
+            "No Published Suggestions"
           }
           description={
             viewMode === 'pending' 
               ? "Generate title suggestions based on your website content and keywords" 
-              : viewMode === 'approved'
-                ? "You haven't approved any suggestions yet."
-                : "You haven't declined any suggestions yet."
+              : viewMode === 'generated'
+                ? "You haven't generated any suggestions yet."
+                : "You haven't published any suggestions yet."
           }
           actionLabel={
             viewMode === 'pending' 
               ? "Generate Suggestions" 
-              : "View Pending Suggestions"
+              : viewMode === 'generated'
+                ? "View Generated Suggestions"
+                : "View Published Suggestions"
           } 
           onAction={
             viewMode === 'pending' 
               ? handleGenerateTitleSuggestions 
-              : () => setViewMode('pending')
+              : viewMode === 'generated'
+                ? () => setViewMode('pending')
+                : () => setViewMode('pending')
           }
         />
       )}

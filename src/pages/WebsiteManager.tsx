@@ -40,6 +40,7 @@ const WebsiteManager = () => {
     id: string; 
     name: string; 
     url: string;
+    language?: string;
     enable_ai_image_generation?: boolean;
     image_prompt?: string;
   } | null>(null);
@@ -80,6 +81,7 @@ const WebsiteManager = () => {
       const success = await updateWebsite(editingWebsite.id, {
         name: editingWebsite.name,
         url: editingWebsite.url,
+        language: editingWebsite.language,
         enable_ai_image_generation: editingWebsite.enable_ai_image_generation,
         image_prompt: editingWebsite.image_prompt
       });
@@ -348,6 +350,26 @@ const WebsiteManager = () => {
                 onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, url: e.target.value } : null)}
                 placeholder="Enter website URL"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-language">Website Language</Label>
+              <select
+                id="edit-language"
+                value={editingWebsite?.language || 'en'}
+                onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, language: e.target.value } : null)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="en">English</option>
+                <option value="da">Danish</option>
+                <option value="de">German</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="it">Italian</option>
+                <option value="nl">Dutch</option>
+                <option value="no">Norwegian</option>
+                <option value="pt">Portuguese</option>
+                <option value="sv">Swedish</option>
+              </select>
             </div>
             <div className="flex items-center justify-between space-x-2">
               <Label htmlFor="ai-image-generation">Enable AI Image Generation</Label>

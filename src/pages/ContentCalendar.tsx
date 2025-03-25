@@ -20,164 +20,107 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { useWebsites } from '@/context/WebsitesContext';
-import { useWordPress } from '@/context/WordPressContext';
+import { usePostThemes } from '@/context/PostThemesContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
 import { generateImage } from '@/services/imageGeneration';
 
+interface Keyword {
+  text: string;
+}
+
 interface CalendarContent {
-  id: number;
+  id: string;
   title: string;
   description: string;
   dateCreated: string;
   date: string;
-  contentStatus?: 'published' | 'draft' | 'scheduled';
-  keywords: any[];
-  // For backward compatibility with older data
-  status?: 'published' | 'draft' | 'scheduled';
-  // Add new field for WordPress sent date
+  contentStatus: 'draft' | 'published' | 'scheduled';
+  keywords: Keyword[];
   wpSentDate?: string;
-  // Add new field for WordPress post URL
   wpPostUrl?: string;
-  // Add new field for preview image URL
   preview_image_url?: string;
+  status: 'pending' | 'generated' | 'published';
+}
+
+interface WordPressSettings {
+  id: string;
+  website_id: string;
+  wp_url: string;
+  wp_username: string;
+  wp_application_password: string;
+  is_connected: boolean;
+  publish_status?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 const ContentCalendar = () => {
   const [displayDate, setDisplayDate] = useState<Date>(new Date());
   const [selectedContent, setSelectedContent] = useState<CalendarContent | null>(null);
   const [allContent, setAllContent] = useState<CalendarContent[]>([]);
-  const [isGeneratingContent, setIsGeneratingContent] = useState<boolean>(false);
-  const [generatingContentId, setGeneratingContentId] = useState<number | null>(null);
-  const [isSendingToWP, setIsSendingToWP] = useState<boolean>(false);
-  const [sendingToWPId, setSendingToWPId] = useState<number | null>(null);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [generatingImageId, setGeneratingImageId] = useState<string | null>(null);
+  const [isSendingToWP, setIsSendingToWP] = useState(false);
+  const [sendingToWPId, setSendingToWPId] = useState<string | null>(null);
+  const [isGeneratingContent, setIsGeneratingContent] = useState(false);
+  const [generatingContentId, setGeneratingContentId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'all' | 'not-generated' | 'not-sent'>('all');
   const { currentWebsite } = useWebsites();
-  const { createPost, settings: wpSettings } = useWordPress();
-  const [directWpSettings, setDirectWpSettings] = useState<any>(null);
-  const { writingStyle, wordpressTemplate } = useSettings();
-  // Add memoized state for WordPress configuration
+  const { 
+    postThemes, 
+    isLoading, 
+    error, 
+    fetchPostThemes, 
+    addPostTheme, 
+    updatePostTheme, 
+    deletePostTheme, 
+    generateContent,
+    setPostThemes,
+    isGeneratingContent: isThemeGeneratingContent
+  } = usePostThemes();
+  const { publicationFrequency } = useSettings();
+  const [directWpSettings, setDirectWpSettings] = useState<WordPressSettings | null>(null);
   const [wpConfigured, setWpConfigured] = useState<boolean>(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
-  const [generatingImageId, setGeneratingImageId] = useState<number | null>(null);
   
+  // Memoize the calendar content conversion
+  const calendarContent = React.useMemo(() => {
+    if (!postThemes || !currentWebsite) return [];
+    
+    return postThemes.map(theme => ({
+      id: theme.id,
+      title: theme.subject_matter,
+      description: theme.post_content || '',
+      dateCreated: theme.created_at,
+      date: theme.scheduled_date,
+      contentStatus: (theme.status === 'pending' ? 'draft' : 
+                     theme.status === 'generated' ? 'scheduled' : 
+                     theme.status === 'published' ? 'published' : 'draft') as 'draft' | 'published' | 'scheduled',
+      keywords: theme.keywords.map(k => ({ text: k })),
+      wpSentDate: theme.wp_sent_date,
+      wpPostUrl: theme.wp_post_url,
+      status: theme.status
+    }));
+  }, [postThemes, currentWebsite]);
+
+  // Update allContent only when calendarContent changes
   useEffect(() => {
-    try {
-      // If no website is selected, don't attempt to load calendar content
-      if (!currentWebsite) {
-        console.log("No website selected, not loading calendar content");
-        return;
-      }
-      
-      console.log("=== Calendar Content Loading Debug ===");
-      console.log(`Loading calendar content for website: ${currentWebsite.name} (ID: ${currentWebsite.id})`);
-      
-      // Use website-specific localStorage key
-      const storageKey = `calendarContent_${currentWebsite.id}`;
-      console.log(`Using storage key: ${storageKey}`);
-      
-      // Check for data in the new format first
-      let storedContent = localStorage.getItem(storageKey);
-      
-      // Log all localStorage keys to help with debugging
-      const allKeys = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.includes('calendar')) {
-          allKeys.push(key);
-        }
-      }
-      console.log("All calendar-related localStorage keys:", allKeys);
-      
-      // If no data exists in the new format, check for legacy data
-      if (!storedContent) {
-        console.log("No website-specific calendar data found, checking for legacy data...");
-        const legacyData = localStorage.getItem('calendarContent');
-        
-        if (legacyData) {
-          console.log(`Found legacy calendar data (${legacyData.length} bytes), migrating to website-specific storage...`);
-          // Migrate legacy data to the new format
-          localStorage.setItem(storageKey, legacyData);
-          storedContent = legacyData;
-          
-          // Optionally, clear the legacy data after migration
-          // localStorage.removeItem('calendarContent');
-          
-          toast.success("Calendar data has been migrated to the new format");
-        } else {
-          console.log("No legacy calendar data found either");
-        }
-      } else {
-        console.log(`Found website-specific calendar data (${storedContent.length} bytes)`);
-      }
-      
-      if (storedContent) {
-        const parsedContent = JSON.parse(storedContent) as CalendarContent[];
-        console.log(`Loaded calendar content for website ${currentWebsite.name}: ${parsedContent.length} items`);
-        
-        const processedContent = parsedContent.map(item => ({
-          ...item,
-          date: item.date ? new Date(item.date).toISOString() : new Date().toISOString(),
-          dateCreated: item.dateCreated || new Date().toISOString(),
-          // Convert status to contentStatus if the old format exists
-          contentStatus: item.contentStatus || item.status || 'scheduled'
-        }));
-        
-        // Sort by date
-        processedContent.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
-        setAllContent(processedContent);
-        console.log(`Calendar content processed and sorted. Final count: ${processedContent.length} items`);
-      } else {
-        // Clear content when switching to a website with no calendar data
-        console.log("No calendar content found, clearing any existing content");
-        setAllContent([]);
-      }
-      console.log("=== End Calendar Content Loading Debug ===");
-    } catch (error) {
-      console.error("Error loading calendar content:", error);
+    const hasChanged = JSON.stringify(calendarContent) !== JSON.stringify(allContent);
+    if (hasChanged) {
+      setAllContent(calendarContent);
     }
-  }, [currentWebsite]);
-  
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setDisplayDate(prev => 
-      direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
-    );
-  };
+  }, [calendarContent]);
 
-  const handleContentClick = (content: CalendarContent) => {
-    setSelectedContent(content);
-  };
-
-  const handleDeleteContent = (contentId: number) => {
-    if (!currentWebsite) return;
-    
-    const updatedContent = allContent.filter(content => content.id !== contentId);
-    const storageKey = `calendarContent_${currentWebsite.id}`;
-    localStorage.setItem(storageKey, JSON.stringify(updatedContent));
-    setAllContent(updatedContent);
-    
-    if (selectedContent && selectedContent.id === contentId) {
-      setSelectedContent(null);
-    }
-    
-    toast.success("Content removed from calendar");
-  };
-  
-  const getContentByMonth = (date: Date) => {
-    // Ensure we have content to filter
+  // Memoize the content filtering functions
+  const getContentByMonth = React.useCallback((date: Date) => {
     if (!allContent || allContent.length === 0) {
-      console.log("No content to filter by month");
       return [];
     }
     
     const month = date.getMonth();
     const year = date.getFullYear();
     
-    // Add debug log
-    console.log(`Filtering content for ${month+1}/${year}`);
-    
-    const filteredContent = allContent.filter(content => {
+    return allContent.filter(content => {
       try {
         const contentDate = new Date(content.date);
         const contentMonth = contentDate.getMonth();
@@ -188,118 +131,188 @@ const ContentCalendar = () => {
         return false;
       }
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [allContent]);
+
+  const getFilteredContent = React.useCallback((content: CalendarContent[]) => {
+    switch (viewMode) {
+      case 'not-generated':
+        return content.filter(item => !item.description);
+      case 'not-sent':
+        return content.filter(item => !item.wpSentDate);
+      default:
+        return content;
+    }
+  }, [viewMode]);
+
+  // Memoize the filtered content
+  const filteredContent = React.useMemo(() => {
+    const monthContent = getContentByMonth(displayDate);
+    return getFilteredContent(monthContent);
+  }, [displayDate, getContentByMonth, getFilteredContent]);
+
+  // Memoize the view info
+  const viewInfo = React.useMemo(() => {
+    switch (viewMode) {
+      case 'not-generated':
+        return {
+          title: "Not Generated",
+          description: "Content items that haven't been generated yet."
+        };
+      case 'not-sent':
+        return {
+          title: "Not Sent",
+          description: "Content that hasn't been sent to WordPress yet."
+        };
+      default:
+        return {
+          title: "All Content",
+          description: "Showing all calendar content."
+        };
+    }
+  }, [viewMode]);
+
+  // Memoize the WordPress configuration check
+  const isWordPressConfigured = React.useCallback(() => {
+    if (directWpSettings && 
+        directWpSettings.wp_url && 
+        directWpSettings.wp_username && 
+        directWpSettings.wp_application_password) {
+      return true;
+    }
+    return false;
+  }, [directWpSettings]);
+
+  // Update WordPress configuration only when needed
+  useEffect(() => {
+    setWpConfigured(isWordPressConfigured());
+  }, [isWordPressConfigured]);
+
+  // Memoize the canSendToWordPress function
+  const canSendToWordPress = React.useCallback((content: CalendarContent) => {
+    const issues = [];
     
-    console.log(`Found ${filteredContent.length} items for ${month+1}/${year}`);
-    return filteredContent;
+    if (!wpConfigured) {
+      issues.push('WordPress not configured');
+    }
+    
+    if (isSendingToWP) {
+      issues.push('Already sending to WordPress');
+    }
+    
+    if (content.contentStatus === 'published' && !!content.wpSentDate) {
+      issues.push('Already sent to WordPress');
+    }
+    
+    if (!content.description || content.description.trim().length === 0) {
+      issues.push('No content to send');
+    }
+    
+    return issues.length === 0;
+  }, [wpConfigured, isSendingToWP]);
+
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    setDisplayDate(prev => 
+      direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
+    );
   };
 
-  const handleEditContent = (contentId: number) => {
+  const handleContentClick = (content: CalendarContent) => {
+    setSelectedContent(content);
+  };
+
+  const handleDeleteContent = (contentId: string) => {
+    if (!currentWebsite) return;
+    
+    const updatedContent = allContent.filter(content => content.id !== contentId);
+    setAllContent(updatedContent);
+    
+    if (selectedContent && selectedContent.id === contentId) {
+      setSelectedContent(null);
+    }
+    
+    toast.success("Content removed from calendar");
+  };
+
+  const handleEditContent = (contentId: string) => {
     toast.info("Edit functionality will be implemented soon");
   };
 
-  const handleRegenerateContent = (contentId: number) => {
-    // First set the generating state to show spinners immediately
-    setIsGeneratingContent(true);
-    setGeneratingContentId(contentId);
-    
-    // Then call the generation function
+  const handleRegenerateContent = (contentId: string) => {
+    // Call the generation function directly
     handleGenerateContent(contentId);
   };
 
-  const handleGenerateContent = async (contentId: number) => {
+  const handleGenerateContent = async (contentId: string) => {
     try {
       setIsGeneratingContent(true);
       setGeneratingContentId(contentId);
-      
-      // Find the selected content
-      const content = allContent.find(item => item.id === contentId);
-      if (!content) {
-        toast.error("Content not found");
-        return;
+      console.log('Starting content generation for contentId:', contentId);
+
+      // Find the corresponding post theme - use UUID directly
+      const theme = postThemes.find(t => t.id === contentId);
+      if (!theme) {
+        console.error('Post theme not found for contentId:', contentId);
+        throw new Error('Post theme not found');
       }
+
+      console.log('Found post theme:', {
+        id: theme.id,
+        subjectMatter: theme.subject_matter,
+        keywords: theme.keywords,
+        status: theme.status
+      });
+
+      // Generate content using the PostThemesContext
+      console.log('Calling generateContent with theme ID:', theme.id);
+      const updatedTheme = await generateContent(theme.id);
       
-      console.log('Generating content for:', content.title);
+      console.log('Content generation result:', updatedTheme);
       
-      // Get current website
-      if (!currentWebsite) {
-        toast.error("Please select a website first");
-        return;
+      if (updatedTheme && updatedTheme.post_content) {
+        // Update the local state immediately with the new content
+        setPostThemes(prev => 
+          prev.map(t => t.id === theme.id ? updatedTheme : t)
+        );
+        
+        toast.success('Content generated successfully');
+      } else {
+        throw new Error('No content was generated');
       }
-      
-      // Dynamically import the services to generate content
-      const { generatePostContent, fetchWebsiteContent } = await import('@/services/aiService');
-      
-      // Fetch website content
-      console.log(`Starting content fetch for website: ${currentWebsite.url} (ID: ${currentWebsite.id})`);
-      const websiteContent = await fetchWebsiteContent(currentWebsite.url, currentWebsite.id);
-      console.log(`Completed content fetch, received ${websiteContent.length} characters`);
-      
-      // Convert the keywords array to string array
-      const keywordsArray = content.keywords && Array.isArray(content.keywords) 
-        ? content.keywords.map(k => typeof k === 'string' ? k : k.text) 
-        : ['wordpress', 'content'];
-      
-      // Use the writing style and WordPress template from the settings context
-      console.log('Using writing style from settings:', writingStyle);
-      console.log('Using WordPress template from settings:', wordpressTemplate ? 'Template available' : 'No template');
-      
-      // Generate post content with websiteId for fetching internal links
-      const generatedContent = await generatePostContent(
-        content.title,
-        keywordsArray,
-        writingStyle, // Use writingStyle from context
-        websiteContent,
-        currentWebsite.id, // Pass the website ID
-        wordpressTemplate // Use wordpressTemplate from context
-      );
-      
-      // Update the content with the generated post
-      const updatedContent = allContent.map(item => 
-        item.id === contentId 
-          ? { ...item, description: generatedContent } 
-          : item
-      );
-      
-      // Save to localStorage
-      const storageKey = `calendarContent_${currentWebsite.id}`;
-      localStorage.setItem(storageKey, JSON.stringify(updatedContent));
-      setAllContent(updatedContent);
-      
-      // Show the updated content to the user
-      const updatedContentItem = updatedContent.find(item => item.id === contentId);
-      if (updatedContentItem) {
-        setSelectedContent(updatedContentItem);
-      }
-      
-      toast.success("Content generated successfully");
     } catch (error) {
-      console.error("Error generating content:", error);
-      toast.error("Failed to generate content");
+      console.error('Error generating content:', error);
+      toast.error('Failed to generate content');
     } finally {
       setIsGeneratingContent(false);
       setGeneratingContentId(null);
     }
   };
 
-  const handleDateChange = (contentId: number, newDate: Date | undefined) => {
-    if (!newDate || !currentWebsite) return;
-    
-    const updatedContent = allContent.map(content => 
-      content.id === contentId 
-        ? { ...content, date: newDate.toISOString() } 
-        : content
-    );
-    
-    setAllContent(updatedContent);
-    const storageKey = `calendarContent_${currentWebsite.id}`;
-    localStorage.setItem(storageKey, JSON.stringify(updatedContent));
-    
-    toast.success("Publication date updated", {
-      description: `Content scheduled for ${format(newDate, 'MMM dd, yyyy')}`
-    });
+  const handleDateChange = async (contentId: string, newDate: Date) => {
+    try {
+      // Find the corresponding post theme
+      const theme = postThemes.find(t => t.id === contentId);
+      if (!theme) {
+        throw new Error('Post theme not found');
+      }
+
+      // Update the scheduled date using the PostThemesContext
+      const success = await updatePostTheme(theme.id, { scheduled_date: newDate.toISOString() });
+      
+      if (success) {
+        // Refresh the post themes to get the updated date
+        await fetchPostThemes();
+        
+        toast.success('Date updated successfully');
+      } else {
+        throw new Error('Failed to update date');
+      }
+    } catch (error) {
+      console.error('Error updating date:', error);
+      toast.error('Failed to update date');
+    }
   };
 
-  const handleSendToWordPress = async (contentId: number) => {
+  const handleSendToWordPress = async (contentId: string) => {
     console.log('=== WordPress Send Post Debug ===');
     console.log('handleSendToWordPress called with contentId:', contentId);
     
@@ -316,29 +329,18 @@ const ContentCalendar = () => {
       toast.error("Content not found");
       return;
     }
-    console.log('Found content:', { 
-      title: content.title, 
-      hasDescription: !!content.description,
-      contentLength: content.description?.length || 0,
-      date: content.date
-    });
 
     if (!currentWebsite) {
       console.error('No website selected');
       toast.error("Please select a website first");
       return;
     }
-    console.log('Current website:', { 
-      id: currentWebsite.id, 
-      name: currentWebsite.name, 
-      url: currentWebsite.url 
-    });
     
     // Use either direct DB settings or context settings
-    const settings = directWpSettings || wpSettings;
+    const settings = directWpSettings;
     
     if (!settings) {
-      console.error('WordPress settings not available (neither direct nor context)');
+      console.error('WordPress settings not available');
       toast.error("WordPress is not configured. Please set up WordPress connection in Settings.");
       return;
     }
@@ -349,230 +351,32 @@ const ContentCalendar = () => {
       toast.error("WordPress is not properly configured. Please check your connection in Settings.");
       return;
     }
-    
-    console.log('WordPress settings valid, proceeding with send:', { 
-      // @ts-ignore - Accessing fields from the wordpress_settings table
-      id: settings.id, 
-      // @ts-ignore - Accessing fields from the wordpress_settings table
-      websiteId: settings.website_id, 
-      // @ts-ignore - Accessing fields from the wordpress_settings table
-      isConnected: settings.is_connected,
-      // @ts-ignore - Accessing fields from the wordpress_settings table
-      wpUrl: settings.wp_url?.substring(0, 30) + '...',
-      // @ts-ignore - Accessing fields from the wordpress_settings table
-      hasUsername: !!settings.wp_username,
-      // @ts-ignore - Accessing fields from the wordpress_settings table
-      hasPassword: !!settings.wp_application_password
-    });
 
     try {
       setSendingToWPId(contentId);
       setIsSendingToWP(true);
       
-      // Extract title and HTML content
-      const title = content.title;
-      const htmlContent = content.description || '';
-      
-      if (!htmlContent || htmlContent.trim().length === 0) {
-        console.error('No HTML content to send');
-        toast.error("No content to send. Please generate content first.");
-        setIsSendingToWP(false);
-        setSendingToWPId(null);
-        return;
+      // Find the corresponding post theme
+      const theme = postThemes.find(t => t.id === contentId);
+      if (!theme) {
+        throw new Error('Post theme not found');
       }
+
+      // Send to WordPress using the PostThemesContext
+      const success = await generateContent(theme.id);
       
-      console.log('Preparing to send to WordPress:', { 
-        title, 
-        contentLength: htmlContent.length,
-        contentPreview: htmlContent.substring(0, 100) + '...' 
-      });
-      
-      console.log('Checking auth session before sending to WordPress');
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !sessionData.session) {
-        console.error('Auth session error:', sessionError);
-        toast.error('You must be logged in to publish to WordPress');
-        setIsSendingToWP(false);
-        setSendingToWPId(null);
-        return;
+      if (success) {
+        // Refresh the post themes to get the updated status
+        await fetchPostThemes();
+        
+        toast.success('Content sent to WordPress successfully');
+      } else {
+        throw new Error('Failed to send to WordPress');
       }
-      console.log('Auth session valid:', !!sessionData.session);
-      
-      // Send to WordPress as a draft post initially
-      console.log('Calling createPost from WordPressContext');
-      
-      // Add more detailed debugging for Edge Function call
-      try {
-        // Call the Edge Function directly for better error debugging
-        console.log('Making direct Edge Function call to wordpress-posts');
-        
-        // Get publish status from WordPress settings instead of hardcoding to 'draft'
-        // @ts-ignore - Accessing publish_status field from settings
-        const postStatus = settings.publish_status || 'draft'; // Fall back to draft if not set
-        console.log(`Using WordPress post status from settings: ${postStatus}`);
-        
-        // @ts-ignore - Supabase Edge Function types may not match exactly
-        const edgeFunctionResponse = await supabase.functions.invoke('wordpress-posts', {
-          body: {
-            website_id: currentWebsite.id,
-            title,
-            content: htmlContent,
-            status: postStatus, // Use the status from settings
-            action: 'create'
-          }
-        });
-        
-        console.log('Edge Function request payload:', {
-          website_id: currentWebsite.id,
-          title: title.substring(0, 30) + '...',
-          contentLength: htmlContent.length,
-          status: postStatus,
-          action: 'create'
-        });
-        console.log('Edge Function response:', JSON.stringify(edgeFunctionResponse, null, 2));
-        
-        if (edgeFunctionResponse.error) {
-          console.error('Edge Function error:', edgeFunctionResponse.error);
-          const errorMsg = edgeFunctionResponse.error.message || 'Unknown error occurred';
-          toast.error(`Failed to send to WordPress: ${errorMsg}`);
-          setIsSendingToWP(false);
-          setSendingToWPId(null);
-          return;
-        }
-        
-        // Enhanced error handling
-        if (!edgeFunctionResponse.data) {
-          console.error('No data returned from Edge Function');
-          toast.error('No response from WordPress service');
-          setIsSendingToWP(false);
-          setSendingToWPId(null);
-          return;
-        }
-        
-        if (!edgeFunctionResponse.data.success) {
-          console.error('WordPress post creation failed:', {
-            error: edgeFunctionResponse.data.error,
-            message: edgeFunctionResponse.data.message,
-            statusCode: edgeFunctionResponse.data.statusCode
-          });
-          
-          let errorMessage = 'Unknown WordPress error';
-          
-          // Try to extract a more specific error message
-          if (edgeFunctionResponse.data.error) {
-            if (typeof edgeFunctionResponse.data.error === 'string') {
-              errorMessage = edgeFunctionResponse.data.error;
-            } else if (edgeFunctionResponse.data.error.message) {
-              errorMessage = edgeFunctionResponse.data.error.message;
-            }
-          } else if (edgeFunctionResponse.data.message) {
-            errorMessage = edgeFunctionResponse.data.message;
-          }
-          
-          // Show a helpful error message
-          toast.error(`WordPress error: ${errorMessage}`);
-          setIsSendingToWP(false);
-          setSendingToWPId(null);
-          return;
-        }
-        
-        // If we get here, the post was created successfully
-        console.log('WordPress post created successfully via direct Edge Function call:', edgeFunctionResponse.data);
-        
-        // Extract post URL from response if available
-        let wpPostUrl = undefined;
-        
-        console.log('Extracting WordPress post URL from response:', edgeFunctionResponse.data);
-        
-        // Handle multiple potential response formats
-        if (edgeFunctionResponse.data.post) {
-          // Modern format with post object
-          if (edgeFunctionResponse.data.post.link) {
-            // Direct link to the post
-            wpPostUrl = edgeFunctionResponse.data.post.link;
-            console.log('WordPress post URL from post.link:', wpPostUrl);
-          } else if (edgeFunctionResponse.data.post.id) {
-            // If we have post ID but no link, construct admin URL
-            // @ts-ignore - Accessing wp_url field from settings
-            const wpAdminBaseUrl = settings.wp_url?.replace(/\/$/, '') || '';
-            if (wpAdminBaseUrl) {
-              wpPostUrl = `${wpAdminBaseUrl}/wp-admin/post.php?post=${edgeFunctionResponse.data.post.id}&action=edit`;
-              console.log('Constructed WordPress admin URL from post ID:', wpPostUrl);
-            }
-          }
-        } else if (edgeFunctionResponse.data.link) {
-          // Direct link in response root
-          wpPostUrl = edgeFunctionResponse.data.link;
-          console.log('WordPress post URL from response.link:', wpPostUrl);
-        } else if (edgeFunctionResponse.data.id) {
-          // ID in response root
-          // @ts-ignore - Accessing wp_url field from settings
-          const wpAdminBaseUrl = settings.wp_url?.replace(/\/$/, '') || '';
-          if (wpAdminBaseUrl) {
-            wpPostUrl = `${wpAdminBaseUrl}/wp-admin/post.php?post=${edgeFunctionResponse.data.id}&action=edit`;
-            console.log('Constructed WordPress admin URL from response ID:', wpPostUrl);
-          }
-        } else if (edgeFunctionResponse.data.data && edgeFunctionResponse.data.data.post) {
-          // Handle nested post object format
-          if (edgeFunctionResponse.data.data.post.link) {
-            wpPostUrl = edgeFunctionResponse.data.data.post.link;
-            console.log('WordPress post URL from data.post.link:', wpPostUrl);
-          } else if (edgeFunctionResponse.data.data.post.id) {
-            // @ts-ignore - Accessing wp_url field from settings
-            const wpAdminBaseUrl = settings.wp_url?.replace(/\/$/, '') || '';
-            if (wpAdminBaseUrl) {
-              wpPostUrl = `${wpAdminBaseUrl}/wp-admin/post.php?post=${edgeFunctionResponse.data.data.post.id}&action=edit`;
-              console.log('Constructed WordPress admin URL from nested post ID:', wpPostUrl);
-            }
-          }
-        } else if (edgeFunctionResponse.data.url) {
-          // Direct URL property
-          wpPostUrl = edgeFunctionResponse.data.url;
-          console.log('WordPress post URL from response.url:', wpPostUrl);
-        }
-        
-        // Add a fallback URL to WordPress admin if nothing else is available
-        // @ts-ignore - Accessing wp_url field from settings
-        if (!wpPostUrl && settings.wp_url) {
-          // @ts-ignore - Accessing wp_url field from settings
-          const wpAdminBaseUrl = settings.wp_url.replace(/\/$/, '');
-          wpPostUrl = `${wpAdminBaseUrl}/wp-admin/edit.php`;
-          console.log('Fallback to WordPress admin posts list:', wpPostUrl);
-        }
-        
-        // Update the content status to indicate it's been sent to WordPress
-        const updatedContent = allContent.map(item => 
-          item.id === contentId 
-            ? { 
-                ...item, 
-                contentStatus: 'published' as const,
-                wpSentDate: new Date().toISOString(),
-                wpPostUrl: wpPostUrl // Store the WordPress post URL
-              } 
-            : item
-        );
-        
-        // Save to localStorage
-        const storageKey = `calendarContent_${currentWebsite.id}`;
-        localStorage.setItem(storageKey, JSON.stringify(updatedContent));
-        setAllContent(updatedContent);
-        
-        // Show the updated content to the user
-        const updatedContentItem = updatedContent.find(item => item.id === contentId);
-        if (updatedContentItem) {
-          setSelectedContent(updatedContentItem);
-        }
-        
-        toast.success("Content sent to WordPress successfully");
-      } catch (directError) {
-        console.error("Error in direct Edge Function call:", directError);
-        toast.error(`Error sending to WordPress: ${directError instanceof Error ? directError.message : String(directError)}`);
-      }
-    } catch (e) {
-      console.error('Exception in sendToWordPress:', e);
-      toast.error('Error sending to WordPress');
+    } catch (error) {
+      console.error('Error sending to WordPress:', error);
+      toast.error('Failed to send content to WordPress');
     } finally {
-      console.log('=== End WordPress Send Post Debug ===');
       setIsSendingToWP(false);
       setSendingToWPId(null);
     }
@@ -584,7 +388,6 @@ const ContentCalendar = () => {
       if (!currentWebsite) return;
       
       try {
-        // Use proper typing for wordpress_settings
         const { data, error } = await supabase
           .from('wordpress_settings')
           .select('*')
@@ -607,149 +410,7 @@ const ContentCalendar = () => {
     fetchWordPressSettings();
   }, [currentWebsite]);
 
-  // Then fix the improved function to check if WordPress is properly configured
-  const isWordPressConfigured = () => {
-    // Check if we have direct settings from the database
-    if (directWpSettings && 
-        directWpSettings.wp_url && 
-        directWpSettings.wp_username && 
-        directWpSettings.wp_application_password) {
-      return true;
-    }
-    
-    // Fall back to context values if direct settings are not available
-    if (wpSettings && 
-        wpSettings.wp_url && 
-        wpSettings.wp_username && 
-        wpSettings.wp_application_password) {
-      return true;
-    }
-    
-    return false;
-  };
-
-  // Fix the refresh function to manually check WordPress connection
-  const refreshWordPressSettings = async () => {
-    if (!currentWebsite) {
-      toast.error("Please select a website first");
-      return;
-    }
-    
-    toast.info("Checking WordPress connection...");
-    
-    try {
-      // Use proper typing for wordpress_settings
-      const { data, error } = await supabase
-        .from('wordpress_settings')
-        .select('*')
-        .eq('website_id', currentWebsite.id)
-        .single();
-        
-      if (error) {
-        if (error.code !== 'PGRST116') { // Not the "no rows returned" error
-          console.error('Error fetching WordPress settings from DB:', error);
-          toast.error("Error checking WordPress connection");
-        } else {
-          toast.error("WordPress is not configured for this website");
-        }
-      } else if (data) {
-        // Store the WordPress settings
-        setDirectWpSettings(data);
-        
-        // Use proper typing for wordpress_settings fields
-        if (data.is_connected) {
-          toast.success("WordPress connection is active");
-        } else {
-          toast.warning("WordPress connection exists but is inactive");
-        }
-      }
-    } catch (e) {
-      console.error('Exception checking WordPress settings:', e);
-      toast.error("Error checking WordPress connection");
-    }
-  };
-
-  // Update the useEffect to cache the configuration result
-  useEffect(() => {
-    // Store the result in state to avoid recalculating it repeatedly
-    setWpConfigured(isWordPressConfigured());
-    
-    // WordPress integration status monitoring
-    // Check for any content that might be sendable
-    const sendableContent = allContent.filter(item => 
-      // Use the cached value instead of calling the function
-      wpConfigured && 
-      !isSendingToWP && 
-      !(item.contentStatus === 'published' && !!item.wpSentDate) &&
-      !!(item.description && item.description.trim().length > 0)
-    );
-  }, [wpSettings, directWpSettings, currentWebsite, allContent, isSendingToWP]);
-
-  // Restore the canSendToWordPress function that was accidentally removed
-  // Add this function to check if a specific content item can be sent to WordPress
-  const canSendToWordPress = (content: CalendarContent) => {
-    const issues = [];
-    
-    // Check if WordPress is configured - use the cached value
-    if (!wpConfigured) {
-      issues.push('WordPress not configured');
-    }
-    
-    // Check if we're already sending something
-    if (isSendingToWP) {
-      issues.push('Already sending to WordPress');
-    }
-    
-    // Check if the content has already been sent
-    if (content.contentStatus === 'published' && !!content.wpSentDate) {
-      issues.push('Already sent to WordPress');
-    }
-    
-    // Check if the content has actual content to send
-    if (!content.description || content.description.trim().length === 0) {
-      issues.push('No content to send');
-    }
-    
-    // All checks passed, can send to WordPress
-    return issues.length === 0;
-  };
-
-  // Add a function to filter content based on view mode
-  const getFilteredContent = (content: CalendarContent[]) => {
-    switch (viewMode) {
-      case 'not-generated':
-        return content.filter(item => !item.description);
-      case 'not-sent':
-        return content.filter(item => !item.wpSentDate);
-      default:
-        return content;
-    }
-  };
-
-  // Get the appropriate view title and description
-  const getViewInfo = () => {
-    switch (viewMode) {
-      case 'not-generated':
-        return {
-          title: "Not Generated",
-          description: "Content items that haven't been generated yet."
-        };
-      case 'not-sent':
-        return {
-          title: "Not Sent",
-          description: "Content that hasn't been sent to WordPress yet."
-        };
-      default:
-        return {
-          title: "All Content",
-          description: "Showing all calendar content."
-        };
-    }
-  };
-
-  const viewInfo = getViewInfo();
-
-  const handleGenerateImage = async (contentId: number) => {
+  const handleGenerateImage = async (contentId: string) => {
     if (!currentWebsite?.enable_ai_image_generation) {
       toast.error('AI image generation is not enabled for this website');
       return;
@@ -816,6 +477,14 @@ const ContentCalendar = () => {
       setGeneratingImageId(null);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -898,8 +567,8 @@ const ContentCalendar = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {getFilteredContent(getContentByMonth(displayDate)).length > 0 ? (
-                            getFilteredContent(getContentByMonth(displayDate)).map((content, index) => (
+                          {filteredContent.length > 0 ? (
+                            filteredContent.map((content, index) => (
                               <TableRow 
                                 key={content.id || index} 
                                 className="cursor-pointer hover:bg-accent/30"
@@ -919,12 +588,18 @@ const ContentCalendar = () => {
                                       </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0">
-                                      <Calendar
-                                        mode="single"
-                                        selected={content.date ? new Date(content.date) : undefined}
-                                        onSelect={(date) => handleDateChange(content.id, date)}
-                                        initialFocus
-                                      />
+                                      <div className="flex items-center space-x-2 mb-4">
+                                        <Calendar
+                                          mode="single"
+                                          selected={content.date ? new Date(content.date) : undefined}
+                                          onSelect={(date) => {
+                                            if (date) {
+                                              handleDateChange(content.id, date);
+                                            }
+                                          }}
+                                          initialFocus
+                                        />
+                                      </div>
                                     </PopoverContent>
                                   </Popover>
                                 </TableCell>
@@ -940,16 +615,18 @@ const ContentCalendar = () => {
                                           e.stopPropagation();
                                           handleRegenerateContent(content.id);
                                         }}
-                                        disabled={isGeneratingContent && generatingContentId === content.id}
+                                        disabled={isThemeGeneratingContent(String(content.id))}
                                         className="h-8 w-8 text-slate-500 hover:text-primary"
-                                        title={isGeneratingContent && generatingContentId === content.id 
+                                        title={isThemeGeneratingContent(String(content.id))
                                           ? "Generating content..." 
                                           : content.description && content.description.trim().length > 0
                                             ? "Regenerate content with AI"
                                             : "Generate content with AI"}
                                       >
-                                        {isGeneratingContent && generatingContentId === content.id ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        {isThemeGeneratingContent(String(content.id)) ? (
+                                          <div className="flex items-center justify-center">
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                                          </div>
                                         ) : content.description && content.description.trim().length > 0 ? (
                                           <RefreshCw className="h-4 w-4" />
                                         ) : (
@@ -1073,7 +750,7 @@ const ContentCalendar = () => {
           wpSentDate={selectedContent.wpSentDate}
           wpPostUrl={selectedContent.wpPostUrl}
           preview_image_url={selectedContent.preview_image_url}
-          isGeneratingContent={isGeneratingContent && generatingContentId === selectedContent.id}
+          isGeneratingContent={isThemeGeneratingContent(String(selectedContent.id))}
           isGeneratingImage={isGeneratingImage && generatingImageId === selectedContent.id}
           isSendingToWP={isSendingToWP && sendingToWPId === selectedContent.id}
           canSendToWordPress={canSendToWordPress(selectedContent)}

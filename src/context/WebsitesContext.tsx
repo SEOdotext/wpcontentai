@@ -181,7 +181,8 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .insert({
           name,
           url,
-          organisation_id: profileData.organisation_id
+          organisation_id: profileData.organisation_id,
+          language: 'en'
         })
         .select()
         .single();

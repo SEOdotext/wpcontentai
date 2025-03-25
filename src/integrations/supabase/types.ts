@@ -212,6 +212,9 @@ export type Database = {
           organisation_id: string | null
           updated_at: string
           url: string
+          language?: string
+          enable_ai_image_generation?: boolean
+          image_prompt?: string
         }
         Insert: {
           created_at?: string
@@ -220,6 +223,9 @@ export type Database = {
           organisation_id?: string | null
           updated_at?: string
           url: string
+          language?: string
+          enable_ai_image_generation?: boolean
+          image_prompt?: string
         }
         Update: {
           created_at?: string
@@ -228,6 +234,9 @@ export type Database = {
           organisation_id?: string | null
           updated_at?: string
           url?: string
+          language?: string
+          enable_ai_image_generation?: boolean
+          image_prompt?: string
         }
         Relationships: [
           {

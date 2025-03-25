@@ -4,71 +4,77 @@ CREATE TABLE IF NOT EXISTS post_themes (
   website_id UUID NOT NULL REFERENCES websites(id) ON DELETE CASCADE,
   subject_matter TEXT NOT NULL,
   keywords TEXT[] NOT NULL DEFAULT '{}',
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'generated', 'published')),
-  scheduled_date TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  content TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  scheduled_date TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  -- WordPress integration fields
+  wp_post_id TEXT,
+  wp_post_url TEXT,
+  wp_sent_date TIMESTAMP WITH TIME ZONE,
+  CONSTRAINT valid_status CHECK (status IN ('pending', 'generated', 'published'))
 );
 
--- Add RLS policies
+-- Enable Row Level Security
 ALTER TABLE post_themes ENABLE ROW LEVEL SECURITY;
 
--- Policy for selecting post_themes (users can only see themes for websites they have access to)
-CREATE POLICY select_post_themes ON post_themes
-  FOR SELECT USING (
+-- Create policies
+CREATE POLICY "Users can view their own post themes"
+  ON post_themes FOR SELECT
+  USING (
     website_id IN (
-      SELECT w.id FROM websites w
-      JOIN user_profiles up ON up.organisation_id = w.organisation_id
-      WHERE up.id = auth.uid()
+      SELECT website_id FROM website_access
+      WHERE user_id = auth.uid()
     )
   );
 
--- Policy for inserting post_themes
-CREATE POLICY insert_post_themes ON post_themes
-  FOR INSERT WITH CHECK (
+CREATE POLICY "Users can insert their own post themes"
+  ON post_themes FOR INSERT
+  WITH CHECK (
     website_id IN (
-      SELECT w.id FROM websites w
-      JOIN user_profiles up ON up.organisation_id = w.organisation_id
-      WHERE up.id = auth.uid()
+      SELECT website_id FROM website_access
+      WHERE user_id = auth.uid()
     )
   );
 
--- Policy for updating post_themes
-CREATE POLICY update_post_themes ON post_themes
-  FOR UPDATE USING (
+CREATE POLICY "Users can update their own post themes"
+  ON post_themes FOR UPDATE
+  USING (
     website_id IN (
-      SELECT w.id FROM websites w
-      JOIN user_profiles up ON up.organisation_id = w.organisation_id
-      WHERE up.id = auth.uid()
+      SELECT website_id FROM website_access
+      WHERE user_id = auth.uid()
     )
   );
 
--- Policy for deleting post_themes
-CREATE POLICY delete_post_themes ON post_themes
-  FOR DELETE USING (
+CREATE POLICY "Users can delete their own post themes"
+  ON post_themes FOR DELETE
+  USING (
     website_id IN (
-      SELECT w.id FROM websites w
-      JOIN user_profiles up ON up.organisation_id = w.organisation_id
-      WHERE up.id = auth.uid()
+      SELECT website_id FROM website_access
+      WHERE user_id = auth.uid()
     )
   );
 
--- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS post_themes_website_id_idx ON post_themes(website_id);
-CREATE INDEX IF NOT EXISTS post_themes_subject_matter_idx ON post_themes(subject_matter);
-CREATE INDEX IF NOT EXISTS post_themes_status_idx ON post_themes(status);
-CREATE INDEX IF NOT EXISTS post_themes_scheduled_date_idx ON post_themes(scheduled_date);
+-- Create indexes
+CREATE INDEX idx_post_themes_website_id ON post_themes(website_id);
+CREATE INDEX idx_post_themes_status ON post_themes(status);
+CREATE INDEX idx_post_themes_scheduled_date ON post_themes(scheduled_date);
 
--- Add trigger to update the updated_at timestamp
+-- Create trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-   NEW.updated_at = NOW();
-   RETURN NEW;
+  NEW.updated_at = NOW();
+  RETURN NEW;
 END;
 $$ language 'plpgsql';
 
+-- Drop existing trigger if it exists
+DROP TRIGGER IF EXISTS update_post_themes_updated_at ON post_themes;
+
+-- Create trigger
 CREATE TRIGGER update_post_themes_updated_at
   BEFORE UPDATE ON post_themes
   FOR EACH ROW
-  EXECUTE PROCEDURE update_updated_at_column(); 
+  EXECUTE FUNCTION update_updated_at_column(); 
