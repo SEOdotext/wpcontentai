@@ -77,7 +77,8 @@ const ContentCalendar = () => {
     deletePostTheme, 
     generateContent,
     setPostThemes,
-    isGeneratingContent: isThemeGeneratingContent
+    isGeneratingContent: isThemeGeneratingContent,
+    sendToWordPress
   } = usePostThemes();
   const { publicationFrequency } = useSettings();
   const [directWpSettings, setDirectWpSettings] = useState<WordPressSettings | null>(null);
@@ -373,7 +374,7 @@ const ContentCalendar = () => {
       }
 
       // Send to WordPress using the PostThemesContext
-      const success = await generateContent(theme.id);
+      const success = await sendToWordPress(theme.id);
       
       if (success) {
         // Refresh the post themes to get the updated status
