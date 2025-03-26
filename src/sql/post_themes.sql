@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS post_themes (
   wp_post_id TEXT,
   wp_post_url TEXT,
   wp_sent_date TIMESTAMP WITH TIME ZONE,
+  -- Image fields
+  image TEXT,
+  image_generation_error TEXT,
+  post_content TEXT,
   CONSTRAINT valid_status CHECK (status IN ('pending', 'generated', 'published'))
 );
 

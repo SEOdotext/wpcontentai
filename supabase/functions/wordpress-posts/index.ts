@@ -20,7 +20,7 @@ async function uploadImageToWordPress(
   wpUsername: string,
   wpPassword: string,
   title: string
-): Promise<string> {
+): Promise<{ url: string; id: number }> {
   console.log('Uploading image to WordPress media library:', imageUrl);
   
   // Download the image
@@ -52,7 +52,7 @@ async function uploadImageToWordPress(
   
   const uploadData = await uploadResponse.json();
   console.log('Image uploaded successfully:', uploadData.source_url);
-  return uploadData.source_url;
+  return { url: uploadData.source_url, id: uploadData.id };
 }
 
 serve(async (req) => {
@@ -152,10 +152,12 @@ serve(async (req) => {
     
     // Handle image upload if image exists in post theme
     let finalContent = postTheme.post_content;
+    let uploadedImageId: number | undefined;
+    let wpImageUrl: string | undefined;
     if (postTheme.image) {
       try {
         console.log('Processing image upload for post');
-        const wpImageUrl = await uploadImageToWordPress(
+        const { url: imageUrl, id: mediaId } = await uploadImageToWordPress(
           postTheme.image,
           wpSettings.wp_url,
           wpSettings.wp_username,
@@ -164,7 +166,9 @@ serve(async (req) => {
         );
         
         // Replace the original image URL with the WordPress media URL
-        finalContent = postTheme.post_content.replace(postTheme.image, wpImageUrl);
+        finalContent = postTheme.post_content.replaceAll(postTheme.image, imageUrl);
+        uploadedImageId = mediaId;
+        wpImageUrl = imageUrl;
         console.log('Image processed and content updated');
       } catch (imageError) {
         console.error('Error uploading image to WordPress:', imageError);
@@ -172,11 +176,12 @@ serve(async (req) => {
       }
     }
     
-    // Prepare post data with processed content
+    // Prepare post data with processed content and featured media if available
     const postData = {
       title: postTheme.subject_matter,
       content: finalContent,
-      status: postStatus
+      status: postStatus,
+      ...(uploadedImageId && { featured_media: uploadedImageId })
     }
     
     // Make the API request to WordPress
@@ -206,6 +211,31 @@ serve(async (req) => {
     // Parse the response to get the post details
     const postResponse = await response.json()
     
+    // If we uploaded an image, set it as the featured image
+    if (postTheme.image && postResponse.id) {
+      try {
+        // Set the featured image for the post
+        const featuredImageResponse = await fetch(`${wpSettings.wp_url}/wp-json/wp/v2/posts/${postResponse.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Basic ' + btoa(`${wpSettings.wp_username}:${wpSettings.wp_application_password}`)
+          },
+          body: JSON.stringify({
+            featured_media: postResponse.featured_media || postResponse.id
+          })
+        });
+
+        if (!featuredImageResponse.ok) {
+          console.error('Failed to set featured image:', await featuredImageResponse.text());
+        } else {
+          console.log('Successfully set featured image for post');
+        }
+      } catch (featuredImageError) {
+        console.error('Error setting featured image:', featuredImageError);
+      }
+    }
+    
     // Update post theme with WordPress information
     const { error: updateError } = await supabaseClient
       .from('post_themes')
@@ -213,7 +243,8 @@ serve(async (req) => {
         status: 'published',
         wp_post_id: postResponse.id,
         wp_post_url: postResponse.link,
-        wp_sent_date: new Date().toISOString()
+        wp_sent_date: new Date().toISOString(),
+        ...(wpImageUrl && { wp_image_url: wpImageUrl })
       })
       .eq('id', post_theme_id);
 
