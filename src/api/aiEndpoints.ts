@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 import { callOpenAI as secureCallOpenAI } from '@/services/openaiService';
+import { supabase } from '@/services/supabaseService';
 
 // Free fetch proxy service URL - Keep for website content fetching
 // Will be replaced with scrape-content function in a future update
@@ -257,4 +258,22 @@ const extractTextFromHtml = (html: string): string => {
   
   // Return a reasonable amount of content
   return textContent.substring(0, 5000);
+};
+
+export const generateAndPublishContent = async (postThemeId: string): Promise<any> => {
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-and-publish', {
+      body: { postThemeId }
+    });
+
+    if (error) {
+      console.error('Error generating and publishing content:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in generateAndPublishContent:', error);
+    throw error;
+  }
 }; 
