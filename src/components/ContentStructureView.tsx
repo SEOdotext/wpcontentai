@@ -11,8 +11,7 @@ import { usePostThemes } from '@/context/PostThemesContext';
 import { useWebsites } from '@/context/WebsitesContext';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { fetchWebsiteContent } from '@/api/aiEndpoints';
-import { generateTitleSuggestions } from '@/services/aiService';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ContentStructureViewProps {
   className?: string;
@@ -116,24 +115,10 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         // Fetch post themes
         await fetchPostThemes();
         
-        // Fetch website content if we have a URL and haven't tried yet
-        if (currentWebsite?.url && !contentFetchAttempted && !websiteContent) {
-          setContentFetchAttempted(true);
-          
-          try {
-            console.log(`Attempting to fetch content for ${currentWebsite.url} using aiEndpoints.fetchWebsiteContent`);
-            const content = await fetchWebsiteContent(currentWebsite.url, currentWebsite.id);
-            if (isMountedRef.current) {
-              setWebsiteContent(content);
-              console.log('Website content fetched successfully, received', content.length, 'characters');
-            }
-          } catch (error) {
-            console.error('Error fetching website content:', error);
-            if (isMountedRef.current) {
-              // No fallback to mock content anymore
-              console.log('Unable to fetch website content');
-            }
-          }
+        // Set initialization complete
+        if (isMountedRef.current) {
+          setIsInitializing(false);
+          console.log('Initialization complete');
         }
       } catch (error) {
         console.error('Error during initialization:', error);
@@ -149,7 +134,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       console.log('Starting initialization');
       initialize();
     }
-  }, [isInitializing, currentWebsite?.url, fetchPostThemes, contentFetchAttempted, websiteContent]);
+  }, [isInitializing, currentWebsite?.url, fetchPostThemes]);
   
   // Auto-generate posts if none exist after initialization
   useEffect(() => {
@@ -160,7 +145,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     // 4. We have no posts
     // 5. We haven't attempted generation yet
     // 6. The input is empty (new condition)
-    // 7. Website content is available
     if (
       isInitializing || 
       isGenerating || 
@@ -168,8 +152,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       !currentWebsite?.id || 
       postThemes.length > 0 || 
       generationAttemptedRef.current || 
-      inputValue.trim() !== '' || // Only generate if input is empty
-      !websiteContent // Only generate if website content is available
+      inputValue.trim() !== ''
     ) {
       return;
     }
@@ -188,62 +171,61 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         
         // Get a single publication date for all posts
         const publicationDate = getNextPublicationDate();
-        
-        for (let i = 0; i < topics.length; i++) {
-          const topic = topics[i];
-          try {
-            // Use subject matters directly for keywords
-            const keywords = [topic.toLowerCase()];
-            
-            // Add a few common WordPress-related keywords if needed
-            if (keywords.length < 2) {
-              keywords.push('wordpress', 'content');
-            }
-            
-            // Generate title suggestions
-            const result = await generateTitleSuggestions(
-              websiteContent,
-              keywords,
-              writingStyle || 'Professional and informative',
-              [topic]
-            );
-            
-            if (result.titles.length > 0) {
-              // Check if likely Danish content
-              const isDanish = subjectMatters.some(subject => 
-                subject.toLowerCase().includes('dansk') || 
-                subject.toLowerCase().includes('personale') || 
-                subject.toLowerCase().includes('arbejdskraft')
-              );
-              
-              // Format the title with proper Danish capitalization if needed
-              const formattedTitle = isDanish ? formatDanishTitle(result.titles[0]) : result.titles[0];
-              
-              // Create a post theme for the first title with the same publication date for all
-              // Use showToast: false for all but the last one to avoid toast spam
-              const isLastPost = i === topics.length - 1;
-              await addPostTheme({
-                website_id: currentWebsite?.id || '',
-                subject_matter: formattedTitle,
-                keywords: result.keywords,
-                status: 'pending',
-                scheduled_date: publicationDate.toISOString(),
-                post_content: null,
-                image: null
-              });
-              console.log(`Generated initial post for topic: ${topic}`);
-              successCount++;
-            }
-          } catch (error) {
-            console.error(`Error generating initial post for topic ${topic}:`, error);
-          }
+
+        // Get current session for authentication
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData?.session?.access_token) {
+          throw new Error('No access token found');
         }
+
+        // Call the edge function directly
+        const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-post-ideas', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionData.session.access_token}`
+          },
+          body: JSON.stringify({
+            website_id: currentWebsite.id,
+            keywords: topics,
+            writing_style: writingStyle,
+            subject_matters: topics
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to generate title suggestions');
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to generate title suggestions');
+        }
+
+        // Create post themes for each title
+        const creationPromises = result.titles.map(title => 
+          addPostTheme({
+            website_id: currentWebsite.id,
+            subject_matter: title,
+            keywords: result.keywordsByTitle?.[title] || result.keywords,
+            status: 'pending',
+            scheduled_date: publicationDate.toISOString(),
+            post_content: null,
+            image: null,
+            wp_post_id: null,
+            wp_post_url: null,
+            wp_sent_date: null
+          })
+        );
+        
+        await Promise.all(creationPromises);
         
         // Only refresh and show toast if we successfully created at least one post
-        if (successCount > 0 && isMountedRef.current) {
+        if (result.titles.length > 0 && isMountedRef.current) {
           // Refresh the list of post themes
           await fetchPostThemes();
-          toast.success(`Generated ${successCount} initial content suggestions for you`);
+          toast.success(`Generated ${result.titles.length} initial content suggestions for you`);
         }
       } catch (error) {
         console.error('Error during initial content generation:', error);
@@ -263,7 +245,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     themesLoading, 
     currentWebsite?.id, 
     postThemes.length, 
-    websiteContent, 
     subjectMatters, 
     writingStyle, 
     addPostTheme, 
@@ -280,82 +261,64 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       return;
     }
     
-    if (!currentWebsite?.url) {
+    if (!currentWebsite?.id) {
       toast.error('Please select a website first');
       return;
     }
-    
-    if (!websiteContent) {
-      toast.error('Website content not available. Please try again later');
-      return;
-    }
-    
+
     setIsGenerating(true);
     
     try {
-      // Parse keywords from input
-      let keywords = inputValue.split(',').map(k => k.trim()).filter(k => k);
-      
-      if (keywords.length === 0) {
-        toast.error('Please enter valid keywords separated by commas');
-        setIsGenerating(false);
-        return;
+      // Get current session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        throw new Error('No access token found');
       }
-      
-      // Try to match keywords with subject matters
-      const matchedKeywords = keywords.map(keyword => {
-        // Find an exact or close match in subjectMatters
-        const matchedSubject = subjectMatters.find(subject => 
-          subject.toLowerCase() === keyword.toLowerCase() ||
-          subject.toLowerCase().includes(keyword.toLowerCase()) ||
-          keyword.toLowerCase().includes(subject.toLowerCase())
-        );
-        
-        return matchedSubject || keyword;
+
+      // Call the edge function directly
+      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-post-ideas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
+        },
+        body: JSON.stringify({
+          website_id: currentWebsite.id,
+          keywords: [inputValue], // Use input value as keyword
+          writing_style: writingStyle,
+          subject_matters: subjectMatters
+        })
       });
-      
-      console.log(`Using website content (${websiteContent.length} characters) for title generation`);
-      console.log('Keywords aligned with subject matters:', matchedKeywords);
-      
-      // Generate title suggestions using AI
-      const result = await generateTitleSuggestions(
-        websiteContent,
-        matchedKeywords,
-        writingStyle || 'Professional and informative',
-        subjectMatters
-      );
-      
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate title suggestions');
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to generate title suggestions');
+      }
+
       // Get a single publication date for all posts
       const publicationDate = getNextPublicationDate();
       console.log('Setting all posts to publish on:', format(publicationDate, 'MMM dd, yyyy'));
       
       // Create post themes for each title with the same publication date
-      const creationPromises = result.titles.map((title, index) => {
-        // Use unique keywords for each title if available, otherwise fall back to the default keywords
-        const titleKeywords = result.keywordsByTitle?.[title] || result.keywords;
-        
-        // Format the title with proper Danish capitalization if the content is likely in Danish
-        const isDanish = subjectMatters.some(subject => 
-          subject.toLowerCase().includes('dansk') || 
-          subject.toLowerCase().includes('personale') || 
-          subject.toLowerCase().includes('arbejdskraft')
-        ) || inputValue.toLowerCase().includes('dansk');
-        const formattedTitle = isDanish ? formatDanishTitle(title) : title;
-        
-        // Use the same publication date for all posts
-        // Only show toast for the last post to avoid toast spam
-        const isLastPost = index === result.titles.length - 1;
-        
-        return addPostTheme({
-          website_id: currentWebsite?.id || '',
-          subject_matter: formattedTitle,
-          keywords: titleKeywords,
+      const creationPromises = result.titles.map(title => 
+        addPostTheme({
+          website_id: currentWebsite.id,
+          subject_matter: title,
+          keywords: result.keywordsByTitle?.[title] || result.keywords,
           status: 'pending',
           scheduled_date: publicationDate.toISOString(),
           post_content: null,
-          image: null
-        });
-      });
+          image: null,
+          wp_post_id: null,
+          wp_post_url: null,
+          wp_sent_date: null
+        })
+      );
       
       await Promise.all(creationPromises);
       
@@ -381,51 +344,62 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       return;
     }
 
+    if (!currentWebsite?.id) {
+      toast.error('Please select a website first');
+      return;
+    }
+
     setIsGenerating(true);
     try {
-      // Use subject matters as keywords and content
-      const result = await generateTitleSuggestions(
-        websiteContent || '', // Use empty string as fallback if no content
-        subjectMatters, // Use subject matters as keywords
-        writingStyle || 'Professional and informative',
-        subjectMatters
-      );
-      
-      if (!result || !result.titles || result.titles.length === 0) {
-        toast.error('No title suggestions were generated');
-        return;
+      // Get current session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        throw new Error('No access token found');
+      }
+
+      // Call the edge function directly
+      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-post-ideas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
+        },
+        body: JSON.stringify({
+          website_id: currentWebsite.id,
+          keywords: subjectMatters,
+          writing_style: writingStyle,
+          subject_matters: subjectMatters
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate title suggestions');
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to generate title suggestions');
       }
 
       const publicationDate = getNextPublicationDate();
       console.log('Setting all posts to publish on:', format(publicationDate, 'MMM dd, yyyy'));
       
       // Create post themes for each title with the same publication date
-      const creationPromises = result.titles.map((title, index) => {
-        // Use unique keywords for each title if available, otherwise fall back to the default keywords
-        const titleKeywords = result.keywordsByTitle?.[title] || result.keywords;
-        
-        // Format the title with proper Danish capitalization if the content is likely in Danish
-        const isDanish = subjectMatters.some(subject => 
-          subject.toLowerCase().includes('dansk') || 
-          subject.toLowerCase().includes('personale') || 
-          subject.toLowerCase().includes('arbejdskraft')
-        );
-        const formattedTitle = isDanish ? formatDanishTitle(title) : title;
-        
-        // Use the same publication date for all posts
-        // Only show toast for the last post to avoid toast spam
-        const isLastPost = index === result.titles.length - 1;
-        
-        return addPostTheme({
-          website_id: currentWebsite?.id || '',
-          subject_matter: formattedTitle,
-          keywords: titleKeywords,
+      const creationPromises = result.titles.map(title => 
+        addPostTheme({
+          website_id: currentWebsite.id,
+          subject_matter: title,
+          keywords: result.keywordsByTitle?.[title] || result.keywords,
           status: 'pending',
           scheduled_date: publicationDate.toISOString(),
           post_content: null,
-          image: null
-        });
-      });
+          image: null,
+          wp_post_id: null,
+          wp_post_url: null,
+          wp_sent_date: null
+        })
+      );
       
       await Promise.all(creationPromises);
       

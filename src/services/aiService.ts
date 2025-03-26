@@ -1,7 +1,10 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { toast } from 'sonner';
 import { callOpenAI } from '@/services/openaiService';
 import { supabase } from '@/integrations/supabase/client';
 import { languages } from '@/data/languages';
+import { PostTheme } from '@/types/database';
+import { useWebsites } from '@/contexts/WebsitesContext';
 
 // Define the interface for the AI service response
 interface AIServiceResponse {
@@ -17,250 +20,69 @@ interface AIServiceResponse {
  * @param keywords User-provided keywords
  * @param writingStyle The writing style preferences
  * @param subjectMatters The subject matters to focus on
+ * @param websiteId The ID of the website
  * @returns A promise that resolves to an array of title suggestions
  */
 export const generateTitleSuggestions = async (
   content: string,
   keywords: string[],
   writingStyle: string,
-  subjectMatters: string[]
-): Promise<AIServiceResponse> => {
+  subjectMatters: string[],
+  websiteId: string
+): Promise<{
+  titles: string[];
+  keywords: string[];
+  keywordsByTitle: { [title: string]: string[] };
+}> => {
   try {
-    // Log the inputs for debugging
     console.log('Generating title suggestions with AI...');
-    console.log('Content length:', content.length);
     console.log('Keywords:', keywords);
     console.log('Writing Style:', writingStyle);
     console.log('Subject Matters:', subjectMatters);
     
-    // Try to use the OpenAI API through the free fetch proxy
-    try {
-      // First prompt to generate titles
-      const titlesPrompt = `
-        You are a content title generator for WordPress websites. 
-        Generate 5 engaging, SEO-friendly titles based on the following:
-        
-        Writing Style: ${writingStyle || 'Professional and informative'}
-        Subject Matters: ${subjectMatters.join(', ') || 'WordPress, Content Marketing'}
-        Keywords: ${keywords.join(', ')}
-        
-        Website Content Summary: 
-        ${content.substring(0, 500)}...
-        
-        Important rules:
-        1. Generate ONLY the titles, nothing else
-        2. Each title should be on its own line
-        3. No numbering, bullet points, or other formatting
-        4. No additional text or explanations
-        5. For Danish titles: Only capitalize the first word and proper nouns
-        6. For English titles: Capitalize main words following standard English title case
-        
-        Example format:
-        Title 1
-        Title 2
-        Title 3
-        Title 4
-        Title 5
-      `;
-      
-      // Use the new openaiService instead of direct FREE_FETCH_PROXY
-      const data = await callOpenAI({
-            model: 'gpt-4',
-            messages: [
-              {
-                role: 'system',
-                content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself. When writing in Danish, follow Danish language rules - headers (h2, h3, etc.) should only capitalize the first word and proper nouns, not every word.'
-              },
-              {
-                role: 'user',
-                content: titlesPrompt
-              }
-            ],
-            temperature: 0.7,
-            max_tokens: 300
-      });
-      
-      console.log('AI response for titles:', data);
-      
-      if (data.choices && data.choices.length > 0) {
-        // Extract titles from the response
-        const aiContent = data.choices[0].message.content;
-        const titles = aiContent
-          .split('\n')
-          .filter(line => line.trim().length > 0)
-          .map(line => line.replace(/^\d+\.\s*/, '').trim())
-          .filter(title => title.length > 0)
-          .slice(0, 5); // Limit to 5 titles
-        
-        // Now generate specific keywords for each title
-        const keywordsByTitle: { [title: string]: string[] } = {};
-        
-        // Create a second prompt to generate keywords for each title
-        const keywordsPrompt = `
-          Generate 3-5 focused, relevant keywords or short phrases for each of these blog post titles.
-          
-          The keywords should be:
-          1. Category-oriented (good for WordPress categories/tags)
-          2. Directly related to the specific post topic
-          3. Include relevant domain-specific terms like: personale udlejning, arbejdskraft, rekruttering, medarbejdere, udenlandsk arbejdskraft
-          4. Can include short phrases (2-3 words) that capture key concepts
-          5. Focus heavily on these subject matters: ${subjectMatters.join(', ')}
-          
-          AVOID generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig
-          
-          Titles:
-          ${titles.map((title, i) => `${i+1}. ${title}`).join('\n')}
-          
-          Format your response like this:
-          Title 1 Keywords: keyword1, keyword phrase, specific term
-          Title 2 Keywords: keyword1, keyword phrase, specific term
-          etc.
-        `;
-        
-        // Second OpenAI call - Replace with openaiService
-        const keywordsData = await callOpenAI({
-              model: 'gpt-4',
-              messages: [
-                {
-                  role: 'system',
-                  content: 'You are a helpful assistant that generates relevant keywords for blog posts.'
-                },
-                {
-                  role: 'user',
-                  content: keywordsPrompt
-                }
-              ],
-              temperature: 0.3,
-              max_tokens: 500
-        });
-          
-          if (keywordsData.choices && keywordsData.choices.length > 0) {
-            const keywordsContent = keywordsData.choices[0].message.content;
-            const keywordsLines = keywordsContent.split('\n').filter(line => line.trim());
-            
-            // Parse the keywords for each title
-            keywordsLines.forEach(line => {
-              const match = line.match(/Title (\d+) Keywords: (.*)/i) || line.match(/(\d+)\.\s*Keywords: (.*)/i);
-              if (match) {
-                const titleIndex = parseInt(match[1]) - 1;
-                const titleKeywords = match[2].split(',').map(k => k.trim()).filter(k => k);
-                
-                if (titleIndex >= 0 && titleIndex < titles.length) {
-                  keywordsByTitle[titles[titleIndex]] = titleKeywords;
-                }
-              }
-            });
-        }
-        
-        // For any titles without keywords, generate them using our fallback method
-        titles.forEach(title => {
-          if (!keywordsByTitle[title]) {
-            keywordsByTitle[title] = generateFocusedKeywords(title, keywords, subjectMatters);
-          }
-        });
-        
-        // Use the first title's keywords as the default set
-        const defaultKeywords = keywordsByTitle[titles[0]] || 
-          generateFocusedKeywords(titles[0], keywords, subjectMatters);
-        
-        console.log('Generated titles with unique keywords:', keywordsByTitle);
-        
-        return {
-          titles: titles,
-          keywords: defaultKeywords,
-          keywordsByTitle: keywordsByTitle
-        };
-      }
-    } catch (apiError) {
-      console.error('Error calling OpenAI API:', apiError);
-      console.log('Falling back to mock title generation');
+    if (!websiteId) {
+      throw new Error('Website ID is required');
     }
-    
-    // Fallback to mock title generation if the API call fails
-    console.log('Using fallback title generation');
-    
-    // Generate titles based on the keywords and subject matters
-    const titles: string[] = [];
-    
-    // Use the first keyword as the main topic
-    const mainKeyword = keywords[0] || 'WordPress';
-    
-    // Detect if we're likely working with Danish content
-    const isDanish = content.toLowerCase().includes('dansk') || 
-      subjectMatters.some(subject => 
-        subject.toLowerCase().includes('dansk') || 
-        subject.toLowerCase().includes('personale udlejning') ||
-        subject.toLowerCase().includes('arbejdskraft')
-      );
-    
-    // Helper to format title according to language rules
-    const formatTitle = (title: string): string => {
-      if (isDanish) {
-        // For Danish: only capitalize first letter and proper nouns
-        // This is a simple implementation - proper nouns detection would require NLP
-        // Split the title into words and capitalize only the first word
-        const words = title.split(' ');
-        
-        // Capitalize first word
-        if (words.length > 0) {
-          words[0] = words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase();
-        }
-        
-        // Keep the rest lowercase (proper nouns would need more sophisticated NLP)
-        for (let i = 1; i < words.length; i++) {
-          // Skip empty words
-          if (!words[i]) continue;
-          
-          // Keep words lowercase unless they appear to be proper nouns
-          // This is a simple heuristic - true NLP would be better
-          const isPotentialProperNoun = (
-            // Common proper noun markers for Danish
-            words[i] === 'Danmark' || 
-            words[i] === 'Dansk' || 
-            words[i].endsWith('ske') || // For words like "danske"
-            words[i].match(/^[A-ZÆØÅ]/) !== null // Already capitalized
-          );
-          
-          words[i] = isPotentialProperNoun ? words[i] : words[i].toLowerCase();
-        }
-        
-        return words.join(' ');
-      } else {
-        // Keep as is for English (already formatted in title case)
-        return title;
-      }
-    };
-    
-    // Generate titles based on the subject matters and keywords
-    for (const subject of subjectMatters.length > 0 ? subjectMatters : ['WordPress']) {
-      titles.push(formatTitle(`The Ultimate Guide to ${mainKeyword} ${subject}`));
-      titles.push(formatTitle(`10 Essential ${mainKeyword} Tips for Better ${subject} Performance`));
-      titles.push(formatTitle(`How to Optimize Your ${subject} Using ${mainKeyword} Best Practices`));
-      titles.push(formatTitle(`${subject} Mastery: Advanced ${mainKeyword} Techniques for Professionals`));
-      titles.push(formatTitle(`Why ${mainKeyword} is Crucial for Your ${subject} Strategy in 2023`));
+
+    // Call the edge function
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('No access token found');
     }
-    
-    // Limit to 5 titles
-    const finalTitles = titles.slice(0, 5);
-    
-    // Create unique keywords for each title
-    const keywordsByTitle: { [title: string]: string[] } = {};
-    finalTitles.forEach(title => {
-      keywordsByTitle[title] = generateFocusedKeywords(title, keywords, subjectMatters);
+
+    const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-post-ideas', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({
+        website_id: websiteId,
+        keywords,
+        writing_style: writingStyle,
+        subject_matters: subjectMatters
+      })
     });
-    
-    // Use the first title's keywords as the default set
-    const defaultKeywords = keywordsByTitle[finalTitles[0]] || [];
-    
-    // Return a subset of the titles (up to 5)
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to generate title suggestions');
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to generate title suggestions');
+    }
+
     return {
-      titles: finalTitles,
-      keywords: defaultKeywords,
-      keywordsByTitle: keywordsByTitle
+      titles: result.titles,
+      keywords: result.keywords,
+      keywordsByTitle: result.keywordsByTitle
     };
+
   } catch (error) {
     console.error('Error generating title suggestions with AI:', error);
-    throw new Error('Failed to generate title suggestions');
+    throw error;
   }
 };
 
@@ -697,33 +519,20 @@ const applyWordPressTemplate = (content: string, template: string, title: string
     }
   });
   
-  // Create a temporary DOM element to parse the template
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = template;
+  // Find the main content div to replace in the template
+  const contentMatch = template.match(/<div[^>]*class="[^"]*entry-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
   
-  // Find the entry-content div in the template
-  const entryContentDiv = tempDiv.querySelector('.entry-content');
-  
-  if (entryContentDiv) {
-    // Replace the content inside the entry-content div
-    entryContentDiv.innerHTML = processedContent;
-    
-    // If there's a title element in the template, update it
-    const titleElement = tempDiv.querySelector('.entry-title');
-    if (titleElement) {
-      titleElement.textContent = title;
-    }
-    
-    // Return the complete template with the content
-    return tempDiv.innerHTML;
+  if (contentMatch) {
+    // Replace only the content inside the entry-content div
+    console.log('Found entry-content div in template, inserting content');
+    return template.replace(
+      contentMatch[0],
+      `<div class="entry-content">${processedContent}</div>`
+    );
   } else {
-    // If no entry-content div found, wrap the content in a basic article structure
-    console.warn('No entry-content div found in template, using basic article structure');
-    return `<article class="post">
-      <div class="entry-content">
-        ${processedContent}
-      </div>
-    </article>`;
+    // If no entry-content div found, just use the generated content
+    console.warn('No entry-content div found in template, using processed content directly');
+    return processedContent;
   }
 };
 
@@ -736,6 +545,7 @@ const applyWordPressTemplate = (content: string, template: string, title: string
  * @param writingStyle The writing style preferences
  * @param websiteContent The existing website content to reference and create backlinks to
  * @param wpTemplate Optional WordPress HTML template to format the content
+ * @param postThemeId Optional postThemeId to update in the database
  * @returns A promise that resolves to the generated post content
  */
 export const generatePostContent = async (
@@ -744,7 +554,8 @@ export const generatePostContent = async (
   writingStyle: string,
   websiteContent: string,
   websiteId: string,
-  wpTemplate?: string
+  wpTemplate?: string,
+  postThemeId?: string
 ): Promise<string> => {
   try {
     console.log('Generating post content with AI...');
@@ -753,25 +564,217 @@ export const generatePostContent = async (
     console.log('Writing Style:', writingStyle);
     console.log('Content length:', websiteContent.length);
     console.log('Website ID:', websiteId);
-    console.log('WordPress Template:', wpTemplate);
+    if (postThemeId) {
+      console.log('Post Theme ID:', postThemeId);
+    }
+    
+    // Basic language detection for various languages
+    const languageDetectors = {
+      'da': { // Danish
+        words: ['og', 'at', 'en', 'den', 'til', 'er', 'det', 'som', 'på', 'med', 'har', 'af', 'for', 'ikke', 'der', 'var'],
+        characters: ['æ', 'ø', 'å', 'Æ', 'Ø', 'Å'],
+        phrases: ['danmark', 'københavn', 'dansk']
+      },
+      'es': { // Spanish
+        words: ['y', 'el', 'la', 'de', 'en', 'que', 'es', 'por', 'un', 'una', 'para', 'con', 'no', 'está'],
+        characters: ['ñ', 'á', 'é', 'í', 'ó', 'ú', 'ü', '¿', '¡'],
+        phrases: ['españa', 'méxico', 'español']
+      },
+      'fr': { // French
+        words: ['et', 'le', 'la', 'les', 'un', 'une', 'des', 'en', 'dans', 'est', 'sont', 'pour', 'avec', 'nous'],
+        characters: ['é', 'è', 'ê', 'à', 'â', 'ç', 'ù', 'û', 'ï', 'œ'],
+        phrases: ['france', 'français', 'paris']
+      },
+      'de': { // German
+        words: ['und', 'der', 'die', 'das', 'in', 'ist', 'für', 'mit', 'nicht', 'auch', 'von', 'zu', 'eine', 'ich'],
+        characters: ['ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü'],
+        phrases: ['deutschland', 'deutsch', 'berlin']
+      },
+      'it': { // Italian
+        words: ['e', 'il', 'la', 'di', 'che', 'in', 'un', 'una', 'non', 'per', 'sono', 'con', 'come', 'questo'],
+        characters: ['à', 'è', 'é', 'ì', 'í', 'ò', 'ó', 'ù', 'ú'],
+        phrases: ['italia', 'italiano', 'roma', 'milano']
+      },
+      'nl': { // Dutch
+        words: ['en', 'het', 'de', 'van', 'een', 'in', 'is', 'op', 'dat', 'niet', 'voor', 'zijn', 'met', 'ook'],
+        characters: ['ij', 'é', 'ë', 'ö', 'ü', 'ä'],
+        phrases: ['nederland', 'amsterdam', 'nederlands']
+      },
+      'pt': { // Portuguese
+        words: ['e', 'o', 'a', 'de', 'que', 'em', 'um', 'uma', 'não', 'para', 'com', 'se', 'como', 'os'],
+        characters: ['á', 'à', 'â', 'ã', 'ç', 'é', 'ê', 'í', 'ó', 'ô', 'õ', 'ú'],
+        phrases: ['brasil', 'portugal', 'português']
+      },
+      'sv': { // Swedish
+        words: ['och', 'att', 'det', 'i', 'en', 'är', 'på', 'för', 'med', 'som', 'inte', 'av', 'till', 'den'],
+        characters: ['å', 'ä', 'ö', 'Å', 'Ä', 'Ö'],
+        phrases: ['sverige', 'stockholm', 'svenska']
+      },
+      'no': { // Norwegian
+        words: ['og', 'i', 'det', 'er', 'på', 'at', 'en', 'for', 'som', 'med', 'til', 'av', 'ikke', 'å'],
+        characters: ['æ', 'ø', 'å', 'Æ', 'Ø', 'Å'],
+        phrases: ['norge', 'oslo', 'norsk']
+      },
+      'fi': { // Finnish
+        words: ['ja', 'on', 'että', 'ei', 'se', 'hän', 'ovat', 'mitä', 'tämä', 'mutta', 'ole', 'kun', 'minä', 'sinä'],
+        characters: ['ä', 'ö', 'å', 'Ä', 'Ö', 'Å'],
+        phrases: ['suomi', 'helsinki', 'suomalainen']
+      },
+      'pl': { // Polish
+        words: ['i', 'w', 'na', 'z', 'do', 'że', 'to', 'nie', 'się', 'jest', 'o', 'a', 'jak', 'po'],
+        characters: ['ą', 'ć', 'ę', 'ł', 'ń', 'ó', 'ś', 'ź', 'ż', 'Ą', 'Ć', 'Ę', 'Ł', 'Ń', 'Ó', 'Ś', 'Ź', 'Ż'],
+        phrases: ['polska', 'warszawa', 'polski']
+      },
+      'ru': { // Russian
+        words: ['и', 'в', 'на', 'с', 'не', 'что', 'это', 'я', 'он', 'а', 'то', 'все', 'как', 'но'],
+        characters: ['а', 'б', 'в', 'г', 'д', 'е', 'ё', 'ж', 'з', 'и', 'й', 'к', 'л', 'м', 'н', 'о', 'п', 'р', 'с', 'т', 'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'ъ', 'ы', 'ь', 'э', 'ю', 'я'],
+        phrases: ['россия', 'москва', 'русский']
+      },
+      'ar': { // Arabic
+        words: ['و', 'في', 'من', 'إلى', 'على', 'أن', 'هذا', 'هي', 'هو', 'لا', 'ما', 'مع', 'كان', 'عن'],
+        characters: ['ا', 'ب', 'ت', 'ث', 'ج', 'ح', 'خ', 'د', 'ذ', 'ر', 'ز', 'س', 'ش', 'ص', 'ض', 'ط', 'ظ', 'ع', 'غ', 'ف', 'ق', 'ك', 'ل', 'م', 'ن', 'ه', 'و', 'ي', 'ء', 'ة'],
+        phrases: ['العربية', 'السعودية', 'مصر', 'القاهرة']
+      },
+      'zh': { // Chinese
+        words: ['的', '是', '在', '不', '了', '有', '和', '人', '这', '中', '大', '为', '上', '个'],
+        characters: ['中', '国', '人', '我', '的', '是', '在', '了', '有', '和', '不', '这', '他', '你'],
+        phrases: ['中国', '北京', '上海', '汉语']
+      },
+      'ja': { // Japanese
+        words: ['の', 'に', 'は', 'を', 'た', 'が', 'で', 'て', 'と', 'し', 'れ', 'さ', 'ある', 'いる'],
+        characters: ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ', 'さ', 'し', 'す', 'せ', 'そ', '日', '本', '人', '私', '見'],
+        phrases: ['日本', '東京', '日本語']
+      },
+      'ko': { // Korean
+        words: ['이', '가', '은', '는', '을', '를', '에', '의', '로', '와', '과', '한', '하다', '있다'],
+        characters: ['ㄱ', 'ㄴ', 'ㄷ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅅ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', '한', '국', '어', '서', '울'],
+        phrases: ['한국', '서울', '한국어']
+      },
+      'hi': { // Hindi
+        words: ['और', 'का', 'की', 'एक', 'में', 'है', 'यह', 'से', 'हैं', 'के', 'पर', 'इस', 'को', 'जो'],
+        characters: ['अ', 'आ', 'इ', 'ई', 'उ', 'ऊ', 'ए', 'ऐ', 'ओ', 'औ', 'क', 'ख', 'ग', 'घ'],
+        phrases: ['भारत', 'हिंदी', 'दिल्ली', 'मुंबई']
+      }
+    };
 
-    // Get website language from the database
-    let contentLanguage = 'en'; // Default to English
-    try {
-      const { data: websiteData } = await supabase
-        .from('websites')
-        .select('language')
-        .eq('id', websiteId)
-        .single();
+    // Helper function to detect language from text
+    const detectLanguageFromText = (text: string): string | null => {
+      // Convert text to lowercase for easier matching
+      const lowerText = text.toLowerCase();
+      
+      // Check each language's markers
+      for (const [langCode, detector] of Object.entries(languageDetectors)) {
+        // Check for words
+        if (detector.words.some(word => {
+          // Match whole words only using word boundaries
+          const regex = new RegExp(`\\b${word}\\b`, 'i');
+          return regex.test(lowerText);
+        })) {
+          return langCode;
+        }
         
-      if (websiteData?.language) {
-        contentLanguage = websiteData.language.toLowerCase();
-        console.log(`Website language from database: ${contentLanguage}`);
+        // Check for special characters
+        if (detector.characters.some(char => lowerText.includes(char))) {
+          return langCode;
+        }
+        
+        // Check for phrases
+        if (detector.phrases.some(phrase => lowerText.includes(phrase))) {
+          return langCode;
+        }
+      }
+      
+      return null; // No confident match
+    };
+    
+    // Try to get website language from the database
+    let websiteLanguage = 'unknown';
+    try {
+      // Check if websites table is accessible (handle type checking issues)
+      const { data: tablesData } = await supabase
+        .from('websites')
+        .select('id')
+        .limit(1);
+      
+      if (tablesData) {
+        // Table exists and is accessible
+        const { data: websiteData } = await supabase
+          .from('websites')
+          .select('*')
+          .eq('id', websiteId)
+          .single();
+          
+        if (websiteData) {
+          // Try to get language field if it exists
+          // @ts-ignore - Handle potential missing language field
+          const language = websiteData.language || websiteData.default_language;
+          if (language) {
+            websiteLanguage = language.toLowerCase();
+            console.log(`Website language from database: ${websiteLanguage}`);
+          }
+        }
       }
     } catch (err) {
       console.log('Could not retrieve website language from database:', err);
     }
-
+    
+    // Auto-detect language from text if no language is set in the database
+    const detectedLanguage = websiteLanguage === 'unknown' ? detectLanguageFromText(title + ' ' + websiteContent.slice(0, 500)) : null;
+    
+    // Determine final language, defaulting to English if we can't detect
+    const contentLanguage = websiteLanguage !== 'unknown' ? websiteLanguage : (detectedLanguage || 'en');
+    
+    console.log('Language detection results:', {
+      websiteLanguage,
+      detectedFromText: detectedLanguage,
+      finalDetermination: contentLanguage
+    });
+    
+    // Flag for Danish-specific formatting (and potentially other languages)
+    const isDanish = contentLanguage === 'da' || contentLanguage === 'danish' || contentLanguage === 'dansk' || 
+                    // Additional checks for Danish content detection
+                    (title && (
+                      title.includes('ø') || title.includes('æ') || title.includes('å') ||
+                      title.includes('Ø') || title.includes('Æ') || title.includes('Å') ||
+                      // Common Danish words that might appear in titles
+                      title.includes(' og ') || title.includes(' i ') || title.includes(' til ') ||
+                      title.includes(' af ') || title.includes(' med ') || title.includes(' på ')
+                    ));
+    
+    console.log('Danish content detection:', isDanish);
+    
+    // If Danish is detected, ensure the title follows Danish capitalization rules
+    if (isDanish && title) {
+      // Log the original title
+      console.log('Original title:', title);
+      
+      // Apply Danish capitalization rules (only first word capitalized)
+      const words = title.split(' ');
+      if (words.length > 0) {
+        words[0] = words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase();
+        
+        // Keep proper nouns capitalized, everything else lowercase
+        for (let i = 1; i < words.length; i++) {
+          if (!words[i]) continue;
+          
+          // Check if potentially a proper noun (very simple heuristic)
+          const isPotentialProperNoun = (
+            words[i] === 'Danmark' || 
+            words[i] === 'Dansk' || 
+            words[i].endsWith('ske') || // For words like "danske"
+            words[i].match(/^[A-ZÆØÅ]/) !== null // Already capitalized
+          );
+          
+          words[i] = isPotentialProperNoun ? words[i] : words[i].toLowerCase();
+        }
+        
+        title = words.join(' ');
+      }
+      
+      // Log the corrected title
+      console.log('Corrected Danish title:', title);
+    }
+    
     // Extract potential links from website content in the database
     const potentialLinks = await extractPotentialLinks(websiteId);
     console.log('Potential backlinks found:', potentialLinks);
@@ -810,30 +813,63 @@ export const generatePostContent = async (
         
         Format the response as HTML with proper heading tags (h2, h3), paragraphs, lists, and link elements.
         Use internal links with anchor text that flows naturally in the content.
+        
+        ${(() => {
+          // Select language-specific instructions
+          switch(contentLanguage) {
+            case 'da':
+              return `Since this content is in Danish, strictly follow Danish capitalization rules for headers:
+              - Only capitalize the first word and proper nouns in headings (h2, h3, etc.)
+              - NEVER capitalize every word in headers as is common in English
+              - Proper nouns (like "Danmark", "København", etc.) should be capitalized
+              - Common words like "og", "i", "til", "af", "med", "på" should NOT be capitalized unless they start a heading
+              - Example correct heading: "De bedste metoder til at optimere din hjemmeside" (NOT "De Bedste Metoder Til At Optimere Din Hjemmeside")`;
+            case 'de':
+              return `Since this content is in German, follow German capitalization rules for headers:
+              - Capitalize nouns and the first word of headlines
+              - Follow German grammar rules for compound words`;
+            case 'es':
+            case 'fr':
+            case 'it':
+            case 'pt':
+              return `Since this content is in ${languages.find(l => l.code === contentLanguage)?.name || contentLanguage}, follow appropriate capitalization rules:
+              - Only capitalize the first word and proper nouns in headings
+              - Do NOT capitalize every word in headers as is common in English`;
+            case 'en':
+              return `Since this content is in English, follow standard English capitalization for headers:
+              - Capitalize all major words in headings (nouns, verbs, adjectives, adverbs)
+              - Do not capitalize articles (a, an, the), coordinating conjunctions, or prepositions unless they are the first word`;
+            case 'other':
+              // Handle custom language code
+              return `For this content in the specified language (${contentLanguage}), follow appropriate capitalization rules:
+              - If you know the standard conventions for this language, follow those conventions
+              - Otherwise, only capitalize the first word and proper nouns in headings
+              - Ensure the content follows the grammatical rules of the target language`;
+            default:
+              // Check if this is one of our defined languages first
+              const languageName = languages.find(l => l.code === contentLanguage)?.name;
+              if (languageName) {
+                return `For this content in ${languageName}, follow appropriate capitalization rules for the target language:
+                - Follow standard conventions for ${languageName}
+                - Ensure proper use of any special characters or grammatical rules specific to this language`;
+              }
+              
+              // Truly unknown language code
+              return `For this content, follow appropriate capitalization rules for the target language (${contentLanguage}):
+              - If the language is like English, capitalize major words in headings
+              - If the language is like most European languages, only capitalize the first word and proper nouns in headings
+              - Follow any special capitalization rules specific to this language`;
+          }
+        })()}
       `;
       
       // Use the new openaiService instead of direct FREE_FETCH_PROXY
       const data = await callOpenAI({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: `You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. 
-            NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. 
-            Focus only on the content body itself. 
-            When writing in Danish, follow Danish language rules - headers (h2, h3, etc.) should only capitalize the first word and proper nouns, not every word.
-            Structure your content with proper HTML elements:
-            - Use <h2> for main section headings
-            - Use <h3> for subsections
-            - Use <p> for paragraphs
-            - Use <ul> and <li> for unordered lists
-            - Use <ol> and <li> for ordered lists
-            - Use <blockquote> for quotes
-            - Use <strong> for emphasis
-            - Use <em> for italics
-            - Use <a> for links
-            - Use <br> sparingly and only within paragraphs
-            - Do not use <div> or other structural elements as they are handled by the WordPress theme`
+            content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself. When writing in Danish, follow Danish language rules - headers (h2, h3, etc.) should only capitalize the first word and proper nouns, not every word.'
           },
           {
             role: 'user',
@@ -852,6 +888,29 @@ export const generatePostContent = async (
         // Apply WordPress template if provided
         if (wpTemplate && wpTemplate.trim().length > 0) {
           generatedContent = applyWordPressTemplate(generatedContent, wpTemplate, title);
+        }
+        
+        // Update the post_theme in the database if a postThemeId was provided
+        if (postThemeId) {
+          try {
+            console.log('Updating post_theme in database with generated content for ID:', postThemeId);
+            
+            const updates: Partial<PostTheme> = { post_content: generatedContent };
+            
+            const { error } = await supabase
+              .from('post_themes')
+              .update(updates)
+              .eq('id', postThemeId);
+              
+            if (error) {
+              console.error('Error updating post_theme with generated content:', error);
+            } else {
+              console.log('Successfully updated post_theme with generated content in database');
+            }
+          } catch (dbError) {
+            console.error('Exception updating post_theme with content:', dbError);
+            // Don't throw this error - we still want to return the generated content
+          }
         }
         
         return generatedContent;

@@ -111,7 +111,7 @@ const Settings = () => {
   const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt } = useSettings();
   const { currentWebsite, updateWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
-  const { createPostTheme } = usePostThemes();
+  const { addPostTheme } = usePostThemes();
   const [frequency, setFrequency] = useState(publicationFrequency);
   const [styleInput, setStyleInput] = useState(writingStyle);
   const [subjects, setSubjects] = useState<string[]>(subjectMatters);
@@ -656,7 +656,8 @@ const Settings = () => {
         content,
         [subject], // Use the subject as the main keyword
         styleInput, // Use the current writing style
-        [subject]  // Focus on this specific subject
+        [subject],  // Focus on this specific subject
+        currentWebsite?.id || ''
       );
       
       // Calculate a scheduled date based on publication frequency
@@ -665,7 +666,18 @@ const Settings = () => {
       
       // Create post themes for each title
       const creationPromises = result.titles.map(title => 
-        createPostTheme(title, result.keywords, null)
+        addPostTheme({
+          website_id: currentWebsite?.id || '',
+          subject_matter: title,
+          keywords: result.keywords,
+          status: 'pending',
+          scheduled_date: scheduledDate.toISOString(),
+          post_content: null,
+          image: null,
+          wp_post_id: null,
+          wp_post_url: null,
+          wp_sent_date: null
+        })
       );
       
       await Promise.all(creationPromises);
