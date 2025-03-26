@@ -55,6 +55,8 @@ interface WordPressSettings {
   publish_status?: string;
   created_at: string;
   updated_at: string;
+  categories?: { id: number; name: string; slug: string }[];
+  last_post_at?: string;
 }
 
 const ContentCalendar = () => {

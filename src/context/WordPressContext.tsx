@@ -12,8 +12,9 @@ interface WordPressSettings {
   wp_application_password: string;
   is_connected: boolean;
   created_at: string;
-  updated_at?: string;
-  last_tested_at?: string;
+  updated_at: string;
+  publish_status?: string;
+  categories?: { id: number; name: string; slug: string }[];
   last_post_at?: string;
 }
 

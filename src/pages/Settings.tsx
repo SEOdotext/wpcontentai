@@ -11,7 +11,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { useWordPress } from '@/context/WordPressContext';
 import { usePostThemes } from '@/context/PostThemesContext';
 import { toast } from 'sonner';
-import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap, Link, HelpCircle, Pencil, Sparkles } from 'lucide-react';
+import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap, Link, HelpCircle, Pencil, Sparkles, RefreshCw, Wand2, Trash2, Upload } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,6 +33,8 @@ import {
 import { languages } from '@/data/languages';
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 
 // Configuration
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
@@ -46,9 +48,10 @@ interface WordPressSettings {
   wp_username: string;
   wp_application_password: string;
   is_connected: boolean;
+  publish_status?: string;
   created_at: string;
   updated_at: string;
-  publish_status?: string;
+  last_post_at?: string;
 }
 
 // Add a constant for the clean template at the top of the file
@@ -107,6 +110,19 @@ const defaultWordPressTemplate = `<!-- WordPress Post HTML Structure Example -->
 
 </article>`;
 
+interface Category {
+  id: string;
+  website_id: string;
+  wp_category_id: number;
+  name: string;
+  slug: string;
+  description: string;
+  parent_id: number;
+  count: number;
+  created_at: string;
+  updated_at: string;
+}
+
 const Settings = () => {
   const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt } = useSettings();
   const { currentWebsite, updateWebsite } = useWebsites();
@@ -126,6 +142,7 @@ const Settings = () => {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [connectionDiagnostics, setConnectionDiagnostics] = useState<any>(null);
   const [directWpSettings, setDirectWpSettings] = useState<WordPressSettings | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [wpFormatOpen, setWpFormatOpen] = useState(false);
   const [htmlTemplate, setHtmlTemplate] = useState(wordpressTemplate);
   const [sendingTestPost, setSendingTestPost] = useState(false);
@@ -136,6 +153,11 @@ const Settings = () => {
   const [customLanguageModalOpen, setCustomLanguageModalOpen] = useState(false);
   const [customLanguageInput, setCustomLanguageInput] = useState("");
   const [wpPublishStatus, setWpPublishStatus] = useState<string>('draft');
+  // Add new state for category generation
+  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+  const [generatedCategories, setGeneratedCategories] = useState<{ name: string; slug: string }[]>([]);
+  const [isGeneratingCategories, setIsGeneratingCategories] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -1338,6 +1360,429 @@ const Settings = () => {
     }
   };
 
+  // Add function to generate category ideas
+  const generateCategoryIdeas = async () => {
+    if (!currentWebsite) {
+      toast.error('Please select a website first');
+      return;
+    }
+
+    setIsGeneratingCategories(true);
+    try {
+      console.log('Generating category ideas for website:', currentWebsite.id);
+      
+      // Get existing categories to exclude them
+      const existingCategories = categories.map(c => c.name.toLowerCase());
+      console.log('Existing categories:', existingCategories);
+
+      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-category-ideas', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          websiteId: currentWebsite.id,
+          existingCategories // Pass existing categories to exclude
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('Error generating categories:', error);
+        throw new Error(error);
+      }
+
+      const data = await response.json();
+      console.log('Generated categories:', data);
+
+      // Filter out any categories that already exist
+      const newCategories = data.categories.filter((category: { name: string; slug: string }) => 
+        !existingCategories.includes(category.name.toLowerCase())
+      );
+
+      if (newCategories.length === 0) {
+        toast.info('No new category ideas generated. All suggested categories already exist.');
+        return;
+      }
+
+      setGeneratedCategories(newCategories);
+      setShowCategoryDialog(true);
+      toast.success('Category ideas generated successfully');
+    } catch (error) {
+      console.error('Error generating categories:', error);
+      toast.error('Failed to generate category ideas');
+    } finally {
+      setIsGeneratingCategories(false);
+    }
+  };
+
+  // Add function to handle category deletion
+  const handleDeleteCategory = async (category: Category) => {
+    if (!currentWebsite) {
+      toast.error('Please select a website first');
+      return;
+    }
+
+    try {
+      console.log('Deleting category:', category);
+      
+      const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/manage-local-categories`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          websiteId: currentWebsite.id,
+          categoryId: category.wp_category_id
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('Error deleting category:', error);
+        throw new Error(error);
+      }
+
+      // Update local state
+      setCategories(categories.filter(c => c.wp_category_id !== category.wp_category_id));
+      toast.success('Category deleted successfully');
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      toast.error('Failed to delete category');
+    }
+  };
+
+  const handleWordPressConnect = async () => {
+    setIsConnecting(true);
+    try {
+      handleStartWordPressAuth();
+    } catch (error) {
+      console.error('Error connecting to WordPress:', error);
+      toast.error('Failed to connect to WordPress');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleWordPressDisconnect = async () => {
+    setIsConnecting(true);
+    try {
+      handleDisconnectWordPress();
+    } catch (error) {
+      console.error('Error disconnecting from WordPress:', error);
+      toast.error('Failed to disconnect from WordPress');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handlePublishStatusChange = async (value: string) => {
+    setIsConnecting(true);
+    try {
+      updateWordPressPublishStatus(value);
+    } catch (error) {
+      console.error('Error updating publish status:', error);
+      toast.error('Failed to update publish status');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleRefreshCategories = async () => {
+    setIsGeneratingCategories(true);
+    try {
+      await generateCategoryIdeas();
+    } catch (error) {
+      console.error('Error refreshing categories:', error);
+      toast.error('Failed to refresh categories');
+    } finally {
+      setIsGeneratingCategories(false);
+    }
+  };
+
+  // Add function to fetch categories
+  const fetchCategories = async () => {
+    if (!currentWebsite) {
+      console.log('No website selected, skipping category fetch');
+      return;
+    }
+
+    try {
+      console.log('Fetching categories for website:', currentWebsite.id);
+      const { data: categories, error } = await supabase
+        .from('wordpress_categories')
+        .select('*')
+        .eq('website_id', currentWebsite.id)
+        .order('name');
+
+      if (error) {
+        console.error('Error fetching categories:', error);
+        toast.error('Failed to fetch categories');
+        return;
+      }
+
+      console.log('Fetched categories:', categories);
+      setCategories(categories || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('Failed to fetch categories');
+    }
+  };
+
+  // Add useEffect to fetch categories when currentWebsite changes
+  useEffect(() => {
+    if (currentWebsite) {
+      console.log('Current website changed, fetching categories');
+      fetchCategories();
+    }
+  }, [currentWebsite]);
+
+  // Add function to handle adding a category
+  const addCategory = async (category: { name: string; slug: string }) => {
+    if (!currentWebsite) {
+      toast.error('Please select a website first');
+      return;
+    }
+
+    try {
+      console.log('Adding category:', category);
+      
+      // Generate a random ID between 1 and 1000000 for wp_category_id
+      const wp_category_id = Math.floor(Math.random() * 1000000) + 1;
+      
+      // Insert the category into the database
+      const { error } = await supabase
+        .from('wordpress_categories')
+        .insert({
+          website_id: currentWebsite.id,
+          wp_category_id,
+          name: category.name,
+          slug: category.slug,
+          description: '', // Optional description
+          parent_id: 0, // No parent category
+          count: 0 // No posts yet
+        });
+
+      if (error) {
+        console.error('Error adding category:', error);
+        throw error;
+      }
+
+      // Refresh the categories list
+      await fetchCategories();
+      
+      // Show success message but keep modal open
+      toast.success(`Category "${category.name}" added successfully`);
+      
+      // Remove the added category from the generated list
+      setGeneratedCategories(prev => prev.filter(c => c.name !== category.name));
+      
+      // If no more categories to add, close the modal
+      if (generatedCategories.length === 1) {
+        setShowCategoryDialog(false);
+      }
+    } catch (error) {
+      console.error('Error adding category:', error);
+      toast.error('Failed to add category');
+    }
+  };
+
+  // Add function to fetch categories from WordPress
+  const fetchCategoriesFromWordPress = async () => {
+    if (!currentWebsite) {
+      toast.error('Please select a website first');
+      return;
+    }
+
+    setIsGeneratingCategories(true);
+    try {
+      console.log('Fetching categories from WordPress for website:', currentWebsite.id);
+      
+      const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/wordpress-categories`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        },
+        body: JSON.stringify({
+          websiteId: currentWebsite.id,
+          action: 'fetch'
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('Error fetching categories from WordPress:', error);
+        throw new Error(error);
+      }
+
+      const data = await response.json();
+      console.log('Categories fetched from WordPress:', data);
+
+      // Refresh the local categories list
+      await fetchCategories();
+      
+      toast.success('Categories refreshed from WordPress');
+    } catch (error) {
+      console.error('Error fetching categories from WordPress:', error);
+      toast.error('Failed to fetch categories from WordPress');
+    } finally {
+      setIsGeneratingCategories(false);
+    }
+  };
+
+  // Add function to push categories to WordPress
+  const pushCategoriesToWordPress = async () => {
+    if (!currentWebsite) {
+      toast.error('Please select a website first');
+      return;
+    }
+
+    setIsGeneratingCategories(true);
+    try {
+      console.log('Pushing categories to WordPress for website:', currentWebsite.id);
+      
+      // Get all categories for this website
+      const { data: categories, error: categoriesError } = await supabase
+        .from('wordpress_categories')
+        .select('*')
+        .eq('website_id', currentWebsite.id);
+
+      if (categoriesError) {
+        throw new Error(`Failed to fetch categories: ${categoriesError.message}`);
+      }
+
+      if (!categories || categories.length === 0) {
+        toast.info('No categories to push to WordPress');
+        return;
+      }
+
+      // Get current session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      if (!sessionData?.session?.access_token) {
+        toast.error('You must be logged in to push categories');
+        return;
+      }
+
+      // Push categories using the new edge function
+      const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/push-categories`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session.access_token}`
+        },
+        body: JSON.stringify({
+          websiteId: currentWebsite.id,
+          categories: categories.map(cat => ({
+            name: cat.name,
+            slug: cat.slug,
+            description: cat.description || ''
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error('Error pushing categories to WordPress:', error);
+        throw new Error(error);
+      }
+
+      const data = await response.json();
+      console.log('Push categories response:', data);
+
+      // Check results
+      const successful = data.results.filter((r: any) => r.success).length;
+      const failed = data.results.filter((r: any) => !r.success).length;
+
+      if (failed > 0) {
+        toast.warning(`Pushed ${successful} categories, ${failed} failed`);
+        console.error('Failed categories:', data.results.filter((r: any) => !r.success));
+      } else {
+        toast.success(`Successfully pushed ${successful} categories to WordPress`);
+      }
+
+      // Refresh the categories list
+      await fetchCategories();
+    } catch (error) {
+      console.error('Error pushing categories to WordPress:', error);
+      toast.error('Failed to push categories to WordPress');
+    } finally {
+      setIsGeneratingCategories(false);
+    }
+  };
+
+  // Update the categories display section
+  const renderCategoriesSection = () => (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Categories</h3>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchCategoriesFromWordPress}
+            disabled={isGeneratingCategories}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isGeneratingCategories ? 'animate-spin' : ''}`} />
+            Get Categories from WordPress
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={pushCategoriesToWordPress}
+            disabled={isGeneratingCategories}
+          >
+            <Upload className={`h-4 w-4 mr-2 ${isGeneratingCategories ? 'animate-spin' : ''}`} />
+            Push to WordPress
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={generateCategoryIdeas}
+            disabled={isGeneratingCategories}
+          >
+            <Wand2 className="h-4 w-4 mr-2" />
+            Generate Ideas
+          </Button>
+        </div>
+      </div>
+      
+      {categories.length === 0 ? (
+        <div className="text-center py-8 border rounded-lg bg-muted/30">
+          <p className="text-muted-foreground">No categories found. Generate some ideas to get started.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {categories.map((category) => (
+            <div
+              key={category.wp_category_id}
+              className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+            >
+              <div>
+                <h4 className="font-medium">{category.name}</h4>
+                <p className="text-sm text-muted-foreground">URL: {category.slug}</p>
+                {category.description && (
+                  <p className="text-xs text-muted-foreground mt-1">{category.description}</p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteCategory(category)}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar />
@@ -1443,45 +1888,22 @@ const Settings = () => {
                         
                         {/* Add WordPress Publish Status selector */}
                         <div className="space-y-2">
-                          <Label htmlFor="publishStatus">Default Publish Status</Label>
-                          <div className="flex space-x-4">
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="radio" 
-                                id="draft" 
-                                name="publishStatus"
-                                checked={wpPublishStatus === 'draft'}
-                                onChange={() => updateWordPressPublishStatus('draft')}
-                                className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
-                              />
-                              <Label 
-                                htmlFor="draft"
-                                className="text-sm font-normal cursor-pointer"
-                              >
-                                Draft
-                              </Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="radio" 
-                                id="publish" 
-                                name="publishStatus"
-                                checked={wpPublishStatus === 'publish'}
-                                onChange={() => updateWordPressPublishStatus('publish')}
-                                className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
-                              />
-                              <Label 
-                                htmlFor="publish"
-                                className="text-sm font-normal cursor-pointer"
-                              >
-                                Published
-                              </Label>
-                            </div>
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              id="publish-status"
+                              checked={wpPublishStatus === 'publish'}
+                              onCheckedChange={(checked) => updateWordPressPublishStatus(checked ? 'publish' : 'draft')}
+                            />
+                            <Label htmlFor="publish-status">
+                              Published
+                            </Label>
                           </div>
                           <p className="text-sm text-muted-foreground">
                             Choose whether content should be saved as draft or published immediately when sent to WordPress.
                           </p>
                         </div>
+                        
+                        {renderCategoriesSection()}
                         
                         {/* Test Post Feedback - Show only when a test post has been created */}
                         {testPostId && (
@@ -2137,6 +2559,35 @@ const Settings = () => {
               <Button type="submit">Save Language</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Generated Category Ideas Dialog */}
+      <Dialog open={showCategoryDialog} onOpenChange={setShowCategoryDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generated Category Ideas</DialogTitle>
+            <DialogDescription>
+              Here are some category ideas based on your content. Click to add them to your WordPress site.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {generatedCategories.map((category, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent cursor-pointer"
+                onClick={() => addCategory(category)}
+              >
+                <div>
+                  <h4 className="font-medium">{category.name}</h4>
+                  <p className="text-sm text-muted-foreground">{category.slug}</p>
+                </div>
+                <Button variant="ghost" size="sm">
+                  Add
+                </Button>
+              </div>
+            ))}
+          </div>
         </DialogContent>
       </Dialog>
 

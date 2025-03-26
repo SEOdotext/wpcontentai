@@ -135,6 +135,51 @@
     "data_type": "text"
   },
   {
+    "table_name": "publish_queue",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "publish_queue",
+    "column_name": "post_theme_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "publish_queue",
+    "column_name": "status",
+    "data_type": "text"
+  },
+  {
+    "table_name": "publish_queue",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "publish_queue",
+    "column_name": "started_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "publish_queue",
+    "column_name": "completed_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "publish_queue",
+    "column_name": "result",
+    "data_type": "jsonb"
+  },
+  {
+    "table_name": "publish_queue",
+    "column_name": "error",
+    "data_type": "text"
+  },
+  {
+    "table_name": "publish_queue",
+    "column_name": "user_token",
+    "data_type": "text"
+  },
+  {
     "table_name": "user_profiles",
     "column_name": "id",
     "data_type": "uuid"
@@ -288,6 +333,56 @@
     "table_name": "websites",
     "column_name": "image_prompt",
     "data_type": "text"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "website_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "wp_category_id",
+    "data_type": "integer"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "slug",
+    "data_type": "text"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "description",
+    "data_type": "text"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "parent_id",
+    "data_type": "integer"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "count",
+    "data_type": "integer"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "wordpress_categories",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
   },
   {
     "table_name": "wordpress_settings",

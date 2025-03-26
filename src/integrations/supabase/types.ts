@@ -259,6 +259,8 @@ export type Database = {
           created_at: string
           updated_at: string
           publish_status?: string
+          categories?: { id: number; name: string; slug: string }[]
+          last_post_at?: string
         }
         Insert: {
           id?: string
@@ -270,6 +272,8 @@ export type Database = {
           created_at?: string
           updated_at?: string
           publish_status?: string
+          categories?: { id: number; name: string; slug: string }[]
+          last_post_at?: string
         }
         Update: {
           id?: string
@@ -281,10 +285,59 @@ export type Database = {
           created_at?: string
           updated_at?: string
           publish_status?: string
+          categories?: { id: number; name: string; slug: string }[]
+          last_post_at?: string
         }
         Relationships: [
           {
             foreignKeyName: "wordpress_settings_website_id_fkey"
+            columns: ["website_id"]
+            isOneToOne: false
+            referencedRelation: "websites"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      wordpress_categories: {
+        Row: {
+          id: string
+          website_id: string
+          wp_category_id: number
+          name: string
+          slug: string
+          description: string | null
+          parent_id: number | null
+          count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          website_id: string
+          wp_category_id: number
+          name: string
+          slug: string
+          description?: string | null
+          parent_id?: number | null
+          count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          website_id?: string
+          wp_category_id?: number
+          name?: string
+          slug?: string
+          description?: string | null
+          parent_id?: number | null
+          count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wordpress_categories_website_id_fkey"
             columns: ["website_id"]
             isOneToOne: false
             referencedRelation: "websites"
