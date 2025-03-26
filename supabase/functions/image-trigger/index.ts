@@ -78,6 +78,55 @@ serve(async (req) => {
       );
     }
 
+    // Start async image generation process
+    generateImageAsync(postId, websiteId, postTheme, supabaseClient).catch(error => {
+      console.error('Error in async image generation:', error);
+      // Update post theme with error status
+      supabaseClient
+        .from('post_themes')
+        .update({ 
+          image_generation_error: error.message,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', postId)
+        .then(() => console.log('Updated post theme with error status'))
+        .catch(e => console.error('Error updating post theme with error:', e));
+    });
+
+    // Return immediately to indicate the process has started
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Image generation started',
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      }
+    );
+  } catch (error) {
+    console.error('Error in image-trigger function:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400,
+      }
+    );
+  }
+});
+
+// Async function to handle the actual image generation
+async function generateImageAsync(
+  postId: string,
+  websiteId: string,
+  postTheme: any,
+  supabaseClient: any
+) {
+  try {
     // Check for custom image prompt in publication_settings
     const { data: pubSettings, error: pubSettingsError } = await supabaseClient
       .from('publication_settings')
@@ -90,20 +139,12 @@ serve(async (req) => {
     if (!pubSettingsError && pubSettings?.image_prompt) {
       customPrompt = pubSettings.image_prompt;
       console.log('Using image prompt from publication_settings:', customPrompt);
-    } else if (website.image_prompt) {
-      customPrompt = website.image_prompt;
+    } else if (postTheme.image_prompt) {
+      customPrompt = postTheme.image_prompt;
       console.log('Using image prompt from website settings:', customPrompt);
     } else {
       console.log('No custom prompt found, will use default prompt template');
     }
-
-    // Now we have the post content, pass it to the image generation process
-    // This keeps all the complex operations on the backend
-    console.log('Generating image for post:', {
-      postId,
-      title: postTheme.subject_matter,
-      contentLength: postTheme.post_content.length
-    });
 
     // Generate a prompt using the custom template if available
     let prompt;
@@ -205,30 +246,12 @@ serve(async (req) => {
       throw new Error(`Error updating post_themes: ${updateError.message}`);
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        imageUrl: publicUrl,
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
-    );
+    console.log('Successfully completed async image generation for post:', postId);
   } catch (error) {
-    console.error('Error in image-trigger function:', error);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred',
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      }
-    );
+    console.error('Error in generateImageAsync:', error);
+    throw error;
   }
-});
+}
 
 // Function to create a safe prompt that won't exceed OpenAI's limits
 function createSafePrompt(title: string, content: string): string {

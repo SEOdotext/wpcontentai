@@ -20,9 +20,10 @@ interface PostThemeRow {
   wp_post_id: string | null;
   wp_post_url: string | null;
   wp_sent_date: string | null;
+  image_generation_error?: string | null;
 }
 
-interface PostTheme {
+export interface PostTheme {
   id: string;
   website_id: string;
   subject_matter: string;
@@ -36,6 +37,7 @@ interface PostTheme {
   wp_post_id: string | null;
   wp_post_url: string | null;
   wp_sent_date: string | null;
+  image_generation_error?: string | null;
 }
 
 interface PublicationSettings {
@@ -188,6 +190,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         wp_post_id: theme.wp_post_id || null,
         wp_post_url: theme.wp_post_url || null,
         wp_sent_date: theme.wp_sent_date || null,
+        image_generation_error: theme.image_generation_error || undefined,
       }));
 
       setPostThemes(typedThemes);
@@ -215,6 +218,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         wp_post_id: null,
         wp_post_url: null,
         wp_sent_date: null,
+        image_generation_error: undefined,
       };
 
       const { data, error } = await supabase
@@ -243,6 +247,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         wp_post_id: rowData.wp_post_id || null,
         wp_post_url: rowData.wp_post_url || null,
         wp_sent_date: rowData.wp_sent_date || null,
+        image_generation_error: rowData.image_generation_error || undefined,
       };
       
       setPostThemes(prev => [...prev, typedData]);
@@ -408,6 +413,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         wp_post_id: rowData.wp_post_id || null,
         wp_post_url: rowData.wp_post_url || null,
         wp_sent_date: rowData.wp_sent_date || null,
+        image_generation_error: rowData.image_generation_error || undefined,
       };
 
       setPostThemes(prev => 

@@ -160,7 +160,7 @@ const ContentView: React.FC<ContentViewProps> = ({
                     ) : preview_image_url ? (
                       <Image className="h-4 w-4 fill-purple-800" />
                     ) : (
-                      <Image className="h-4 w-4" />
+                      <Image className="h-4 w-4 text-purple-600" />
                     )}
                   </Button>
                 )}

@@ -24,6 +24,7 @@ import { usePostThemes } from '@/context/PostThemesContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
 import { generateImage, checkWebsiteImageGenerationEnabled } from '@/services/imageGeneration';
+import { PostTheme } from '@/context/PostThemesContext';
 
 interface Keyword {
   text: string;
@@ -59,8 +60,7 @@ const ContentCalendar = () => {
   const [displayDate, setDisplayDate] = useState<Date>(new Date());
   const [selectedContent, setSelectedContent] = useState<CalendarContent | null>(null);
   const [allContent, setAllContent] = useState<CalendarContent[]>([]);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [generatingImageId, setGeneratingImageId] = useState<string | null>(null);
+  const [generatingImageIds, setGeneratingImageIds] = useState<Set<string>>(new Set());
   const [isSendingToWP, setIsSendingToWP] = useState(false);
   const [sendingToWPId, setSendingToWPId] = useState<string | null>(null);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
@@ -429,8 +429,8 @@ const ContentCalendar = () => {
     }
 
     try {
-      setIsGeneratingImage(true);
-      setGeneratingImageId(contentId);
+      // Add this contentId to the set of generating images
+      setGeneratingImageIds(prev => new Set(prev).add(contentId));
 
       const content = allContent.find(item => item.id === contentId);
       if (!content) {
@@ -446,39 +446,88 @@ const ContentCalendar = () => {
       });
 
       console.log('Image generation result:', result);
-      console.log('Image URL from result:', result.imageUrl);
 
-      // Update the content with the image URL
-      const updatedContent = allContent.map(item =>
-        item.id === contentId
-          ? { ...item, preview_image_url: result.imageUrl }
-          : item
-      );
+      if (result.isGenerating) {
+        // Start polling for status updates
+        const pollInterval = setInterval(async () => {
+          try {
+            // Check the database directly for the image status
+            const { data: postTheme, error } = await supabase
+              .from('post_themes')
+              .select('image')
+              .eq('id', contentId)
+              .single() as { data: Pick<PostTheme, 'image'> | null, error: any };
 
-      // Log the updated content item
-      const updatedItem = updatedContent.find(item => item.id === contentId);
-      console.log('Updated content item:', updatedItem);
-      console.log('Preview image URL in updated item:', updatedItem?.preview_image_url);
+            if (error) {
+              console.error('Error checking image status:', error);
+              clearInterval(pollInterval);
+              return;
+            }
 
-      setAllContent(updatedContent);
+            console.log('Image generation status:', postTheme);
 
-      // Update selected content if this is the currently selected item
-      if (selectedContent?.id === contentId) {
-        console.log('Updating selected content with new image URL');
-        setSelectedContent(updatedItem!);
+            if (postTheme?.image) {
+              // Image is ready, update the UI
+              const updatedContent = allContent.map(item =>
+                item.id === contentId
+                  ? { ...item, preview_image_url: postTheme.image }
+                  : item
+              );
+
+              setAllContent(updatedContent);
+
+              // Update selected content if this is the currently selected item
+              if (selectedContent?.id === contentId) {
+                setSelectedContent(updatedContent.find(item => item.id === contentId)!);
+              }
+
+              // Save to localStorage
+              const storageKey = `calendarContent_${currentWebsite.id}`;
+              localStorage.setItem(storageKey, JSON.stringify(updatedContent));
+
+              toast.success('Image generated successfully');
+              clearInterval(pollInterval);
+            }
+          } catch (error) {
+            console.error('Error checking image status:', error);
+            clearInterval(pollInterval);
+          }
+        }, 5000); // Poll every 5 seconds
+
+        // Clear interval after 5 minutes (timeout)
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          toast.error('Image generation timed out');
+        }, 5 * 60 * 1000);
+      } else if (result.imageUrl) {
+        // Image was generated immediately
+        const updatedContent = allContent.map(item =>
+          item.id === contentId
+            ? { ...item, preview_image_url: result.imageUrl }
+            : item
+        );
+
+        setAllContent(updatedContent);
+
+        if (selectedContent?.id === contentId) {
+          setSelectedContent(updatedContent.find(item => item.id === contentId)!);
+        }
+
+        const storageKey = `calendarContent_${currentWebsite.id}`;
+        localStorage.setItem(storageKey, JSON.stringify(updatedContent));
+
+        toast.success('Image generated successfully');
       }
-
-      // Save to localStorage
-      const storageKey = `calendarContent_${currentWebsite.id}`;
-      localStorage.setItem(storageKey, JSON.stringify(updatedContent));
-
-      toast.success('Image generated successfully');
     } catch (error) {
       console.error('Error generating image:', error);
       toast.error('Failed to generate image');
     } finally {
-      setIsGeneratingImage(false);
-      setGeneratingImageId(null);
+      // Remove this contentId from the set of generating images
+      setGeneratingImageIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(contentId);
+        return newSet;
+      });
     }
   };
 
@@ -650,7 +699,7 @@ const ContentCalendar = () => {
                                           e.stopPropagation();
                                           handleGenerateImage(content.id);
                                         }}
-                                        disabled={isGeneratingImage && generatingImageId === content.id}
+                                        disabled={generatingImageIds.has(content.id)}
                                         className={`h-8 w-8 ${
                                           content.preview_image_url
                                             ? 'text-purple-800 bg-purple-50 cursor-default'
@@ -659,13 +708,13 @@ const ContentCalendar = () => {
                                         title={
                                           content.preview_image_url
                                             ? "Image generated"
-                                            : isGeneratingImage && generatingImageId === content.id
+                                            : generatingImageIds.has(content.id)
                                               ? "Generating image..."
                                               : "Generate image"
                                         }
                                       >
-                                        {isGeneratingImage && generatingImageId === content.id ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        {generatingImageIds.has(content.id) ? (
+                                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
                                         ) : content.preview_image_url ? (
                                           <Image className="h-4 w-4 fill-purple-800" />
                                         ) : (
@@ -755,7 +804,7 @@ const ContentCalendar = () => {
           wpPostUrl={selectedContent.wpPostUrl}
           preview_image_url={selectedContent.preview_image_url}
           isGeneratingContent={isThemeGeneratingContent(String(selectedContent.id))}
-          isGeneratingImage={isGeneratingImage && generatingImageId === selectedContent.id}
+          isGeneratingImage={generatingImageIds.has(selectedContent.id)}
           isSendingToWP={isSendingToWP && sendingToWPId === selectedContent.id}
           canSendToWordPress={canSendToWordPress(selectedContent)}
           canGenerateImage={!!currentWebsite?.enable_ai_image_generation && !selectedContent.preview_image_url}

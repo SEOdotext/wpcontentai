@@ -48,20 +48,49 @@ export async function generateImage({ content, postId, websiteId }: GenerateImag
     }
 
     console.log('Edge Function response:', data);
-    console.log('Image URL from response:', data.imageUrl);
 
     if (!data.success) {
       throw new Error(data.error || 'Failed to generate image');
     }
 
-    // Validate the image URL
-    if (!data.imageUrl) {
-      throw new Error('No image URL returned from Edge Function');
+    // If we have an image URL, return it immediately
+    if (data.imageUrl) {
+      return data;
     }
 
-    return data;
+    // If we don't have an image URL but the request was successful, it means the image is being generated
+    return {
+      success: true,
+      isGenerating: true,
+      message: 'Image generation started'
+    };
   } catch (error) {
     console.error('Error in generateImage service:', error);
+    throw error;
+  }
+}
+
+export async function checkImageGenerationStatus(postId: string) {
+  try {
+    console.log('Checking image generation status for post:', postId);
+
+    const { data: postTheme, error } = await supabase
+      .from('post_themes')
+      .select('image')
+      .eq('id', postId)
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      success: true,
+      imageUrl: postTheme?.image || null,
+      isGenerating: !postTheme?.image
+    };
+  } catch (error) {
+    console.error('Error checking image generation status:', error);
     throw error;
   }
 }
