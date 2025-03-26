@@ -70,11 +70,8 @@ serve(async (req) => {
   try {
     // Create Supabase client using auth from request
     const supabaseClient = createClient(
-      // Supabase API URL - env var exposed by default when deployed
       Deno.env.get('SUPABASE_URL') ?? '',
-      // Supabase API ANON KEY - env var exposed by default when deployed
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      // Create client with Auth context of the user that called the function
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
     

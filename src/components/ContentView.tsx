@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Calendar as CalendarIcon, RefreshCw, Tag, Trash, X, Send, FileEdit, Loader2, ExternalLink, Image } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, RefreshCw, Tag, Trash, X, Send, FileEdit, Loader2, ExternalLink, Image, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -28,9 +28,11 @@ interface ContentViewProps {
   onRegenerateClick?: () => void;
   onGenerateImage?: () => void;
   onSendToWordPress?: () => void;
+  onGenerateAndPublish?: () => void;
   isGeneratingContent?: boolean;
   isGeneratingImage?: boolean;
   isSendingToWP?: boolean;
+  isGeneratingAndPublishing?: boolean;
   canSendToWordPress?: boolean;
   canGenerateImage?: boolean;
 }
@@ -50,9 +52,11 @@ const ContentView: React.FC<ContentViewProps> = ({
   onRegenerateClick,
   onGenerateImage,
   onSendToWordPress,
+  onGenerateAndPublish,
   isGeneratingContent = false,
   isGeneratingImage = false,
   isSendingToWP = false,
+  isGeneratingAndPublishing = false,
   canSendToWordPress = false,
   canGenerateImage = false,
 }) => {

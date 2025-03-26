@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, FileEdit, Send, Loader2, RefreshCw, Trash, Image } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, FileEdit, Send, Loader2, RefreshCw, Trash, Image, Plus, Sparkles } from 'lucide-react';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import ContentView from '@/components/ContentView';
@@ -25,6 +25,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
 import { generateImage, checkWebsiteImageGenerationEnabled } from '@/services/imageGeneration';
 import { PostTheme } from '@/context/PostThemesContext';
+import { generateAndPublishContent } from '@/api/aiEndpoints';
 
 interface Keyword {
   text: string;
@@ -83,6 +84,7 @@ const ContentCalendar = () => {
   const { publicationFrequency } = useSettings();
   const [directWpSettings, setDirectWpSettings] = useState<WordPressSettings | null>(null);
   const [wpConfigured, setWpConfigured] = useState<boolean>(false);
+  const [generatingAndPublishingIds, setGeneratingAndPublishingIds] = useState<Set<string>>(new Set());
   
   // Memoize the calendar content conversion
   const calendarContent = React.useMemo(() => {
@@ -531,6 +533,28 @@ const ContentCalendar = () => {
     }
   };
 
+  const handleGenerateAndPublish = async (postThemeId: string) => {
+    try {
+      // Add this contentId to the set of generating and publishing
+      setGeneratingAndPublishingIds(prev => new Set(prev).add(postThemeId));
+      
+      await generateAndPublishContent(postThemeId);
+      toast.success('Content generated and published successfully!');
+      // Refresh the content
+      fetchPostThemes();
+    } catch (error) {
+      console.error('Error generating and publishing content:', error);
+      toast.error('Failed to generate and publish content');
+    } finally {
+      // Remove this contentId from the set of generating and publishing
+      setGeneratingAndPublishingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(postThemeId);
+        return newSet;
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -752,6 +776,35 @@ const ContentCalendar = () => {
                                         <Send className="h-4 w-4" />
                                       )}
                                     </Button>
+
+                                    {/* Generate and Publish Button */}
+                                    {!(content.contentStatus === 'published' && !!content.wpSentDate) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleGenerateAndPublish(content.id);
+                                        }}
+                                        disabled={generatingAndPublishingIds.has(content.id)}
+                                        className={`h-8 w-8 ${
+                                          generatingAndPublishingIds.has(content.id)
+                                            ? 'text-blue-300 cursor-not-allowed'
+                                            : 'text-blue-600 hover:bg-blue-100 hover:text-blue-700'
+                                        }`}
+                                        title={
+                                          generatingAndPublishingIds.has(content.id)
+                                            ? "Generating and publishing..."
+                                            : "Generate and publish content"
+                                        }
+                                      >
+                                        {generatingAndPublishingIds.has(content.id) ? (
+                                          <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                                        ) : (
+                                          <Sparkles className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    )}
                                     
                                     <Button
                                       variant="ghost"
@@ -799,6 +852,7 @@ const ContentCalendar = () => {
           onRegenerateClick={() => handleRegenerateContent(selectedContent.id)}
           onGenerateImage={() => handleGenerateImage(selectedContent.id)}
           onSendToWordPress={() => handleSendToWordPress(selectedContent.id)}
+          onGenerateAndPublish={() => handleGenerateAndPublish(selectedContent.id)}
           fullContent={selectedContent.description}
           wpSentDate={selectedContent.wpSentDate}
           wpPostUrl={selectedContent.wpPostUrl}
@@ -806,6 +860,7 @@ const ContentCalendar = () => {
           isGeneratingContent={isThemeGeneratingContent(String(selectedContent.id))}
           isGeneratingImage={generatingImageIds.has(selectedContent.id)}
           isSendingToWP={isSendingToWP && sendingToWPId === selectedContent.id}
+          isGeneratingAndPublishing={generatingAndPublishingIds.has(selectedContent.id)}
           canSendToWordPress={canSendToWordPress(selectedContent)}
           canGenerateImage={!!currentWebsite?.enable_ai_image_generation && !selectedContent.preview_image_url}
         />

@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import { callOpenAI as secureCallOpenAI } from '@/services/openaiService';
-import { supabase } from '@/services/supabaseService';
+import { supabase } from '@/integrations/supabase/client';
 
 // Free fetch proxy service URL - Keep for website content fetching
 // Will be replaced with scrape-content function in a future update

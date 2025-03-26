@@ -11,7 +11,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { useWordPress } from '@/context/WordPressContext';
 import { usePostThemes } from '@/context/PostThemesContext';
 import { toast } from 'sonner';
-import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap, Link, HelpCircle, Pencil } from 'lucide-react';
+import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap, Link, HelpCircle, Pencil, Sparkles } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
@@ -1678,7 +1678,7 @@ const Settings = () => {
                           }}
                         />
                         <Button onClick={handleAddSubject}>
-                          <Plus className="h-4 w-4" />
+                          <Sparkles className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
