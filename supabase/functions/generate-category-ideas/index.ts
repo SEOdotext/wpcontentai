@@ -90,8 +90,8 @@ IMPORTANT:
 1. Do not generate any categories that are already in use. Here are the existing categories to avoid:
 ${existingCategories.map(c => `- ${c}`).join('\n')}
 
-2. Category names should be human-readable and NOT contain hyphens. Only use hyphens in the slug.
-3. For Danish categories, follow proper Danish capitalization rules (first word capitalized, other words lowercase unless they are proper nouns).
+2. Category names should be human-readable and NOT contain hyphens. Use spaces and proper capitalization instead.
+3. Only use kebab-case for the slug field, not the category name.
 
 Format each category exactly like this, one per line:
 Category Name|category-name-slug
