@@ -65,6 +65,26 @@
     "data_type": "text"
   },
   {
+    "table_name": "post_themes",
+    "column_name": "wp_post_id",
+    "data_type": "text"
+  },
+  {
+    "table_name": "post_themes",
+    "column_name": "wp_post_url",
+    "data_type": "text"
+  },
+  {
+    "table_name": "post_themes",
+    "column_name": "wp_sent_date",
+    "data_type": "date"
+  },
+  {
+    "table_name": "post_themes",
+    "column_name": "wp_image_url",
+    "data_type": "text"
+  },
+  {
     "table_name": "publication_settings",
     "column_name": "id",
     "data_type": "uuid"
@@ -107,6 +127,11 @@
   {
     "table_name": "publication_settings",
     "column_name": "wordpress_template",
+    "data_type": "text"
+  },
+  {
+    "table_name": "publication_settings",
+    "column_name": "image_prompt",
     "data_type": "text"
   },
   {

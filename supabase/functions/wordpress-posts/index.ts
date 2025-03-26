@@ -156,7 +156,10 @@ serve(async (req) => {
     let wpImageUrl: string | undefined;
     if (postTheme.image) {
       try {
-        console.log('Processing image upload for post');
+        console.log('Processing image upload for post:', {
+          postId: post_theme_id,
+          imageUrl: postTheme.image
+        });
         const { url: imageUrl, id: mediaId } = await uploadImageToWordPress(
           postTheme.image,
           wpSettings.wp_url,
@@ -169,10 +172,19 @@ serve(async (req) => {
         finalContent = postTheme.post_content.replaceAll(postTheme.image, imageUrl);
         uploadedImageId = mediaId;
         wpImageUrl = imageUrl;
-        console.log('Image processed and content updated');
+        console.log('Image processed and content updated:', {
+          postId: post_theme_id,
+          wpImageUrl,
+          mediaId
+        });
       } catch (imageError) {
-        console.error('Error uploading image to WordPress:', imageError);
+        console.error('Error uploading image to WordPress:', {
+          postId: post_theme_id,
+          error: imageError.message,
+          originalImageUrl: postTheme.image
+        });
         // Continue with original content if image upload fails
+        wpImageUrl = postTheme.image; // Keep the original image URL if upload fails
       }
     }
     
@@ -237,11 +249,18 @@ serve(async (req) => {
     }
     
     // Update post theme with WordPress information
+    console.log('Updating post theme with WordPress information:', {
+      postId: post_theme_id,
+      wpPostId: postResponse.id.toString(),
+      wpPostUrl: postResponse.link,
+      wpImageUrl
+    });
+    
     const { error: updateError } = await supabaseClient
       .from('post_themes')
       .update({
         status: 'published',
-        wp_post_id: postResponse.id,
+        wp_post_id: postResponse.id.toString(),
         wp_post_url: postResponse.link,
         wp_sent_date: new Date().toISOString(),
         ...(wpImageUrl && { wp_image_url: wpImageUrl })
@@ -249,8 +268,13 @@ serve(async (req) => {
       .eq('id', post_theme_id);
 
     if (updateError) {
-      console.error('Error updating post theme:', updateError);
+      console.error('Error updating post theme:', {
+        postId: post_theme_id,
+        error: updateError.message
+      });
       // Don't throw here as the post was created successfully
+    } else {
+      console.log('Successfully updated post theme with WordPress information');
     }
     
     return new Response(
