@@ -454,18 +454,20 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         return false;
       }
 
-      // Call the WordPress integration function
+      // Call the WordPress integration function with minimal data
       const { data, error: wpError } = await supabase.functions.invoke('wordpress-posts', {
         body: {
           website_id: theme.website_id,
-          title: theme.subject_matter,
-          content: theme.post_content,
-          status: 'draft',
+          post_theme_id: theme.id,
           action: 'create'
         }
       });
 
       if (wpError) throw wpError;
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to send to WordPress');
+      }
 
       // Update the post theme with WordPress information
       const { error: updateError } = await supabase
@@ -488,8 +490,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
               status: 'published',
               wp_post_id: data.post.id,
               wp_post_url: data.post.url,
-              wp_sent_date: new Date().toISOString(),
-              post_content: t.post_content
+              wp_sent_date: new Date().toISOString()
             }
           : t
         )

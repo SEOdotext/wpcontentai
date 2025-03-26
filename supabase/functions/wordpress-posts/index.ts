@@ -9,11 +9,50 @@ console.log("WordPress Posts function started")
 
 interface PostRequest {
   website_id: string
-  title: string
-  content: string
-  status?: 'draft' | 'publish' // Make status optional
-  post_id?: number // Include for updates
+  post_theme_id: string
   action: 'create' | 'update'
+}
+
+// Add function to upload image to WordPress media library
+async function uploadImageToWordPress(
+  imageUrl: string,
+  wpUrl: string,
+  wpUsername: string,
+  wpPassword: string,
+  title: string
+): Promise<string> {
+  console.log('Uploading image to WordPress media library:', imageUrl);
+  
+  // Download the image
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) {
+    throw new Error(`Failed to download image: ${imageResponse.status}`);
+  }
+  
+  const imageBlob = await imageResponse.blob();
+  
+  // Create form data for WordPress media upload
+  const formData = new FormData();
+  formData.append('file', imageBlob, 'header-image.png');
+  formData.append('title', title);
+  
+  // Upload to WordPress media library
+  const uploadResponse = await fetch(`${wpUrl}/wp-json/wp/v2/media`, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Basic ' + btoa(`${wpUsername}:${wpPassword}`)
+    },
+    body: formData
+  });
+  
+  if (!uploadResponse.ok) {
+    const errorText = await uploadResponse.text();
+    throw new Error(`Failed to upload image to WordPress: ${errorText}`);
+  }
+  
+  const uploadData = await uploadResponse.json();
+  console.log('Image uploaded successfully:', uploadData.source_url);
+  return uploadData.source_url;
 }
 
 serve(async (req) => {
@@ -48,16 +87,31 @@ serve(async (req) => {
       throw new Error('Not authorized')
     }
     
-    // Extract request data
-    const { website_id, title, content, status, post_id, action } = await req.json() as PostRequest
+    // Extract request data - now we only need minimal data
+    const { website_id, post_theme_id, action } = await req.json() as PostRequest
     
     // Validate input
-    if (!website_id || !title || !content || !action) {
+    if (!website_id || !post_theme_id || !action) {
       throw new Error('Missing required fields')
     }
     
-    if (action === 'update' && !post_id) {
-      throw new Error('Post ID is required for update operation')
+    // Get post theme data from database
+    const { data: postTheme, error: postThemeError } = await supabaseClient
+      .from('post_themes')
+      .select('*')
+      .eq('id', post_theme_id)
+      .single();
+    
+    if (postThemeError) {
+      throw new Error('Failed to retrieve post theme data');
+    }
+
+    if (!postTheme) {
+      throw new Error('Post theme not found');
+    }
+
+    if (!postTheme.post_content) {
+      throw new Error('Post has no content');
     }
     
     // Get WordPress settings for this website
@@ -80,9 +134,8 @@ serve(async (req) => {
     let apiUrl
     let method
     
-    // Determine post status - use the one from the request if provided,
-    // otherwise use the setting from wordpress_settings (defaulting to 'draft' if not set)
-    const postStatus = status || wpSettings.publish_status || 'draft'
+    // Determine post status - use the setting from wordpress_settings (defaulting to 'draft' if not set)
+    const postStatus = wpSettings.publish_status || 'draft'
     console.log(`Using WordPress post status: ${postStatus}`)
     
     if (action === 'create') {
@@ -90,14 +143,39 @@ serve(async (req) => {
       method = 'POST'
     } else {
       // Update operation
-      apiUrl = `${wpSettings.wp_url}/wp-json/wp/v2/posts/${post_id}`
+      if (!postTheme.wp_post_id) {
+        throw new Error('Post ID is required for update operation')
+      }
+      apiUrl = `${wpSettings.wp_url}/wp-json/wp/v2/posts/${postTheme.wp_post_id}`
       method = 'PUT'
     }
     
-    // Prepare post data
+    // Handle image upload if image exists in post theme
+    let finalContent = postTheme.post_content;
+    if (postTheme.image) {
+      try {
+        console.log('Processing image upload for post');
+        const wpImageUrl = await uploadImageToWordPress(
+          postTheme.image,
+          wpSettings.wp_url,
+          wpSettings.wp_username,
+          wpSettings.wp_application_password,
+          postTheme.subject_matter
+        );
+        
+        // Replace the original image URL with the WordPress media URL
+        finalContent = postTheme.post_content.replace(postTheme.image, wpImageUrl);
+        console.log('Image processed and content updated');
+      } catch (imageError) {
+        console.error('Error uploading image to WordPress:', imageError);
+        // Continue with original content if image upload fails
+      }
+    }
+    
+    // Prepare post data with processed content
     const postData = {
-      title,
-      content,
+      title: postTheme.subject_matter,
+      content: finalContent,
       status: postStatus
     }
     
@@ -127,6 +205,22 @@ serve(async (req) => {
     
     // Parse the response to get the post details
     const postResponse = await response.json()
+    
+    // Update post theme with WordPress information
+    const { error: updateError } = await supabaseClient
+      .from('post_themes')
+      .update({
+        status: 'published',
+        wp_post_id: postResponse.id,
+        wp_post_url: postResponse.link,
+        wp_sent_date: new Date().toISOString()
+      })
+      .eq('id', post_theme_id);
+
+    if (updateError) {
+      console.error('Error updating post theme:', updateError);
+      // Don't throw here as the post was created successfully
+    }
     
     return new Response(
       JSON.stringify({

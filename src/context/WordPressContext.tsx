@@ -456,15 +456,41 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       // Add the image to the content if available
       const contentWithImage = imageUrl
-        ? `<img src="${imageUrl}" alt="${title}" class="wp-post-header-image" />\n\n${content}`
+        ? `<img src="${imageUrl}" alt="${title}" class="wp-post-header-image wp-post-image" style="width: 100%; height: auto; max-width: 1200px; margin: 0 auto; display: block;" />\n\n${content}`
         : content;
 
+      // Create a post theme record first
+      const { data: postTheme, error: postThemeError } = await supabase
+        .from('post_themes')
+        .insert({
+          website_id: currentWebsite.id,
+          subject_matter: title,
+          post_content: contentWithImage,
+          status: 'draft',
+          keywords: [] // Required field from db schema
+        })
+        .select()
+        .single();
+
+      if (postThemeError) {
+        console.error('Error creating post theme:', postThemeError);
+        toast.error('Failed to create post');
+        return false;
+      }
+
+      if (!postTheme?.id) {
+        console.error('No post theme ID returned');
+        toast.error('Failed to create post');
+        return false;
+      }
+
+      console.log('Created post theme:', postTheme.id);
+
+      // Send minimal data to edge function
       const { data, error } = await supabase.functions.invoke('wordpress-posts', {
         body: {
           website_id: currentWebsite.id,
-          title,
-          content: contentWithImage,
-          status,
+          post_theme_id: postTheme.id,
           action: 'create'
         }
       });
