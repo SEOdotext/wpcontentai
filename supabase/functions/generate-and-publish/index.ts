@@ -51,6 +51,53 @@ serve(async (req) => {
       throw new Error(`Invalid postThemeId format. Expected UUID, got: ${postThemeId}`);
     }
 
+    // Check if this is a direct call or a queue processing call
+    const isQueueProcessing = req.headers.get('X-Queue-Processing') === 'true';
+    
+    if (!isQueueProcessing) {
+      // Add job to queue
+      console.log('Adding job to publish queue...');
+      const { data: queueJob, error: queueError } = await supabaseClient
+        .from('publish_queue')
+        .insert({
+          post_theme_id: postThemeId,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          user_token: token
+        })
+        .select()
+        .single();
+
+      if (queueError) {
+        console.error('Error adding job to queue:', queueError);
+        throw new Error(`Failed to add job to queue: ${queueError.message}`);
+      }
+
+      // Trigger queue processing
+      console.log('Triggering queue processing...');
+      const queueResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/process-publish-queue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+        }
+      });
+
+      if (!queueResponse.ok) {
+        console.error('Error triggering queue processing:', await queueResponse.text());
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Job added to queue',
+          queueJob
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Continue with existing processing logic for queue jobs
     // Get the post theme details from the database
     console.log('Fetching post theme from database...');
     console.log('Using Supabase URL:', Deno.env.get('SUPABASE_URL'));
