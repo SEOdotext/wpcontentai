@@ -23,7 +23,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { usePostThemes } from '@/context/PostThemesContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
-import { generateImage } from '@/services/imageGeneration';
+import { generateImage, checkWebsiteImageGenerationEnabled } from '@/services/imageGeneration';
 
 interface Keyword {
   text: string;
@@ -100,6 +100,7 @@ const ContentCalendar = () => {
       keywords: theme.keywords.map(k => ({ text: k })),
       wpSentDate: theme.wp_sent_date,
       wpPostUrl: theme.wp_post_url,
+      preview_image_url: theme.image || null,
       status: theme.status
     }));
   }, [postThemes, currentWebsite]);
@@ -437,18 +438,10 @@ const ContentCalendar = () => {
         return;
       }
 
-      // Create a temporary post ID for image storage
-      const tempPostId = `temp_${Date.now()}`;
-
-      // Use custom prompt if available, otherwise use default
-      const defaultPrompt = `${content.title}\n\n${content.description || ''}`;
-      const customPrompt = currentWebsite.image_prompt
-        ?.replace('{title}', content.title)
-        ?.replace('{content}', content.description || '');
-      
+      // Call the Edge Function to generate the image
       const result = await generateImage({
-        content: customPrompt || defaultPrompt,
-        postId: tempPostId,
+        content: '',  // Not needed anymore as we pass postId
+        postId: contentId,
         websiteId: currentWebsite.id
       });
 

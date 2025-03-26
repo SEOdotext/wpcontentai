@@ -108,7 +108,7 @@ const defaultWordPressTemplate = `<!-- WordPress Post HTML Structure Example -->
 </article>`;
 
 const Settings = () => {
-  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading } = useSettings();
+  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt } = useSettings();
   const { currentWebsite, updateWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
   const { createPostTheme } = usePostThemes();
@@ -1834,19 +1834,11 @@ const Settings = () => {
                           <Input
                             id="image-prompt"
                             type="text"
-                            defaultValue={currentWebsite?.image_prompt || 'Create a modern, professional image that represents: {title}. Context: {content}'}
+                            defaultValue={imagePrompt}
                             onBlur={async (e) => {
-                              if (!currentWebsite) {
-                                toast.error("Please select a website first");
-                                return;
-                              }
                               try {
-                                const success = await updateWebsite(currentWebsite.id, {
-                                  image_prompt: e.target.value
-                                });
-                                if (success) {
-                                  toast.success("Image generation prompt updated");
-                                }
+                                setImagePrompt(e.target.value);
+                                toast.success("Image generation prompt updated");
                               } catch (error) {
                                 console.error('Failed to update image prompt:', error);
                                 toast.error('Failed to update image prompt');

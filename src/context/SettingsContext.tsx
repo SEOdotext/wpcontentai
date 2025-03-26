@@ -17,6 +17,7 @@ interface PublicationSettings {
   website_id: string;
   created_at: string;
   updated_at: string;
+  image_prompt?: string;
 }
 
 interface SettingsContextType {
@@ -28,6 +29,8 @@ interface SettingsContextType {
   setSubjectMatters: (subjects: string[]) => void;
   wordpressTemplate: string;
   setWordpressTemplate: (template: string) => void;
+  imagePrompt: string;
+  setImagePrompt: (prompt: string) => void;
   isLoading: boolean;
 }
 
@@ -71,6 +74,7 @@ const defaultSettings = {
   </div>
 
 </article>`,
+  imagePrompt: 'Create a modern, professional image that represents: {title}. Context: {content}',
 };
 
 const SettingsContext = createContext<SettingsContextType>({
@@ -79,6 +83,7 @@ const SettingsContext = createContext<SettingsContextType>({
   setWritingStyle: () => {},
   setSubjectMatters: () => {},
   setWordpressTemplate: () => {},
+  setImagePrompt: () => {},
   isLoading: false,
 });
 
@@ -89,6 +94,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [writingStyle, setWritingStyle] = useState<string>(defaultSettings.writingStyle);
   const [subjectMatters, setSubjectMatters] = useState<string[]>(defaultSettings.subjectMatters);
   const [wordpressTemplate, setWordpressTemplate] = useState<string>(defaultSettings.wordpressTemplate);
+  const [imagePrompt, setImagePrompt] = useState<string>(defaultSettings.imagePrompt);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const { currentWebsite } = useWebsites();
@@ -102,6 +108,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setWritingStyle(defaultSettings.writingStyle);
         setSubjectMatters(defaultSettings.subjectMatters);
         setWordpressTemplate(defaultSettings.wordpressTemplate);
+        setImagePrompt(defaultSettings.imagePrompt);
         setIsLoading(false);
         return;
       }
@@ -143,6 +150,19 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           } else {
             console.log("No WordPress template found, using default");
             setWordpressTemplate(defaultSettings.wordpressTemplate);
+          }
+          
+          // Set image prompt if it exists
+          if (settings.image_prompt) {
+            console.log("Found image prompt:", settings.image_prompt);
+            setImagePrompt(settings.image_prompt);
+          } else if (currentWebsite.image_prompt) {
+            // Fallback to website settings if publication settings don't have it
+            console.log("Using image prompt from website settings:", currentWebsite.image_prompt);
+            setImagePrompt(currentWebsite.image_prompt);
+          } else {
+            console.log("No image prompt found, using default");
+            setImagePrompt(defaultSettings.imagePrompt);
           }
           
           // Convert subject_matters to string[] ensuring type safety
@@ -195,6 +215,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               writing_style: defaultSettings.writingStyle,
               subject_matters: defaultSettings.subjectMatters,
               wordpress_template: defaultSettings.wordpressTemplate,
+              image_prompt: currentWebsite.image_prompt || defaultSettings.imagePrompt, // Use website's image prompt if available
               website_id: currentWebsite.id,
               organisation_id: currentWebsite.organisation_id
             })
@@ -213,6 +234,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setWritingStyle(defaultSettings.writingStyle);
             setSubjectMatters(defaultSettings.subjectMatters);
             setWordpressTemplate(defaultSettings.wordpressTemplate);
+            setImagePrompt(defaultSettings.imagePrompt);
           }
         }
       } catch (error) {
@@ -222,6 +244,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setWritingStyle(defaultSettings.writingStyle);
         setSubjectMatters(defaultSettings.subjectMatters);
         setWordpressTemplate(defaultSettings.wordpressTemplate);
+        setImagePrompt(defaultSettings.imagePrompt);
       } finally {
         setIsLoading(false);
       }
@@ -235,7 +258,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     frequency: number, 
     style: string, 
     subjects: string[],
-    template?: string
+    template?: string,
+    prompt?: string
   ) => {
     if (!currentWebsite) {
       console.error("Cannot update settings: No website selected");
@@ -251,8 +275,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
       
-      // Use current template value if not provided
+      // Use current values if not provided
       const templateToUpdate = template !== undefined ? template : wordpressTemplate;
+      const promptToUpdate = prompt !== undefined ? prompt : imagePrompt;
       
       // Ensure subjects is a clean array of strings
       const cleanSubjects = subjects.filter(s => s && s.trim().length > 0);
@@ -268,6 +293,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             writing_style: style,
             subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
             wordpress_template: templateToUpdate,
+            image_prompt: promptToUpdate,
             website_id: currentWebsite.id,
             organisation_id: currentWebsite.organisation_id
           })
@@ -294,6 +320,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             writing_style: style,
             subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
             wordpress_template: templateToUpdate,
+            image_prompt: promptToUpdate,
             updated_at: new Date().toISOString()
           })
           .eq('id', settingsId);
@@ -341,6 +368,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, template);
   };
 
+  // Add handler for image prompt
+  const handleSetImagePrompt = (prompt: string) => {
+    setImagePrompt(prompt);
+    updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, wordpressTemplate, prompt);
+  };
+
   return (
     <SettingsContext.Provider 
       value={{ 
@@ -352,6 +385,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSubjectMatters: handleSetSubjectMatters,
         wordpressTemplate,
         setWordpressTemplate: handleSetWordpressTemplate,
+        imagePrompt,
+        setImagePrompt: handleSetImagePrompt,
         isLoading
       }}
     >

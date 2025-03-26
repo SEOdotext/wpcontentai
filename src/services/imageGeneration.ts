@@ -18,7 +18,8 @@ export async function generateImage({ content, postId, websiteId }: GenerateImag
 
     // Get the Supabase URL from the client config
     const supabaseUrl = (supabase as any).supabaseUrl;
-    const functionUrl = `${supabaseUrl}/functions/v1/generate-image`;
+    // Use image-trigger instead of generate-image since it has CORS properly configured
+    const functionUrl = `${supabaseUrl}/functions/v1/image-trigger`;
     console.log('Calling Edge Function at:', functionUrl);
 
     const response = await fetch(functionUrl, {
@@ -27,7 +28,7 @@ export async function generateImage({ content, postId, websiteId }: GenerateImag
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ content, postId, websiteId }),
+      body: JSON.stringify({ postId, websiteId }),
     });
 
     console.log('Response status:', response.status);

@@ -1,21 +1,76 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
 interface GenerateImageParams {
   content: string;
   postId: string;
   websiteId: string;
 }
 
+// Function to create a safe prompt that won't exceed OpenAI's limits
+function createSafePrompt(content: string): string {
+  // Extract a title if possible (first line or first sentence)
+  let title = '';
+  if (content.includes('\n')) {
+    title = content.split('\n')[0].trim();
+  } else if (content.includes('.')) {
+    title = content.split('.')[0].trim() + '.';
+  } else {
+    title = content.substring(0, Math.min(100, content.length));
+  }
+  
+  // Create a shortened summary - limit to safe character count
+  // OpenAI limit is 4000, but we'll use much less to be safe
+  const MAX_PROMPT_LENGTH = 1500;
+  
+  // Start with the title and leave room for the prompt prefix
+  let safeContent = title;
+  
+  // Add as much of the content as we can fit
+  if (content.length > title.length) {
+    const remainingSpace = MAX_PROMPT_LENGTH - safeContent.length - 100; // 100 chars buffer for prefix
+    if (remainingSpace > 0) {
+      // Add a brief excerpt from the content, avoiding cutting in the middle of words
+      let excerpt = content.substring(title.length, title.length + remainingSpace);
+      
+      // Try to end at a sentence or paragraph break if possible
+      const sentenceBreak = excerpt.lastIndexOf('.');
+      const paragraphBreak = excerpt.lastIndexOf('\n');
+      
+      let breakPoint = Math.max(sentenceBreak, paragraphBreak);
+      if (breakPoint > excerpt.length / 2) {
+        excerpt = excerpt.substring(0, breakPoint + 1);
+      }
+      
+      safeContent += ' ' + excerpt.trim();
+    }
+  }
+  
+  return `Create a professional, high-quality blog post header image for the following content: ${safeContent}`;
+}
+
+// Helper to add timeout to fetch requests
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 30000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Basic OPTIONS handling without unnecessary CORS
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', { 
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   try {
@@ -26,16 +81,33 @@ serve(async (req) => {
       throw new Error('Missing required fields');
     }
 
+    console.log('Received image generation request:', { 
+      postId, 
+      websiteId,
+      contentLength: content.length 
+    });
+
     // Initialize Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Verify that the post_themes record exists
+    const { data: postTheme, error: postThemeError } = await supabaseClient
+      .from('post_themes')
+      .select('id')
+      .eq('id', postId)
+      .single();
+      
+    if (postThemeError || !postTheme) {
+      throw new Error(`Post theme record not found: ${postThemeError?.message || 'No record with ID ' + postId}`);
+    }
+
     // Check if AI image generation is enabled for the website
     const { data: website, error: websiteError } = await supabaseClient
       .from('websites')
-      .select('enable_ai_image_generation')
+      .select('enable_ai_image_generation, image_prompt')
       .eq('id', websiteId)
       .single();
 
@@ -47,26 +119,73 @@ serve(async (req) => {
       throw new Error('AI image generation is not enabled for this website');
     }
 
+    // Create a safe prompt that won't exceed OpenAI's limits
+    const safePrompt = createSafePrompt(content);
+    console.log('Generated safe prompt, length:', safePrompt.length);
+
+    // Apply custom prompt template if available
+    let finalPrompt = safePrompt;
+    if (website.image_prompt) {
+      try {
+        // Extract the main topic to use in the custom prompt
+        const mainTopic = content.split('\n')[0] || content.substring(0, 50);
+        finalPrompt = website.image_prompt
+          .replace('{content}', safePrompt.substring(safePrompt.indexOf(': ') + 2))
+          .replace('{title}', mainTopic);
+          
+        // Ensure the prompt doesn't exceed the limit
+        if (finalPrompt.length > 4000) {
+          finalPrompt = finalPrompt.substring(0, 3900) + '...';
+        }
+        
+        console.log('Using custom prompt template, length:', finalPrompt.length);
+      } catch (promptError) {
+        console.error('Error applying custom prompt, using default:', promptError);
+      }
+    }
+
     // Generate image with DALL-E 3 using direct API call
-    const openaiResponse = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-      },
-      body: JSON.stringify({
-        model: 'dall-e-3',
-        prompt: `Create a professional, high-quality blog post header image for the following content: ${content}`,
-        n: 1,
-        size: '1792x1024',
-        quality: 'standard',
-        style: 'natural',
-      }),
-    });
+    console.log('Calling OpenAI API...');
+    let openaiResponse;
+    try {
+      openaiResponse = await fetchWithTimeout(
+        'https://api.openai.com/v1/images/generations',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+          },
+          body: JSON.stringify({
+            model: 'dall-e-3',
+            prompt: finalPrompt,
+            n: 1,
+            size: '1792x1024',
+            quality: 'standard',
+            style: 'natural',
+          }),
+        },
+        60000 // 60 second timeout for image generation
+      );
+    } catch (fetchError: any) {
+      if (fetchError.name === 'AbortError') {
+        throw new Error('OpenAI API request timed out after 60 seconds');
+      }
+      throw new Error(`OpenAI API request failed: ${fetchError.message}`);
+    }
 
     if (!openaiResponse.ok) {
-      const error = await openaiResponse.text();
-      throw new Error(`OpenAI API error: ${error}`);
+      const errorText = await openaiResponse.text();
+      console.error('OpenAI API error:', errorText);
+      
+      // Try to parse the error for more helpful messages
+      try {
+        const errorJson = JSON.parse(errorText);
+        const errorMessage = errorJson.error?.message || 'Unknown OpenAI error';
+        throw new Error(`OpenAI API error: ${errorMessage}`);
+      } catch (parseError) {
+        throw new Error(`OpenAI API error: ${errorText}`);
+      }
     }
 
     const openaiData = await openaiResponse.json();
@@ -74,18 +193,59 @@ serve(async (req) => {
       throw new Error('No image URL returned from OpenAI');
     }
 
-    // Download the image
-    const imageResponse = await fetch(openaiData.data[0].url);
-    const imageBlob = await imageResponse.blob();
+    console.log('Successfully generated image with OpenAI');
 
-    // Upload to Supabase Storage
-    const fileName = `${websiteId}/${postId}/header-image.png`;
+    // Download the image
+    console.log('Downloading image from OpenAI...');
+    let imageResponse;
+    try {
+      imageResponse = await fetchWithTimeout(
+        openaiData.data[0].url,
+        {},
+        30000 // 30 second timeout for image download
+      );
+      
+      if (!imageResponse.ok) {
+        throw new Error(`Failed to download image: ${imageResponse.status} ${imageResponse.statusText}`);
+      }
+    } catch (downloadError: any) {
+      if (downloadError.name === 'AbortError') {
+        throw new Error('Image download timed out after 30 seconds');
+      }
+      throw new Error(`Image download failed: ${downloadError.message}`);
+    }
+    
+    const imageBlob = await imageResponse.blob();
+    if (!imageBlob || imageBlob.size === 0) {
+      throw new Error('Downloaded image is empty or invalid');
+    }
+
+    // Upload to Supabase Storage with a simplified path
+    console.log('Uploading image to Supabase Storage...');
+    
+    // Use a simpler file path that's easier to maintain and access
+    const fileName = `${postId}-header.png`;
+    
+    // First try to delete any existing image to avoid conflicts
+    try {
+      await supabaseClient
+        .storage
+        .from('post-images')
+        .remove([fileName]);
+      console.log('Removed any existing image');
+    } catch (removeError) {
+      // Ignore errors from remove operation as the file might not exist
+      console.log('No existing image found or error removing');
+    }
+    
+    // Now upload the new image with public access
     const { data: uploadData, error: uploadError } = await supabaseClient
       .storage
       .from('post-images')
       .upload(fileName, imageBlob, {
         contentType: 'image/png',
         upsert: true,
+        public: true // Explicitly set public access
       });
 
     if (uploadError) {
@@ -97,6 +257,37 @@ serve(async (req) => {
       .storage
       .from('post-images')
       .getPublicUrl(fileName);
+    
+    if (!publicUrl) {
+      throw new Error('Failed to generate public URL for uploaded image');
+    }
+    
+    console.log('Generated public URL:', publicUrl);
+      
+    // Update the post_themes table with the image URL
+    console.log('Updating post_themes record with image URL...');
+    const { data: updateData, error: updateError } = await supabaseClient
+      .from('post_themes')
+      .update({ 
+        image: publicUrl,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', postId)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw new Error(`Error updating post_themes: ${updateError.message}`);
+    }
+
+    if (!updateData || !updateData.image) {
+      throw new Error('Update succeeded but image URL was not saved correctly');
+    }
+
+    console.log('Successfully updated post_themes record with image URL:', {
+      postId,
+      imageUrl: publicUrl
+    });
 
     return new Response(
       JSON.stringify({
@@ -104,7 +295,7 @@ serve(async (req) => {
         imageUrl: publicUrl,
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         status: 200,
       }
     );
@@ -116,7 +307,7 @@ serve(async (req) => {
         error: error instanceof Error ? error.message : 'Unknown error occurred',
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         status: 400,
       }
     );
