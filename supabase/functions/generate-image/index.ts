@@ -165,12 +165,14 @@ serve(async (req) => {
             style: 'natural',
           }),
         },
-        60000 // 60 second timeout for image generation
+        120000 // Increased timeout to 120 seconds for DALL-E 3
       );
     } catch (fetchError: any) {
       if (fetchError.name === 'AbortError') {
-        throw new Error('OpenAI API request timed out after 60 seconds');
+        console.error('OpenAI API request timed out after 120 seconds');
+        throw new Error('OpenAI API request timed out after 120 seconds');
       }
+      console.error('OpenAI API request failed:', fetchError);
       throw new Error(`OpenAI API request failed: ${fetchError.message}`);
     }
 

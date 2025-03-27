@@ -240,23 +240,56 @@ serve(async (req) => {
     let imageUrl = null;
     if (website.enable_ai_image_generation) {
       console.log('Generating image for post:', postThemeId);
-      const imageResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-image', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          postId: postThemeId,
-          websiteId: postTheme.website_id,
-          content: postTheme.post_content
-        })
-      });
+      try {
+        const imageResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/image-trigger', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            postId: postThemeId,
+            websiteId: postTheme.website_id
+          })
+        });
 
-      if (imageResponse.ok) {
-        const imageResult = await imageResponse.json();
-        imageUrl = imageResult.imageUrl;
+        if (!imageResponse.ok) {
+          const errorText = await imageResponse.text();
+          console.error('Image generation failed:', {
+            status: imageResponse.status,
+            statusText: imageResponse.statusText,
+            error: errorText
+          });
+          // Don't throw here, continue with WordPress publishing
+        } else {
+          const imageResult = await imageResponse.json();
+          console.log('Image trigger response:', imageResult);
+          
+          if (imageResult.imageUrl) {
+            imageUrl = imageResult.imageUrl;
+            console.log('Image generated successfully:', imageUrl);
+          } else if (imageResult.success) {
+            console.log('Image generation started but not completed yet');
+            // Check if there's an existing image in the post theme
+            const { data: postThemeWithImage } = await supabaseClient
+              .from('post_themes')
+              .select('image')
+              .eq('id', postThemeId)
+              .single();
+            
+            if (postThemeWithImage?.image) {
+              imageUrl = postThemeWithImage.image;
+              console.log('Found existing image:', imageUrl);
+            }
+            // Don't wait for completion, continue with WordPress publishing
+          }
+        }
+      } catch (imageError) {
+        console.error('Error during image generation:', imageError);
+        // Don't throw here, continue with WordPress publishing
       }
+    } else {
+      console.log('AI image generation is not enabled for this website');
     }
 
     // Step 3: Send to WordPress
