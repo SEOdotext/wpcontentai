@@ -38,6 +38,7 @@ interface CalendarContent {
   date: string;
   contentStatus: 'draft' | 'published' | 'scheduled';
   keywords: Keyword[];
+  categories: string[];
   wpSentDate?: string;
   wpPostUrl?: string;
   preview_image_url?: string;
@@ -101,6 +102,7 @@ const ContentCalendar = () => {
                      theme.status === 'generated' ? 'scheduled' : 
                      theme.status === 'published' ? 'published' : 'draft') as 'draft' | 'published' | 'scheduled',
       keywords: theme.keywords.map(k => ({ text: k })),
+      categories: theme.categories || [],
       wpSentDate: theme.wp_sent_date,
       wpPostUrl: theme.wp_post_url,
       preview_image_url: theme.image || null,
@@ -588,7 +590,14 @@ const ContentCalendar = () => {
       console.log('Content generation queued:', response);
       
       if (response.queueJob && response.queueJob.id) {
-        toast.success('Content generation and publishing job added to queue');
+        // Find the post theme to get the subject matter
+        const postTheme = postThemes.find(theme => theme.id === postThemeId);
+        const subjectMatter = postTheme?.subject_matter || 'this content';
+        
+        // Show success toast with additional information
+        toast.success(`Content generation and publishing job added to queue`, {
+          description: `For "${subjectMatter}" - you can now exit the page and this will finish in the background.`
+        });
         
         // Poll for queue status
         const pollInterval = setInterval(async () => {
@@ -963,6 +972,7 @@ const ContentCalendar = () => {
           title={selectedContent.title}
           description={selectedContent.description}
           keywords={selectedContent.keywords}
+          categories={selectedContent.categories}
           dateCreated={selectedContent.dateCreated}
           status={selectedContent.contentStatus || 'scheduled'}
           onClose={() => setSelectedContent(null)}

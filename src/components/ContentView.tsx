@@ -18,6 +18,7 @@ interface ContentViewProps {
   description?: string;
   fullContent?: string;
   keywords?: Keyword[];
+  categories?: string[];
   dateCreated?: string;
   status?: 'draft' | 'published' | 'scheduled';
   wpSentDate?: string;
@@ -42,6 +43,7 @@ const ContentView: React.FC<ContentViewProps> = ({
   description,
   fullContent,
   keywords = [],
+  categories = [],
   dateCreated,
   status = 'draft',
   wpSentDate,
@@ -383,6 +385,27 @@ const ContentView: React.FC<ContentViewProps> = ({
                         className="bg-blue-50 text-blue-700 border-blue-200 text-xs"
                       >
                         {typeof keyword === 'string' ? keyword : keyword.text}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            
+            {/* Categories Section */}
+            {categories.length > 0 && (
+              <>
+                <Separator className="mt-0 mb-3 shrink-0" />
+                <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6 shrink-0">
+                  <h3 className="text-sm font-medium mb-2">Categories:</h3>
+                  <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
+                    {categories.map((category, index) => (
+                      <Badge 
+                        key={index}
+                        variant="outline" 
+                        className="bg-green-50 text-green-700 border-green-200 text-xs"
+                      >
+                        {category}
                       </Badge>
                     ))}
                   </div>
