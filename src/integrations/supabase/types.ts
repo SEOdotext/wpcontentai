@@ -384,6 +384,50 @@ export type Database = {
           },
         ]
       }
+      publish_queue: {
+        Row: {
+          id: string
+          post_theme_id: string
+          status: string
+          created_at: string
+          started_at: string | null
+          completed_at: string | null
+          result: any | null
+          error: string | null
+          user_token: string
+        }
+        Insert: {
+          id?: string
+          post_theme_id: string
+          status?: string
+          created_at?: string
+          started_at?: string | null
+          completed_at?: string | null
+          result?: any | null
+          error?: string | null
+          user_token: string
+        }
+        Update: {
+          id?: string
+          post_theme_id?: string
+          status?: string
+          created_at?: string
+          started_at?: string | null
+          completed_at?: string | null
+          result?: any | null
+          error?: string | null
+          user_token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publish_queue_post_theme_id_fkey"
+            columns: ["post_theme_id"]
+            isOneToOne: false
+            referencedRelation: "post_themes"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

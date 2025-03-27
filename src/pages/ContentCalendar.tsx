@@ -23,9 +23,8 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { usePostThemes } from '@/context/PostThemesContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
-import { generateImage, checkWebsiteImageGenerationEnabled } from '@/services/imageGeneration';
+import { generateImage, checkWebsiteImageGenerationEnabled, generateAndPublishContent, checkPublishQueueStatus } from '@/api/aiEndpoints';
 import { PostTheme } from '@/context/PostThemesContext';
-import { generateAndPublishContent } from '@/api/aiEndpoints';
 
 interface Keyword {
   text: string;
@@ -540,14 +539,81 @@ const ContentCalendar = () => {
       // Add this contentId to the set of generating and publishing
       setGeneratingAndPublishingIds(prev => new Set(prev).add(postThemeId));
       
-      await generateAndPublishContent(postThemeId);
-      toast.success('Content generated and published successfully!');
-      // Refresh the content
-      fetchPostThemes();
+      // Start the generation process
+      const response = await generateAndPublishContent(postThemeId);
+      console.log('Content generation queued:', response);
+      
+      if (response.queueJob && response.queueJob.id) {
+        toast.success('Content generation and publishing job added to queue');
+        
+        // Poll for queue status
+        const pollInterval = setInterval(async () => {
+          try {
+            const queueStatus = await checkPublishQueueStatus(postThemeId);
+            
+            if (queueStatus && (queueStatus.status === 'completed' || queueStatus.status === 'failed')) {
+              clearInterval(pollInterval);
+              
+              if (queueStatus.status === 'completed') {
+                toast.success('Content generated and published successfully!');
+              } else {
+                toast.error(`Failed to generate and publish content: ${queueStatus.error || 'Unknown error'}`);
+              }
+              
+              // Refresh the content
+              fetchPostThemes();
+              
+              // Remove this contentId from the set of generating and publishing
+              setGeneratingAndPublishingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(postThemeId);
+                return newSet;
+              });
+            }
+          } catch (pollError) {
+            console.error('Error polling queue status:', pollError);
+            // Don't stop polling on error
+          }
+        }, 5000); // Check every 5 seconds
+        
+        // Set a timeout to stop polling after 5 minutes
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          
+          // Check if item is still in generating set
+          if (generatingAndPublishingIds.has(postThemeId)) {
+            toast.info('Generation is taking longer than expected. Check back later.');
+            
+            // Refresh the content anyway
+            fetchPostThemes();
+            
+            // Remove this contentId from the set of generating and publishing
+            setGeneratingAndPublishingIds(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(postThemeId);
+              return newSet;
+            });
+          }
+        }, 5 * 60 * 1000); // 5 minutes
+      } else {
+        toast.warning('No queue job ID returned. Progress monitoring is not available.');
+        
+        // Refresh the content after a delay
+        setTimeout(() => {
+          fetchPostThemes();
+          
+          // Remove this contentId from the set of generating and publishing
+          setGeneratingAndPublishingIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(postThemeId);
+            return newSet;
+          });
+        }, 30000); // Wait 30 seconds before refreshing
+      }
     } catch (error) {
       console.error('Error generating and publishing content:', error);
       toast.error('Failed to generate and publish content');
-    } finally {
+      
       // Remove this contentId from the set of generating and publishing
       setGeneratingAndPublishingIds(prev => {
         const newSet = new Set(prev);

@@ -276,4 +276,26 @@ export const generateAndPublishContent = async (postThemeId: string): Promise<an
     console.error('Error in generateAndPublishContent:', error);
     throw error;
   }
+};
+
+export const checkPublishQueueStatus = async (postThemeId: string): Promise<any> => {
+  try {
+    const { data, error } = await supabase
+      .from('publish_queue')
+      .select('*')
+      .eq('post_theme_id', postThemeId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      console.error('Error checking publish queue status:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in checkPublishQueueStatus:', error);
+    throw error;
+  }
 }; 
