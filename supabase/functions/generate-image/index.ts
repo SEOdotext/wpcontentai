@@ -119,17 +119,40 @@ serve(async (req) => {
       throw new Error('AI image generation is not enabled for this website');
     }
 
-    // Create a safe prompt that won't exceed OpenAI's limits
+    // Get publication settings to check for image model and other settings
+    const { data: pubSettings, error: pubSettingsError } = await supabaseClient
+      .from('publication_settings')
+      .select('image_prompt, image_model, negative_prompt')
+      .eq('website_id', websiteId)
+      .single();
+
+    if (pubSettingsError) {
+      console.log('Error fetching publication settings:', pubSettingsError.message);
+      // Continue with default settings if there's an error
+    }
+
+    // Determine which model to use, defaulting to DALL-E if not specified
+    const imageModel = pubSettings?.image_model || 'dalle';
+    console.log('Using image model:', imageModel);
+
+    // Get negative prompt if using Stable Diffusion
+    const negativePrompt = imageModel === 'stable-diffusion' ? (pubSettings?.negative_prompt || '') : '';
+    if (imageModel === 'stable-diffusion' && negativePrompt) {
+      console.log('Using negative prompt for Stable Diffusion');
+    }
+
+    // Create a safe prompt that won't exceed API limits
     const safePrompt = createSafePrompt(content);
     console.log('Generated safe prompt, length:', safePrompt.length);
 
     // Apply custom prompt template if available
     let finalPrompt = safePrompt;
-    if (website.image_prompt) {
+    if (pubSettings?.image_prompt || website.image_prompt) {
       try {
         // Extract the main topic to use in the custom prompt
         const mainTopic = content.split('\n')[0] || content.substring(0, 50);
-        finalPrompt = website.image_prompt
+        const promptTemplate = pubSettings?.image_prompt || website.image_prompt;
+        finalPrompt = promptTemplate
           .replace('{content}', safePrompt.substring(safePrompt.indexOf(': ') + 2))
           .replace('{title}', mainTopic);
           
@@ -144,80 +167,176 @@ serve(async (req) => {
       }
     }
 
-    // Generate image with DALL-E 3 using direct API call
-    console.log('Calling OpenAI API...');
-    let openaiResponse;
-    try {
-      openaiResponse = await fetchWithTimeout(
-        'https://api.openai.com/v1/images/generations',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-          },
-          body: JSON.stringify({
-            model: 'dall-e-3',
-            prompt: finalPrompt,
-            n: 1,
-            size: '1792x1024',
-            quality: 'standard',
-            style: 'natural',
-          }),
-        },
-        120000 // Increased timeout to 120 seconds for DALL-E 3
-      );
-    } catch (fetchError: any) {
-      if (fetchError.name === 'AbortError') {
-        console.error('OpenAI API request timed out after 120 seconds');
-        throw new Error('OpenAI API request timed out after 120 seconds');
-      }
-      console.error('OpenAI API request failed:', fetchError);
-      throw new Error(`OpenAI API request failed: ${fetchError.message}`);
-    }
+    let imageBlob: Blob;
+    let imageFormat = 'image/png'; // Default format
 
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error('OpenAI API error:', errorText);
-      
-      // Try to parse the error for more helpful messages
+    if (imageModel === 'dalle') {
+      // Generate image with DALL-E 3 using OpenAI API
+      console.log('Calling OpenAI API for DALL-E image...');
+      let openaiResponse;
       try {
-        const errorJson = JSON.parse(errorText);
-        const errorMessage = errorJson.error?.message || 'Unknown OpenAI error';
-        throw new Error(`OpenAI API error: ${errorMessage}`);
-      } catch (parseError) {
-        throw new Error(`OpenAI API error: ${errorText}`);
+        openaiResponse = await fetchWithTimeout(
+          'https://api.openai.com/v1/images/generations',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+            },
+            body: JSON.stringify({
+              model: 'dall-e-3',
+              prompt: finalPrompt,
+              n: 1,
+              size: '1792x1024',
+              quality: 'standard',
+              style: 'natural',
+            }),
+          },
+          120000 // Increased timeout to 120 seconds for DALL-E 3
+        );
+      } catch (fetchError: any) {
+        if (fetchError.name === 'AbortError') {
+          console.error('OpenAI API request timed out after 120 seconds');
+          throw new Error('OpenAI API request timed out after 120 seconds');
+        }
+        console.error('OpenAI API request failed:', fetchError);
+        throw new Error(`OpenAI API request failed: ${fetchError.message}`);
       }
-    }
 
-    const openaiData = await openaiResponse.json();
-    if (!openaiData.data?.[0]?.url) {
-      throw new Error('No image URL returned from OpenAI');
-    }
+      if (!openaiResponse.ok) {
+        const errorText = await openaiResponse.text();
+        console.error('OpenAI API error:', errorText);
+        
+        // Try to parse the error for more helpful messages
+        try {
+          const errorJson = JSON.parse(errorText);
+          const errorMessage = errorJson.error?.message || 'Unknown OpenAI error';
+          throw new Error(`OpenAI API error: ${errorMessage}`);
+        } catch (parseError) {
+          throw new Error(`OpenAI API error: ${errorText}`);
+        }
+      }
 
-    console.log('Successfully generated image with OpenAI');
+      const openaiData = await openaiResponse.json();
+      if (!openaiData.data?.[0]?.url) {
+        throw new Error('No image URL returned from OpenAI');
+      }
 
-    // Download the image
-    console.log('Downloading image from OpenAI...');
-    let imageResponse;
-    try {
-      imageResponse = await fetchWithTimeout(
-        openaiData.data[0].url,
-        {},
-        30000 // 30 second timeout for image download
-      );
+      console.log('Successfully generated image with OpenAI');
+
+      // Download the image
+      console.log('Downloading image from OpenAI...');
+      let imageResponse;
+      try {
+        imageResponse = await fetchWithTimeout(
+          openaiData.data[0].url,
+          {},
+          30000 // 30 second timeout for image download
+        );
+        
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to download image: ${imageResponse.status} ${imageResponse.statusText}`);
+        }
+      } catch (downloadError: any) {
+        if (downloadError.name === 'AbortError') {
+          throw new Error('Image download timed out after 30 seconds');
+        }
+        throw new Error(`Image download failed: ${downloadError.message}`);
+      }
       
-      if (!imageResponse.ok) {
-        throw new Error(`Failed to download image: ${imageResponse.status} ${imageResponse.statusText}`);
+      imageBlob = await imageResponse.blob();
+      
+    } else {
+      // Generate image with Stable Diffusion using Stability AI API
+      console.log('Calling Stability AI API for Stable Diffusion image...');
+      
+      const STABILITY_API_KEY = Deno.env.get('STABILITY_API_KEY');
+      if (!STABILITY_API_KEY) {
+        throw new Error('STABILITY_API_KEY is not set in environment variables');
       }
-    } catch (downloadError: any) {
-      if (downloadError.name === 'AbortError') {
-        throw new Error('Image download timed out after 30 seconds');
+      
+      try {
+        // Call Stability AI API
+        const stabilityResponse = await fetchWithTimeout(
+          'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${STABILITY_API_KEY}`,
+            },
+            body: JSON.stringify({
+              text_prompts: [
+                {
+                  text: finalPrompt,
+                  weight: 1
+                },
+                ...(negativePrompt ? [{
+                  text: negativePrompt,
+                  weight: -1
+                }] : [])
+              ],
+              cfg_scale: 7,
+              height: 1024,
+              width: 1024,
+              samples: 1,
+              steps: 30,
+            }),
+          },
+          90000 // 90 second timeout for Stability API
+        );
+        
+        if (!stabilityResponse.ok) {
+          const errorText = await stabilityResponse.text();
+          console.error('Stability AI API error:', errorText);
+          
+          try {
+            const errorJson = JSON.parse(errorText);
+            const errorMessage = errorJson.message || 'Unknown Stability AI error';
+            throw new Error(`Stability AI API error: ${errorMessage}`);
+          } catch (parseError) {
+            throw new Error(`Stability AI API error: ${errorText}`);
+          }
+        }
+        
+        const stabilityData = await stabilityResponse.json();
+        
+        if (!stabilityData.artifacts || stabilityData.artifacts.length === 0) {
+          throw new Error('No image data returned from Stability AI');
+        }
+        
+        console.log('Successfully generated image with Stability AI');
+        
+        // Convert base64 to Blob
+        const base64Image = stabilityData.artifacts[0].base64;
+        const byteCharacters = atob(base64Image);
+        const byteArrays = [];
+        
+        for (let offset = 0; offset < byteCharacters.length; offset += 1024) {
+          const slice = byteCharacters.slice(offset, offset + 1024);
+          
+          const byteNumbers = new Array(slice.length);
+          for (let i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+          }
+          
+          const byteArray = new Uint8Array(byteNumbers);
+          byteArrays.push(byteArray);
+        }
+        
+        imageBlob = new Blob(byteArrays, { type: 'image/png' });
+        imageFormat = 'image/png';
+        
+      } catch (stabilityError: any) {
+        if (stabilityError.name === 'AbortError') {
+          throw new Error('Stability AI API request timed out');
+        }
+        console.error('Stability AI API request failed:', stabilityError);
+        throw new Error(`Stability AI API request failed: ${stabilityError.message}`);
       }
-      throw new Error(`Image download failed: ${downloadError.message}`);
     }
     
-    const imageBlob = await imageResponse.blob();
     if (!imageBlob || imageBlob.size === 0) {
       throw new Error('Downloaded image is empty or invalid');
     }
@@ -245,7 +364,7 @@ serve(async (req) => {
       .storage
       .from('post-images')
       .upload(fileName, imageBlob, {
-        contentType: 'image/png',
+        contentType: imageFormat,
         upsert: true,
         public: true // Explicitly set public access
       });

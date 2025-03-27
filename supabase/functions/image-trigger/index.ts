@@ -127,158 +127,52 @@ async function generateImageAsync(
   supabaseClient: any
 ) {
   try {
-    // Check for custom image prompt in publication_settings
-    const { data: pubSettings, error: pubSettingsError } = await supabaseClient
-      .from('publication_settings')
-      .select('image_prompt')
-      .eq('website_id', websiteId)
-      .maybeSingle();
-
-    // Determine which image prompt to use
-    let customPrompt = null;
-    if (!pubSettingsError && pubSettings?.image_prompt) {
-      customPrompt = pubSettings.image_prompt;
-      console.log('Using image prompt from publication_settings:', customPrompt);
-    } else if (postTheme.image_prompt) {
-      customPrompt = postTheme.image_prompt;
-      console.log('Using image prompt from website settings:', customPrompt);
-    } else {
-      console.log('No custom prompt found, will use default prompt template');
-    }
-
-    // Generate a prompt using the custom template if available
-    let prompt;
-    if (customPrompt) {
-      console.log('Before token replacement, custom prompt is:', customPrompt);
-      prompt = customPrompt
-        .replace('{title}', postTheme.subject_matter)
-        .replace('{content}', postTheme.post_content.substring(0, 1000)); // Limit content length
-      console.log('After token replacement, final prompt is:', prompt.substring(0, 100) + '...');
-    } else {
-      // Fallback to default prompt format
-      prompt = createSafePrompt(postTheme.subject_matter, postTheme.post_content);
-      console.log('Using default prompt template:', prompt.substring(0, 100) + '...');
-    }
-
-    // Call OpenAI to generate the image
-    const openaiResponse = await fetch('https://api.openai.com/v1/images/generations', {
+    console.log('Starting image generation for post:', postId);
+    
+    // Call the generate-image Edge function instead of implementing image generation directly
+    const edgeUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-image`;
+    console.log('Calling generate-image Edge function:', edgeUrl);
+    
+    const response = await fetch(edgeUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
       },
       body: JSON.stringify({
-        model: 'dall-e-3',
-        prompt: prompt,
-        n: 1,
-        size: '1792x1024',
-        quality: 'standard',
-        style: 'natural',
+        content: postTheme.post_content,
+        postId: postId,
+        websiteId: websiteId
       }),
     });
-
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error('OpenAI API error:', errorText);
-      throw new Error(`OpenAI API error: ${errorText}`);
-    }
-
-    const openaiData = await openaiResponse.json();
-    if (!openaiData.data?.[0]?.url) {
-      throw new Error('No image URL returned from OpenAI');
-    }
-
-    // Download the image
-    const imageResponse = await fetch(openaiData.data[0].url);
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to download image: ${imageResponse.status}`);
+    
+    if (!response.ok) {
+      let errorMessage = `Edge function error: ${response.status} ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        // Fallback to the status error if JSON parsing fails
+      }
+      throw new Error(errorMessage);
     }
     
-    const imageBlob = await imageResponse.blob();
-
-    // Upload to Supabase Storage
-    const fileName = `${postId}-header.png`;
+    const data = await response.json();
     
-    // Try to remove any existing image first
-    try {
-      await supabaseClient.storage.from('post-images').remove([fileName]);
-      console.log('Removed any existing image');
-    } catch (e) {
-      // Ignore removal errors
+    if (!data.success || !data.imageUrl) {
+      throw new Error('Image generation failed: ' + (data.error || 'No image URL returned'));
     }
     
-    // Upload the new image with public access
-    const { data: uploadData, error: uploadError } = await supabaseClient
-      .storage
-      .from('post-images')
-      .upload(fileName, imageBlob, {
-        contentType: 'image/png',
-        upsert: true,
-        public: true
-      });
-
-    if (uploadError) {
-      throw new Error(`Error uploading image: ${uploadError.message}`);
-    }
-
-    // Get the public URL
-    const { data: { publicUrl } } = supabaseClient
-      .storage
-      .from('post-images')
-      .getPublicUrl(fileName);
+    console.log('Successfully completed async image generation for post:', postId, data.imageUrl);
+    return data.imageUrl;
     
-    if (!publicUrl) {
-      throw new Error('Failed to generate public URL for uploaded image');
-    }
-    
-    console.log('Generated public URL:', publicUrl);
-      
-    // Update the post_themes table with the image URL
-    const { error: updateError } = await supabaseClient
-      .from('post_themes')
-      .update({ 
-        image: publicUrl,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', postId);
-
-    if (updateError) {
-      throw new Error(`Error updating post_themes: ${updateError.message}`);
-    }
-
-    console.log('Successfully completed async image generation for post:', postId);
   } catch (error) {
     console.error('Error in generateImageAsync:', error);
     throw error;
   }
 }
 
-// Function to create a safe prompt that won't exceed OpenAI's limits
-function createSafePrompt(title: string, content: string): string {
-  // Create a shortened summary - limit to safe character count
-  // OpenAI limit is 4000, but we'll use much less to be safe
-  const MAX_PROMPT_LENGTH = 1500;
-  
-  // Start with the title
-  let safeContent = title.substring(0, Math.min(100, title.length));
-  
-  // Add as much of the content as we can fit
-  const remainingSpace = MAX_PROMPT_LENGTH - safeContent.length - 100; // 100 chars buffer for prefix
-  if (remainingSpace > 0) {
-    // Add a brief excerpt from the content, avoiding cutting in the middle of words
-    let excerpt = content.substring(0, remainingSpace);
-    
-    // Try to end at a sentence or paragraph break if possible
-    const sentenceBreak = excerpt.lastIndexOf('.');
-    const paragraphBreak = excerpt.lastIndexOf('\n');
-    
-    let breakPoint = Math.max(sentenceBreak, paragraphBreak);
-    if (breakPoint > excerpt.length / 2) {
-      excerpt = excerpt.substring(0, breakPoint + 1);
-    }
-    
-    safeContent += ' ' + excerpt.trim();
-  }
-  
-  return `Create a professional, high-quality blog post header image for: ${safeContent}`;
-} 
+// Function to create a safe prompt is no longer needed as it's handled by the generate-image function
+// function createSafePrompt(title: string, content: string): string {
+//   ...
+// } 

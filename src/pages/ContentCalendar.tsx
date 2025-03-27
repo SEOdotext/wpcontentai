@@ -228,14 +228,20 @@ const ContentCalendar = () => {
   const handleDeleteContent = (contentId: string) => {
     if (!currentWebsite) return;
     
-    const updatedContent = allContent.filter(content => content.id !== contentId);
-    setAllContent(updatedContent);
-    
-    if (selectedContent && selectedContent.id === contentId) {
-      setSelectedContent(null);
-    }
-    
-    toast.success("Content removed from calendar");
+    // Call the deletePostTheme function from context
+    deletePostTheme(contentId)
+      .then(success => {
+        if (success) {
+          // Clear selected content if it was deleted
+          if (selectedContent && selectedContent.id === contentId) {
+            setSelectedContent(null);
+          }
+        }
+      })
+      .catch(error => {
+        console.error('Error deleting content:', error);
+        toast.error('Failed to delete content');
+      });
   };
 
   const handleEditContent = (contentId: string) => {
@@ -438,6 +444,12 @@ const ContentCalendar = () => {
       const content = allContent.find(item => item.id === contentId);
       if (!content) {
         toast.error('Content not found');
+        // Remove contentId from generating set if content not found
+        setGeneratingImageIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(contentId);
+          return newSet;
+        });
         return;
       }
 
@@ -464,6 +476,12 @@ const ContentCalendar = () => {
             if (error) {
               console.error('Error checking image status:', error);
               clearInterval(pollInterval);
+              // Remove from generating images set on error
+              setGeneratingImageIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(contentId);
+                return newSet;
+              });
               return;
             }
 
@@ -490,10 +508,23 @@ const ContentCalendar = () => {
 
               toast.success('Image generated successfully');
               clearInterval(pollInterval);
+              
+              // Remove from generating images set only when complete
+              setGeneratingImageIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(contentId);
+                return newSet;
+              });
             }
           } catch (error) {
             console.error('Error checking image status:', error);
             clearInterval(pollInterval);
+            // Remove from generating images set on error
+            setGeneratingImageIds(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(contentId);
+              return newSet;
+            });
           }
         }, 5000); // Poll every 5 seconds
 
@@ -501,6 +532,12 @@ const ContentCalendar = () => {
         setTimeout(() => {
           clearInterval(pollInterval);
           toast.error('Image generation timed out');
+          // Remove from generating images set on timeout
+          setGeneratingImageIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(contentId);
+            return newSet;
+          });
         }, 5 * 60 * 1000);
       } else if (result.imageUrl) {
         // Image was generated immediately
@@ -520,12 +557,19 @@ const ContentCalendar = () => {
         localStorage.setItem(storageKey, JSON.stringify(updatedContent));
 
         toast.success('Image generated successfully');
+        
+        // Remove from generating images set since generation is complete
+        setGeneratingImageIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(contentId);
+          return newSet;
+        });
       }
     } catch (error) {
       console.error('Error generating image:', error);
       toast.error('Failed to generate image');
-    } finally {
-      // Remove this contentId from the set of generating images
+      
+      // Remove from generating images set on error
       setGeneratingImageIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(contentId);
@@ -550,6 +594,12 @@ const ContentCalendar = () => {
         const pollInterval = setInterval(async () => {
           try {
             const queueStatus = await checkPublishQueueStatus(postThemeId);
+            
+            // If status is 'not_found', continue polling
+            if (queueStatus.status === 'not_found') {
+              console.log('Queue entry not found yet, continuing to poll...');
+              return;
+            }
             
             if (queueStatus && (queueStatus.status === 'completed' || queueStatus.status === 'failed')) {
               clearInterval(pollInterval);

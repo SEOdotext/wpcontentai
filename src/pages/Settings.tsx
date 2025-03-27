@@ -124,7 +124,7 @@ interface Category {
 }
 
 const Settings = () => {
-  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt } = useSettings();
+  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt, imageModel, setImageModel, negativePrompt, setNegativePrompt } = useSettings();
   const { currentWebsite, updateWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
   const { addPostTheme } = usePostThemes();
@@ -2258,43 +2258,101 @@ const Settings = () => {
                       </div>
 
                       {currentWebsite?.enable_ai_image_generation && (
-                        <div className="space-y-2 mt-4">
-                          <Label htmlFor="image-prompt">
-                            Image Generation Prompt
-                            <span className="block text-sm text-muted-foreground">
-                              Customize how images are generated. Use {'{title}'} for the content title and {'{content}'} for the content description.
-                            </span>
-                          </Label>
-                          <Input
-                            id="image-prompt"
-                            type="text"
-                            defaultValue={imagePrompt}
-                            onBlur={async (e) => {
-                              try {
-                                setImagePrompt(e.target.value);
-                                toast.success("Image generation prompt updated");
-                              } catch (error) {
-                                console.error('Failed to update image prompt:', error);
-                                toast.error('Failed to update image prompt');
-                              }
-                            }}
-                            placeholder="Create a modern, professional image that represents: {title}. Context: {content}"
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            Example: "Create a photorealistic {'{title}'} in the style of {'{content}'}"
-                          </p>
+                        <div className="space-y-4 mt-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="image-model">
+                              Image Generation Model
+                              <span className="block text-sm text-muted-foreground">
+                                Select which AI model to use for generating images
+                              </span>
+                            </Label>
+                            <Select 
+                              value={imageModel} 
+                              onValueChange={(value) => {
+                                setImageModel(value);
+                                toast.success(`Image model updated to ${value === 'dalle' ? 'DALL-E' : 'Stable Diffusion'}`);
+                              }}
+                            >
+                              <SelectTrigger id="image-model">
+                                <SelectValue placeholder="Select image generation model" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="dalle">DALL-E</SelectItem>
+                                <SelectItem value="stable-diffusion">Stable Diffusion</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="image-prompt">
+                              Image Generation Prompt
+                              <span className="block text-sm text-muted-foreground">
+                                Customize how images are generated. Use {'{title}'} for the content title and {'{content}'} for the content description.
+                              </span>
+                            </Label>
+                            <Input
+                              id="image-prompt"
+                              type="text"
+                              defaultValue={imagePrompt}
+                              onBlur={async (e) => {
+                                try {
+                                  setImagePrompt(e.target.value);
+                                  toast.success("Image generation prompt updated");
+                                } catch (error) {
+                                  console.error('Failed to update image prompt:', error);
+                                  toast.error('Failed to update image prompt');
+                                }
+                              }}
+                              placeholder="Create a modern, professional image that represents: {title}. Context: {content}"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Example: "Create a photorealistic {'{title}'} in the style of {'{content}'}"
+                            </p>
+                          </div>
+
+                          {imageModel === 'stable-diffusion' && (
+                            <div className="space-y-2">
+                              <Label htmlFor="negative-prompt">
+                                Negative Prompt (Stable Diffusion)
+                                <span className="block text-sm text-muted-foreground">
+                                  Specify what you don't want to appear in the generated image
+                                </span>
+                              </Label>
+                              <Input
+                                id="negative-prompt"
+                                type="text"
+                                defaultValue={negativePrompt}
+                                onBlur={async (e) => {
+                                  try {
+                                    setNegativePrompt(e.target.value);
+                                    toast.success("Negative prompt updated");
+                                  } catch (error) {
+                                    console.error('Failed to update negative prompt:', error);
+                                    toast.error('Failed to update negative prompt');
+                                  }
+                                }}
+                                placeholder="blurry, bad quality, distorted faces, bad anatomy"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Example: "low quality, bad proportions, deformed, blurry, grainy"
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="rounded-lg border bg-muted/30 p-4">
+                            <h4 className="font-medium mb-2">About AI Image Generation:</h4>
+                            <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
+                              <li>Generates unique preview images for each post</li>
+                              <li>Uses post content to create relevant images</li>
+                              <li>Images are automatically optimized for your website</li>
+                              <li>Requires valid content to generate images</li>
+                              {imageModel === 'stable-diffusion' && (
+                                <li>Stable Diffusion allows more control with negative prompts</li>
+                              )}
+                            </ul>
+                          </div>
                         </div>
                       )}
-
-                      <div className="rounded-lg border bg-muted/30 p-4">
-                        <h4 className="font-medium mb-2">About AI Image Generation:</h4>
-                        <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
-                          <li>Generates unique preview images for each post</li>
-                          <li>Uses post content to create relevant images</li>
-                          <li>Images are automatically optimized for your website</li>
-                          <li>Requires valid content to generate images</li>
-                        </ul>
-                      </div>
                     </div>
                   </CardContent>
                 </Card>

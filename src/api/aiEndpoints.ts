@@ -1,6 +1,11 @@
 import { toast } from 'sonner';
 import { callOpenAI as secureCallOpenAI } from '@/services/openaiService';
 import { supabase } from '@/integrations/supabase/client';
+import { generateImage, checkImageGenerationStatus, checkWebsiteImageGenerationEnabled as checkImageEnabled } from '@/services/imageGeneration';
+
+// Re-export the image generation functions
+export { generateImage, checkImageGenerationStatus };
+export const checkWebsiteImageGenerationEnabled = checkImageEnabled;
 
 // Free fetch proxy service URL - Keep for website content fetching
 // Will be replaced with scrape-content function in a future update
@@ -285,15 +290,23 @@ export const checkPublishQueueStatus = async (postThemeId: string): Promise<any>
       .select('*')
       .eq('post_theme_id', postThemeId)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
 
     if (error) {
       console.error('Error checking publish queue status:', error);
       throw error;
     }
 
-    return data;
+    // Handle the case where no rows are found
+    if (!data || data.length === 0) {
+      return {
+        status: 'not_found',
+        message: 'No publish queue entry found for this post theme'
+      };
+    }
+
+    // Return the first (and only) item in the array
+    return data[0];
   } catch (error) {
     console.error('Error in checkPublishQueueStatus:', error);
     throw error;

@@ -160,6 +160,16 @@
     "data_type": "text"
   },
   {
+    "table_name": "publication_settings",
+    "column_name": "image_model",
+    "data_type": "text"
+  },
+  {
+    "table_name": "publication_settings",
+    "column_name": "negative_prompt",
+    "data_type": "text"
+  },
+  {
     "table_name": "publish_queue",
     "column_name": "id",
     "data_type": "uuid"

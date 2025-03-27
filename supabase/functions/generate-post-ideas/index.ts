@@ -24,7 +24,6 @@ interface GeneratePostIdeasRequest {
 interface PostIdea {
   title: string;
   keywords: string[];
-  description: string;
   categories: string[];
 }
 
@@ -218,8 +217,7 @@ ${existingContent.join('\n')}
 For each idea, provide:
 1. A compelling title
 2. 3-5 relevant keywords
-3. A brief description (max 100 words)
-4. Assign 1-3 categories from the following existing WordPress categories. Do not create new categories:
+3. Assign 1-3 categories from the following existing WordPress categories. Do not create new categories:
 ${categoriesToUse.join(', ')}
 
 Important rules:
@@ -233,10 +231,9 @@ Format the response as JSON with this structure:
 {
   "ideas": [
     {
-      "title": "string",
-      "keywords": ["string"],
-      "description": "string",
-      "categories": ["string"]
+      "title": "",
+      "keywords": [],
+      "categories": []
     }
   ]
 }`;
@@ -273,20 +270,35 @@ Format the response as JSON with this structure:
     
     // Extract JSON from markdown code blocks if present
     let content = openaiData.choices[0].message.content;
-    const jsonMatch = content.match(/```(?:json)?\n([\s\S]*?)\n```/);
-    if (jsonMatch) {
-      content = jsonMatch[1];
+    
+    // Better handling of potential JSON formatting from OpenAI
+    let jsonData;
+    try {
+      // First, try to parse content directly
+      jsonData = JSON.parse(content);
+    } catch (e) {
+      // If direct parsing fails, try to extract JSON from code blocks
+      try {
+        const jsonMatch = content.match(/```(?:json)?\n([\s\S]*?)\n```/);
+        if (jsonMatch && jsonMatch[1]) {
+          jsonData = JSON.parse(jsonMatch[1]);
+        } else {
+          // If no code block, remove any backticks and try again
+          const cleanedContent = content.replace(/```json|```/g, '').trim();
+          jsonData = JSON.parse(cleanedContent);
+        }
+      } catch (innerError) {
+        console.error('Failed to parse JSON after cleaning:', innerError);
+        throw new Error('Invalid JSON response from OpenAI');
+      }
     }
     
-    // Parse the cleaned content
-    const ideas = JSON.parse(content);
-
     // Process titles for Danish content and create keywordsByTitle
     const processedTitles: string[] = [];
     const keywordsByTitle: { [title: string]: string[] } = {};
     const categoriesByTitle: { [title: string]: string[] } = {};
     
-    ideas.ideas.forEach((idea: PostIdea) => {
+    jsonData.ideas.forEach((idea: PostIdea) => {
       const isDanish = isDanishContent(idea.title);
       const processedTitle = isDanish ? formatDanishTitle(idea.title) : idea.title;
       processedTitles.push(processedTitle);

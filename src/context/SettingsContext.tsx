@@ -18,6 +18,8 @@ interface PublicationSettings {
   created_at: string;
   updated_at: string;
   image_prompt?: string;
+  image_model?: string;
+  negative_prompt?: string;
 }
 
 interface SettingsContextType {
@@ -31,6 +33,10 @@ interface SettingsContextType {
   setWordpressTemplate: (template: string) => void;
   imagePrompt: string;
   setImagePrompt: (prompt: string) => void;
+  imageModel: string;
+  setImageModel: (model: string) => void;
+  negativePrompt: string;
+  setNegativePrompt: (prompt: string) => void;
   isLoading: boolean;
 }
 
@@ -75,6 +81,8 @@ const defaultSettings = {
 
 </article>`,
   imagePrompt: 'Create a modern, professional image that represents: {title}. Context: {content}',
+  imageModel: 'dalle', // Default to DALL-E
+  negativePrompt: '', // Default empty negative prompt for stable diffusion
 };
 
 const SettingsContext = createContext<SettingsContextType>({
@@ -84,6 +92,8 @@ const SettingsContext = createContext<SettingsContextType>({
   setSubjectMatters: () => {},
   setWordpressTemplate: () => {},
   setImagePrompt: () => {},
+  setImageModel: () => {},
+  setNegativePrompt: () => {},
   isLoading: false,
 });
 
@@ -95,6 +105,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [subjectMatters, setSubjectMatters] = useState<string[]>(defaultSettings.subjectMatters);
   const [wordpressTemplate, setWordpressTemplate] = useState<string>(defaultSettings.wordpressTemplate);
   const [imagePrompt, setImagePrompt] = useState<string>(defaultSettings.imagePrompt);
+  const [imageModel, setImageModel] = useState<string>(defaultSettings.imageModel);
+  const [negativePrompt, setNegativePrompt] = useState<string>(defaultSettings.negativePrompt);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const { currentWebsite } = useWebsites();
@@ -109,6 +121,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSubjectMatters(defaultSettings.subjectMatters);
         setWordpressTemplate(defaultSettings.wordpressTemplate);
         setImagePrompt(defaultSettings.imagePrompt);
+        setImageModel(defaultSettings.imageModel);
+        setNegativePrompt(defaultSettings.negativePrompt);
         setIsLoading(false);
         return;
       }
@@ -165,6 +179,24 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setImagePrompt(defaultSettings.imagePrompt);
           }
           
+          // Set image model if it exists
+          if (settings.image_model) {
+            console.log("Found image model:", settings.image_model);
+            setImageModel(settings.image_model);
+          } else {
+            console.log("No image model found, using default");
+            setImageModel(defaultSettings.imageModel);
+          }
+          
+          // Set negative prompt if it exists
+          if (settings.negative_prompt) {
+            console.log("Found negative prompt:", settings.negative_prompt);
+            setNegativePrompt(settings.negative_prompt);
+          } else {
+            console.log("No negative prompt found, using default");
+            setNegativePrompt(defaultSettings.negativePrompt);
+          }
+          
           // Convert subject_matters to string[] ensuring type safety
           if (settings.subject_matters) {
             console.log("Retrieved subject_matters:", settings.subject_matters, "Type:", typeof settings.subject_matters);
@@ -216,6 +248,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               subject_matters: defaultSettings.subjectMatters,
               wordpress_template: defaultSettings.wordpressTemplate,
               image_prompt: currentWebsite.image_prompt || defaultSettings.imagePrompt, // Use website's image prompt if available
+              image_model: defaultSettings.imageModel,
+              negative_prompt: defaultSettings.negativePrompt,
               website_id: currentWebsite.id,
               organisation_id: currentWebsite.organisation_id
             })
@@ -235,6 +269,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setSubjectMatters(defaultSettings.subjectMatters);
             setWordpressTemplate(defaultSettings.wordpressTemplate);
             setImagePrompt(defaultSettings.imagePrompt);
+            setImageModel(defaultSettings.imageModel);
+            setNegativePrompt(defaultSettings.negativePrompt);
           }
         }
       } catch (error) {
@@ -245,6 +281,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setSubjectMatters(defaultSettings.subjectMatters);
         setWordpressTemplate(defaultSettings.wordpressTemplate);
         setImagePrompt(defaultSettings.imagePrompt);
+        setImageModel(defaultSettings.imageModel);
+        setNegativePrompt(defaultSettings.negativePrompt);
       } finally {
         setIsLoading(false);
       }
@@ -259,7 +297,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     style: string, 
     subjects: string[],
     template?: string,
-    prompt?: string
+    prompt?: string,
+    model?: string,
+    negPrompt?: string
   ) => {
     if (!currentWebsite) {
       console.error("Cannot update settings: No website selected");
@@ -278,6 +318,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Use current values if not provided
       const templateToUpdate = template !== undefined ? template : wordpressTemplate;
       const promptToUpdate = prompt !== undefined ? prompt : imagePrompt;
+      const modelToUpdate = model !== undefined ? model : imageModel;
+      const negPromptToUpdate = negPrompt !== undefined ? negPrompt : negativePrompt;
       
       // Ensure subjects is a clean array of strings
       const cleanSubjects = subjects.filter(s => s && s.trim().length > 0);
@@ -294,6 +336,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
             wordpress_template: templateToUpdate,
             image_prompt: promptToUpdate,
+            image_model: modelToUpdate,
+            negative_prompt: negPromptToUpdate,
             website_id: currentWebsite.id,
             organisation_id: currentWebsite.organisation_id
           })
@@ -321,6 +365,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
             wordpress_template: templateToUpdate,
             image_prompt: promptToUpdate,
+            image_model: modelToUpdate,
+            negative_prompt: negPromptToUpdate,
             updated_at: new Date().toISOString()
           })
           .eq('id', settingsId);
@@ -374,6 +420,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, wordpressTemplate, prompt);
   };
 
+  // Add handler for image model
+  const handleSetImageModel = (model: string) => {
+    setImageModel(model);
+    updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, model);
+  };
+
+  // Add handler for negative prompt
+  const handleSetNegativePrompt = (prompt: string) => {
+    setNegativePrompt(prompt);
+    updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, prompt);
+  };
+
   return (
     <SettingsContext.Provider 
       value={{ 
@@ -387,6 +445,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setWordpressTemplate: handleSetWordpressTemplate,
         imagePrompt,
         setImagePrompt: handleSetImagePrompt,
+        imageModel,
+        setImageModel: handleSetImageModel,
+        negativePrompt,
+        setNegativePrompt: handleSetNegativePrompt,
         isLoading
       }}
     >

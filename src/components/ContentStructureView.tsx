@@ -88,7 +88,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     addPostTheme,
     updatePostTheme,
     isGeneratingContent,
-    getNextPublicationDate
+    getNextPublicationDate,
+    setPostThemes
   } = usePostThemes();
   
   // Cleanup on unmount
@@ -429,14 +430,29 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   };
 
   const handleUpdateTitleDate = (id: string, newDate: Date) => {
-    // This will be handled by the TitleSuggestion component
+    // Update the local state to reflect the date change
+    // The TitleSuggestion component already updates the database
+    const updatedTitleSuggestions = postThemes.map(theme => {
+      if (theme.id === id) {
+        return {
+          ...theme,
+          scheduled_date: newDate.toISOString()
+        };
+      }
+      return theme;
+    });
+    
+    // Update the state with the modified themes
+    setPostThemes(updatedTitleSuggestions);
+    
+    // Log the update for debugging
+    console.log(`Date updated for post ${id} to ${newDate.toISOString()}`);
   };
 
   /**
    * Handler called when a title suggestion is approved (liked)
    * This function:
-   * 1. Updates the status of the liked post to 'generated'
-   * 2. Increments the dates of all other pending posts by one day
+   * 1. Updates the dates of all other pending posts by one day
    * 
    * @param id The ID of the post that was liked
    */
@@ -447,9 +463,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     if (!likedPost) {
       return; // Post not found
     }
-    
-    // Update the liked post to 'generated' status
-    updatePostTheme(id, { status: 'generated' });
     
     // Find all other pending posts
     const otherPendingPosts = postThemes.filter(theme => 
