@@ -55,6 +55,71 @@ async function uploadImageToWordPress(
   return { url: uploadData.source_url, id: uploadData.id };
 }
 
+// Helper function to get WordPress category IDs from category names
+async function getCategoryIds(
+  supabase: any,
+  websiteId: string,
+  categoryNames: string[],
+  wpUrl: string,
+  wpUsername: string,
+  wpPassword: string
+): Promise<number[]> {
+  console.log('Getting category IDs for:', categoryNames);
+  
+  if (!categoryNames || categoryNames.length === 0) {
+    return [];
+  }
+  
+  // First, try to get category IDs from our database
+  const { data: categories, error } = await supabase
+    .from('wordpress_categories')
+    .select('wp_category_id, name')
+    .eq('website_id', websiteId)
+    .in('name', categoryNames);
+
+  if (error) {
+    console.error('Error fetching categories from database:', error);
+    // Continue and try to fetch from WordPress directly
+  }
+  
+  // If we found all categories in our database, use those IDs
+  if (categories && categories.length === categoryNames.length) {
+    console.log('Found all categories in database:', categories);
+    return categories.map(cat => cat.wp_category_id);
+  }
+  
+  // If not all categories were found, fetch from WordPress
+  console.log('Fetching categories from WordPress');
+  try {
+    const response = await fetch(`${wpUrl}/wp-json/wp/v2/categories?per_page=100`, {
+      headers: {
+        'Authorization': `Basic ${btoa(`${wpUsername}:${wpPassword}`)}`
+      }
+    });
+    
+    if (!response.ok) {
+      console.error('Error fetching categories from WordPress:', response.statusText);
+      // Return whatever we found in the database
+      return categories ? categories.map(cat => cat.wp_category_id) : [];
+    }
+    
+    const wpCategories = await response.json();
+    
+    // Filter for the categories we need
+    const matchedCategories = wpCategories
+      .filter(cat => categoryNames.includes(cat.name))
+      .map(cat => cat.id);
+    
+    console.log('Matched WordPress categories:', matchedCategories);
+    
+    return matchedCategories;
+  } catch (fetchError) {
+    console.error('Error in WordPress API request:', fetchError);
+    // Return whatever we found in the database
+    return categories ? categories.map(cat => cat.wp_category_id) : [];
+  }
+}
+
 serve(async (req) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -190,7 +255,18 @@ serve(async (req) => {
       title: postTheme.subject_matter,
       content: finalContent,
       status: postStatus,
-      ...(uploadedImageId && { featured_media: uploadedImageId })
+      ...(uploadedImageId && { featured_media: uploadedImageId }),
+      // Add categories if they exist
+      ...(postTheme.categories && postTheme.categories.length > 0 && { 
+        categories: await getCategoryIds(
+          supabaseClient, 
+          website_id, 
+          postTheme.categories,
+          wpSettings.wp_url,
+          wpSettings.wp_username,
+          wpSettings.wp_application_password
+        ) 
+      })
     }
     
     // Make the API request to WordPress

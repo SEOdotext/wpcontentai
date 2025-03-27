@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS post_themes (
   website_id UUID NOT NULL REFERENCES websites(id) ON DELETE CASCADE,
   subject_matter TEXT NOT NULL,
   keywords TEXT[] NOT NULL DEFAULT '{}',
+  categories TEXT[] NOT NULL DEFAULT '{}',
   content TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
   scheduled_date TIMESTAMP WITH TIME ZONE,

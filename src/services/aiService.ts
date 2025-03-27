@@ -33,6 +33,8 @@ export const generateTitleSuggestions = async (
   titles: string[];
   keywords: string[];
   keywordsByTitle: { [title: string]: string[] };
+  categories: string[];
+  categoriesByTitle: { [title: string]: string[] };
 }> => {
   try {
     console.log('Generating title suggestions with AI...');
@@ -77,7 +79,9 @@ export const generateTitleSuggestions = async (
     return {
       titles: result.titles,
       keywords: result.keywords,
-      keywordsByTitle: result.keywordsByTitle
+      keywordsByTitle: result.keywordsByTitle,
+      categories: result.categories || [],
+      categoriesByTitle: result.categoriesByTitle || {}
     };
 
   } catch (error) {
@@ -865,7 +869,7 @@ export const generatePostContent = async (
       
       // Use the new openaiService instead of direct FREE_FETCH_PROXY
       const data = await callOpenAI({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',

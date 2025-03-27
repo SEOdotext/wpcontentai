@@ -25,6 +25,7 @@ interface PostIdea {
   title: string;
   keywords: string[];
   description: string;
+  categories: string[];
 }
 
 interface GeneratePostIdeasResponse {
@@ -148,7 +149,7 @@ serve(async (req) => {
     // Get existing post themes
     const { data: existingPosts, error: postsError } = await supabaseClient
       .from('post_themes')
-      .select('subject_matter, keywords')
+      .select('subject_matter, keywords, categories')
       .eq('website_id', website_id)
       .order('created_at', { ascending: false })
       .limit(10);
@@ -156,6 +157,17 @@ serve(async (req) => {
     if (postsError) {
       console.error('Error fetching existing posts:', postsError);
       throw new Error('Failed to fetch existing posts');
+    }
+
+    // Get existing WordPress categories for the website
+    const { data: wpCategories, error: wpCategoriesError } = await supabaseClient
+      .from('wordpress_categories')
+      .select('name, description')
+      .eq('website_id', website_id);
+
+    if (wpCategoriesError) {
+      console.error('Error fetching WordPress categories:', wpCategoriesError);
+      throw new Error('Failed to fetch WordPress categories');
     }
 
     // Get website content from sitemap
@@ -179,6 +191,14 @@ serve(async (req) => {
       ...(existingPosts?.flatMap(post => post.keywords || []) || [])
     ];
 
+    // Extract all existing categories from posts
+    const existingCategories = wpCategories?.map(cat => cat.name) || [];
+    
+    // Use default categories if none exist
+    const categoriesToUse = existingCategories.length > 0 
+      ? existingCategories 
+      : ['WordPress', 'SEO', 'Content Marketing', 'Web Development', 'Blogging'];
+
     // Create a prompt that avoids existing content
     const existingTitles = existingPosts?.map(post => post.subject_matter) || [];
     const existingContent = sitemapContent?.map(content => content.title) || [];
@@ -199,12 +219,15 @@ For each idea, provide:
 1. A compelling title
 2. 3-5 relevant keywords
 3. A brief description (max 100 words)
+4. Assign 1-3 categories from the following existing WordPress categories. Do not create new categories:
+${categoriesToUse.join(', ')}
 
 Important rules:
 1. For Danish titles: Only capitalize the first word and proper nouns
 2. For English titles: Capitalize main words following standard English title case
 3. Keywords should be category-oriented and domain-specific
 4. Avoid generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig
+5. Only use the existing categories provided above. Do not create new categories.
 
 Format the response as JSON with this structure:
 {
@@ -212,7 +235,8 @@ Format the response as JSON with this structure:
     {
       "title": "string",
       "keywords": ["string"],
-      "description": "string"
+      "description": "string",
+      "categories": ["string"]
     }
   ]
 }`;
@@ -260,23 +284,28 @@ Format the response as JSON with this structure:
     // Process titles for Danish content and create keywordsByTitle
     const processedTitles: string[] = [];
     const keywordsByTitle: { [title: string]: string[] } = {};
+    const categoriesByTitle: { [title: string]: string[] } = {};
     
     ideas.ideas.forEach((idea: PostIdea) => {
       const isDanish = isDanishContent(idea.title);
       const processedTitle = isDanish ? formatDanishTitle(idea.title) : idea.title;
       processedTitles.push(processedTitle);
       keywordsByTitle[processedTitle] = generateFocusedKeywords(processedTitle, idea.keywords, subject_matters);
+      categoriesByTitle[processedTitle] = idea.categories;
     });
 
     // Use the first title's keywords as the default set
     const defaultKeywords = keywordsByTitle[processedTitles[0]] || [];
+    const defaultCategories = categoriesByTitle[processedTitles[0]] || [];
 
     return new Response(
       JSON.stringify({
         success: true,
         titles: processedTitles,
         keywords: defaultKeywords,
-        keywordsByTitle
+        keywordsByTitle,
+        categories: defaultCategories,
+        categoriesByTitle
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

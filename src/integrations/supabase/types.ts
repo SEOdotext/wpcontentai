@@ -33,6 +33,7 @@ export type Database = {
           website_id: string
           subject_matter: string
           keywords: string[]
+          categories: string[]
           status: string
           scheduled_date: string | null
           created_at: string
@@ -43,6 +44,7 @@ export type Database = {
           website_id: string
           subject_matter: string
           keywords: string[]
+          categories?: string[]
           status?: string
           scheduled_date?: string | null
           created_at?: string
@@ -53,6 +55,7 @@ export type Database = {
           website_id?: string
           subject_matter?: string
           keywords?: string[]
+          categories?: string[]
           status?: string
           scheduled_date?: string | null
           created_at?: string

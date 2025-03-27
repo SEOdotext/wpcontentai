@@ -109,7 +109,7 @@ export const callOpenAI = async (payload: OpenAIRequestPayload) => {
 export const generateContent = async (
   systemPrompt: string,
   userPrompt: string,
-  model: string = 'gpt-3.5-turbo',
+  model: string = 'gpt-4o-mini',
   options: {
     temperature?: number;
     max_tokens?: number;

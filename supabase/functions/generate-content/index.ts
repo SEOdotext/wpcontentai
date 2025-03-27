@@ -181,7 +181,7 @@ Use internal links with anchor text that flows naturally in the content.`;
     
     // Log actual request parameters in detail
     const openaiRequestBody = {
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         { 
           role: 'system', 

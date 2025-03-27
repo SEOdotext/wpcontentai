@@ -15,6 +15,26 @@
     "data_type": "timestamp with time zone"
   },
   {
+    "table_name": "post_theme_categories",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "post_theme_categories",
+    "column_name": "post_theme_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "post_theme_categories",
+    "column_name": "wordpress_category_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "post_theme_categories",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
     "table_name": "post_themes",
     "column_name": "id",
     "data_type": "uuid"
@@ -83,6 +103,11 @@
     "table_name": "post_themes",
     "column_name": "wp_image_url",
     "data_type": "text"
+  },
+  {
+    "table_name": "post_themes",
+    "column_name": "categories",
+    "data_type": "jsonb"
   },
   {
     "table_name": "publication_settings",

@@ -55,7 +55,7 @@ import { generateContent } from '@/services/openaiService';
 const blogPost = await generateContent(
   'You are a professional content writer who specializes in WordPress articles.',
   'Write a blog post about optimizing WordPress performance.',
-  'gpt-3.5-turbo',
+  'gpt-4o-mini',
   { temperature: 0.7, max_tokens: 1000 }
 );
 ```
@@ -69,7 +69,7 @@ const response = await supabase.functions.invoke('ai-service', {
   body: {
     service: 'openai',
     payload: {
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'You are a helpful assistant.' },
         { role: 'user', content: 'Write a short poem about WordPress.' }

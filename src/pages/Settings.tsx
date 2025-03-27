@@ -691,7 +691,8 @@ const Settings = () => {
         addPostTheme({
           website_id: currentWebsite?.id || '',
           subject_matter: title,
-          keywords: result.keywords,
+          keywords: result.keywordsByTitle?.[title] || result.keywords,
+          categories: result.categoriesByTitle?.[title] || result.categories,
           status: 'pending',
           scheduled_date: scheduledDate.toISOString(),
           post_content: null,
@@ -703,11 +704,10 @@ const Settings = () => {
       );
       
       await Promise.all(creationPromises);
-      
-      toast.success(`${result.titles.length} content ideas for "${subject}" have been scheduled for ${scheduledDate.toLocaleDateString()}`);
+      toast.success('Content suggestions generated successfully');
     } catch (error) {
       console.error('Error generating content:', error);
-      toast.error(`Failed to schedule content for "${subject}"`);
+      toast.error('Failed to generate content suggestions');
     } finally {
       setGeneratingSubject(null);
     }

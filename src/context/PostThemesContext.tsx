@@ -11,6 +11,7 @@ interface PostThemeRow {
   website_id: string;
   subject_matter: string;
   keywords: string[];
+  categories: string[];
   status: string;
   scheduled_date: string;
   created_at: string;
@@ -28,6 +29,7 @@ export interface PostTheme {
   website_id: string;
   subject_matter: string;
   keywords: string[];
+  categories: string[];
   status: 'pending' | 'generated' | 'published';
   scheduled_date: string;
   created_at: string;
@@ -181,6 +183,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         website_id: theme.website_id,
         subject_matter: theme.subject_matter,
         keywords: theme.keywords,
+        categories: theme.categories || [],
         post_content: theme.post_content || null,
         status: theme.status as 'pending' | 'generated' | 'published',
         scheduled_date: theme.scheduled_date,
@@ -238,6 +241,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         website_id: rowData.website_id,
         subject_matter: rowData.subject_matter,
         keywords: rowData.keywords,
+        categories: rowData.categories || [],
         post_content: rowData.post_content || null,
         status: rowData.status as 'pending' | 'generated' | 'published',
         scheduled_date: rowData.scheduled_date,
@@ -404,6 +408,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         website_id: rowData.website_id,
         subject_matter: rowData.subject_matter,
         keywords: rowData.keywords,
+        categories: rowData.categories || [],
         post_content: rowData.post_content || null,
         status: rowData.status as 'pending' | 'generated' | 'published',
         scheduled_date: rowData.scheduled_date,

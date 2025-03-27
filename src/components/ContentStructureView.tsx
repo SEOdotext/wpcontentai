@@ -30,6 +30,8 @@ interface TitleSuggestionProps {
   status: 'pending' | 'generated' | 'published';
   onUpdateKeywords: (keywords: string[]) => void;
   isGeneratingContent: boolean;
+  categories: string[];
+  onUpdateCategories: (categories: string[]) => void;
 }
 
 // Helper function to format titles with proper Danish capitalization
@@ -209,6 +211,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
             website_id: currentWebsite.id,
             subject_matter: title,
             keywords: result.keywordsByTitle?.[title] || result.keywords,
+            categories: result.categoriesByTitle?.[title] || result.categories,
             status: 'pending',
             scheduled_date: publicationDate.toISOString(),
             post_content: null,
@@ -310,6 +313,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           website_id: currentWebsite.id,
           subject_matter: title,
           keywords: result.keywordsByTitle?.[title] || result.keywords,
+          categories: result.categoriesByTitle?.[title] || result.categories,
           status: 'pending',
           scheduled_date: publicationDate.toISOString(),
           post_content: null,
@@ -391,6 +395,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           website_id: currentWebsite.id,
           subject_matter: title,
           keywords: result.keywordsByTitle?.[title] || result.keywords,
+          categories: result.categoriesByTitle?.[title] || result.categories,
           status: 'pending',
           scheduled_date: publicationDate.toISOString(),
           post_content: null,
@@ -468,6 +473,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     // No need to call fetchPostThemes() as updatePostTheme already updates local state
   };
 
+  const handleUpdateCategories = (id: string, categories: string[]) => {
+    // Use updatePostTheme which handles state updates internally
+    updatePostTheme(id, { categories });
+    // No need to call fetchPostThemes() as updatePostTheme already updates local state
+  };
+
   // Filter suggestions based on view mode
   const filteredTitleSuggestions = postThemes
     .filter(theme => {
@@ -486,6 +497,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       id: theme.id,
       title: theme.subject_matter,
       keywords: theme.keywords,
+      categories: theme.categories || [],
       date: new Date(theme.scheduled_date),
       status: theme.status as 'pending' | 'generated' | 'published'
     }));
@@ -621,6 +633,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   id={title.id}
                   title={title.title}
                   keywords={title.keywords}
+                  categories={title.categories}
                   selected={selectedTitleId === title.id}
                   onSelect={() => handleSelectTitle(title.id)}
                   onRemove={() => handleRemoveTitle(title.id)}
@@ -629,6 +642,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   onLiked={() => handleTitleLiked(title.id)}
                   status={title.status}
                   onUpdateKeywords={handleUpdateKeywords}
+                  onUpdateCategories={handleUpdateCategories}
                   isGeneratingContent={isGeneratingContent(title.id)}
                 />
               ))}
@@ -658,6 +672,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               id={title.id}
               title={title.title}
               keywords={title.keywords}
+              categories={title.categories}
               selected={selectedTitleId === title.id}
               onSelect={() => handleSelectTitle(title.id)}
               onRemove={() => handleRemoveTitle(title.id)}
@@ -666,6 +681,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               onLiked={() => handleTitleLiked(title.id)}
               status={title.status}
               onUpdateKeywords={handleUpdateKeywords}
+              onUpdateCategories={handleUpdateCategories}
               isGeneratingContent={isGeneratingContent(title.id)}
             />
           ))}
