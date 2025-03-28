@@ -23,7 +23,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { usePostThemes } from '@/context/PostThemesContext';
 import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
-import { generateImage, checkWebsiteImageGenerationEnabled, generateAndPublishContent, checkPublishQueueStatus } from '@/api/aiEndpoints';
+import { generateImage, checkWebsiteImageGenerationEnabled, generateAndPublishContent } from '@/api/aiEndpoints';
 import { PostTheme } from '@/context/PostThemesContext';
 
 interface Keyword {
@@ -87,6 +87,69 @@ const ContentCalendar = () => {
   const [directWpSettings, setDirectWpSettings] = useState<WordPressSettings | null>(null);
   const [wpConfigured, setWpConfigured] = useState<boolean>(false);
   const [generatingAndPublishingIds, setGeneratingAndPublishingIds] = useState<Set<string>>(new Set());
+  const [activeSubscriptions, setActiveSubscriptions] = useState<{ [key: string]: { unsubscribe: () => void } }>({});
+  
+  // Clean up any active subscriptions when component unmounts
+  useEffect(() => {
+    return () => {
+      // Unsubscribe from all active channels when component unmounts
+      Object.values(activeSubscriptions).forEach(subscription => {
+        if (subscription && typeof subscription.unsubscribe === 'function') {
+          subscription.unsubscribe();
+        }
+      });
+    };
+  }, [activeSubscriptions]);
+  
+  // Set up realtime when component loads
+  useEffect(() => {
+    console.log('Setting up test channel for realtime functionality');
+    
+    // Create a test channel with a unique name
+    const testChannelId = `test-channel-${Math.random().toString(36).substring(2, 11)}`;
+    const setupChannel = supabase.channel(testChannelId);
+    
+    setupChannel
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'publish_queue'
+        },
+        (payload) => {
+          console.log('Realtime test payload received:', payload);
+        }
+      )
+      .subscribe((status) => {
+        console.log(`Realtime test connection status: ${status}`);
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime is working correctly for publish_queue table');
+          console.log('🔍 Debug info: If your realtime subscriptions are working but database queries are failing, check your RLS policies');
+          
+          // Once we've verified the subscription works, clean it up
+          setTimeout(() => {
+            setupChannel.unsubscribe();
+            console.log('Test channel unsubscribed');
+          }, 5000);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Realtime subscription error - publish_queue table might not have realtime enabled');
+          console.error('📋 Steps to enable realtime:');
+          console.error('1. Go to Supabase Dashboard -> Database -> Replication');
+          console.error('2. Enable realtime and select the publish_queue table');
+          console.error('3. Restart your Supabase project or the realtime service');
+        } else if (status === 'TIMED_OUT') {
+          console.error('⏱️ Realtime subscription timed out - check your network connection');
+        } else if (status === 'CLOSED') {
+          console.log('Realtime test channel closed');
+        }
+      });
+    
+    return () => {
+      setupChannel.unsubscribe();
+    };
+  }, []);
   
   // Memoize the calendar content conversion
   const calendarContent = React.useMemo(() => {
@@ -590,6 +653,8 @@ const ContentCalendar = () => {
       console.log('Content generation queued:', response);
       
       if (response.queueJob && response.queueJob.id) {
+        const queueJobId = response.queueJob.id;
+        
         // Find the post theme to get the subject matter
         const postTheme = postThemes.find(theme => theme.id === postThemeId);
         const subjectMatter = postTheme?.subject_matter || 'this content';
@@ -599,61 +664,165 @@ const ContentCalendar = () => {
           description: `For "${subjectMatter}" - you can now exit the page and this will finish in the background.`
         });
         
-        // Poll for queue status
-        const pollInterval = setInterval(async () => {
-          try {
-            const queueStatus = await checkPublishQueueStatus(postThemeId);
+        // Check job status immediately first - it might have completed already
+        try {
+          const { data: jobStatus, error } = await supabase
+            .from('publish_queue')
+            .select('*')
+            .eq('id', queueJobId)
+            .single();
+          
+          if (error) {
+            console.error('Error checking initial job status:', error);
+          } else {
+            console.log('Initial job status check:', jobStatus);
             
-            // If status is 'not_found', continue polling
-            if (queueStatus.status === 'not_found') {
-              console.log('Queue entry not found yet, continuing to poll...');
-              return;
-            }
-            
-            if (queueStatus && (queueStatus.status === 'completed' || queueStatus.status === 'failed')) {
-              clearInterval(pollInterval);
+            // If job is already completed, handle it immediately
+            if (jobStatus && (jobStatus.status === 'completed' || jobStatus.status === 'failed')) {
+              console.log(`Job ${queueJobId} already ${jobStatus.status}, handling immediately`);
               
-              if (queueStatus.status === 'completed') {
-                toast.success('Content generated and published successfully!');
-              } else {
-                toast.error(`Failed to generate and publish content: ${queueStatus.error || 'Unknown error'}`);
-              }
-              
-              // Refresh the content
-              fetchPostThemes();
-              
-              // Remove this contentId from the set of generating and publishing
+              // Remove from generating set
               setGeneratingAndPublishingIds(prev => {
                 const newSet = new Set(prev);
                 newSet.delete(postThemeId);
                 return newSet;
               });
+              
+              // Show appropriate notification
+              if (jobStatus.status === 'completed') {
+                toast.success('Content generated and published successfully!');
+              } else {
+                toast.error(`Failed to generate and publish content: ${jobStatus.error || 'Unknown error'}`);
+              }
+              
+              // Refresh post themes to get the latest data
+              fetchPostThemes();
+              
+              return; // Exit early - no need to set up subscription for completed job
             }
-          } catch (pollError) {
-            console.error('Error polling queue status:', pollError);
-            // Don't stop polling on error
           }
-        }, 5000); // Check every 5 seconds
+        } catch (queryError) {
+          console.error('Exception checking job status:', queryError);
+        }
         
-        // Set a timeout to stop polling after 5 minutes
-        setTimeout(() => {
-          clearInterval(pollInterval);
-          
-          // Check if item is still in generating set
+        // Set up Supabase Realtime subscription for the specific queue job ID
+        const channel = supabase.channel(`queue-job-${queueJobId}`);
+        console.log(`Setting up realtime subscription for queue job ${queueJobId}`);
+        
+        channel
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'publish_queue',
+              filter: `id=eq.${queueJobId}`
+            },
+            (payload) => {
+              console.log('Publish queue UPDATE received for job:', payload);
+              const status = payload.new.status;
+              
+              // Process the update
+              if (status === 'completed' || status === 'failed') {
+                console.log(`Job ${queueJobId} is now ${status}, handling update`);
+                
+                // Remove the id from generating set
+                setGeneratingAndPublishingIds(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(postThemeId);
+                  return newSet;
+                });
+                
+                // Show appropriate notification
+                if (status === 'completed') {
+                  toast.success('Content generated and published successfully!');
+                } else {
+                  toast.error(`Failed to generate and publish content: ${payload.new.error || 'Unknown error'}`);
+                }
+                
+                // Refresh post themes to get the latest data
+                fetchPostThemes();
+                
+                // Remove from active subscriptions
+                setActiveSubscriptions(prev => {
+                  const newSubscriptions = { ...prev };
+                  delete newSubscriptions[queueJobId];
+                  return newSubscriptions;
+                });
+                
+                // Unsubscribe from this channel
+                channel.unsubscribe();
+              }
+            }
+          )
+          .subscribe((status) => {
+            console.log(`Realtime subscription status for job ${queueJobId}:`, status);
+          });
+        
+        // Add to active subscriptions
+        setActiveSubscriptions(prev => ({
+          ...prev,
+          [queueJobId]: { unsubscribe: () => channel.unsubscribe() }
+        }));
+        
+        // Set a safety timeout to unsubscribe and update UI after 30 seconds
+        // This is a safety net in case realtime doesn't work
+        setTimeout(async () => {
+          // Check if the id is still in the generating set
           if (generatingAndPublishingIds.has(postThemeId)) {
-            toast.info('Generation is taking longer than expected. Check back later.');
+            console.log(`Safety timeout reached for job ${queueJobId}, checking final status...`);
             
-            // Refresh the content anyway
+            // Check the status one last time
+            try {
+              const { data: finalStatus, error } = await supabase
+                .from('publish_queue')
+                .select('*')
+                .eq('id', queueJobId)
+                .single();
+              
+              if (error) {
+                console.error('Error checking final job status:', error);
+                toast.info('Generation status unknown. Please check back later.');
+              } else {
+                console.log('Final status check:', finalStatus);
+                
+                if (finalStatus && (finalStatus.status === 'completed' || finalStatus.status === 'failed')) {
+                  // Remove from generating set
+                  setGeneratingAndPublishingIds(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(postThemeId);
+                    return newSet;
+                  });
+                  
+                  // Show appropriate notification
+                  if (finalStatus.status === 'completed') {
+                    toast.success('Content generated and published successfully!');
+                  } else {
+                    toast.error(`Failed to generate and publish content: ${finalStatus.error || 'Unknown error'}`);
+                  }
+                } else {
+                  toast.info('Generation status unknown. Please check back later.');
+                }
+              }
+            } catch (queryError) {
+              console.error('Exception checking final job status:', queryError);
+              toast.info('Generation status unknown. Please check back later.');
+            }
+            
+            // Refresh post themes regardless
             fetchPostThemes();
             
-            // Remove this contentId from the set of generating and publishing
-            setGeneratingAndPublishingIds(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(postThemeId);
-              return newSet;
+            // Remove from active subscriptions
+            setActiveSubscriptions(prev => {
+              const newSubscriptions = { ...prev };
+              delete newSubscriptions[queueJobId];
+              return newSubscriptions;
             });
+            
+            // Unsubscribe from the channel
+            channel.unsubscribe();
           }
-        }, 5 * 60 * 1000); // 5 minutes
+        }, 30 * 1000); // 30 seconds timeout instead of 5 minutes
       } else {
         toast.warning('No queue job ID returned. Progress monitoring is not available.');
         
