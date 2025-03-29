@@ -62,13 +62,6 @@ const formatDanishTitle = (title: string): string => {
   return words.join(' ');
 };
 
-// Default topics to use when generating initial content
-const DEFAULT_TOPICS = [
-  'WordPress Content Management',
-  'SEO Best Practices',
-  'Content Marketing Strategies'
-];
-
 const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }) => {
   const [selectedTitleId, setSelectedTitleId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
@@ -147,15 +140,13 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     // 3. We have a website
     // 4. We have no posts
     // 5. We haven't attempted generation yet
-    // 6. The input is empty (new condition)
     if (
       isInitializing || 
       isGenerating || 
       themesLoading || 
       !currentWebsite?.id || 
       postThemes.length > 0 || 
-      generationAttemptedRef.current || 
-      inputValue.trim() !== ''
+      generationAttemptedRef.current
     ) {
       return;
     }
@@ -164,14 +155,10 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       // Mark that we've attempted generation to prevent loops
       generationAttemptedRef.current = true;
       
-      console.log('No posts found and input empty, generating initial content...');
+      console.log('No posts found, generating initial content from website content...');
       setIsGenerating(true);
       
       try {
-        // Generate 3 posts with default topics
-        const topics = subjectMatters.length > 0 ? subjectMatters.slice(0, 3) : DEFAULT_TOPICS;
-        let successCount = 0;
-        
         // Get a single publication date for all posts
         const publicationDate = getNextPublicationDate();
 
@@ -190,9 +177,9 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           },
           body: JSON.stringify({
             website_id: currentWebsite.id,
-            keywords: topics,
+            keywords: [], // No keywords, just use website content
             writing_style: writingStyle,
-            subject_matters: topics
+            subject_matters: [] // No subject matters, just use website content
           })
         });
 
@@ -211,8 +198,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           addPostTheme({
             website_id: currentWebsite.id,
             subject_matter: title,
-            keywords: result.keywordsByTitle?.[title] || result.keywords,
-            categories: result.categoriesByTitle?.[title] || result.categories,
+            keywords: result.keywordsByTitle?.[title] || [],
+            categories: result.categoriesByTitle?.[title] || [],
             status: 'pending',
             scheduled_date: publicationDate.toISOString(),
             post_content: null,
@@ -249,22 +236,14 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     themesLoading, 
     currentWebsite?.id, 
     postThemes.length, 
-    subjectMatters, 
     writingStyle, 
     addPostTheme, 
     fetchPostThemes,
-    inputValue,
     getNextPublicationDate
   ]);
   
   // Modify the existing function to handle empty input
   const handleGenerateTitleSuggestions = async () => {
-    // If input is empty, use subject matters instead
-    if (!inputValue.trim()) {
-      handleGenerateFromSubjects();
-      return;
-    }
-    
     if (!currentWebsite?.id) {
       toast.error('Please select a website first');
       return;
@@ -288,9 +267,9 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         },
         body: JSON.stringify({
           website_id: currentWebsite.id,
-          keywords: [inputValue], // Use input value as keyword
+          keywords: inputValue.trim() ? [inputValue] : [], // Use input if provided
           writing_style: writingStyle,
-          subject_matters: subjectMatters
+          subject_matters: subjectMatters.length > 0 ? subjectMatters : [] // Use subjects if available
         })
       });
 
@@ -313,8 +292,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         addPostTheme({
           website_id: currentWebsite.id,
           subject_matter: title,
-          keywords: result.keywordsByTitle?.[title] || result.keywords,
-          categories: result.categoriesByTitle?.[title] || result.categories,
+          keywords: result.keywordsByTitle?.[title] || result.keywords || [],
+          categories: result.categoriesByTitle?.[title] || result.categories || [],
           status: 'pending',
           scheduled_date: publicationDate.toISOString(),
           post_content: null,
@@ -561,12 +540,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       <div className="mb-4">
         <div className="flex gap-2">
           <Input
-            placeholder="Enter keywords (e.g., wordpress, seo, content marketing)"
+            placeholder="Enter keywords (optional)"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className="flex-1"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !isGenerating && inputValue.trim() && currentWebsite) {
+              if (e.key === 'Enter' && !isGenerating && currentWebsite) {
                 e.preventDefault();
                 handleGenerateTitleSuggestions();
               }
@@ -585,7 +564,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
             ) : (
               <>
                 <RefreshCw className="h-4 w-4 mr-2" />
-                {inputValue.trim() ? 'Generate from Keywords' : 'Generate from Subjects'}
+                Generate
               </>
             )}
           </Button>

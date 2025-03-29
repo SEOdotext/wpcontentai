@@ -49,14 +49,8 @@ interface GeneratePostIdeasResponse {
 }
 
 // Helper function to detect if content is likely in Danish
-function isDanishContent(text: string): boolean {
-  const danishIndicators = [
-    'dansk', 'personale', 'arbejdskraft', 'udlejning', 'vikarbureau',
-    'rekruttering', 'medarbejdere', 'udenlandsk', 'arbejdsmarked'
-  ];
-  
-  const lowerText = text.toLowerCase();
-  return danishIndicators.some(indicator => lowerText.includes(indicator));
+function isDanishContent(text: string, websiteLanguage: string = 'en'): boolean {
+  return websiteLanguage === 'da';
 }
 
 // Helper function to format Danish titles
@@ -97,30 +91,23 @@ function generateFocusedKeywords(title: string, userKeywords: string[], subjectM
     }
   }
   
-  // 2. Add domain-specific terms
-  const domainTerms = [
-    "personale udlejning", 
-    "udenlandsk arbejdskraft", 
-    "rekruttering", 
-    "vikarbureau",
-    "arbejdsmarked"
-  ];
-  
-  const relevantDomainTerms = domainTerms
-    .filter(term => lowerTitle.includes(term.toLowerCase()))
-    .slice(0, 2);
-  
-  if (relevantDomainTerms.length > 0) {
-    result.push(...relevantDomainTerms);
+  // 2. Add relevant user keywords only if they exist
+  if (userKeywords && userKeywords.length > 0) {
+    const relevantUserKeywords = userKeywords
+      .filter(keyword => lowerTitle.includes(keyword.toLowerCase()))
+      .slice(0, 2);
+    
+    if (relevantUserKeywords.length > 0) {
+      result.push(...relevantUserKeywords);
+    }
   }
   
-  // 3. Add relevant user keywords
-  const relevantUserKeywords = userKeywords
-    .filter(keyword => lowerTitle.includes(keyword.toLowerCase()))
-    .slice(0, 2);
-  
-  if (relevantUserKeywords.length > 0) {
-    result.push(...relevantUserKeywords);
+  // 3. Extract key phrases from the title if no other keywords were found
+  if (result.length === 0) {
+    const titleWords = lowerTitle.split(/\s+/).filter(w => w.length > 3);
+    if (titleWords.length > 0) {
+      result.push(...titleWords.slice(0, 2));
+    }
   }
   
   return result;
@@ -209,6 +196,18 @@ serve(async (req) => {
       throw new Error('Failed to fetch sitemap content');
     }
 
+    // Get website language
+    const { data: website, error: websiteError } = await supabaseClient
+      .from('websites')
+      .select('language')
+      .eq('id', website_id)
+      .single();
+
+    if (websiteError) {
+      console.error('Error fetching website:', websiteError);
+      throw new Error('Failed to fetch website');
+    }
+
     // Combine all keywords
     const allKeywords = [
       ...keywords,
@@ -219,10 +218,8 @@ serve(async (req) => {
     // Extract all existing categories from posts
     const existingCategories = wpCategories?.map(cat => cat.name) || [];
     
-    // Use default categories if none exist
-    const categoriesToUse = existingCategories.length > 0 
-      ? existingCategories 
-      : ['WordPress', 'SEO', 'Content Marketing', 'Web Development', 'Blogging'];
+    // Use only existing categories, no defaults
+    const categoriesToUse = existingCategories;
 
     // Create a prompt that avoids existing content
     const existingTitles = existingPosts?.map(post => post.subject_matter) || [];
@@ -233,6 +230,7 @@ serve(async (req) => {
 Keywords to include: ${allKeywords.join(', ')}
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
 Subject matters: ${subject_matters.join(', ') || pubSettings?.subject_matters?.join(', ') || 'general'}
+Language: ${website?.language || 'en'}
 
 Avoid these existing topics:
 ${existingTitles.join('\n')}
@@ -241,17 +239,22 @@ And these existing cornerstone content:
 ${existingContent.join('\n')}
 
 For each idea, provide:
-1. A compelling title
-2. 3-5 relevant keywords
+1. A compelling title that directly relates to the website's content and purpose
+2. 3-5 relevant keywords that are specific to the website's domain
 3. Assign 1-3 categories from the following existing WordPress categories. Do not create new categories:
 ${categoriesToUse.join(', ')}
 
 Important rules:
 1. For Danish titles: Only capitalize the first word and proper nouns
 2. For English titles: Capitalize main words following standard English title case
-3. Keywords should be category-oriented and domain-specific
-4. Avoid generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig
+3. Keywords should be specific to the website's domain and content
+4. Avoid generic terms and focus on the website's specific niche
 5. Only use the existing categories provided above. Do not create new categories.
+6. Titles should be specific to the website's content and avoid generic marketing terms
+7. Focus on the website's actual products, services, or expertise
+8. DO NOT use generic terms like: digital, technology, marketing, SEO, WordPress, content, online, strategy
+9. DO NOT use categories that are not in the provided list
+10. Keywords must be specific to the website's actual content and purpose
 
 Format the response as JSON with this structure:
 {
@@ -276,7 +279,7 @@ Format the response as JSON with this structure:
         messages: [
           {
             role: 'system',
-            content: 'You are a professional content strategist who creates unique and engaging blog post ideas.'
+            content: 'You are a professional content strategist who creates unique and engaging blog post ideas. You focus on the specific content and purpose of each website, avoiding generic terms and categories.'
           },
           {
             role: 'user',
@@ -325,7 +328,7 @@ Format the response as JSON with this structure:
     const categoriesByTitle: { [title: string]: string[] } = {};
     
     jsonData.ideas.forEach((idea: PostIdea) => {
-      const isDanish = isDanishContent(idea.title);
+      const isDanish = isDanishContent(idea.title, website?.language);
       const processedTitle = isDanish ? formatDanishTitle(idea.title) : idea.title;
       processedTitles.push(processedTitle);
       keywordsByTitle[processedTitle] = generateFocusedKeywords(processedTitle, idea.keywords, subject_matters);
