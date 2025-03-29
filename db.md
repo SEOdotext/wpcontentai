@@ -1,5 +1,55 @@
 [
   {
+    "table_name": "image_generation_queue",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "image_generation_queue",
+    "column_name": "post_theme_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "image_generation_queue",
+    "column_name": "website_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "image_generation_queue",
+    "column_name": "status",
+    "data_type": "text"
+  },
+  {
+    "table_name": "image_generation_queue",
+    "column_name": "error",
+    "data_type": "text"
+  },
+  {
+    "table_name": "image_generation_queue",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "image_generation_queue",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "image_generation_queue",
+    "column_name": "completed_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "image_generation_queue",
+    "column_name": "image_url",
+    "data_type": "text"
+  },
+  {
+    "table_name": "image_generation_queue",
+    "column_name": "user_token",
+    "data_type": "text"
+  },
+  {
     "table_name": "organisations",
     "column_name": "id",
     "data_type": "uuid"

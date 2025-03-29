@@ -63,10 +63,25 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return;
         }
         
+        // Get user's organisation_id first
+        const { data: profileData, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('organisation_id')
+          .eq('id', session.user.id)
+          .single();
+          
+        if (profileError) throw profileError;
+        if (!profileData?.organisation_id) {
+          console.log("User has no organization");
+          setIsLoading(false);
+          return;
+        }
+        
         // Fetch websites
         const { data, error } = await supabase
           .from('websites')
           .select('*')
+          .eq('organisation_id', profileData.organisation_id)
           .order('created_at', { ascending: false });
           
         if (error) throw error;

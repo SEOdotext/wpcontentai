@@ -15,6 +15,322 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
+/**
+ * Waits for image generation to complete by polling the post_themes table
+ * @param supabaseClient The Supabase client
+ * @param postThemeId The post theme ID
+ * @param maxWaitTime Maximum wait time in milliseconds (default: 120000 - 2 minutes)
+ * @param interval Polling interval in milliseconds (default: 2000 - 2 seconds)
+ * @returns The image URL if found, null otherwise
+ */
+async function waitForImageGeneration(
+  supabaseClient: any,
+  postThemeId: string,
+  maxWaitTime = 120000,
+  interval = 2000
+): Promise<string | null> {
+  console.log(`Starting to poll for image generation for post ${postThemeId}`);
+  console.log(`Max wait time: ${maxWaitTime}ms, Polling interval: ${interval}ms`);
+  
+  const startTime = Date.now();
+  let imageUrl = null;
+  
+  while (Date.now() - startTime < maxWaitTime) {
+    // Check if the image has been generated
+    const { data: postTheme, error } = await supabaseClient
+      .from('post_themes')
+      .select('image')
+      .eq('id', postThemeId)
+      .single();
+    
+    if (error) {
+      console.error('Error checking image status:', error);
+    } else if (postTheme?.image) {
+      imageUrl = postTheme.image;
+      console.log(`Found image URL after ${Date.now() - startTime}ms:`, imageUrl);
+      break;
+    }
+    
+    console.log(`Image not found, waiting ${interval}ms...`);
+    // Wait for the specified interval
+    await new Promise(resolve => setTimeout(resolve, interval));
+  }
+  
+  if (!imageUrl) {
+    console.log(`Image generation timed out after ${maxWaitTime}ms`);
+  }
+  
+  return imageUrl;
+}
+
+/**
+ * Fetches the most recent post theme data from the database
+ */
+async function getPostTheme(supabaseClient: any, postThemeId: string) {
+  console.log('Fetching fresh post theme data for ID:', postThemeId);
+  
+  const { data: postTheme, error } = await supabaseClient
+    .from('post_themes')
+    .select(`
+      id,
+      website_id,
+      subject_matter,
+      keywords,
+      status,
+      scheduled_date,
+      post_content,
+      image,
+      wp_post_id,
+      wp_post_url,
+      wp_sent_date,
+      wp_image_url
+    `)
+    .eq('id', postThemeId)
+    .single();
+  
+  if (error) {
+    console.error('Error fetching post theme:', error);
+    throw new Error(`Failed to fetch post theme data: ${error.message}`);
+  }
+  
+  if (!postTheme) {
+    throw new Error(`Post theme not found with ID: ${postThemeId}`);
+  }
+  
+  return postTheme;
+}
+
+/**
+ * Fetches website settings from the database
+ */
+async function getWebsiteSettings(supabaseClient: any, websiteId: string) {
+  console.log('Fetching website settings for ID:', websiteId);
+  
+  const { data: website, error } = await supabaseClient
+    .from('websites')
+    .select('*')
+    .eq('id', websiteId)
+    .single();
+  
+  if (error) {
+    console.error('Error fetching website settings:', error);
+    throw new Error(`Failed to fetch website settings: ${error.message}`);
+  }
+  
+  if (!website) {
+    throw new Error(`Website not found with ID: ${websiteId}`);
+  }
+  
+  return website;
+}
+
+/**
+ * Fetches WordPress settings from the database
+ */
+async function getWordPressSettings(supabaseClient: any, websiteId: string) {
+  console.log('Fetching WordPress settings for website ID:', websiteId);
+  
+  const { data: wpSettings, error } = await supabaseClient
+    .from('wordpress_settings')
+    .select('*')
+    .eq('website_id', websiteId)
+    .single();
+  
+  if (error) {
+    console.error('Error fetching WordPress settings:', error);
+    throw new Error(`Failed to fetch WordPress settings: ${error.message}`);
+  }
+  
+  if (!wpSettings) {
+    throw new Error(`WordPress settings not found for website ID: ${websiteId}`);
+  }
+  
+  return wpSettings;
+}
+
+/**
+ * Generates content for a post
+ */
+async function generateContent(postThemeId: string, token: string) {
+  console.log('Generating content for post:', postThemeId);
+  
+  const contentResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v2', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({ postThemeId })
+  });
+  
+  if (!contentResponse.ok) {
+    const errorText = await contentResponse.text();
+    console.error('Content generation failed:', {
+      status: contentResponse.status,
+      statusText: contentResponse.statusText,
+      error: errorText
+    });
+    throw new Error(`Failed to generate content: ${contentResponse.status} ${contentResponse.statusText}`);
+  }
+  
+  const contentResult = await contentResponse.json();
+  console.log('Content generation successful:', {
+    postThemeId,
+    hasContent: !!contentResult.content,
+    contentLength: contentResult.content?.length || 0
+  });
+  
+  return contentResult;
+}
+
+/**
+ * Triggers image generation and waits for it to complete
+ */
+async function triggerAndWaitForImage(supabaseClient: any, postThemeId: string, websiteId: string, token: string) {
+  console.log('Triggering image generation for post:', postThemeId);
+  
+  try {
+    // First check if image already exists
+    const { data: existingImage } = await supabaseClient
+      .from('post_themes')
+      .select('image')
+      .eq('id', postThemeId)
+      .single();
+    
+    if (existingImage?.image) {
+      console.log('Image already exists:', existingImage.image);
+      return existingImage.image;
+    }
+    
+    console.log('No existing image found, starting generation process');
+    
+    // Trigger image generation
+    const imageResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/image-trigger', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        postId: postThemeId,
+        websiteId: websiteId
+      })
+    });
+    
+    if (!imageResponse.ok) {
+      const errorText = await imageResponse.text();
+      console.error('Image generation failed:', {
+        status: imageResponse.status,
+        statusText: imageResponse.statusText,
+        error: errorText
+      });
+      return null;
+    }
+    
+    const imageResult = await imageResponse.json();
+    console.log('Image trigger response:', imageResult);
+    
+    if (imageResult.imageUrl) {
+      // Image was generated immediately
+      console.log('Image generated immediately:', imageResult.imageUrl);
+      return imageResult.imageUrl;
+    } else if (imageResult.success && imageResult.isGenerating) {
+      console.log('Image generation started, waiting for completion...');
+      
+      // Wait for the image to be generated by polling the post_themes table
+      const imageUrl = await waitForImageGeneration(supabaseClient, postThemeId);
+      
+      if (imageUrl) {
+        console.log('Image generation completed successfully:', imageUrl);
+        return imageUrl;
+      } else {
+        console.log('Image generation timed out, proceeding without image');
+        return null;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error in image generation process:', error);
+    return null;
+  }
+}
+
+/**
+ * Sends a post to WordPress
+ */
+async function sendToWordPress(postThemeId: string, websiteId: string, token: string) {
+  console.log('Sending post to WordPress:', postThemeId);
+  
+  const wpResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/wordpress-posts', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      post_theme_id: postThemeId,
+      action: 'create',
+      status: 'draft', // Will be overridden by WordPress settings
+      website_id: websiteId
+    })
+  });
+  
+  if (!wpResponse.ok) {
+    const errorText = await wpResponse.text();
+    console.error('WordPress publishing failed:', {
+      status: wpResponse.status,
+      statusText: wpResponse.statusText,
+      error: errorText
+    });
+    throw new Error(`Failed to send post to WordPress: ${wpResponse.status} ${wpResponse.statusText}`);
+  }
+  
+  const wpResult = await wpResponse.json();
+  console.log('WordPress publishing successful:', {
+    postId: wpResult.post?.id,
+    postUrl: wpResult.post?.link,
+    status: wpResult.post?.status
+  });
+  
+  return wpResult;
+}
+
+/**
+ * Updates the post theme with the WordPress publishing results
+ */
+async function updatePostThemeWithResults(
+  supabaseClient: any, 
+  postThemeId: string, 
+  wpResult: any, 
+  imageUrl: string | null
+) {
+  console.log('Updating post theme with results:', {
+    postThemeId,
+    wpPostId: wpResult.post.id,
+    hasImage: !!imageUrl
+  });
+  
+  const { error: updateError } = await supabaseClient
+    .from('post_themes')
+    .update({
+      status: 'published',
+      wp_sent_date: new Date().toISOString(),
+      wp_post_id: wpResult.post.id,
+      wp_post_url: wpResult.post.link,
+      wp_image_url: imageUrl
+    })
+    .eq('id', postThemeId);
+  
+  if (updateError) {
+    console.error('Error updating post theme with results:', updateError);
+  } else {
+    console.log('Successfully updated post theme with WordPress details');
+  }
+  
+  return !updateError;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -97,267 +413,180 @@ serve(async (req) => {
       );
     }
 
-    // Continue with existing processing logic for queue jobs
-    // Get the post theme details from the database
-    console.log('Fetching post theme from database...');
-    console.log('Using Supabase URL:', Deno.env.get('SUPABASE_URL'));
-    console.log('Post theme ID being queried:', postThemeId);
+    // ===== QUEUE PROCESSING LOGIC =====
+    // This section runs when processing a job from the queue
     
-    // First check if the post theme exists
-    console.log('Executing existence check query...');
-    const { count, error: countError } = await supabaseClient
-      .from('post_themes')
-      .select('id', { count: 'exact', head: true })
-      .eq('id', postThemeId);
-
-    if (countError) {
-      console.error('Error checking post theme existence:', countError);
-      console.error('Error details:', {
-        code: countError.code,
-        message: countError.message,
-        details: countError.details,
-        hint: countError.hint
-      });
-      throw new Error(`Failed to check post theme existence: ${countError.message}`);
-    }
-
-    console.log('Post theme count:', count);
-
-    if (count === 0) {
-      console.log('No post theme found with ID:', postThemeId);
-      throw new Error(`Post theme not found with ID: ${postThemeId}`);
-    }
-
-    // Now fetch the actual post theme with all required fields
-    console.log('Executing full post theme query...');
-    const { data: postTheme, error: postThemeError } = await supabaseClient
-      .from('post_themes')
-      .select(`
-        id,
-        website_id,
-        subject_matter,
-        keywords,
-        status,
-        scheduled_date,
-        post_content,
-        image,
-        wp_post_id,
-        wp_post_url,
-        wp_sent_date,
-        wp_image_url
-      `)
-      .eq('id', postThemeId)
-      .single();
-
-    if (postThemeError) {
-      console.error('Database error fetching post theme:', postThemeError);
-      console.error('Error details:', {
-        code: postThemeError.code,
-        message: postThemeError.message,
-        details: postThemeError.details,
-        hint: postThemeError.hint
-      });
-      throw new Error(`Failed to fetch post theme from database: ${postThemeError.message}`);
-    }
-
-    if (!postTheme) {
-      console.log('No post theme data returned from full query');
-      throw new Error(`Post theme not found with ID: ${postThemeId}`);
-    }
-
-    console.log('Successfully fetched post theme:', {
+    console.log('Starting processing for post theme ID:', postThemeId);
+    
+    // Step 1: Fetch the most recent post theme data
+    const postTheme = await getPostTheme(supabaseClient, postThemeId);
+    console.log('Retrieved post theme:', {
       id: postTheme.id,
-      website_id: postTheme.website_id,
-      status: postTheme.status,
-      subject_matter: postTheme.subject_matter,
-      has_content: !!postTheme.post_content,
-      has_image: !!postTheme.image
+      subject: postTheme.subject_matter,
+      hasContent: !!postTheme.post_content,
+      hasImage: !!postTheme.image
     });
-
-    // Get website settings
-    console.log('Fetching website settings...');
-    const { data: website, error: websiteError } = await supabaseClient
-      .from('websites')
-      .select('*')
-      .eq('id', postTheme.website_id)
-      .single();
-
-    if (websiteError) {
-      console.error('Database error fetching website:', websiteError);
-      throw new Error(`Failed to fetch website settings: ${websiteError.message}`);
-    }
-
-    if (!website) {
-      throw new Error(`Website not found with ID: ${postTheme.website_id}`);
-    }
-
-    // Get WordPress settings
-    console.log('Fetching WordPress settings...');
-    const { data: wpSettings, error: wpError } = await supabaseClient
-      .from('wordpress_settings')
-      .select('*')
-      .eq('website_id', postTheme.website_id)
-      .single();
-
-    if (wpError) {
-      console.error('Database error fetching WordPress settings:', wpError);
-      throw new Error(`Failed to fetch WordPress settings: ${wpError.message}`);
-    }
-
-    if (!wpSettings) {
-      throw new Error(`WordPress settings not found for website ID: ${postTheme.website_id}`);
-    }
-
-    // Step 1: Generate content
-    console.log('Generating content for post:', postThemeId);
-    const contentResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v2', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ postThemeId })
+    
+    // Step 2: Fetch website settings
+    const website = await getWebsiteSettings(supabaseClient, postTheme.website_id);
+    
+    // Step 3: Fetch WordPress settings
+    const wpSettings = await getWordPressSettings(supabaseClient, postTheme.website_id);
+    console.log('WordPress settings retrieved:', {
+      url: wpSettings.wp_url,
+      hasCredentials: !!wpSettings.wp_username && !!wpSettings.wp_application_password,
+      publishStatus: wpSettings.publish_status || 'draft'
     });
-
-    if (!contentResponse.ok) {
-      const errorText = await contentResponse.text();
-      console.error('Content generation failed:', {
-        status: contentResponse.status,
-        statusText: contentResponse.statusText,
-        error: errorText
-      });
-      throw new Error(`Failed to generate content: ${contentResponse.status} ${contentResponse.statusText}`);
-    }
-
-    const contentResult = await contentResponse.json();
-    console.log('Content generation successful:', {
-      postThemeId,
-      hasContent: !!contentResult.content,
-      contentLength: contentResult.content?.length
-    });
-
-    // Step 2: Generate image if enabled
-    let imageUrl = null;
-    if (website.enable_ai_image_generation) {
-      console.log('Generating image for post:', postThemeId);
-      try {
-        const imageResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/image-trigger', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            postId: postThemeId,
-            websiteId: postTheme.website_id
-          })
+    
+    // Step 4: Generate content if not already generated
+    if (!postTheme.post_content) {
+      console.log('No content found - generating content first');
+      await generateContent(postThemeId, token);
+      
+      // Re-fetch post theme to get the updated content
+      const contentUpdatedTheme = await getPostTheme(supabaseClient, postThemeId);
+      
+      if (!contentUpdatedTheme.post_content) {
+        throw new Error('Content generation completed but no content was found in the database');
+      }
+      
+      console.log('Content generated successfully, content length:', contentUpdatedTheme.post_content.length);
+      
+      // Add to image generation queue if enabled
+      if (website.enable_ai_image_generation) {
+        console.log('Adding to image generation queue:', {
+          postThemeId,
+          websiteId: website.id
         });
-
-        if (!imageResponse.ok) {
-          const errorText = await imageResponse.text();
-          console.error('Image generation failed:', {
-            status: imageResponse.status,
-            statusText: imageResponse.statusText,
-            error: errorText
-          });
-          // Don't throw here, continue with WordPress publishing
+        
+        const { data: queueJob, error: queueError } = await supabaseClient
+          .from('image_generation_queue')
+          .insert({
+            post_theme_id: postThemeId,
+            website_id: website.id,
+            status: 'pending',
+            user_token: token
+          })
+          .select()
+          .single();
+        
+        if (queueError) {
+          console.error('Failed to add to image generation queue:', queueError);
         } else {
-          const imageResult = await imageResponse.json();
-          console.log('Image trigger response:', imageResult);
+          console.log('Successfully added to image generation queue:', {
+            jobId: queueJob.id,
+            status: queueJob.status
+          });
           
-          if (imageResult.imageUrl) {
-            imageUrl = imageResult.imageUrl;
-            console.log('Image generated successfully:', imageUrl);
-          } else if (imageResult.success) {
-            console.log('Image generation started but not completed yet');
-            // Check if there's an existing image in the post theme
-            const { data: postThemeWithImage } = await supabaseClient
-              .from('post_themes')
-              .select('image')
-              .eq('id', postThemeId)
-              .single();
-            
-            if (postThemeWithImage?.image) {
-              imageUrl = postThemeWithImage.image;
-              console.log('Found existing image:', imageUrl);
+          // Trigger the queue processor
+          const processorResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/process-image-queue', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
             }
-            // Don't wait for completion, continue with WordPress publishing
+          });
+          
+          if (!processorResponse.ok) {
+            console.error('Failed to trigger image queue processor:', await processorResponse.text());
+          } else {
+            console.log('Image queue processor triggered successfully');
           }
         }
-      } catch (imageError) {
-        console.error('Error during image generation:', imageError);
-        // Don't throw here, continue with WordPress publishing
       }
     } else {
-      console.log('AI image generation is not enabled for this website');
+      console.log('Using existing content, length:', postTheme.post_content.length);
     }
-
-    // Step 3: Send to WordPress
-    console.log('Sending post to WordPress:', postThemeId);
-    console.log('WordPress settings:', {
-      wp_url: wpSettings.wp_url,
-      has_username: !!wpSettings.wp_username,
-      has_password: !!wpSettings.wp_application_password,
-      publish_status: wpSettings.publish_status
+    
+    // Step 5: Wait for image generation to complete
+    let imageUrl = postTheme.image;
+    console.log('Initial image check:', {
+      postThemeId,
+      hasExistingImage: !!imageUrl,
+      existingImageUrl: imageUrl || 'none'
     });
-
-    const wpResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/wordpress-posts', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        post_theme_id: postThemeId,
-        action: 'create',
-        status: wpSettings.publish_status || 'draft',
-        website_id: postTheme.website_id
-      })
-    });
-
-    if (!wpResponse.ok) {
-      const errorText = await wpResponse.text();
-      console.error('WordPress publishing failed:', {
-        status: wpResponse.status,
-        statusText: wpResponse.statusText,
-        error: errorText
-      });
-      throw new Error(`Failed to send post to WordPress: ${wpResponse.status} ${wpResponse.statusText}`);
+    
+    if (!imageUrl && website.enable_ai_image_generation) {
+      console.log('Waiting for image generation to complete...');
+      
+      // Poll the image generation queue for status
+      const maxAttempts = 30; // 30 attempts * 2 second delay = 60 seconds max wait
+      let attempts = 0;
+      
+      while (attempts < maxAttempts) {
+        const { data: queueStatus, error: statusError } = await supabaseClient
+          .from('image_generation_queue')
+          .select('status, image_url, error')
+          .eq('post_theme_id', postThemeId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (statusError) {
+          console.error('Error checking image queue status:', statusError);
+          break;
+        }
+        
+        console.log('Image generation status:', {
+          postThemeId,
+          status: queueStatus.status,
+          imageUrl: queueStatus.image_url || 'none',
+          attempt: attempts + 1
+        });
+        
+        if (queueStatus.status === 'completed' && queueStatus.image_url) {
+          imageUrl = queueStatus.image_url;
+          break;
+        }
+        
+        if (queueStatus.status === 'failed') {
+          console.error('Image generation failed:', queueStatus.error);
+          break;
+        }
+        
+        // Wait 2 seconds before next check
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempts++;
+      }
+      
+      if (!imageUrl) {
+        console.log('Image generation did not complete in time, proceeding without image');
+      }
     }
-
-    const wpResult = await wpResponse.json();
-    console.log('WordPress publishing successful:', {
-      postId: wpResult.post?.id,
-      postUrl: wpResult.post?.link,
-      status: wpResult.post?.status
+    
+    // Step 6: Re-fetch the post theme to ensure we have the latest data
+    const updatedPostTheme = await getPostTheme(supabaseClient, postThemeId);
+    console.log('Final post theme data before WordPress publishing:', {
+      postThemeId,
+      hasContent: !!updatedPostTheme.post_content,
+      contentLength: updatedPostTheme.post_content?.length || 0,
+      hasImage: !!updatedPostTheme.image,
+      imageUrl: updatedPostTheme.image || 'none'
     });
-
-    // Update post theme with final status
-    console.log('Updating post theme with WordPress details...');
-    const { error: updateError } = await supabaseClient
-      .from('post_themes')
-      .update({
-        status: 'published',
-        wp_sent_date: new Date().toISOString(),
-        wp_post_id: wpResult.post.id,
-        wp_post_url: wpResult.post.link,
-        wp_image_url: imageUrl // Add the generated image URL if available
-      })
-      .eq('id', postThemeId);
-
-    if (updateError) {
-      console.error('Error updating post theme:', updateError);
-      console.error('Error details:', {
-        code: updateError.code,
-        message: updateError.message,
-        details: updateError.details,
-        hint: updateError.hint
-      });
-      // Don't throw here, as the post was successfully published to WordPress
-    } else {
-      console.log('Successfully updated post theme with WordPress details');
-    }
-
+    
+    // Step 7: Send to WordPress
+    console.log('Sending to WordPress with final data:', {
+      postThemeId,
+      hasImage: !!updatedPostTheme.image,
+      imageUrl: updatedPostTheme.image || 'none',
+      contentLength: updatedPostTheme.post_content?.length || 0
+    });
+    
+    // Log the exact image URL being sent
+    console.log('Image URL being sent to WordPress:', {
+      postThemeId,
+      imageUrl: updatedPostTheme.image,
+      isNull: updatedPostTheme.image === null,
+      isUndefined: updatedPostTheme.image === undefined,
+      isEmpty: updatedPostTheme.image === ''
+    });
+    
+    const wpResult = await sendToWordPress(postThemeId, updatedPostTheme.website_id, token);
+    
+    // Step 8: Update post theme with WordPress results
+    await updatePostThemeWithResults(supabaseClient, postThemeId, wpResult, updatedPostTheme.image);
+    
+    // Return the successful response
     return new Response(
       JSON.stringify({
         success: true,

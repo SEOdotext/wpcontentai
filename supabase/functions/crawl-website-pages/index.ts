@@ -168,14 +168,14 @@ async function crawlWebsite(baseUrl: string, maxPages = MAX_PAGES): Promise<Arra
 
 serve(async (req) => {
   // CORS headers
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': 'https://websitetexts.com',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   };
 
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers });
+    return new Response("ok", { headers: corsHeaders });
   }
   
   try {
@@ -183,7 +183,7 @@ serve(async (req) => {
     if (req.method !== "POST") {
       return new Response(
         JSON.stringify({ error: "Method not allowed" }),
-        { status: 405, headers: { ...headers, "Content-Type": "application/json" } }
+        { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -194,7 +194,7 @@ serve(async (req) => {
     if (!website_id) {
       return new Response(
         JSON.stringify({ error: "Missing website_id parameter" }),
-        { status: 400, headers: { ...headers, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -220,7 +220,7 @@ serve(async (req) => {
       if (websiteError || !website) {
         return new Response(
           JSON.stringify({ error: websiteError?.message || "Website not found" }),
-          { status: 404, headers: { ...headers, "Content-Type": "application/json" } }
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
@@ -243,7 +243,7 @@ serve(async (req) => {
           website_url: url,
           message: "Could not find any pages on the website."
         }),
-        { status: 200, headers: { ...headers, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -261,7 +261,7 @@ serve(async (req) => {
         crawl_url: url,
         pages: processedPages
       }),
-      { headers: { ...headers, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -269,7 +269,7 @@ serve(async (req) => {
     
     return new Response(
       JSON.stringify({ error: `Internal server error: ${error.message}` }),
-      { status: 500, headers: { ...headers, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 }); 

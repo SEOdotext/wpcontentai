@@ -116,7 +116,7 @@ const makeWordPressApiRequest = async (baseUrl: string, encodedAuth: string) => 
 serve(async (req) => {
   // Set up CORS headers
   const corsHeaders = {
-    'Access-Control-Allow-Origin': '*', // In production, restrict this to your domain
+    'Access-Control-Allow-Origin': 'https://websitetexts.com',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };

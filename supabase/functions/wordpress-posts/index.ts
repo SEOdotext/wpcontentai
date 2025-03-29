@@ -21,15 +21,31 @@ async function uploadImageToWordPress(
   wpPassword: string,
   title: string
 ): Promise<{ url: string; id: number }> {
-  console.log('Uploading image to WordPress media library:', imageUrl);
+  console.log('Starting WordPress image upload process:', {
+    sourceImageUrl: imageUrl,
+    wpUrl,
+    title,
+    hasCredentials: !!wpUsername && !!wpPassword
+  });
   
   // Download the image
   const imageResponse = await fetch(imageUrl);
+  console.log('Image download response:', {
+    status: imageResponse.status,
+    ok: imageResponse.ok,
+    contentType: imageResponse.headers.get('content-type'),
+    contentLength: imageResponse.headers.get('content-length')
+  });
+  
   if (!imageResponse.ok) {
     throw new Error(`Failed to download image: ${imageResponse.status}`);
   }
   
   const imageBlob = await imageResponse.blob();
+  console.log('Image blob created:', {
+    size: imageBlob.size,
+    type: imageBlob.type
+  });
   
   // Create form data for WordPress media upload
   const formData = new FormData();
@@ -37,6 +53,7 @@ async function uploadImageToWordPress(
   formData.append('title', title);
   
   // Upload to WordPress media library
+  console.log('Attempting WordPress media upload...');
   const uploadResponse = await fetch(`${wpUrl}/wp-json/wp/v2/media`, {
     method: 'POST',
     headers: {
@@ -45,13 +62,28 @@ async function uploadImageToWordPress(
     body: formData
   });
   
+  console.log('WordPress media upload response:', {
+    status: uploadResponse.status,
+    ok: uploadResponse.ok,
+    contentType: uploadResponse.headers.get('content-type')
+  });
+  
   if (!uploadResponse.ok) {
     const errorText = await uploadResponse.text();
+    console.error('WordPress media upload failed:', {
+      status: uploadResponse.status,
+      error: errorText
+    });
     throw new Error(`Failed to upload image to WordPress: ${errorText}`);
   }
   
   const uploadData = await uploadResponse.json();
-  console.log('Image uploaded successfully:', uploadData.source_url);
+  console.log('WordPress media upload successful:', {
+    mediaId: uploadData.id,
+    url: uploadData.source_url,
+    title: uploadData.title?.rendered
+  });
+  
   return { url: uploadData.source_url, id: uploadData.id };
 }
 
@@ -175,6 +207,15 @@ serve(async (req) => {
     if (!postTheme.post_content) {
       throw new Error('Post has no content');
     }
+    
+    // Log detailed image information
+    console.log('Post theme data:', {
+      id: post_theme_id,
+      hasImage: !!postTheme.image,
+      imageUrl: postTheme.image || 'No image available',
+      contentLength: postTheme.post_content.length,
+      subject: postTheme.subject_matter
+    });
     
     // Get WordPress settings for this website
     const { data: wpSettings, error: settingsError } = await supabaseClient
