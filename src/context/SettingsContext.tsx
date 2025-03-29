@@ -43,7 +43,7 @@ interface SettingsContextType {
 const defaultSettings = {
   publicationFrequency: 7, // Default to weekly
   writingStyle: 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through.', // Default writing style
-  subjectMatters: ['Technology', 'Business'], // Default subjects
+  subjectMatters: [], // Empty array for default subjects
   wordpressTemplate: `<!-- WordPress Post HTML Structure Example -->
 <article class="post">
 
