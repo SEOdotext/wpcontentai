@@ -509,6 +509,49 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
     }
   };
 
+  /**
+   * Determines the content type based on URL patterns
+   */
+  const determineContentType = (url: string): string => {
+    const urlLower = url.toLowerCase();
+    
+    // Check for post patterns
+    if (urlLower.includes('/post/') || 
+        urlLower.includes('/blog/') || 
+        urlLower.includes('/article/') ||
+        urlLower.includes('/news/')) {
+      return 'post';
+    }
+    
+    // Check for category patterns
+    if (urlLower.includes('/category/')) {
+      return 'category';
+    }
+    
+    // Check for post category patterns
+    if (urlLower.includes('/post-category/') || 
+        urlLower.includes('/blog-category/')) {
+      return 'post_category';
+    }
+    
+    // Check for product patterns
+    if (urlLower.includes('/product/') || 
+        urlLower.includes('/shop/') || 
+        urlLower.includes('/store/')) {
+      return 'product';
+    }
+    
+    // Check for product category patterns
+    if (urlLower.includes('/product-category/') || 
+        urlLower.includes('/shop-category/') || 
+        urlLower.includes('/store-category/')) {
+      return 'product_category';
+    }
+    
+    // Default to page
+    return 'page';
+  };
+
   // Crawl website pages when no sitemap is available
   const crawlWebsitePages = async (websiteId: string, maxPages = 50): Promise<WebsiteContent[]> => {
     try {
@@ -566,7 +609,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         url: page.url,
         title: page.title,
         content: '', // Empty content initially
-        content_type: 'crawled', // This indicates it was sourced from crawling
+        content_type: determineContentType(page.url), // Use URL pattern analysis
         last_fetched: page.last_fetched,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -614,7 +657,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         url: page.url,
         title: page.title || page.url,
         content: page.content || '',
-        content_type: 'crawled',
+        content_type: determineContentType(page.url), // Use URL pattern analysis
         last_fetched: new Date().toISOString(),
         metadata: {},
         is_cornerstone: false // Default to not cornerstone
@@ -853,7 +896,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       console.log(`Importing pages for website ID: ${websiteId}`, options);
       
       // Try sitemap first if not explicitly disabled
-      let pages: { url: string; title?: string; content?: string }[] = [];
+      let pages: { url: string; title?: string; content?: string; content_type?: string }[] = [];
       
       if (options.useSitemap !== false) {
         pages = await fetchSitemapPages(websiteId, options.customSitemapUrl);
@@ -877,7 +920,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         url: page.url,
         title: page.title || page.url,
         content: page.content || '',
-        content_type: options.useSitemap !== false ? 'sitemap' : 'crawled',
+        content_type: page.content_type || 'page', // Use the content type from the source, default to 'page'
         last_fetched: new Date().toISOString(),
         metadata: {},
         is_cornerstone: false // Default to not cornerstone

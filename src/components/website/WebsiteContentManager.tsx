@@ -66,7 +66,6 @@ const WebsiteContentManager = forwardRef<WebsiteContentManagerRef, {
   const { websiteContent, loading: globalLoading, error, fetchWebsiteContent, setCornerstone } = useWebsiteContent();
   const { currentWebsite } = useWebsites();
 
-  const [activeTab, setActiveTab] = useState<string>('all');
   const [settingCornerstone, setSettingCornerstone] = useState<string | null>(null);
   const [showCornerstoneOnly, setShowCornerstoneOnly] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -115,10 +114,7 @@ const WebsiteContentManager = forwardRef<WebsiteContentManagerRef, {
     // First apply the cornerstone filter
     if (showCornerstoneOnly && !content.is_cornerstone) return false;
     
-    // Then apply the tab filter
-    if (activeTab !== 'all' && content.type !== activeTab) return false;
-    
-    // Finally apply the search filter
+    // Then apply the search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       return content.title.toLowerCase().includes(searchLower) || 
@@ -279,18 +275,31 @@ const WebsiteContentManager = forwardRef<WebsiteContentManagerRef, {
     }
   }));
 
+  const getContentTypeLabel = (type: string) => {
+    switch (type) {
+      case 'page':
+        return 'Page';
+      case 'post':
+        return 'Post';
+      case 'category':
+        return 'Category';
+      case 'post_category':
+        return 'Post Category';
+      case 'product':
+        return 'Product';
+      case 'product_category':
+        return 'Product Category';
+      case 'sitemap':
+        return 'Sitemap';
+      default:
+        return type.charAt(0).toUpperCase() + type.slice(1);
+    }
+  };
+
   return (
     <div className="w-full">
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-4">
-          <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="page">Pages</TabsTrigger>
-              <TabsTrigger value="post">Posts</TabsTrigger>
-              <TabsTrigger value="custom">Custom</TabsTrigger>
-            </TabsList>
-          </Tabs>
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -333,106 +342,90 @@ const WebsiteContentManager = forwardRef<WebsiteContentManagerRef, {
       </div>
               
       {loading ? (
-        <div className="flex justify-center items-center py-4">
-          <Loader2 className="h-8 w-8 animate-spin" />
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       ) : error ? (
-        <div className="text-center py-4 text-red-500">
-          <p>Error: {error}</p>
-        </div>
+        <div className="text-center text-red-500">{error}</div>
       ) : filteredContent.length === 0 ? (
-        <EmptyState 
-          title="No Content Found"
-          description={
-            showCornerstoneOnly
-              ? "No key content found. Mark some pages as key content to see them here."
-              : "Import your website pages to get started with content management."
-          }
-          icon={showCornerstoneOnly ? <Star className="h-6 w-6" /> : <Download className="h-6 w-6" />}
-          actionLabel={showCornerstoneOnly ? "Show All Content" : "Import Pages"}
-          onAction={showCornerstoneOnly 
-            ? () => setShowCornerstoneOnly(false) 
-            : onImportClick || (() => {
-                // If no import click handler provided, just refresh content
-                if (currentWebsite?.id) {
-                  console.log('No import handler provided, refreshing content for website:', currentWebsite.id);
-                  setLocalLoading(true);
-                  fetchWebsiteContent(currentWebsite.id)
-                    .finally(() => setLocalLoading(false));
-                }
-              })
-          }
+        <EmptyState
+          icon={<FileText className="h-6 w-6" />}
+          title="No content found"
+          description="Import your website content to get started"
+          onAction={onImportClick || (() => {
+            if (currentWebsite?.id) {
+              console.log('No import handler provided, refreshing content for website:', currentWebsite.id);
+              setLocalLoading(true);
+              fetchWebsiteContent(currentWebsite.id)
+                .finally(() => setLocalLoading(false));
+            }
+          })}
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="font-semibold">Title</TableHead>
-              <TableHead className="font-semibold">URL</TableHead>
-              <TableHead className="font-semibold">Type</TableHead>
-              <TableHead className="font-semibold">Last Updated</TableHead>
-              <TableHead className="font-semibold text-center">Key Content</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredContent.map((content) => (
-              <TableRow key={content.id} className={content.is_cornerstone ? "bg-green-50" : ""}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setSelectedContent(content)}
-                      className={cn(
-                        "text-left hover:text-blue-600 transition-colors",
-                        content.content ? "cursor-pointer" : "cursor-not-allowed opacity-80"
-                      )}
-                      disabled={!content.content}
-                      title={content.content ? "Click to view content" : "No content available"}
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>URL</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Last Updated</TableHead>
+                <TableHead className="w-[100px]">Key Content</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredContent.map((content) => (
+                <TableRow key={content.id}>
+                  <TableCell className="font-medium">{content.title}</TableCell>
+                  <TableCell>
+                    <a 
+                      href={content.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline"
                     >
-                      {content.title}
-                    </button>
-                    {content.is_cornerstone && (
-                      <Badge variant="outline" className="ml-2 bg-green-50 text-green-700 border-green-200 text-xs">
-                        Key Content
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="truncate max-w-[200px]">
-                  <a href={content.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                    {content.url}
-                  </a>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={content.type === 'page' ? 'default' : content.type === 'post' ? 'secondary' : 'outline'}>
-                    {content.type}
-                  </Badge>
-                </TableCell>
-                <TableCell>{new Date(content.updated_at).toLocaleDateString()}</TableCell>
-                <TableCell>
-                  <div className="flex justify-center">
+                      {content.url}
+                    </a>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {getContentTypeLabel(content.content_type)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{new Date(content.last_fetched).toLocaleDateString()}</TableCell>
+                  <TableCell>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <VisibleSwitch
-                            checked={content.is_cornerstone}
-                            onCheckedChange={() => handleSetCornerstone(content.id, content.is_cornerstone)}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleSetCornerstone(content.id, content.is_cornerstone)}
                             disabled={settingCornerstone === content.id}
-                            className={settingCornerstone === content.id ? "opacity-50" : ""}
-                          />
+                            className={cn(
+                              "h-8 w-8 p-0",
+                              content.is_cornerstone && "text-yellow-500 hover:text-yellow-600"
+                            )}
+                          >
+                            <Star className={cn(
+                              "h-4 w-4",
+                              content.is_cornerstone ? "fill-current" : "fill-none"
+                            )} />
+                          </Button>
                         </TooltipTrigger>
-                        <TooltipContent sideOffset={5} side="left">
+                        <TooltipContent>
                           {content.is_cornerstone 
-                            ? "Click to remove from key content" 
-                            : "Click to mark as key content"}
+                            ? "Remove from key content" 
+                            : "Mark as key content"}
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {selectedContent && (
@@ -487,7 +480,7 @@ const WebsiteContentManager = forwardRef<WebsiteContentManagerRef, {
                       <p className="text-sm text-muted-foreground mt-1">{suggestion.reason}</p>
                     </div>
                     <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                      {page.type}
+                      {page.content_type ? getContentTypeLabel(page.content_type) : page.type}
                     </Badge>
                   </div>
                 );

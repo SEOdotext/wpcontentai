@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS website_content (
   url TEXT NOT NULL,
   title TEXT,
   content TEXT NOT NULL,
-  content_type TEXT NOT NULL, -- 'page', 'post', 'sitemap', etc.
+  content_type TEXT NOT NULL CHECK (content_type IN ('page', 'post', 'category', 'post_category', 'product', 'product_category', 'sitemap')),
   last_fetched TIMESTAMP WITH TIME ZONE DEFAULT now(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
