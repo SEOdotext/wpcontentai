@@ -287,67 +287,8 @@ export const fetchWebsiteContent = async (url: string, websiteId: string): Promi
       return combinedContent;
     }
     
-    // If still no content, fall back to mock content
-    console.warn('⚠️ No content found in database, using fallback mock content!');
-    
-    // Extract domain for domain-specific content
-    const domain = url.replace(/https?:\/\//, '').split('.')[0].toLowerCase();
-    console.log(`Extracted domain for fallback content: ${domain}`);
-    
-    let mockContent = '';
-    
-    // Domain-specific content fallbacks
-    if (domain === 'workforceu') {
-      console.log('Using WorkForceEU specific mock content');
-      mockContent = `
-        WorkForceEU is a leading platform for workforce management and HR solutions in Europe.
-        We provide comprehensive services for recruitment, talent management, and workforce optimization.
-        Our expertise includes temporary staffing, permanent placement, and workforce consulting.
-        We help businesses find the right talent and manage their workforce efficiently.
-        Topics include recruitment strategies, HR management, talent acquisition, and workforce planning.
-        We specialize in providing flexible staffing solutions for businesses of all sizes.
-        Our workforce consultants have deep expertise in European labor regulations and best practices.
-        Working with WorkForceEU means accessing a wide network of pre-vetted talent.
-      `;
-    } else if (domain === 'predicthire') {
-      console.log('Using PredictHire specific mock content');
-      mockContent = `
-        PredictHire is an AI-powered recruitment platform that helps businesses make better hiring decisions.
-        Our technology uses predictive analytics to identify the best candidates for your organization.
-        We offer solutions for candidate screening, assessment, and selection.
-        Our platform reduces bias in the hiring process and improves the quality of hires.
-        Topics include AI in recruitment, candidate experience, hiring efficiency, and talent analytics.
-      `;
-    } else if (url.includes('wordpress')) {
-      console.log('Using WordPress specific mock content');
-      mockContent = `
-        This is a website about WordPress content management.
-        We provide tips and guides for optimizing your WordPress site.
-        Topics include SEO, content marketing, plugin recommendations, and performance optimization.
-        Our goal is to help you create a better WordPress website with engaging content.
-        WordPress is a powerful platform for building websites and blogs.
-        With the right plugins and themes, you can create a professional-looking site without coding.
-        Content marketing is essential for driving traffic to your WordPress site.
-        SEO optimization helps your WordPress content rank higher in search results.
-      `;
-    } else {
-      console.log(`Using generic mock content for domain: ${domain}`);
-      mockContent = `
-        This is a website about ${domain} and related topics.
-        We provide valuable information, resources, and services in this field.
-        Our content covers best practices, industry trends, and practical advice.
-        Topics include digital marketing, content strategy, SEO, and online presence optimization.
-        Our goal is to help you succeed in the digital landscape with expert guidance.
-        Web development trends change rapidly, and we keep you updated on the latest technologies.
-        Content creation is a key component of any successful digital marketing strategy.
-        SEO best practices help ensure your content reaches your target audience.
-      `;
-    }
-    
-    console.log(`Generated ${mockContent.length} characters of mock content for ${domain}`);
-    console.log('Mock content preview:', mockContent.substring(0, 100).trim() + '...');
-    
-    return mockContent;
+    // If no content is found, throw an error
+    throw new Error('No content found in database. Please ensure the website has content before generating posts.');
   } catch (error) {
     console.error('Error fetching website content:', error);
     throw new Error('Failed to fetch website content');
@@ -972,46 +913,18 @@ export const ensureCornerstoneContent = async (websiteId: string, websiteUrl: st
     let mockContent = '';
     let title = '';
     
-    switch (domain) {
-      case 'workforceu':
-        title = 'WorkForceEU - Workforce Management and HR Solutions';
-        mockContent = `
-          WorkForceEU is a leading platform for workforce management and HR solutions in Europe.
-          We provide comprehensive services for recruitment, talent management, and workforce optimization.
-          Our expertise includes temporary staffing, permanent placement, and workforce consulting.
-          We help businesses find the right talent and manage their workforce efficiently.
-          Topics include recruitment strategies, HR management, talent acquisition, and workforce planning.
-          We specialize in providing flexible staffing solutions for businesses of all sizes.
-          Our workforce consultants have deep expertise in European labor regulations and best practices.
-          Working with WorkForceEU means accessing a wide network of pre-vetted talent.
-        `;
-        break;
-      case 'predicthire':
-        title = 'PredictHire - AI-Powered Recruitment Platform';
-        mockContent = `
-          PredictHire is an AI-powered recruitment platform that helps businesses make better hiring decisions.
-          Our technology uses predictive analytics to identify the best candidates for your organization.
-          We offer solutions for candidate screening, assessment, and selection.
-          Our platform reduces bias in the hiring process and improves the quality of hires.
-          Topics include AI in recruitment, candidate experience, hiring efficiency, and talent analytics.
-          PredictHire helps you save time and resources in your recruitment process.
-          Our data-driven approach ensures you find candidates who are the best fit for your organization.
-          We integrate with your existing HR systems to streamline your hiring workflow.
-        `;
-        break;
-      default:
-        title = `${domain.charAt(0).toUpperCase() + domain.slice(1)} - Digital Solutions`;
-        mockContent = `
-          This is a website about ${domain} and related topics.
-          We provide valuable information, resources, and services in this field.
-          Our content covers best practices, industry trends, and practical advice.
-          Topics include digital marketing, content strategy, SEO, and online presence optimization.
-          Our goal is to help you succeed in the digital landscape with expert guidance.
-          We offer personalized solutions tailored to your specific needs and objectives.
-          Our team of experts has years of experience in digital transformation and innovation.
-          Contact us today to learn how we can help you achieve your goals.
-        `;
-    }
+    // Generic title and content
+    title = `${domain.charAt(0).toUpperCase() + domain.slice(1)} - Our Services`;
+    mockContent = `
+      Welcome to our website.
+      We provide valuable information and services.
+      Our team is dedicated to helping our clients.
+      We focus on delivering quality solutions.
+      Our expertise helps businesses grow.
+      We understand our clients' needs.
+      Our services are tailored to each client.
+      We build lasting relationships with our clients.
+    `;
     
     // Insert cornerstone content
     const { error: insertError } = await supabase
