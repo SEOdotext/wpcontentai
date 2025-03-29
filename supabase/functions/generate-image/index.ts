@@ -7,6 +7,27 @@ interface GenerateImageParams {
   websiteId: string;
 }
 
+// Get allowed origins from environment variables
+const ALLOWED_ORIGINS = {
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://websitetexts.com'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.websitetexts.com', 'http://localhost:8080']
+};
+
+// Function to determine if origin is allowed
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  
+  // In development, allow all origins
+  if (Deno.env.get('ENVIRONMENT') === 'development') return true;
+  
+  // Check against allowed origins based on environment
+  const allowedOrigins = Deno.env.get('ENVIRONMENT') === 'production' 
+    ? ALLOWED_ORIGINS.production 
+    : ALLOWED_ORIGINS.staging;
+    
+  return allowedOrigins.includes(origin);
+}
+
 // Function to create a safe prompt that won't exceed OpenAI's limits
 function createSafePrompt(content: string): string {
   // Extract a title if possible (first line or first sentence)
@@ -66,10 +87,21 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout 
 }
 
 serve(async (req) => {
+  // Get the origin from the request
+  const origin = req.headers.get('origin');
+  
+  // Set CORS headers based on origin
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400'
+  };
+
   // Basic OPTIONS handling without unnecessary CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { 
-      headers: { 'Content-Type': 'application/json' }
+      headers: corsHeaders
     });
   }
 
@@ -416,7 +448,10 @@ serve(async (req) => {
         imageUrl: publicUrl,
       }),
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
         status: 200,
       }
     );
@@ -428,7 +463,10 @@ serve(async (req) => {
         error: error instanceof Error ? error.message : 'Unknown error occurred',
       }),
       {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
         status: 400,
       }
     );

@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useWebsites } from '@/context/WebsitesContext';
 import { useWebsiteContent } from '@/context/WebsiteContentContext';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
-import { Map, Download, Loader2, Link, Search, FileText } from 'lucide-react';
+import { Map, Download, Loader2, Link, Search, FileText, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/EmptyState';
 import { SidebarProvider } from '@/components/ui/sidebar';
-import WebsiteContentManager from '@/components/website/WebsiteContentManager';
+import WebsiteContentManager, { WebsiteContentManagerRef } from '@/components/website/WebsiteContentManager';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from "@/components/ui/badge";
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const WebsiteSitemap = () => {
   const { currentWebsite } = useWebsites();
@@ -26,12 +28,16 @@ const WebsiteSitemap = () => {
   const [customSitemapUrl, setCustomSitemapUrl] = useState('');
   const [maxPages, setMaxPages] = useState(50);
   const [useSitemap, setUseSitemap] = useState(true);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const navigate = useNavigate();
   
   // Check if we have any cornerstone content
   const hasContent = websiteContent.length > 0;
   const hasCornerstoneContent = websiteContent.some(content => content.is_cornerstone);
   const cornerstoneCount = websiteContent.filter(content => content.is_cornerstone).length;
+
+  // Create a ref to access WebsiteContentManager methods
+  const websiteContentManagerRef = useRef<WebsiteContentManagerRef>(null);
 
   const handleImportPages = async () => {
     if (!currentWebsite) return;
@@ -82,6 +88,55 @@ const WebsiteSitemap = () => {
     handleImportPages();
   };
 
+  const handleSuggestKeyContent = async () => {
+    if (!currentWebsite?.id) return;
+    
+    setIsLoadingSuggestions(true);
+    try {
+      console.log('Fetching suggestions for website:', currentWebsite.id);
+      console.log('Available content:', websiteContent);
+      
+      const { data, error } = await supabase.functions.invoke('suggest-key-content', {
+        body: { website_id: currentWebsite.id }
+      });
+      
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw error;
+      }
+      
+      console.log('Received suggestions response:', data);
+      
+      if (data.error) {
+        console.error('Suggestions API error:', data.error);
+        toast.error(data.message || 'Failed to get suggestions');
+        return;
+      }
+      
+      // Validate suggestions
+      const validSuggestions = data.suggestions.filter((suggestion: any) => {
+        const isValid = suggestion && suggestion.id && suggestion.reason;
+        if (!isValid) {
+          console.warn('Invalid suggestion:', suggestion);
+        }
+        return isValid;
+      });
+      
+      console.log('Valid suggestions:', validSuggestions);
+      console.log('Available pages:', data.debug?.available_pages);
+      
+      // Pass suggestions to WebsiteContentManager
+      if (websiteContentManagerRef.current) {
+        websiteContentManagerRef.current.handleSuggestions(validSuggestions);
+      }
+    } catch (error) {
+      console.error('Error getting suggestions:', error);
+      toast.error('Failed to get key content suggestions');
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -110,6 +165,28 @@ const WebsiteSitemap = () => {
                         </>
                       )}
                     </Button>
+                    
+                    {/* Suggest Key Content button */}
+                    {hasContent && (
+                      <Button
+                        variant="outline"
+                        onClick={handleSuggestKeyContent}
+                        disabled={isImporting || isScrapingCornerstone}
+                        className="gap-2"
+                      >
+                        {isLoadingSuggestions ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Getting Suggestions...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-4 w-4" />
+                            Suggest Key Content
+                          </>
+                        )}
+                      </Button>
+                    )}
                     
                     {/* Only show Update Key Content button if we have content */}
                     {hasContent && (
@@ -262,7 +339,10 @@ const WebsiteSitemap = () => {
                   actionLabel="Select Website"
                 />
               ) : (
-                <WebsiteContentManager onImportClick={() => setShowImportDialog(true)} />
+                <WebsiteContentManager 
+                  ref={websiteContentManagerRef}
+                  onImportClick={() => setShowImportDialog(true)} 
+                />
               )}
             </div>
           </main>

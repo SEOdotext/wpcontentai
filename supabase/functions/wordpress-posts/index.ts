@@ -7,6 +7,27 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 console.log("WordPress Posts function started")
 
+// Get allowed origins from environment variables
+const ALLOWED_ORIGINS = {
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://websitetexts.com'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.websitetexts.com', 'http://localhost:8080']
+};
+
+// Function to determine if origin is allowed
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  
+  // In development, allow all origins
+  if (Deno.env.get('ENVIRONMENT') === 'development') return true;
+  
+  // Check against allowed origins based on environment
+  const allowedOrigins = Deno.env.get('ENVIRONMENT') === 'production' 
+    ? ALLOWED_ORIGINS.production 
+    : ALLOWED_ORIGINS.staging;
+    
+  return allowedOrigins.includes(origin);
+}
+
 interface PostRequest {
   website_id: string
   post_theme_id: string
@@ -153,12 +174,17 @@ async function getCategoryIds(
 }
 
 serve(async (req) => {
+  // Get the origin from the request
+  const origin = req.headers.get('origin');
+  
+  // Set CORS headers based on origin
   const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  }
-  
+    'Access-Control-Max-Age': '86400'
+  };
+
   // Handle CORS preflight request
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })

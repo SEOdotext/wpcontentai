@@ -1,9 +1,9 @@
-import React, { useEffect, useState, forwardRef, useCallback } from 'react';
+import React, { useEffect, useState, forwardRef, useCallback, useImperativeHandle } from 'react';
 import { useWebsiteContent, WebsiteContent } from '@/context/WebsiteContentContext';
 import { useWebsites } from '@/context/WebsitesContext';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, Download, FileText } from 'lucide-react';
+import { Loader2, Download, FileText, Search, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,10 @@ import { Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import EmptyState from '@/components/EmptyState';
 import ContentViewModal from './ContentViewModal';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // Custom styled switch component with forwardRef to fix the ref warning
 const VisibleSwitch = forwardRef<HTMLDivElement, {
@@ -45,21 +49,31 @@ const VisibleSwitch = forwardRef<HTMLDivElement, {
 // Add display name to avoid React warnings
 VisibleSwitch.displayName = 'VisibleSwitch';
 
+// Define the ref interface
+export interface WebsiteContentManagerRef {
+  handleSuggestions: (suggestions: Array<{ id: string; reason: string }>) => void;
+}
+
 /**
  * WebsiteContentManager component for managing website content
  * Uses local state to avoid reloading the entire table when toggling cornerstone content
  */
-const WebsiteContentManager: React.FC<{
-  onImportClick?: () => void; // Add a prop for handling import click
-}> = ({
+const WebsiteContentManager = forwardRef<WebsiteContentManagerRef, {
+  onImportClick?: () => void;
+}>(({
   onImportClick
-}) => {
+}, ref) => {
   const { websiteContent, loading: globalLoading, error, fetchWebsiteContent, setCornerstone } = useWebsiteContent();
   const { currentWebsite } = useWebsites();
 
   const [activeTab, setActiveTab] = useState<string>('all');
   const [settingCornerstone, setSettingCornerstone] = useState<string | null>(null);
   const [showCornerstoneOnly, setShowCornerstoneOnly] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showSuggestionsDialog, setShowSuggestionsDialog] = useState(false);
+  const [suggestions, setSuggestions] = useState<Array<{ id: string; reason: string }>>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   
   // Initialize localContent with websiteContent
   const [localContent, setLocalContent] = useState<typeof websiteContent>(websiteContent);
@@ -92,19 +106,26 @@ const WebsiteContentManager: React.FC<{
     }
   }, [currentWebsite?.id, lastLoadedWebsiteId, fetchWebsiteContent]);
 
-  // Update local content when websiteContent changes
+  // Sync localContent with websiteContent when it changes
   useEffect(() => {
-    if (currentWebsite?.id === lastLoadedWebsiteId) {
-      console.log('Updating local content for website:', currentWebsite?.id);
-      setLocalContent(websiteContent);
-    }
-  }, [websiteContent, currentWebsite?.id, lastLoadedWebsiteId]);
+    setLocalContent(websiteContent);
+  }, [websiteContent]);
 
   const filteredContent = localContent.filter(content => {
-    if (showCornerstoneOnly) return content.is_cornerstone;
-    if (activeTab === 'all') return true;
-    if (activeTab === 'cornerstone') return content.is_cornerstone;
-    return content.type === activeTab;
+    // First apply the cornerstone filter
+    if (showCornerstoneOnly && !content.is_cornerstone) return false;
+    
+    // Then apply the tab filter
+    if (activeTab !== 'all' && content.type !== activeTab) return false;
+    
+    // Finally apply the search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      return content.title.toLowerCase().includes(searchLower) || 
+             content.url.toLowerCase().includes(searchLower);
+    }
+    
+    return true;
   });
 
   // Memoize the handleSetCornerstone function to avoid recreating it on every render
@@ -159,44 +180,156 @@ const WebsiteContentManager: React.FC<{
     setShowCornerstoneOnly(value);
   };
 
+  const handleSuggestKeyContent = async () => {
+    if (!currentWebsite?.id) return;
+    
+    setIsLoadingSuggestions(true);
+    try {
+      console.log('Fetching suggestions for website:', currentWebsite.id);
+      console.log('Available content:', localContent);
+      
+      const { data, error } = await supabase.functions.invoke('suggest-key-content', {
+        body: { website_id: currentWebsite.id }
+      });
+      
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw error;
+      }
+      
+      console.log('Received suggestions response:', data);
+      
+      if (data.error) {
+        console.error('Suggestions API error:', data.error);
+        toast.error(data.message || 'Failed to get suggestions');
+        return;
+      }
+      
+      // Validate suggestions
+      const validSuggestions = data.suggestions.filter((suggestion: any) => {
+        const isValid = suggestion && suggestion.id && suggestion.reason;
+        if (!isValid) {
+          console.warn('Invalid suggestion:', suggestion);
+        }
+        return isValid;
+      });
+      
+      console.log('Valid suggestions:', validSuggestions);
+      console.log('Available pages:', data.debug?.available_pages);
+      
+      setSuggestions(validSuggestions);
+      // Initialize all suggestions as selected
+      setSelectedSuggestions(new Set(validSuggestions.map(s => s.id)));
+      setShowSuggestionsDialog(true);
+    } catch (error) {
+      console.error('Error getting suggestions:', error);
+      toast.error('Failed to get key content suggestions');
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const handleApplySuggestions = async () => {
+    if (!currentWebsite?.id) return;
+    
+    try {
+      // Only apply selected suggestions
+      const selectedSuggestionsList = suggestions.filter(s => selectedSuggestions.has(s.id));
+      
+      // Apply selected suggestions
+      for (const suggestion of selectedSuggestionsList) {
+        await setCornerstone(suggestion.id, currentWebsite.id);
+        
+        // Update local content immediately after each suggestion is applied
+        setLocalContent(prevContent => 
+          prevContent.map(content => 
+            content.id === suggestion.id 
+              ? { ...content, is_cornerstone: true }
+              : content
+          )
+        );
+      }
+      
+      toast.success(`Successfully marked ${selectedSuggestionsList.length} pages as key content`);
+      setShowSuggestionsDialog(false);
+    } catch (error) {
+      console.error('Error applying suggestions:', error);
+      toast.error('Failed to apply suggestions');
+    }
+  };
+
+  const toggleSuggestion = (id: string) => {
+    setSelectedSuggestions(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  // Expose methods to parent component
+  useImperativeHandle(ref, () => ({
+    handleSuggestions: (newSuggestions: Array<{ id: string; reason: string }>) => {
+      setSuggestions(newSuggestions);
+      setSelectedSuggestions(new Set(newSuggestions.map(s => s.id)));
+      setShowSuggestionsDialog(true);
+    }
+  }));
+
   return (
     <div className="w-full">
       <div className="flex justify-between items-center mb-4">
-        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="page">Pages</TabsTrigger>
-            <TabsTrigger value="post">Posts</TabsTrigger>
-            <TabsTrigger value="custom">Custom</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        {localContent.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-700">Show key content only</span>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex justify-center">
-                    <VisibleSwitch
-                      checked={showCornerstoneOnly}
-                      onCheckedChange={toggleCornerstoneOnly}
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  {showCornerstoneOnly 
-                    ? "Currently showing only key content" 
-                    : "Toggle to show only key content"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {cornerstoneContentCount > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5">
-                {cornerstoneContentCount}
-              </Badge>
-            )}
+        <div className="flex items-center gap-4">
+          <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab}>
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="page">Pages</TabsTrigger>
+              <TabsTrigger value="post">Posts</TabsTrigger>
+              <TabsTrigger value="custom">Custom</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search titles or URLs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 w-[300px]"
+            />
           </div>
-        )}
+        </div>
+        <div className="flex items-center gap-4">
+          {localContent.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Show key content only</span>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex justify-center">
+                      <VisibleSwitch
+                        checked={showCornerstoneOnly}
+                        onCheckedChange={toggleCornerstoneOnly}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    {showCornerstoneOnly 
+                      ? "Currently showing only key content" 
+                      : "Toggle to show only key content"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              {cornerstoneContentCount > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5">
+                  {cornerstoneContentCount}
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
       </div>
               
       {loading ? (
@@ -311,8 +444,87 @@ const WebsiteContentManager: React.FC<{
           lastFetched={selectedContent.last_fetched}
         />
       )}
+
+      {/* Key Content Suggestions Dialog */}
+      <Dialog open={showSuggestionsDialog} onOpenChange={setShowSuggestionsDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Suggested Key Content</DialogTitle>
+            <DialogDescription>
+              Select which pages you want to mark as key content. Each suggestion includes a reason why the page is important.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-auto">
+            <div className="space-y-4 py-4">
+              {suggestions.map((suggestion) => {
+                console.log('Processing suggestion:', suggestion);
+                const page = localContent.find(p => p.id === suggestion.id);
+                console.log('Found matching page:', page);
+                if (!page) {
+                  console.log('No matching page found for suggestion:', suggestion);
+                  return null;
+                }
+                
+                return (
+                  <div key={suggestion.id} className="flex items-start gap-4 p-4 rounded-lg border">
+                    <VisibleSwitch
+                      checked={selectedSuggestions.has(suggestion.id)}
+                      onCheckedChange={() => toggleSuggestion(suggestion.id)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-medium">{page.title}</h4>
+                        <a 
+                          href={page.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-blue-500 hover:text-blue-600 hover:underline"
+                        >
+                          ↗
+                        </a>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{suggestion.reason}</p>
+                    </div>
+                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                      {page.type}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <DialogFooter className="mt-4">
+            <div className="flex items-center gap-2 mr-auto">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setSelectedSuggestions(new Set(suggestions.map(s => s.id)))}
+              >
+                Select All
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setSelectedSuggestions(new Set())}
+              >
+                Clear All
+              </Button>
+            </div>
+            <Button variant="outline" onClick={() => setShowSuggestionsDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleApplySuggestions}
+              disabled={selectedSuggestions.size === 0}
+            >
+              Apply Selected ({selectedSuggestions.size})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-};
+});
 
 export default WebsiteContentManager; 

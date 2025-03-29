@@ -3,8 +3,30 @@
 // This enables autocomplete, go to definition, etc.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 console.log("WordPress Proxy function started - v1.0.6")
+
+// Get allowed origins from environment variables
+const ALLOWED_ORIGINS = {
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://websitetexts.com'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.websitetexts.com', 'http://localhost:8080']
+};
+
+// Function to determine if origin is allowed
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  
+  // In development, allow all origins
+  if (Deno.env.get('ENVIRONMENT') === 'development') return true;
+  
+  // Check against allowed origins based on environment
+  const allowedOrigins = Deno.env.get('ENVIRONMENT') === 'production' 
+    ? ALLOWED_ORIGINS.production 
+    : ALLOWED_ORIGINS.staging;
+    
+  return allowedOrigins.includes(origin);
+}
 
 // Try multiple endpoints for WordPress API in case some are restricted
 const makeWordPressApiRequest = async (baseUrl: string, encodedAuth: string) => {
@@ -114,11 +136,15 @@ const makeWordPressApiRequest = async (baseUrl: string, encodedAuth: string) => 
 };
 
 serve(async (req) => {
-  // Set up CORS headers
+  // Get the origin from the request
+  const origin = req.headers.get('origin');
+  
+  // Set CORS headers based on origin
   const corsHeaders = {
-    'Access-Control-Allow-Origin': 'https://websitetexts.com',
+    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400'
   };
   
   // Handle CORS preflight request

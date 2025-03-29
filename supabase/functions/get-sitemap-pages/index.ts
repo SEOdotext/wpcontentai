@@ -15,6 +15,27 @@ const COMMON_SITEMAP_PATHS = [
   '/post-sitemap.xml'
 ];
 
+// Get allowed origins from environment variables
+const ALLOWED_ORIGINS = {
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://websitetexts.com'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.websitetexts.com', 'http://localhost:8080']
+};
+
+// Function to determine if origin is allowed
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  
+  // In development, allow all origins
+  if (Deno.env.get('ENVIRONMENT') === 'development') return true;
+  
+  // Check against allowed origins based on environment
+  const allowedOrigins = Deno.env.get('ENVIRONMENT') === 'production' 
+    ? ALLOWED_ORIGINS.production 
+    : ALLOWED_ORIGINS.staging;
+    
+  return allowedOrigins.includes(origin);
+}
+
 // Function to fetch a URL with error handling
 async function fetchWithTimeout(url: string, timeout = 5000): Promise<Response> {
   const controller = new AbortController();
@@ -159,15 +180,20 @@ function extractTitleFromUrl(url: string): string {
 }
 
 serve(async (req) => {
-  // CORS headers
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  // Get the origin from the request
+  const origin = req.headers.get('origin');
+  
+  // Set CORS headers based on origin
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400'
   };
 
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers });
+    return new Response("ok", { headers: corsHeaders });
   }
   
   try {
@@ -175,7 +201,7 @@ serve(async (req) => {
     if (req.method !== "POST") {
       return new Response(
         JSON.stringify({ error: "Method not allowed" }),
-        { status: 405, headers: { ...headers, "Content-Type": "application/json" } }
+        { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -191,7 +217,7 @@ serve(async (req) => {
     if (!website_id) {
       return new Response(
         JSON.stringify({ error: "Missing website_id parameter" }),
-        { status: 400, headers: { ...headers, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -212,7 +238,7 @@ serve(async (req) => {
       if (websiteError || !website) {
         return new Response(
           JSON.stringify({ error: websiteError?.message || "Website not found" }),
-          { status: 404, headers: { ...headers, "Content-Type": "application/json" } }
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
@@ -270,7 +296,7 @@ serve(async (req) => {
           website_url: url,
           message: "No sitemap found at common paths. Try providing a custom sitemap URL."
         }),
-        { status: 200, headers: { ...headers, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
@@ -336,7 +362,7 @@ serve(async (req) => {
       console.error('Error fetching existing pages:', existingPagesError);
       return new Response(
         JSON.stringify({ error: 'Failed to check existing pages' }),
-        { status: 500, headers: { ...headers, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -365,7 +391,7 @@ serve(async (req) => {
         total_pages: processedPages.length,
         new_pages: newPages.length
       }),
-      { headers: { ...headers, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     
   } catch (error) {
@@ -373,7 +399,7 @@ serve(async (req) => {
     
     return new Response(
       JSON.stringify({ error: `Internal server error: ${error.message}` }),
-      { status: 500, headers: { ...headers, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 }); 

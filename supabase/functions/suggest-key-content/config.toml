@@ -1,0 +1,8 @@
+[global]
+runtime = "deno"
+entrypoint = "index.ts"
+
+[functions.suggest-key-content]
+verify_jwt = true
+memory = 1024
+timeout = 60 

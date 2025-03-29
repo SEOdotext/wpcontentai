@@ -9,6 +9,27 @@ import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts
 // Maximum number of pages to crawl
 const MAX_PAGES = 50;
 
+// Get allowed origins from environment variables
+const ALLOWED_ORIGINS = {
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://websitetexts.com'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.websitetexts.com', 'http://localhost:8080']
+};
+
+// Function to determine if origin is allowed
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  
+  // In development, allow all origins
+  if (Deno.env.get('ENVIRONMENT') === 'development') return true;
+  
+  // Check against allowed origins based on environment
+  const allowedOrigins = Deno.env.get('ENVIRONMENT') === 'production' 
+    ? ALLOWED_ORIGINS.production 
+    : ALLOWED_ORIGINS.staging;
+    
+  return allowedOrigins.includes(origin);
+}
+
 // Function to fetch a URL with error handling
 async function fetchWithTimeout(url: string, timeout = 5000): Promise<Response> {
   const controller = new AbortController();
@@ -167,10 +188,15 @@ async function crawlWebsite(baseUrl: string, maxPages = MAX_PAGES): Promise<Arra
 }
 
 serve(async (req) => {
-  // CORS headers
+  // Get the origin from the request
+  const origin = req.headers.get('origin');
+  
+  // Set CORS headers based on origin
   const corsHeaders = {
-    'Access-Control-Allow-Origin': 'https://websitetexts.com',
+    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400'
   };
 
   // Handle CORS preflight requests
