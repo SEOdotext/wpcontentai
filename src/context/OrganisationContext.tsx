@@ -9,6 +9,16 @@ interface Organisation {
   created_at: string;
 }
 
+interface OrganisationMembership {
+  organisation_id: string;
+  role: string;
+  organisation: {
+    id: string;
+    name: string;
+    created_at: string;
+  };
+}
+
 interface OrganisationContextType {
   organisation: Organisation | null;
   hasOrganisation: boolean;
@@ -50,16 +60,17 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         
         // Get user's organization memberships
         const { data: memberships, error: membershipError } = await supabase
-          .from('organization_memberships')
+          .from('organisation_memberships')
           .select(`
             organisation_id,
             role,
             organisation:organisations (
               id,
-              name
+              name,
+              created_at
             )
           `)
-          .eq('user_id', sessionData.session.user.id);
+          .eq('member_id', sessionData.session.user.id) as { data: OrganisationMembership[] | null, error: any };
         
         if (membershipError) {
           console.error("Error fetching organization memberships:", membershipError);
@@ -76,12 +87,20 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         }
         
         // Set the first organization as the current one
-        const currentOrg = memberships[0].organisation;
+        const currentOrg = {
+          id: memberships[0].organisation.id,
+          name: memberships[0].organisation.name,
+          created_at: memberships[0].organisation.created_at
+        } as Organisation;
         setOrganisation(currentOrg);
         setHasOrganisation(true);
         
         // Store all organizations for later use
-        setOrganizations(memberships.map(m => m.organisation));
+        setOrganizations(memberships.map(m => ({
+          id: m.organisation.id,
+          name: m.organisation.name,
+          created_at: m.organisation.created_at
+        } as Organisation)));
         
       } catch (error) {
         console.error("Error checking organization:", error);
@@ -147,9 +166,9 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       // Add user as admin to the organization
       const { error: membershipError } = await supabase
-        .from('organization_memberships')
+        .from('organisation_memberships')
         .insert({
-          user_id: sessionData.session.user.id,
+          member_id: sessionData.session.user.id,
           organisation_id: orgData.id,
           role: 'admin'
         });
@@ -192,9 +211,9 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       // First verify the user has admin access to this organisation
       const { data: membershipData, error: membershipError } = await supabase
-        .from('organization_memberships')
+        .from('organisation_memberships')
         .select('role')
-        .eq('user_id', sessionData.session.user.id)
+        .eq('member_id', sessionData.session.user.id)
         .eq('organisation_id', id)
         .single();
 

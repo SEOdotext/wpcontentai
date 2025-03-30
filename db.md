@@ -50,6 +50,36 @@
     "data_type": "text"
   },
   {
+    "table_name": "organisation_memberships",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "organisation_memberships",
+    "column_name": "member_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "organisation_memberships",
+    "column_name": "organisation_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "organisation_memberships",
+    "column_name": "role",
+    "data_type": "text"
+  },
+  {
+    "table_name": "organisation_memberships",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "organisation_memberships",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
     "table_name": "organisations",
     "column_name": "id",
     "data_type": "uuid"
@@ -283,11 +313,6 @@
     "table_name": "user_profiles",
     "column_name": "last_name",
     "data_type": "text"
-  },
-  {
-    "table_name": "user_profiles",
-    "column_name": "organisation_id",
-    "data_type": "uuid"
   },
   {
     "table_name": "user_profiles",

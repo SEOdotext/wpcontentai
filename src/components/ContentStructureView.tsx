@@ -12,6 +12,11 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from '@/integrations/supabase/client';
+import { Tables } from '@/types/supabase';
+
+type PostTheme = Tables['post_themes']['Row'] & {
+  categories: { id: string; name: string }[];
+};
 
 interface ContentStructureViewProps {
   className?: string;
@@ -21,17 +26,17 @@ interface TitleSuggestionProps {
   id: string;
   title: string;
   keywords: string[];
+  categories: { id: string; name: string }[];
   selected: boolean;
   onSelect: () => void;
   onRemove: () => void;
-  date: string;
-  onUpdateDate: (newDate: string) => void;
+  date: Date;
+  onUpdateDate: (newDate: Date) => void;
   onLiked: () => void;
   status: 'pending' | 'generated' | 'published';
   onUpdateKeywords: (keywords: string[]) => void;
+  onUpdateCategories: (categories: { id: string; name: string }[]) => void;
   isGeneratingContent: boolean;
-  categories: string[];
-  onUpdateCategories: (categories: string[]) => void;
 }
 
 // Helper function to format titles with proper Danish capitalization
@@ -62,6 +67,13 @@ const formatDanishTitle = (title: string): string => {
   return words.join(' ');
 };
 
+// Default topics to use when generating initial content
+const DEFAULT_TOPICS = [
+  'WordPress Content Management',
+  'SEO Best Practices',
+  'Content Marketing Strategies'
+];
+
 const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }) => {
   const [selectedTitleId, setSelectedTitleId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
@@ -81,9 +93,11 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     addPostTheme,
     updatePostTheme,
     isGeneratingContent,
-    getNextPublicationDate,
-    setPostThemes
+    getNextPublicationDate
   } = usePostThemes();
+  
+  // Add categoriesByTitle state
+  const [categoriesByTitle, setCategoriesByTitle] = useState<{ [title: string]: { id: string; name: string }[] }>({});
   
   // Cleanup on unmount
   useEffect(() => {
@@ -140,13 +154,15 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     // 3. We have a website
     // 4. We have no posts
     // 5. We haven't attempted generation yet
+    // 6. The input is empty (new condition)
     if (
       isInitializing || 
       isGenerating || 
       themesLoading || 
       !currentWebsite?.id || 
       postThemes.length > 0 || 
-      generationAttemptedRef.current
+      generationAttemptedRef.current || 
+      inputValue.trim() !== ''
     ) {
       return;
     }
@@ -155,10 +171,14 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       // Mark that we've attempted generation to prevent loops
       generationAttemptedRef.current = true;
       
-      console.log('No posts found, generating initial content from website content...');
+      console.log('No posts found and input empty, generating initial content...');
       setIsGenerating(true);
       
       try {
+        // Generate 3 posts with default topics
+        const topics = subjectMatters.length > 0 ? subjectMatters.slice(0, 3) : DEFAULT_TOPICS;
+        let successCount = 0;
+        
         // Get a single publication date for all posts
         const publicationDate = getNextPublicationDate();
 
@@ -177,9 +197,9 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           },
           body: JSON.stringify({
             website_id: currentWebsite.id,
-            keywords: [], // No keywords, just use website content
+            keywords: topics,
             writing_style: writingStyle,
-            subject_matters: [] // No subject matters, just use website content
+            subject_matters: topics
           })
         });
 
@@ -198,7 +218,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           addPostTheme({
             website_id: currentWebsite.id,
             subject_matter: title,
-            keywords: result.keywordsByTitle?.[title] || [],
+            keywords: result.keywordsByTitle?.[title] || result.keywords,
             categories: result.categoriesByTitle?.[title] || [],
             status: 'pending',
             scheduled_date: publicationDate.toISOString(),
@@ -236,103 +256,18 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     themesLoading, 
     currentWebsite?.id, 
     postThemes.length, 
+    subjectMatters, 
     writingStyle, 
     addPostTheme, 
     fetchPostThemes,
+    inputValue,
     getNextPublicationDate
   ]);
   
-  // Modify the existing function to handle empty input
+  // Update handleGenerateTitleSuggestions to handle categories
   const handleGenerateTitleSuggestions = async () => {
-    if (!currentWebsite?.id) {
-      toast.error('Please select a website first');
-      return;
-    }
-
-    setIsGenerating(true);
+    if (!currentWebsite?.id || isGenerating) return;
     
-    try {
-      // Get current session for authentication
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData?.session?.access_token) {
-        throw new Error('No access token found');
-      }
-
-      // Call the edge function directly
-      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-post-ideas', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session.access_token}`
-        },
-        body: JSON.stringify({
-          website_id: currentWebsite.id,
-          keywords: inputValue.trim() ? [inputValue] : [], // Use input if provided
-          writing_style: writingStyle,
-          subject_matters: subjectMatters.length > 0 ? subjectMatters : [] // Use subjects if available
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate title suggestions');
-      }
-
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to generate title suggestions');
-      }
-
-      // Get a single publication date for all posts
-      const publicationDate = getNextPublicationDate();
-      console.log('Setting all posts to publish on:', format(publicationDate, 'MMM dd, yyyy'));
-      
-      // Create post themes for each title with the same publication date
-      const creationPromises = result.titles.map(title => 
-        addPostTheme({
-          website_id: currentWebsite.id,
-          subject_matter: title,
-          keywords: result.keywordsByTitle?.[title] || result.keywords || [],
-          categories: result.categoriesByTitle?.[title] || result.categories || [],
-          status: 'pending',
-          scheduled_date: publicationDate.toISOString(),
-          post_content: null,
-          image: null,
-          wp_post_id: null,
-          wp_post_url: null,
-          wp_sent_date: null
-        })
-      );
-      
-      await Promise.all(creationPromises);
-      
-      // Refresh the list of post themes
-      await fetchPostThemes();
-      
-      // Clear the input
-      setInputValue('');
-      
-      toast.success(`${result.titles.length} title suggestions generated for ${format(publicationDate, 'MMM dd, yyyy')}`);
-    } catch (error) {
-      console.error('Error generating title suggestions:', error);
-      toast.error('Failed to generate title suggestions');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // Update the function to generate suggestions using subject matters
-  const handleGenerateFromSubjects = async () => {
-    if (!subjectMatters.length) {
-      toast.error('Please add at least one subject matter first');
-      return;
-    }
-
-    if (!currentWebsite?.id) {
-      toast.error('Please select a website first');
-      return;
-    }
-
     setIsGenerating(true);
     try {
       // Get current session for authentication
@@ -341,7 +276,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         throw new Error('No access token found');
       }
 
-      // Call the edge function directly
+      // Call the edge function
       const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-post-ideas', {
         method: 'POST',
         headers: {
@@ -350,7 +285,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         },
         body: JSON.stringify({
           website_id: currentWebsite.id,
-          keywords: subjectMatters,
+          keywords: inputValue.split(',').map(k => k.trim()).filter(Boolean),
           writing_style: writingStyle,
           subject_matters: subjectMatters
         })
@@ -366,18 +301,18 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         throw new Error(result.error || 'Failed to generate title suggestions');
       }
 
-      const publicationDate = getNextPublicationDate();
-      console.log('Setting all posts to publish on:', format(publicationDate, 'MMM dd, yyyy'));
-      
-      // Create post themes for each title with the same publication date
+      // Store categories by title
+      setCategoriesByTitle(result.categoriesByTitle || {});
+
+      // Create post themes for each title
       const creationPromises = result.titles.map(title => 
         addPostTheme({
           website_id: currentWebsite.id,
           subject_matter: title,
           keywords: result.keywordsByTitle?.[title] || result.keywords,
-          categories: result.categoriesByTitle?.[title] || result.categories,
+          categories: result.categoriesByTitle?.[title] || [],
           status: 'pending',
-          scheduled_date: publicationDate.toISOString(),
+          scheduled_date: getNextPublicationDate().toISOString(),
           post_content: null,
           image: null,
           wp_post_id: null,
@@ -391,13 +326,28 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       // Refresh the list of post themes
       await fetchPostThemes();
       
-      toast.success(`${result.titles.length} title suggestions generated for ${format(publicationDate, 'MMM dd, yyyy')}`);
+      // Clear input
+      setInputValue('');
+      
+      toast.success(`Generated ${result.titles.length} content suggestions for you`);
     } catch (error) {
       console.error('Error generating title suggestions:', error);
       toast.error('Failed to generate title suggestions');
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleUpdateTitleDate = async (id: string, newDate: Date) => {
+    await updatePostTheme(id, { scheduled_date: newDate.toISOString() });
+  };
+
+  const handleUpdateKeywords = async (id: string, keywords: string[]) => {
+    await updatePostTheme(id, { keywords });
+  };
+
+  const handleUpdateCategories = async (id: string, categories: { id: string; name: string }[]) => {
+    await updatePostTheme(id, { categories });
   };
 
   const handleSelectTitle = (id: string) => {
@@ -408,30 +358,11 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     // This will be handled by the TitleSuggestion component
   };
 
-  const handleUpdateTitleDate = (id: string, newDate: Date) => {
-    // Update the local state to reflect the date change
-    // The TitleSuggestion component already updates the database
-    const updatedTitleSuggestions = postThemes.map(theme => {
-      if (theme.id === id) {
-        return {
-          ...theme,
-          scheduled_date: newDate.toISOString()
-        };
-      }
-      return theme;
-    });
-    
-    // Update the state with the modified themes
-    setPostThemes(updatedTitleSuggestions);
-    
-    // Log the update for debugging
-    console.log(`Date updated for post ${id} to ${newDate.toISOString()}`);
-  };
-
   /**
    * Handler called when a title suggestion is approved (liked)
    * This function:
-   * 1. Updates the dates of all other pending posts by one day
+   * 1. Updates the status of the liked post to 'generated'
+   * 2. Increments the dates of all other pending posts by one day
    * 
    * @param id The ID of the post that was liked
    */
@@ -442,6 +373,9 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     if (!likedPost) {
       return; // Post not found
     }
+    
+    // Update the liked post to 'generated' status
+    updatePostTheme(id, { status: 'generated' });
     
     // Find all other pending posts
     const otherPendingPosts = postThemes.filter(theme => 
@@ -457,18 +391,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     
     // Show success toast
     toast.success(`"${likedPost.subject_matter}" has been added to your calendar`);
-  };
-
-  const handleUpdateKeywords = (id: string, keywords: string[]) => {
-    // Use updatePostTheme which handles state updates internally
-    updatePostTheme(id, { keywords });
-    // No need to call fetchPostThemes() as updatePostTheme already updates local state
-  };
-
-  const handleUpdateCategories = (id: string, categories: string[]) => {
-    // Use updatePostTheme which handles state updates internally
-    updatePostTheme(id, { categories });
-    // No need to call fetchPostThemes() as updatePostTheme already updates local state
   };
 
   // Filter suggestions based on view mode
@@ -488,7 +410,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     .map(theme => ({
       id: theme.id,
       title: theme.subject_matter,
-      keywords: theme.keywords,
+      keywords: Array.isArray(theme.keywords) ? theme.keywords : [],
       categories: theme.categories || [],
       date: new Date(theme.scheduled_date),
       status: theme.status as 'pending' | 'generated' | 'published'
@@ -540,12 +462,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       <div className="mb-4">
         <div className="flex gap-2">
           <Input
-            placeholder="Enter keywords (optional)"
+            placeholder="Enter keywords (e.g., wordpress, seo, content marketing)"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             className="flex-1"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !isGenerating && currentWebsite) {
+              if (e.key === 'Enter' && !isGenerating && inputValue.trim() && currentWebsite) {
                 e.preventDefault();
                 handleGenerateTitleSuggestions();
               }
@@ -564,7 +486,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
             ) : (
               <>
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Generate
+                {inputValue.trim() ? 'Generate from Keywords' : 'Generate from Subjects'}
               </>
             )}
           </Button>
@@ -630,11 +552,11 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   onSelect={() => handleSelectTitle(title.id)}
                   onRemove={() => handleRemoveTitle(title.id)}
                   date={title.date}
-                  onUpdateDate={handleUpdateTitleDate}
+                  onUpdateDate={(newDate) => handleUpdateTitleDate(title.id, newDate)}
                   onLiked={() => handleTitleLiked(title.id)}
                   status={title.status}
-                  onUpdateKeywords={handleUpdateKeywords}
-                  onUpdateCategories={handleUpdateCategories}
+                  onUpdateKeywords={(keywords) => handleUpdateKeywords(title.id, keywords)}
+                  onUpdateCategories={(categories) => handleUpdateCategories(title.id, categories)}
                   isGeneratingContent={isGeneratingContent(title.id)}
                 />
               ))}
@@ -658,25 +580,31 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               </AlertDescription>
             </Alert>
           )}
-          {filteredTitleSuggestions.map((title) => (
-            <TitleSuggestion
-              key={title.id}
-              id={title.id}
-              title={title.title}
-              keywords={title.keywords}
-              categories={title.categories}
-              selected={selectedTitleId === title.id}
-              onSelect={() => handleSelectTitle(title.id)}
-              onRemove={() => handleRemoveTitle(title.id)}
-              date={title.date}
-              onUpdateDate={handleUpdateTitleDate}
-              onLiked={() => handleTitleLiked(title.id)}
-              status={title.status}
-              onUpdateKeywords={handleUpdateKeywords}
-              onUpdateCategories={handleUpdateCategories}
-              isGeneratingContent={isGeneratingContent(title.id)}
-            />
-          ))}
+          {postThemes.map((theme) => {
+            const themeCategories = theme.categories || [];
+            const themeKeywords = Array.isArray(theme.keywords) ? theme.keywords : [];
+            const themeDate = theme.scheduled_date ? new Date(theme.scheduled_date) : new Date();
+            
+            return (
+              <TitleSuggestion
+                key={theme.id}
+                id={theme.id}
+                title={theme.subject_matter}
+                keywords={themeKeywords}
+                categories={themeCategories}
+                selected={selectedTitleId === theme.id}
+                onSelect={() => handleSelectTitle(theme.id)}
+                onRemove={() => handleRemoveTitle(theme.id)}
+                date={themeDate}
+                onUpdateDate={(newDate) => handleUpdateTitleDate(theme.id, newDate)}
+                onLiked={() => handleTitleLiked(theme.id)}
+                status={theme.status}
+                onUpdateKeywords={(keywords) => handleUpdateKeywords(theme.id, keywords)}
+                onUpdateCategories={(categories) => handleUpdateCategories(theme.id, categories)}
+                isGeneratingContent={isGeneratingContent(theme.id)}
+              />
+            );
+          })}
         </div>
       ) : (
         <EmptyState

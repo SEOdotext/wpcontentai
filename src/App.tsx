@@ -99,19 +99,19 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
           return;
         }
 
-        const { data: memberships, error } = await supabase
-          .from('organization_memberships')
-          .select('organisation_id')
-          .eq('user_id', session.user.id);
+        const { data: memberships, error: membershipError } = await supabase
+          .from('organisation_memberships')
+          .select('*')
+          .eq('member_id', session.user.id);
 
-        if (error) {
-          console.error("Error checking organization memberships:", error);
+        if (membershipError) {
+          console.error("Error checking organisation memberships:", membershipError);
           setHasOrganisation(false);
         } else {
           setHasOrganisation(memberships && memberships.length > 0);
         }
       } catch (error) {
-        console.error("Error checking organization:", error);
+        console.error("Error checking organisation:", error);
         setHasOrganisation(false);
       } finally {
         setIsChecking(false);

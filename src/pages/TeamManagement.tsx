@@ -81,41 +81,66 @@ const TeamManagement = () => {
   const [activeTab, setActiveTab] = useState<'invite' | 'add'>('add');
 
   // Fetch team members and website access
-  useEffect(() => {
     const fetchTeamData = async () => {
       if (!organisation?.id) return;
       
       setLoading(true);
       try {
+      console.log('Fetching team members for organisation:', organisation.id);
         // Fetch team members for this organization
-        const { data: members, error: membersError } = await supabase
-          .from('organization_memberships')
-          .select(`
-            id,
-            role,
-            created_at,
-            user:user_profiles (
-              id,
-              email,
-              first_name,
-              last_name
-            )
-          `)
+      const { data: memberships, error: membershipsError } = await supabase
+        .from('organisation_memberships')
+        .select('id, role, created_at, member_id')
           .eq('organisation_id', organisation.id);
         
-        if (membersError) throw membersError;
-        
-        // Transform the data to match our interface
-        const typedMembers = members.map(member => ({
-          id: member.user.id,
-          email: member.user.email,
-          first_name: member.user.first_name,
-          last_name: member.user.last_name,
-          role: member.role as 'admin' | 'member',
-          created_at: member.created_at,
+      if (membershipsError) {
+        console.error('Error fetching memberships:', membershipsError);
+        throw membershipsError;
+      }
+      
+      console.log('Found memberships:', memberships);
+
+      if (!memberships || memberships.length === 0) {
+        console.log('No memberships found');
+        setTeamMembers([]);
+        return;
+      }
+
+      // Get user profiles for all members
+      const memberIds = memberships.map(m => m.member_id);
+      console.log('Fetching user profiles for:', memberIds);
+      
+      const { data: userProfiles, error: profilesError } = await supabase
+        .from('user_profiles')
+        .select('id, email, first_name, last_name')
+        .in('id', memberIds);
+      
+      if (profilesError) {
+        console.error('Error fetching user profiles:', profilesError);
+        throw profilesError;
+      }
+      
+      console.log('Found user profiles:', userProfiles);
+      
+      // Combine the data
+      const typedMembers = memberships.map(membership => {
+        const userProfile = userProfiles?.find(profile => profile.id === membership.member_id);
+        if (!userProfile) {
+          console.error('User profile not found for member:', membership.member_id);
+          return null;
+        }
+        return {
+          id: userProfile.id,
+          email: userProfile.email,
+          first_name: userProfile.first_name,
+          last_name: userProfile.last_name,
+          role: membership.role as 'admin' | 'member',
+          created_at: membership.created_at,
           organisation_id: organisation.id
-        }));
+        };
+      }).filter((member): member is TeamMember => member !== null);
         
+      console.log('Final team members:', typedMembers);
         setTeamMembers(typedMembers);
         
         // Check if website_access table exists
@@ -166,6 +191,8 @@ const TeamManagement = () => {
       }
     };
     
+  // Initial data fetch
+  useEffect(() => {
     fetchTeamData();
   }, [organisation?.id]);
 
@@ -175,19 +202,50 @@ const TeamManagement = () => {
     
     setIsInviting(true);
     try {
-      // In a real implementation, you would:
-      // 1. Create a user in auth.users
-      // 2. Then create a user_profile linked to that auth user
-      
-      // For now, we'll show a message explaining the limitation
-      toast.info('In a production environment, this would create a new user and send an invitation email.');
-      toast.info('For now, please create the user manually in the Supabase dashboard.');
+      console.log('Sending invitation for:', inviteEmail.trim());
+      // Handle invitation using the new RPC function
+      const { data, error } = await supabase.rpc('handle_organisation_invitation', {
+        p_email: inviteEmail.trim(),
+        p_organisation_id: organisation.id,
+        p_role: inviteRole,
+        p_website_ids: selectedWebsites
+      });
+
+      if (error) {
+        console.error('Error from handle_organisation_invitation:', error);
+        throw error;
+      }
+
+      console.log('Invitation response:', data);
+
+      if (data.status === 'success') {
+        // Send invitation email
+        const { error: emailError } = await supabase.rpc('send_invitation_email', {
+          p_user_id: data.user_id,
+          p_organisation_id: organisation.id,
+          p_is_new_user: data.is_new_user
+        });
+
+        if (emailError) {
+          console.error('Error sending invitation email:', emailError);
+          // Don't throw here, as the user is already added
+        }
+
+        toast.success(data.message);
       
       // Reset form
       setInviteEmail('');
       setInviteRole('member');
       setSelectedWebsites([]);
       setIsDialogOpen(false);
+        
+        // Refresh team members list
+        console.log('Refreshing team data...');
+        await fetchTeamData();
+      } else {
+        console.error('Invitation failed:', data.message);
+        toast.error(data.message);
+      }
     } catch (error) {
       console.error('Error inviting team member:', error);
       toast.error('Failed to invite team member');
@@ -336,181 +394,37 @@ const TeamManagement = () => {
     
     setIsAddingExistingUser(true);
     try {
-      // Check if user exists
-      const { data: existingUsers, error: userError } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('email', existingUserEmail.trim());
-      
-      if (userError) throw userError;
-      
-      if (!existingUsers || existingUsers.length === 0) {
-        console.log('User not found with email:', existingUserEmail);
-        
-        // Try direct ID lookup if the input looks like a UUID
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        if (uuidRegex.test(existingUserEmail.trim())) {
-          console.log('Input looks like a UUID, trying direct ID lookup');
-          const { data: userById, error: idLookupError } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', existingUserEmail.trim());
-            
-          if (idLookupError) {
-            console.error('Error looking up user by ID:', idLookupError);
-          } else if (userById && userById.length > 0) {
-            console.log('Found user by ID:', userById[0]);
-            const existingUser = userById[0];
-            
-            // Check if user is already in this organization
-            const { data: existingMembership } = await supabase
-              .from('organization_memberships')
-              .select('*')
-              .eq('user_id', existingUser.id)
-              .eq('organisation_id', organisation.id)
-              .single();
-            
-            if (existingMembership) {
-              console.log('User already in organization:', organisation.id);
-              toast.info('This user is already in your organization.');
-              return;
-            }
-            
-            // Add user to organization
-            console.log('Adding user to organization:', organisation.id);
-            const { error: membershipError } = await supabase
-              .from('organization_memberships')
-              .insert({
-                user_id: existingUser.id,
-                organisation_id: organisation.id,
-                role: inviteRole
-              });
-            
-            if (membershipError) {
-              console.error('Error adding user to organization:', membershipError);
-              toast.error('Failed to add user to organization');
-              return;
-            }
-            
-            // If member role, add website access
-            if (inviteRole === 'member' && selectedWebsites.length > 0) {
-              try {
-                console.log('Adding website access for user:', existingUser.id);
-                const accessEntries = selectedWebsites.map(websiteId => ({
-                  user_id: existingUser.id,
-                  website_id: websiteId
-                }));
-                
-                const { error: accessError } = await supabase
-                  .from('website_access')
-                  .insert(accessEntries);
-                
-                if (accessError) {
-                  console.error('Error adding website access:', accessError);
-                  throw accessError;
-                }
-              } catch (error) {
-                console.error('Error adding website access:', error);
-                toast.warning('User added but website access could not be added');
-              }
-            }
-            
-            // Refresh data
-            const updatedUser = {
-              ...existingUser,
-              role: inviteRole as 'admin' | 'member',
-              organisation_id: organisation.id
-            };
-            
-            setTeamMembers(prev => [...prev, updatedUser]);
-            console.log('User successfully added to organization');
-            toast.success('User added to organization successfully');
+      // Handle invitation using the new RPC function
+      const { data, error } = await supabase.rpc('handle_organisation_invitation', {
+        p_email: existingUserEmail.trim(),
+        p_organisation_id: organisation.id,
+        p_role: inviteRole,
+        p_website_ids: selectedWebsites
+      });
+
+      if (error) throw error;
+
+      if (data.status === 'success') {
+        // Send invitation email
+        await supabase.rpc('send_invitation_email', {
+          p_user_id: data.user_id,
+          p_organisation_id: organisation.id,
+          p_is_new_user: data.is_new_user
+        });
+
+        toast.success(data.message);
             
             // Reset form
             setExistingUserEmail('');
             setInviteRole('member');
             setSelectedWebsites([]);
             setIsDialogOpen(false);
-            return;
-          }
-        }
         
-        toast.error('User not found. The user must have already signed up before they can be added.');
-        return;
+        // Refresh team members list
+        fetchTeamData();
+      } else {
+        toast.error(data.message);
       }
-      
-      const existingUser = existingUsers[0];
-      console.log('Found user:', existingUser);
-      
-      // Check if user is already in this organization
-      const { data: existingMembership } = await supabase
-        .from('organization_memberships')
-        .select('*')
-        .eq('user_id', existingUser.id)
-        .eq('organisation_id', organisation.id)
-        .single();
-      
-      if (existingMembership) {
-        console.log('User already in organization:', organisation.id);
-        toast.info('This user is already in your organization.');
-        return;
-      }
-      
-      // Add user to organization
-      console.log('Adding user to organization:', organisation.id);
-      const { error: membershipError } = await supabase
-        .from('organization_memberships')
-        .insert({
-          user_id: existingUser.id,
-          organisation_id: organisation.id,
-          role: inviteRole
-        });
-      
-      if (membershipError) {
-        console.error('Error adding user to organization:', membershipError);
-        toast.error('Failed to add user to organization');
-        return;
-      }
-      
-      // If member role, add website access
-      if (inviteRole === 'member' && selectedWebsites.length > 0) {
-        try {
-          console.log('Adding website access for user:', existingUser.id);
-          const accessEntries = selectedWebsites.map(websiteId => ({
-            user_id: existingUser.id,
-            website_id: websiteId
-          }));
-          
-          const { error: accessError } = await supabase
-            .from('website_access')
-            .insert(accessEntries);
-          
-          if (accessError) {
-            console.error('Error adding website access:', accessError);
-            throw accessError;
-          }
-        } catch (error) {
-          console.error('Error adding website access:', error);
-          toast.warning('User added but website access could not be added');
-        }
-      }
-      
-      // Refresh data
-      const updatedUser = {
-        ...existingUser,
-        role: inviteRole as 'admin' | 'member',
-        organisation_id: organisation.id
-      };
-      
-      setTeamMembers(prev => [...prev, updatedUser]);
-      console.log('User successfully added to organization');
-      toast.success('User added to organization successfully');
-      
-      // Reset form
-      setExistingUserEmail('');
-      setInviteRole('member');
-      setSelectedWebsites([]);
-      setIsDialogOpen(false);
     } catch (error) {
       console.error('Error adding existing user:', error);
       toast.error('Failed to add user to organization');
@@ -545,99 +459,12 @@ const TeamManagement = () => {
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Team Management</DialogTitle>
+                      <DialogTitle>Invite Team Member</DialogTitle>
                       <DialogDescription>
-                        Invite new members or add existing users to your organization.
+                        Invite a new team member to your organization. They will receive an email invitation to join.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
-                      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md mb-4">
-                        <p className="text-yellow-800 font-medium">Development Mode</p>
-                        <p className="text-sm text-yellow-700 mt-1">
-                          In a production environment, inviting new users would create accounts and send email invitations.
-                          For now, you can add existing users to your organization.
-                        </p>
-                      </div>
-                      
-                      <Tabs defaultValue="add" value={activeTab} onValueChange={(value) => setActiveTab(value as 'invite' | 'add')}>
-                        <TabsList className="grid w-full grid-cols-2">
-                          <TabsTrigger value="add">Add Existing User</TabsTrigger>
-                          <TabsTrigger value="invite">Invite New User</TabsTrigger>
-                        </TabsList>
-                        
-                        <TabsContent value="add" className="space-y-4 mt-4">
-                          <div className="space-y-2">
-                            <label htmlFor="existingUserEmail" className="text-sm font-medium">
-                              Email Address
-                            </label>
-                            <Input
-                              id="existingUserEmail"
-                              type="email"
-                              placeholder="colleague@example.com"
-                              value={existingUserEmail}
-                              onChange={(e) => setExistingUserEmail(e.target.value)}
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Enter the email of an existing user to add them to your organization.
-                              Works with users who signed up with email/password or Google authentication.
-                            </p>
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <label htmlFor="role-add" className="text-sm font-medium">
-                              Role
-                            </label>
-                            <Select
-                              value={inviteRole}
-                              onValueChange={(value) => setInviteRole(value as 'admin' | 'member')}
-                            >
-                              <SelectTrigger id="role-add">
-                                <SelectValue placeholder="Select a role" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="admin">Admin (Full Access)</SelectItem>
-                                <SelectItem value="member">Member (Limited Access)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          {inviteRole === 'member' && (
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium">
-                                Website Access
-                              </label>
-                              <div className="border rounded-md p-4 max-h-60 overflow-y-auto space-y-2">
-                                {websites.length === 0 ? (
-                                  <p className="text-sm text-muted-foreground">No websites available</p>
-                                ) : (
-                                  websites.map((website) => (
-                                    <div key={website.id} className="flex items-center space-x-2">
-                                      <Checkbox
-                                        id={`website-add-${website.id}`}
-                                        checked={selectedWebsites.includes(website.id)}
-                                        onCheckedChange={(checked) => {
-                                          if (checked) {
-                                            setSelectedWebsites([...selectedWebsites, website.id]);
-                                          } else {
-                                            setSelectedWebsites(selectedWebsites.filter(id => id !== website.id));
-                                          }
-                                        }}
-                                      />
-                                      <label
-                                        htmlFor={`website-add-${website.id}`}
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                      >
-                                        {website.name}
-                                      </label>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </TabsContent>
-                        
-                        <TabsContent value="invite" className="space-y-4 mt-4">
                           <div className="space-y-2">
                             <label htmlFor="email" className="text-sm font-medium">
                               Email Address
@@ -649,17 +476,20 @@ const TeamManagement = () => {
                               value={inviteEmail}
                               onChange={(e) => setInviteEmail(e.target.value)}
                             />
+                        <p className="text-xs text-muted-foreground">
+                          Enter the email address of the person you want to invite. They will receive an invitation to join your organization.
+                        </p>
                           </div>
                           
                           <div className="space-y-2">
-                            <label htmlFor="role-invite" className="text-sm font-medium">
+                        <label htmlFor="role" className="text-sm font-medium">
                               Role
                             </label>
                             <Select
                               value={inviteRole}
                               onValueChange={(value) => setInviteRole(value as 'admin' | 'member')}
                             >
-                              <SelectTrigger id="role-invite">
+                          <SelectTrigger id="role">
                                 <SelectValue placeholder="Select a role" />
                               </SelectTrigger>
                               <SelectContent>
@@ -681,7 +511,7 @@ const TeamManagement = () => {
                                   websites.map((website) => (
                                     <div key={website.id} className="flex items-center space-x-2">
                                       <Checkbox
-                                        id={`website-invite-${website.id}`}
+                                    id={`website-${website.id}`}
                                         checked={selectedWebsites.includes(website.id)}
                                         onCheckedChange={(checked) => {
                                           if (checked) {
@@ -692,7 +522,7 @@ const TeamManagement = () => {
                                         }}
                                       />
                                       <label
-                                        htmlFor={`website-invite-${website.id}`}
+                                    htmlFor={`website-${website.id}`}
                                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                                       >
                                         {website.name}
@@ -703,25 +533,8 @@ const TeamManagement = () => {
                               </div>
                             </div>
                           )}
-                        </TabsContent>
-                      </Tabs>
                     </div>
                     <DialogFooter>
-                      {activeTab === 'add' ? (
-                        <Button
-                          onClick={handleAddExistingUser}
-                          disabled={isAddingExistingUser || !existingUserEmail.trim()}
-                        >
-                          {isAddingExistingUser ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Adding...
-                            </>
-                          ) : (
-                            'Add to Organization'
-                          )}
-                        </Button>
-                      ) : (
                         <Button
                           onClick={handleInviteTeamMember}
                           disabled={isInviting || !inviteEmail.trim()}
@@ -729,13 +542,12 @@ const TeamManagement = () => {
                           {isInviting ? (
                             <>
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Inviting...
+                            Sending Invitation...
                             </>
                           ) : (
                             'Send Invitation'
                           )}
                         </Button>
-                      )}
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>

@@ -8,26 +8,11 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Get allowed origins from environment variables
-const ALLOWED_ORIGINS = {
-  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://websitetexts.com'],
-  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.websitetexts.com', 'http://localhost:8080']
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
-
-// Function to determine if origin is allowed
-function isAllowedOrigin(origin: string | null): boolean {
-  if (!origin) return false;
-  
-  // In development, allow all origins
-  if (Deno.env.get('ENVIRONMENT') === 'development') return true;
-  
-  // Check against allowed origins based on environment
-  const allowedOrigins = Deno.env.get('ENVIRONMENT') === 'production' 
-    ? ALLOWED_ORIGINS.production 
-    : ALLOWED_ORIGINS.staging;
-    
-  return allowedOrigins.includes(origin);
-}
 
 interface GeneratePostIdeasRequest {
   website_id: string;
@@ -39,6 +24,7 @@ interface GeneratePostIdeasRequest {
 interface PostIdea {
   title: string;
   keywords: string[];
+  description: string;
   categories: string[];
 }
 
@@ -46,11 +32,18 @@ interface GeneratePostIdeasResponse {
   titles: string[];
   keywords: string[];
   keywordsByTitle: { [title: string]: string[] };
+  categoriesByTitle: { [title: string]: string[] };
 }
 
 // Helper function to detect if content is likely in Danish
-function isDanishContent(text: string, websiteLanguage: string = 'en'): boolean {
-  return websiteLanguage === 'da';
+function isDanishContent(text: string): boolean {
+  const danishIndicators = [
+    'dansk', 'personale', 'arbejdskraft', 'udlejning', 'vikarbureau',
+    'rekruttering', 'medarbejdere', 'udenlandsk', 'arbejdsmarked'
+  ];
+  
+  const lowerText = text.toLowerCase();
+  return danishIndicators.some(indicator => lowerText.includes(indicator));
 }
 
 // Helper function to format Danish titles
@@ -91,23 +84,30 @@ function generateFocusedKeywords(title: string, userKeywords: string[], subjectM
     }
   }
   
-  // 2. Add relevant user keywords only if they exist
-  if (userKeywords && userKeywords.length > 0) {
-    const relevantUserKeywords = userKeywords
-      .filter(keyword => lowerTitle.includes(keyword.toLowerCase()))
-      .slice(0, 2);
-    
-    if (relevantUserKeywords.length > 0) {
-      result.push(...relevantUserKeywords);
-    }
+  // 2. Add domain-specific terms
+  const domainTerms = [
+    "personale udlejning", 
+    "udenlandsk arbejdskraft", 
+    "rekruttering", 
+    "vikarbureau",
+    "arbejdsmarked"
+  ];
+  
+  const relevantDomainTerms = domainTerms
+    .filter(term => lowerTitle.includes(term.toLowerCase()))
+    .slice(0, 2);
+  
+  if (relevantDomainTerms.length > 0) {
+    result.push(...relevantDomainTerms);
   }
   
-  // 3. Extract key phrases from the title if no other keywords were found
-  if (result.length === 0) {
-    const titleWords = lowerTitle.split(/\s+/).filter(w => w.length > 3);
-    if (titleWords.length > 0) {
-      result.push(...titleWords.slice(0, 2));
-    }
+  // 3. Add relevant user keywords
+  const relevantUserKeywords = userKeywords
+    .filter(keyword => lowerTitle.includes(keyword.toLowerCase()))
+    .slice(0, 2);
+  
+  if (relevantUserKeywords.length > 0) {
+    result.push(...relevantUserKeywords);
   }
   
   return result;
@@ -116,17 +116,6 @@ function generateFocusedKeywords(title: string, userKeywords: string[], subjectM
 console.log("Hello from Functions!")
 
 serve(async (req) => {
-  // Get the origin from the request
-  const origin = req.headers.get('origin');
-  
-  // Set CORS headers based on origin
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Max-Age': '86400'
-  };
-
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -161,7 +150,7 @@ serve(async (req) => {
     // Get existing post themes
     const { data: existingPosts, error: postsError } = await supabaseClient
       .from('post_themes')
-      .select('subject_matter, keywords, categories')
+      .select('subject_matter, keywords')
       .eq('website_id', website_id)
       .order('created_at', { ascending: false })
       .limit(10);
@@ -169,17 +158,6 @@ serve(async (req) => {
     if (postsError) {
       console.error('Error fetching existing posts:', postsError);
       throw new Error('Failed to fetch existing posts');
-    }
-
-    // Get existing WordPress categories for the website
-    const { data: wpCategories, error: wpCategoriesError } = await supabaseClient
-      .from('wordpress_categories')
-      .select('name, description')
-      .eq('website_id', website_id);
-
-    if (wpCategoriesError) {
-      console.error('Error fetching WordPress categories:', wpCategoriesError);
-      throw new Error('Failed to fetch WordPress categories');
     }
 
     // Get website content from sitemap
@@ -196,16 +174,16 @@ serve(async (req) => {
       throw new Error('Failed to fetch sitemap content');
     }
 
-    // Get website language
-    const { data: website, error: websiteError } = await supabaseClient
-      .from('websites')
-      .select('language')
-      .eq('id', website_id)
-      .single();
+    // Get available categories for the website
+    const { data: categories, error: categoriesError } = await supabaseClient
+      .from('wordpress_categories')
+      .select('id, name, description')
+      .eq('website_id', website_id)
+      .order('name');
 
-    if (websiteError) {
-      console.error('Error fetching website:', websiteError);
-      throw new Error('Failed to fetch website');
+    if (categoriesError) {
+      console.error('Error fetching categories:', categoriesError);
+      throw new Error('Failed to fetch categories');
     }
 
     // Combine all keywords
@@ -215,22 +193,21 @@ serve(async (req) => {
       ...(existingPosts?.flatMap(post => post.keywords || []) || [])
     ];
 
-    // Extract all existing categories from posts
-    const existingCategories = wpCategories?.map(cat => cat.name) || [];
-    
-    // Use only existing categories, no defaults
-    const categoriesToUse = existingCategories;
-
     // Create a prompt that avoids existing content
     const existingTitles = existingPosts?.map(post => post.subject_matter) || [];
     const existingContent = sitemapContent?.map(content => content.title) || [];
+    
+    // Format categories for the prompt
+    const categoriesList = categories?.map(cat => `${cat.name} (${cat.description || 'No description'})`).join('\n') || '';
 
     const prompt = `Generate 5 unique blog post ideas for a website. Consider the following:
 
 Keywords to include: ${allKeywords.join(', ')}
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
 Subject matters: ${subject_matters.join(', ') || pubSettings?.subject_matters?.join(', ') || 'general'}
-Language: ${website?.language || 'en'}
+
+Available categories:
+${categoriesList}
 
 Avoid these existing topics:
 ${existingTitles.join('\n')}
@@ -239,30 +216,27 @@ And these existing cornerstone content:
 ${existingContent.join('\n')}
 
 For each idea, provide:
-1. A compelling title that directly relates to the website's content and purpose
-2. 3-5 relevant keywords that are specific to the website's domain
-3. Assign 1-3 categories from the following existing WordPress categories. Do not create new categories:
-${categoriesToUse.join(', ')}
+1. A compelling title
+2. 3-5 relevant keywords
+3. A brief description (max 100 words)
+4. Up to 5 most relevant categories from the available list above
 
 Important rules:
 1. For Danish titles: Only capitalize the first word and proper nouns
 2. For English titles: Capitalize main words following standard English title case
-3. Keywords should be specific to the website's domain and content
-4. Avoid generic terms and focus on the website's specific niche
-5. Only use the existing categories provided above. Do not create new categories.
-6. Titles should be specific to the website's content and avoid generic marketing terms
-7. Focus on the website's actual products, services, or expertise
-8. DO NOT use generic terms like: digital, technology, marketing, SEO, WordPress, content, online, strategy
-9. DO NOT use categories that are not in the provided list
-10. Keywords must be specific to the website's actual content and purpose
+3. Keywords should be category-oriented and domain-specific
+4. Avoid generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig
+5. Categories must be selected from the provided list only
+6. Each post should have 1-5 relevant categories
 
 Format the response as JSON with this structure:
 {
   "ideas": [
     {
-      "title": "",
-      "keywords": [],
-      "categories": []
+      "title": "string",
+      "keywords": ["string"],
+      "description": "string",
+      "categories": ["string"]
     }
   ]
 }`;
@@ -279,7 +253,7 @@ Format the response as JSON with this structure:
         messages: [
           {
             role: 'system',
-            content: 'You are a professional content strategist who creates unique and engaging blog post ideas. You focus on the specific content and purpose of each website, avoiding generic terms and categories.'
+            content: 'You are a professional content strategist who creates unique and engaging blog post ideas.'
           },
           {
             role: 'user',
@@ -299,45 +273,72 @@ Format the response as JSON with this structure:
     
     // Extract JSON from markdown code blocks if present
     let content = openaiData.choices[0].message.content;
-    
-    // Better handling of potential JSON formatting from OpenAI
-    let jsonData;
-    try {
-      // First, try to parse content directly
-      jsonData = JSON.parse(content);
-    } catch (e) {
-      // If direct parsing fails, try to extract JSON from code blocks
-      try {
-        const jsonMatch = content.match(/```(?:json)?\n([\s\S]*?)\n```/);
-        if (jsonMatch && jsonMatch[1]) {
-          jsonData = JSON.parse(jsonMatch[1]);
-        } else {
-          // If no code block, remove any backticks and try again
-          const cleanedContent = content.replace(/```json|```/g, '').trim();
-          jsonData = JSON.parse(cleanedContent);
-        }
-      } catch (innerError) {
-        console.error('Failed to parse JSON after cleaning:', innerError);
-        throw new Error('Invalid JSON response from OpenAI');
-      }
+    const jsonMatch = content.match(/```(?:json)?\n([\s\S]*?)\n```/);
+    if (jsonMatch) {
+      content = jsonMatch[1];
     }
     
+    // Parse the cleaned content
+    const ideas = JSON.parse(content);
+
     // Process titles for Danish content and create keywordsByTitle
     const processedTitles: string[] = [];
     const keywordsByTitle: { [title: string]: string[] } = {};
-    const categoriesByTitle: { [title: string]: string[] } = {};
     
-    jsonData.ideas.forEach((idea: PostIdea) => {
-      const isDanish = isDanishContent(idea.title, website?.language);
+    ideas.ideas.forEach((idea: PostIdea) => {
+      const isDanish = isDanishContent(idea.title);
       const processedTitle = isDanish ? formatDanishTitle(idea.title) : idea.title;
       processedTitles.push(processedTitle);
       keywordsByTitle[processedTitle] = generateFocusedKeywords(processedTitle, idea.keywords, subject_matters);
-      categoriesByTitle[processedTitle] = idea.categories;
     });
 
     // Use the first title's keywords as the default set
     const defaultKeywords = keywordsByTitle[processedTitles[0]] || [];
-    const defaultCategories = categoriesByTitle[processedTitles[0]] || [];
+
+    // Process the ideas and create post themes with categories
+    const parsedIdeas = JSON.parse(content).ideas;
+
+    // Create post themes and category associations
+    for (const idea of parsedIdeas) {
+      // Create post theme
+      const { data: postTheme, error: postThemeError } = await supabaseClient
+        .from('post_themes')
+        .insert({
+          website_id,
+          subject_matter: idea.title,
+          keywords: idea.keywords,
+          post_content: idea.description,
+          status: 'draft'
+        })
+        .select()
+        .single();
+
+      if (postThemeError) {
+        console.error('Error creating post theme:', postThemeError);
+        continue;
+      }
+
+      // Get category IDs for the selected categories
+      const categoryIds = categories
+        ?.filter(cat => idea.categories.includes(cat.name))
+        .map(cat => cat.id) || [];
+
+      // Create category associations
+      if (categoryIds.length > 0) {
+        const categoryAssociations = categoryIds.map(categoryId => ({
+          post_theme_id: postTheme.id,
+          wordpress_category_id: categoryId
+        }));
+
+        const { error: categoryError } = await supabaseClient
+          .from('post_theme_categories')
+          .insert(categoryAssociations);
+
+        if (categoryError) {
+          console.error('Error creating category associations:', categoryError);
+        }
+      }
+    }
 
     return new Response(
       JSON.stringify({
@@ -345,8 +346,7 @@ Format the response as JSON with this structure:
         titles: processedTitles,
         keywords: defaultKeywords,
         keywordsByTitle,
-        categories: defaultCategories,
-        categoriesByTitle
+        categoriesByTitle: {}
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

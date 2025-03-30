@@ -16,7 +16,7 @@ interface TitleSuggestionProps {
   id: string;
   title: string;
   keywords: string[];
-  categories: string[];
+  categories: { id: string; name: string }[];
   selected?: boolean;
   onSelect?: (id: string) => void;
   onRemove?: (id: string) => void;
@@ -26,7 +26,7 @@ interface TitleSuggestionProps {
   onLiked?: () => void;
   status: 'pending' | 'generated' | 'published';
   onUpdateKeywords?: (id: string, keywords: string[]) => void;
-  onUpdateCategories?: (id: string, categories: string[]) => void;
+  onUpdateCategories?: (id: string, categories: { id: string; name: string }[]) => void;
   isGeneratingContent?: boolean;
 }
 
@@ -205,11 +205,11 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       });
   };
 
-  const handleRemoveCategory = (category: string, e: React.MouseEvent) => {
+  const handleRemoveCategory = (category: { id: string; name: string }, e: React.MouseEvent) => {
     e.stopPropagation();
     
     // Filter out the removed category
-    const updatedCategories = categories.filter(c => c !== category);
+    const updatedCategories = categories.filter(c => c.id !== category.id);
     
     // Update in the database
     updatePostTheme(id, { categories: updatedCategories })
@@ -224,28 +224,6 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       .catch(error => {
         console.error('Error removing category:', error);
         toast.error('Failed to remove category');
-      });
-  };
-
-  const handleAddCategory = (newCategory: string) => {
-    if (!newCategory.trim()) return;
-    
-    // Add the new category
-    const updatedCategories = [...categories, newCategory.trim()];
-    
-    // Update in the database
-    updatePostTheme(id, { categories: updatedCategories })
-      .then(() => {
-        // Only notify parent component about the change after successful update
-        if (onUpdateCategories) {
-          onUpdateCategories(id, updatedCategories);
-        }
-        
-        toast.success('Category added');
-      })
-      .catch(error => {
-        console.error('Error adding category:', error);
-        toast.error('Failed to add category');
       });
   };
 
@@ -276,8 +254,25 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       <div className="flex justify-between items-start mb-2">
         <div>
           <h3 className="font-medium text-base text-balance">{title}</h3>
-          <div className="mt-1">
+          <div className="mt-1 flex items-center gap-2">
             {getStatusBadge()}
+            <div className="flex flex-wrap gap-1">
+              {categories.map((category) => (
+                <Badge 
+                  key={`cat-${category.id}`}
+                  variant="secondary"
+                  className="bg-secondary/50 text-secondary-foreground"
+                >
+                  <span>{category.name}</span>
+                  <button
+                    onClick={(e) => handleRemoveCategory(category, e)}
+                    className="ml-1 hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
           </div>
         </div>
         
@@ -347,58 +342,27 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       </div>
       
       {keywords.length > 0 && (
-        <div className="mt-3">
-          <div className="text-xs font-medium text-muted-foreground mb-1">Keywords</div>
-          <div className="flex flex-wrap gap-1.5">
-            {keywords.map((keyword, index) => (
-              <Badge 
-                key={index}
-                variant="outline" 
-                className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 pr-1"
+        <div className="flex flex-wrap gap-1.5 mt-3">
+          {keywords.map((keyword, index) => (
+            <Badge 
+              key={index}
+              variant="outline" 
+              className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 pr-1"
+            >
+              <span>{keyword}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-3 w-3 rounded-full p-0 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
+                onClick={(e) => handleRemoveKeyword(keyword, e)}
+                disabled={status === 'published'}
               >
-                <span>{keyword}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-3 w-3 rounded-full p-0 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
-                  onClick={(e) => handleRemoveKeyword(keyword, e)}
-                  disabled={status === 'published'}
-                >
-                  <X className="h-2 w-2" />
-                  <span className="sr-only">Remove keyword</span>
-                </Button>
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {categories.length > 0 && (
-        <div className="mt-3">
-          <div className="text-xs font-medium text-muted-foreground mb-1">Categories</div>
-          <div className="flex flex-wrap gap-1.5">
-            {categories.map((category, index) => (
-              <Badge 
-                key={index}
-                variant="outline" 
-                className="bg-purple-50 text-purple-700 border-purple-200 text-xs flex items-center gap-1 pr-1"
-              >
-                <span>{category}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-3 w-3 rounded-full p-0 text-purple-700 hover:bg-purple-200 hover:text-purple-800"
-                  onClick={(e) => handleRemoveCategory(category, e)}
-                  disabled={status === 'published'}
-                >
-                  <X className="h-2 w-2" />
-                  <span className="sr-only">Remove category</span>
-                </Button>
-              </Badge>
-            ))}
-          </div>
+                <X className="h-2 w-2" />
+                <span className="sr-only">Remove keyword</span>
+              </Button>
+            </Badge>
+          ))}
         </div>
       )}
     </div>

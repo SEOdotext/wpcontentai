@@ -11,7 +11,6 @@ interface PostThemeRow {
   website_id: string;
   subject_matter: string;
   keywords: string[];
-  categories: string[];
   status: string;
   scheduled_date: string;
   created_at: string;
@@ -22,6 +21,8 @@ interface PostThemeRow {
   wp_post_url: string | null;
   wp_sent_date: string | null;
   image_generation_error?: string | null;
+  // Categories will be fetched separately through the junction table
+  categories?: { id: string; name: string }[];
 }
 
 export interface PostTheme {
@@ -29,7 +30,6 @@ export interface PostTheme {
   website_id: string;
   subject_matter: string;
   keywords: string[];
-  categories: string[];
   status: 'pending' | 'generated' | 'published';
   scheduled_date: string;
   created_at: string;
@@ -40,6 +40,7 @@ export interface PostTheme {
   wp_post_url: string | null;
   wp_sent_date: string | null;
   image_generation_error?: string | null;
+  categories: { id: string; name: string }[];
 }
 
 interface PublicationSettings {
@@ -160,14 +161,12 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user found');
 
+      // First fetch the post themes
       const { data: themes, error: fetchError } = await supabase
         .from('post_themes')
         .select('*')
         .eq('website_id', currentWebsite.id)
         .order('scheduled_date', { ascending: true });
-
-      console.log('Raw themes from database:', themes);
-      console.log('Current website ID:', currentWebsite.id);
 
       if (fetchError) {
         console.error('Database fetch error:', fetchError);
@@ -176,14 +175,49 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
 
       if (!themes || themes.length === 0) {
         console.log('No themes found for website:', currentWebsite.id);
+        setPostThemes([]);
+        return;
+      }
+
+      // Fetch categories in chunks to avoid URL length limits
+      const CHUNK_SIZE = 100;
+      const categoriesByTheme: Record<string, { id: string; name: string }[]> = {};
+      
+      for (let i = 0; i < themes.length; i += CHUNK_SIZE) {
+        const chunk = themes.slice(i, i + CHUNK_SIZE);
+        const themeIds = chunk.map(t => t.id);
+        
+        const { data: categoryLinks, error: categoryError } = await supabase
+          .from('post_theme_categories')
+          .select(`
+            post_theme_id,
+            wordpress_category:wordpress_category_id (
+              id,
+              name
+            )
+          `)
+          .in('post_theme_id', themeIds);
+
+        if (categoryError) {
+          console.error('Error fetching categories:', categoryError);
+          throw categoryError;
+        }
+
+        // Add categories from this chunk to our map
+        (categoryLinks || []).forEach(link => {
+          const themeId = link.post_theme_id;
+          if (!categoriesByTheme[themeId]) categoriesByTheme[themeId] = [];
+          if (link.wordpress_category) {
+            categoriesByTheme[themeId].push(link.wordpress_category);
+          }
+        });
       }
 
       const typedThemes: PostTheme[] = themes.map((theme: PostThemeRow) => ({
         id: theme.id,
         website_id: theme.website_id,
         subject_matter: theme.subject_matter,
-        keywords: theme.keywords,
-        categories: theme.categories || [],
+        keywords: theme.keywords || [],
         post_content: theme.post_content || null,
         status: theme.status as 'pending' | 'generated' | 'published',
         scheduled_date: theme.scheduled_date,
@@ -194,6 +228,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         wp_post_url: theme.wp_post_url || null,
         wp_sent_date: theme.wp_sent_date || null,
         image_generation_error: theme.image_generation_error || undefined,
+        categories: categoriesByTheme[theme.id] || []
       }));
 
       setPostThemes(typedThemes);
@@ -214,8 +249,11 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     }
 
     try {
+      // Extract categories from the postTheme object
+      const { categories, ...themeData } = postTheme;
+      
       const newTheme = {
-        ...postTheme,
+        ...themeData,
         website_id: currentWebsite.id,
         status: 'pending' as const,
         wp_post_id: null,
@@ -224,6 +262,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         image_generation_error: undefined,
       };
 
+      // Insert the post theme first
       const { data, error } = await supabase
         .from('post_themes')
         .insert(newTheme)
@@ -231,6 +270,20 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         .single();
 
       if (error) throw error;
+
+      // If we have categories, insert them into the junction table
+      if (categories && categories.length > 0) {
+        const { error: categoryError } = await supabase
+          .from('post_theme_categories')
+          .insert(
+            categories.map(cat => ({
+              post_theme_id: data.id,
+              wordpress_category_id: cat.id
+            }))
+          );
+
+        if (categoryError) throw categoryError;
+      }
 
       // Cast the data to PostThemeRow
       const rowData = data as PostThemeRow;
@@ -241,7 +294,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         website_id: rowData.website_id,
         subject_matter: rowData.subject_matter,
         keywords: rowData.keywords,
-        categories: rowData.categories || [],
+        categories: categories || [],
         post_content: rowData.post_content || null,
         status: rowData.status as 'pending' | 'generated' | 'published',
         scheduled_date: rowData.scheduled_date,
@@ -269,74 +322,64 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     try {
       console.log('Updating post theme:', { id, updates });
       
-      // If we're updating the scheduled_date and it's not explicitly provided,
-      // calculate the next publication date
-      if (updates.status === 'generated' && !updates.scheduled_date) {
-        updates.scheduled_date = getNextPublicationDate().toISOString();
-        console.log('Calculated new scheduled date:', updates.scheduled_date);
-      }
+      // Handle category updates separately
+      if (updates.categories) {
+        const { categories, ...otherUpdates } = updates;
+        
+        // Delete existing category links
+        const { error: deleteError } = await supabase
+          .from('post_theme_categories')
+          .delete()
+          .eq('post_theme_id', id);
 
-      // Log the exact update payload being sent to Supabase
-      console.log('Sending update to Supabase:', {
-        id,
-        updates: {
-          ...updates,
-          updated_at: new Date().toISOString()
+        if (deleteError) throw deleteError;
+
+        // Insert new category links
+        if (categories.length > 0) {
+          const { error: insertError } = await supabase
+            .from('post_theme_categories')
+            .insert(
+              categories.map(cat => ({
+                post_theme_id: id,
+                wordpress_category_id: cat.id
+              }))
+            );
+
+          if (insertError) throw insertError;
         }
-      });
 
-      const { error } = await supabase
-        .from('post_themes')
-        .update(updates)
-        .eq('id', id);
+        // Continue with other updates if any
+        if (Object.keys(otherUpdates).length > 0) {
+          const { error } = await supabase
+            .from('post_themes')
+            .update(otherUpdates)
+            .eq('id', id);
 
-      if (error) {
-        console.error('Supabase update error:', error);
-        throw error;
+          if (error) throw error;
+        }
+      } else {
+        // Handle non-category updates
+        const { error } = await supabase
+          .from('post_themes')
+          .update(updates)
+          .eq('id', id);
+
+        if (error) throw error;
       }
 
-      // Log the current state before update
-      console.log('Current post themes state:', postThemes);
+      // Refresh post themes to get updated data
+      await fetchPostThemes();
 
-      // Update local state with all fields from updates
-      setPostThemes(prev => {
-        const newState = prev.map(theme => {
-          if (theme.id === id) {
-            const updatedTheme = {
-              ...theme,
-              ...updates,
-              // Ensure post_content is preserved if not in updates
-              post_content: updates.post_content !== undefined ? updates.post_content : theme.post_content,
-              // Ensure scheduled_date is properly updated
-              scheduled_date: updates.scheduled_date || theme.scheduled_date
-            };
-            console.log('Updating theme in state:', {
-              before: theme,
-              after: updatedTheme,
-              updates
-            });
-            return updatedTheme;
-          }
-          return theme;
-        });
-        console.log('New post themes state:', newState);
-        return newState;
-      });
-      
-      // Only show toast if showToast is true
       if (showToast) {
         toast.success('Post theme updated');
       }
-      
+
       return true;
     } catch (err) {
       console.error('Error updating post theme:', err);
-      
-      // Only show toast if showToast is true
       if (showToast) {
         toast.error('Failed to update post theme');
       }
-      
       return false;
     }
   };
