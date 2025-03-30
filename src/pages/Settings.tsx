@@ -11,7 +11,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { useWordPress } from '@/context/WordPressContext';
 import { usePostThemes } from '@/context/PostThemesContext';
 import { toast } from 'sonner';
-import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap, Link, HelpCircle, Pencil, Sparkles, RefreshCw, Wand2, Trash2, Upload } from 'lucide-react';
+import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap, Link, HelpCircle, Pencil, Sparkles, RefreshCw, Wand2, Trash2, Upload, ExternalLink } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
@@ -172,24 +172,30 @@ const Settings = () => {
             .from('wordpress_settings')
             .select('*')
             .eq('website_id', currentWebsite.id)
-            .single();
+            .limit(1);
           
-          if (response.data) {
-            console.log('Directly fetched settings from database:', response.data);
-            setDirectWpSettings(response.data);
-            setWpUsername(response.data.wp_username || '');
-            setWpPassword(response.data.wp_application_password || '');
+          if (response.data && response.data.length > 0) {
+            console.log('Directly fetched settings from database:', response.data[0]);
+            setDirectWpSettings(response.data[0]);
+            setWpUsername(response.data[0].wp_username || '');
+            setWpPassword(response.data[0].wp_application_password || '');
             console.log('Set fields from direct database query:', {
-              username: response.data.wp_username,
-              passwordLength: response.data.wp_application_password?.length || 0
+              username: response.data[0].wp_username,
+              passwordLength: response.data[0].wp_application_password?.length || 0
             });
-          } else if (response.error) {
+          } else if (response.error && response.error.code !== 'PGRST116') {
             console.error('Error fetching WordPress settings:', response.error);
           } else {
             console.log('No WordPress settings found for this website');
+            setDirectWpSettings(null);
+            setWpUsername('');
+            setWpPassword('');
           }
         } catch (error) {
           console.error('Error fetching WordPress settings:', error);
+          setDirectWpSettings(null);
+          setWpUsername('');
+          setWpPassword('');
         }
       }
     };
@@ -249,6 +255,7 @@ const Settings = () => {
             console.error('Error fetching WordPress settings from DB:', error);
           } else {
             console.log('No WordPress settings found in database for this website');
+            setDirectWpSettings(null);
           }
         } else if (data && data.length > 0) {
           console.log('WordPress settings found in database:', data[0]);
@@ -260,9 +267,12 @@ const Settings = () => {
           if (data[0]?.publish_status) {
             setWpPublishStatus(data[0].publish_status);
           }
+        } else {
+          setDirectWpSettings(null);
         }
       } catch (e) {
         console.error('Exception checking WordPress settings:', e);
+        setDirectWpSettings(null);
       }
     };
     
@@ -283,22 +293,25 @@ const Settings = () => {
             .from('wordpress_settings')
             .select('*')
             .eq('website_id', currentWebsite.id)
-            .single();
+            .limit(1);
             
           if (error) {
             console.error('Error checking WordPress settings:', error);
             setDirectWpSettings(null);
-          } else {
-            console.log('WordPress settings found directly in DB:', data);
-            console.log('WordPress connection state:', data?.is_connected);
+          } else if (data && data.length > 0) {
+            console.log('WordPress settings found directly in DB:', data[0]);
+            console.log('WordPress connection state:', data[0]?.is_connected);
             
             // Store the WordPress settings directly in state
-            setDirectWpSettings(data);
+            setDirectWpSettings(data[0]);
             
             // Set publish status if it exists
-            if (data?.publish_status) {
-              setWpPublishStatus(data.publish_status);
+            if (data[0]?.publish_status) {
+              setWpPublishStatus(data[0].publish_status);
             }
+          } else {
+            console.log('No WordPress settings found');
+            setDirectWpSettings(null);
           }
         } catch (e) {
           console.error('Exception checking WordPress settings:', e);
@@ -551,7 +564,7 @@ const Settings = () => {
           .from('wordpress_settings')
           .select('*')
           .eq('website_id', currentWebsite.id)
-          .single();
+          .limit(1);
           
         if (fetchError && fetchError.code !== 'PGRST116') {
           // Real error (not "no rows returned" error)
@@ -562,7 +575,7 @@ const Settings = () => {
         }
         
         let result;
-        if (existingSettings) {
+        if (existingSettings && existingSettings.length > 0) {
           // Update existing record
           console.log('Updating existing WordPress settings');
           result = await supabase
@@ -570,7 +583,7 @@ const Settings = () => {
             .update(wpSettings)
             .eq('website_id', currentWebsite.id)
             .select()
-            .single();
+            .limit(1);
         } else {
           // Insert new record
           console.log('Inserting new WordPress settings');
@@ -578,7 +591,7 @@ const Settings = () => {
             .from('wordpress_settings')
             .insert(wpSettings)
             .select()
-            .single();
+            .limit(1);
         }
         
         const { data, error } = result;
@@ -588,6 +601,11 @@ const Settings = () => {
           toast.error('Failed to save WordPress settings');
           setConnectionError('Database error: ' + error.message);
           return;
+        }
+        
+        // Update the directWpSettings state with the new data
+        if (data && data.length > 0) {
+          setDirectWpSettings(data[0]);
         }
         
         setShowAuthDialog(false);
@@ -2416,6 +2434,34 @@ const Settings = () => {
                     <li>Copy the generated password <b>exactly as shown</b> - it should look like: xxxx xxxx xxxx xxxx</li>
                     <li>Paste it below along with your WordPress username</li>
                   </ol>
+                  <div className="mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => {
+                        if (currentWebsite?.url) {
+                          const wpUrl = currentWebsite.url.replace(/\/$/, '');
+                          window.open(`${wpUrl}/wp-admin/profile.php#application-passwords-section`, '_blank');
+                        } else {
+                          toast.error('Please enter your WordPress website URL first');
+                        }
+                      }}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Open WordPress Profile
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm">
+                  <p className="font-medium text-yellow-800">Using Security Plugins?</p>
+                  <p className="text-yellow-800 mt-1">
+                    If you're using security plugins like Wordfence, Sucuri, or iThemes Security, you may need to enable Application Passwords in their settings.
+                  </p>
+                  <p className="text-yellow-800 mt-1">
+                    Look for settings like "Application Passwords", "REST API", or "XML-RPC" and make sure they're enabled.
+                  </p>
                 </div>
               </div>
 
@@ -2496,20 +2542,6 @@ const Settings = () => {
                     </p>
                   </div>
                 )}
-                
-                <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm">
-                  <p className="font-medium text-yellow-800">Important Note:</p>
-                  <p className="text-yellow-800 mt-1">
-                    Your WordPress credentials will be stored in our database but <strong>NOT</strong> verified immediately.
-                  </p>
-                  <p className="text-yellow-800 mt-1">
-                    Make sure you enter the correct information to ensure content publishing works later.
-                  </p>
-                  <p className="text-yellow-800 mt-1">
-                    <strong>For local development:</strong> Connection testing will likely fail due to authentication and CORS restrictions. 
-                    This is expected and does not mean your credentials are invalid.
-                  </p>
-                </div>
                 
                 {connectionError && (
                   <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
