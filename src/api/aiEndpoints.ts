@@ -157,8 +157,7 @@ export const fetchWebsiteContent = async (url: string, websiteId?: string): Prom
           This is a website about ${domain} and related topics.
           We provide valuable information, resources, and services in this field.
           Our content covers best practices, industry trends, and practical advice.
-          Topics include digital marketing, content strategy, SEO, and online presence optimization.
-          Our goal is to help you succeed in the digital landscape with expert guidance.
+          Our goal is to help you succeed with expert guidance.
         `;
     }
     
@@ -211,7 +210,6 @@ export const fetchWebsiteContent = async (url: string, websiteId?: string): Prom
         return `
           This is a website about ${url.replace(/https?:\/\//, '').split('.')[0]}.
           We provide tips and guides for optimizing your online presence.
-          Topics include SEO, content marketing, and digital strategy.
           Our goal is to help you create better content and improve your website performance.
         `;
       }
@@ -228,7 +226,6 @@ export const fetchWebsiteContent = async (url: string, websiteId?: string): Prom
       return `
         This is a website about ${url.replace(/https?:\/\//, '').split('.')[0]}.
         We provide tips and guides for optimizing your online presence.
-        Topics include SEO, content marketing, and digital strategy.
         Our goal is to help you create better content and improve your website performance.
       `;
     }
