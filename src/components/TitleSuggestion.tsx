@@ -24,7 +24,7 @@ interface TitleSuggestionProps {
   date: Date;
   onUpdateDate?: (id: string, date: Date) => void;
   onLiked?: () => void;
-  status: 'pending' | 'generated' | 'published';
+  status: 'pending' | 'approved' | 'published';
   onUpdateKeywords?: (id: string, keywords: string[]) => void;
   onUpdateCategories?: (id: string, categories: { id: string; name: string }[]) => void;
   isGeneratingContent?: boolean;
@@ -56,7 +56,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   /**
    * Handles the approval (like) action for a title suggestion
    * This function:
-   * 1. Updates the post status to 'generated'
+   * 1. Updates the post status to 'approved'
    * 2. Sets the proper scheduled date
    * 3. Notifies the parent component about the approval
    */
@@ -82,7 +82,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       
       // Update the post theme with the scheduled date and status
       const updated = await updatePostTheme(id, { 
-        status: 'generated',
+        status: 'approved',
         scheduled_date: scheduledDate.toISOString()
       }, false);
       
@@ -230,8 +230,8 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   // Get status badge color
   const getStatusBadge = () => {
     switch (status) {
-      case 'generated':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Generated</Badge>;
+      case 'approved':
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Approved</Badge>;
       case 'published':
         return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Published</Badge>;
       default:

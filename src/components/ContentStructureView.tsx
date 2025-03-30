@@ -16,6 +16,7 @@ import { Tables } from '@/types/supabase';
 
 type PostTheme = Tables['post_themes']['Row'] & {
   categories: { id: string; name: string }[];
+  status: 'pending' | 'approved' | 'published';
 };
 
 interface ContentStructureViewProps {
@@ -33,7 +34,7 @@ interface TitleSuggestionProps {
   date: Date;
   onUpdateDate: (newDate: Date) => void;
   onLiked: () => void;
-  status: 'pending' | 'generated' | 'published';
+  status: 'pending' | 'approved' | 'published';
   onUpdateKeywords: (keywords: string[]) => void;
   onUpdateCategories: (categories: { id: string; name: string }[]) => void;
   isGeneratingContent: boolean;
@@ -81,7 +82,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   const [websiteContent, setWebsiteContent] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [contentFetchAttempted, setContentFetchAttempted] = useState(false);
-  const [viewMode, setViewMode] = useState<'pending' | 'generated' | 'published'>('pending');
+  const [viewMode, setViewMode] = useState<'pending' | 'approved' | 'published'>('pending');
   const generationAttemptedRef = useRef(false);
   const isMountedRef = useRef(true);
   const { publicationFrequency, subjectMatters, writingStyle } = useSettings();
@@ -93,11 +94,15 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     addPostTheme,
     updatePostTheme,
     isGeneratingContent,
-    getNextPublicationDate
+    getNextPublicationDate,
+    setPostThemes
   } = usePostThemes();
   
   // Add categoriesByTitle state
   const [categoriesByTitle, setCategoriesByTitle] = useState<{ [title: string]: { id: string; name: string }[] }>({});
+  
+  // Add state for furthest future date
+  const [furthestFutureDate, setFurthestFutureDate] = useState<Date>(new Date());
   
   // Cleanup on unmount
   useEffect(() => {
@@ -132,10 +137,10 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         }
       } catch (error) {
         console.error('Error during initialization:', error);
-      } finally {
+        // Set initialization complete even on error to prevent infinite loading
         if (isMountedRef.current) {
           setIsInitializing(false);
-          console.log('Initialization complete');
+          console.log('Initialization complete (with error)');
         }
       }
     };
@@ -167,6 +172,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       return;
     }
     
+    // Auto-apply functionality commented out
+    /*
     const generateInitialPosts = async () => {
       // Mark that we've attempted generation to prevent loops
       generationAttemptedRef.current = true;
@@ -250,6 +257,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     // Use a timeout to avoid immediate generation
     const timer = setTimeout(generateInitialPosts, 500);
     return () => clearTimeout(timer);
+    */
   }, [
     isInitializing, 
     isGenerating,
@@ -264,7 +272,43 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     getNextPublicationDate
   ]);
   
-  // Update handleGenerateTitleSuggestions to handle categories
+  // Update furthest future date when needed
+  useEffect(() => {
+    const updateFurthestDate = async () => {
+      if (!currentWebsite?.id) return;
+      
+      try {
+        // Get the furthest future date from approved and published posts
+        const { data: themesData, error } = await supabase
+          .from('post_themes')
+          .select('scheduled_date')
+          .eq('website_id', currentWebsite.id)
+          .in('status', ['approved', 'published'])
+          .order('scheduled_date', { ascending: false })
+          .limit(1);
+
+        if (error) throw error;
+
+        // If we have a date in approved/published posts, use that as the base
+        if (themesData && themesData.length > 0) {
+          const baseDate = new Date(themesData[0].scheduled_date);
+          // Add the publication frequency to get the next available date
+          const nextDate = addDays(baseDate, publicationFrequency);
+          setFurthestFutureDate(nextDate);
+        } else {
+          // If no dates in approved/published posts, use today as base
+          setFurthestFutureDate(new Date());
+        }
+      } catch (error) {
+        console.error('Error getting furthest future date:', error);
+        setFurthestFutureDate(new Date());
+      }
+    };
+
+    updateFurthestDate();
+  }, [currentWebsite?.id, publicationFrequency, postThemes]);
+  
+  // Update handleGenerateTitleSuggestions to use furthest future date
   const handleGenerateTitleSuggestions = async () => {
     if (!currentWebsite?.id || isGenerating) return;
     
@@ -305,21 +349,24 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       setCategoriesByTitle(result.categoriesByTitle || {});
 
       // Create post themes for each title
-      const creationPromises = result.titles.map(title => 
-        addPostTheme({
+      const creationPromises = result.titles.map((title, index) => {
+        // Add days based on index to space out the posts
+        const postDate = addDays(furthestFutureDate, index + 1);
+        
+        return addPostTheme({
           website_id: currentWebsite.id,
           subject_matter: title,
           keywords: result.keywordsByTitle?.[title] || result.keywords,
           categories: result.categoriesByTitle?.[title] || [],
           status: 'pending',
-          scheduled_date: getNextPublicationDate().toISOString(),
+          scheduled_date: postDate.toISOString(),
           post_content: null,
           image: null,
           wp_post_id: null,
           wp_post_url: null,
           wp_sent_date: null
-        })
-      );
+        });
+      });
       
       await Promise.all(creationPromises);
       
@@ -358,39 +405,70 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     // This will be handled by the TitleSuggestion component
   };
 
-  /**
-   * Handler called when a title suggestion is approved (liked)
-   * This function:
-   * 1. Updates the status of the liked post to 'generated'
-   * 2. Increments the dates of all other pending posts by one day
-   * 
-   * @param id The ID of the post that was liked
-   */
-  const handleTitleLiked = (id: string) => {
-    // Find the specific post that was liked
-    const likedPost = postThemes.find(theme => theme.id === id);
-    
-    if (!likedPost) {
-      return; // Post not found
+  // Update handleTitleLiked to maintain the liked post's date and update other posts
+  const handleTitleLiked = async (id: string) => {
+    try {
+      // Get the current post's date before updating
+      const postToUpdate = postThemes.find(theme => theme.id === id);
+      if (!postToUpdate) return;
+
+      // Calculate new dates for pending posts based on the approved post's date
+      const approvedDate = new Date(postToUpdate.scheduled_date);
+      const newBaseDate = addDays(approvedDate, publicationFrequency);
+
+      // Update the liked post's status to approved while keeping its date
+      const { error: updateError } = await supabase
+        .from('post_themes')
+        .update({ status: 'approved' })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
+
+      // Get all pending posts except the one being approved
+      const pendingThemes = postThemes.filter(theme => 
+        theme.status === 'pending' && theme.id !== id
+      );
+
+      // Update each pending post's date to be after the approved post
+      const updatePromises = pendingThemes.map(theme => 
+        supabase
+          .from('post_themes')
+          .update({ 
+            scheduled_date: newBaseDate.toISOString(),
+            status: 'pending'
+          })
+          .eq('id', theme.id)
+      );
+
+      await Promise.all(updatePromises);
+
+      // Update local state for all posts in a single operation
+      setPostThemes(prev =>
+        prev.map(theme => {
+          if (theme.id === id) {
+            // Keep the approved post's date unchanged
+            return { ...theme, status: 'approved' };
+          }
+          if (pendingThemes.some(pending => pending.id === theme.id)) {
+            // Update pending posts' dates
+            return { 
+              ...theme, 
+              scheduled_date: newBaseDate.toISOString(),
+              status: 'pending'
+            };
+          }
+          return theme;
+        })
+      );
+
+      // Update the furthest future date
+      setFurthestFutureDate(newBaseDate);
+
+      toast.success('Post approved');
+    } catch (error) {
+      console.error('Error updating post status:', error);
+      toast.error('Failed to update post status');
     }
-    
-    // Update the liked post to 'generated' status
-    updatePostTheme(id, { status: 'generated' });
-    
-    // Find all other pending posts
-    const otherPendingPosts = postThemes.filter(theme => 
-      theme.status === 'pending' && theme.id !== id
-    );
-    
-    // Update each pending post's date to be one day later
-    otherPendingPosts.forEach(post => {
-      const currentDate = new Date(post.scheduled_date);
-      const nextDate = addDays(currentDate, 1);
-      updatePostTheme(post.id, { scheduled_date: nextDate.toISOString() }, false);
-    });
-    
-    // Show success toast
-    toast.success(`"${likedPost.subject_matter}" has been added to your calendar`);
   };
 
   // Filter suggestions based on view mode
@@ -398,8 +476,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     .filter(theme => {
       if (viewMode === 'pending') {
         return theme.status === 'pending';
-      } else if (viewMode === 'generated') {
-        return theme.status === 'generated';
+      } else if (viewMode === 'approved') {
+        return theme.status === 'approved';
       } else if (viewMode === 'published') {
         return theme.status === 'published';
       }
@@ -410,19 +488,26 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     .map(theme => ({
       id: theme.id,
       title: theme.subject_matter,
-      keywords: Array.isArray(theme.keywords) ? theme.keywords : [],
+      keywords: theme.keywords || [],
       categories: theme.categories || [],
-      date: new Date(theme.scheduled_date),
-      status: theme.status as 'pending' | 'generated' | 'published'
+      // For pending posts, use the furthest future date from approved posts
+      date: theme.status === 'pending' ? furthestFutureDate : new Date(theme.scheduled_date),
+      status: theme.status
     }));
 
   // Get the appropriate view title and description
   const getViewInfo = () => {
     switch (viewMode) {
-      case 'generated':
+      case 'pending':
         return {
-          title: "Generated Suggestions",
-          description: "These suggestions have been generated and added to your calendar.",
+          title: "Content Calendar",
+          description: "Manage your content schedule and approve suggestions.",
+          alertClass: "bg-yellow-50 border-yellow-200"
+        };
+      case 'approved':
+        return {
+          title: "Approved Suggestions",
+          description: "These suggestions have been approved and added to your calendar.",
           alertClass: "bg-green-50 border-green-200"
         };
       case 'published':
@@ -496,7 +581,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           {websiteContent ? 
             "Website content analyzed and ready for title generation" : 
             currentWebsite ? 
-                "Waiting for website content analysis..." : 
+                "" : 
               "Select a website to analyze content"
           }
         </p>
@@ -508,15 +593,15 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               className="text-xs h-7 px-2"
               onClick={() => setViewMode('pending')}
             >
-              Pending
+              Content Calendar
             </Button>
             <Button
-              variant={viewMode === 'generated' ? "default" : "ghost"}
+              variant={viewMode === 'approved' ? "default" : "ghost"}
               size="sm"
               className="text-xs h-7 px-2"
-              onClick={() => setViewMode('generated')}
+              onClick={() => setViewMode('approved')}
             >
-              Generated
+              Approved
             </Button>
             <Button
               variant={viewMode === 'published' ? "default" : "ghost"}
@@ -580,58 +665,52 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               </AlertDescription>
             </Alert>
           )}
-          {postThemes.map((theme) => {
-            const themeCategories = theme.categories || [];
-            const themeKeywords = Array.isArray(theme.keywords) ? theme.keywords : [];
-            const themeDate = theme.scheduled_date ? new Date(theme.scheduled_date) : new Date();
-            
-            return (
-              <TitleSuggestion
-                key={theme.id}
-                id={theme.id}
-                title={theme.subject_matter}
-                keywords={themeKeywords}
-                categories={themeCategories}
-                selected={selectedTitleId === theme.id}
-                onSelect={() => handleSelectTitle(theme.id)}
-                onRemove={() => handleRemoveTitle(theme.id)}
-                date={themeDate}
-                onUpdateDate={(newDate) => handleUpdateTitleDate(theme.id, newDate)}
-                onLiked={() => handleTitleLiked(theme.id)}
-                status={theme.status}
-                onUpdateKeywords={(keywords) => handleUpdateKeywords(theme.id, keywords)}
-                onUpdateCategories={(categories) => handleUpdateCategories(theme.id, categories)}
-                isGeneratingContent={isGeneratingContent(theme.id)}
-              />
-            );
-          })}
+          {filteredTitleSuggestions.map((title) => (
+            <TitleSuggestion
+              key={title.id}
+              id={title.id}
+              title={title.title}
+              keywords={title.keywords}
+              categories={title.categories}
+              selected={selectedTitleId === title.id}
+              onSelect={() => handleSelectTitle(title.id)}
+              onRemove={() => handleRemoveTitle(title.id)}
+              date={title.date}
+              onUpdateDate={(newDate) => handleUpdateTitleDate(title.id, newDate)}
+              onLiked={() => handleTitleLiked(title.id)}
+              status={title.status}
+              onUpdateKeywords={(keywords) => handleUpdateKeywords(title.id, keywords)}
+              onUpdateCategories={(categories) => handleUpdateCategories(title.id, categories)}
+              isGeneratingContent={isGeneratingContent(title.id)}
+            />
+          ))}
         </div>
       ) : (
         <EmptyState
           icon={<Globe className="h-8 w-8 text-muted-foreground" />}
           title={
-            viewMode === 'pending' ? "No Pending Suggestions" :
-            viewMode === 'generated' ? "No Generated Suggestions" :
+            viewMode === 'pending' ? "No Content in Calendar" :
+            viewMode === 'approved' ? "No Approved Suggestions" :
             "No Published Suggestions"
           }
           description={
             viewMode === 'pending' 
-              ? "Generate title suggestions based on your website content and keywords" 
-              : viewMode === 'generated'
-                ? "You haven't generated any suggestions yet."
+              ? "Generate title suggestions to add to your content calendar" 
+              : viewMode === 'approved'
+                ? "You haven't approved any suggestions yet."
                 : "You haven't published any suggestions yet."
           }
           actionLabel={
             viewMode === 'pending' 
               ? "Generate Suggestions" 
-              : viewMode === 'generated'
-                ? "View Generated Suggestions"
-                : "View Published Suggestions"
+              : viewMode === 'approved'
+                ? "View Content Calendar"
+                : "View Content Calendar"
           } 
           onAction={
             viewMode === 'pending' 
               ? handleGenerateTitleSuggestions 
-              : viewMode === 'generated'
+              : viewMode === 'approved'
                 ? () => setViewMode('pending')
                 : () => setViewMode('pending')
           }

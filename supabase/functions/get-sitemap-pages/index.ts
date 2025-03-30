@@ -379,17 +379,27 @@ serve(async (req) => {
       content_type: page.content_type // Use the content type from sitemap
     }));
 
-    // Filter out pages that already exist
-    const newPages = processedPages.filter(page => !existingUrls.has(page.url));
+    // Filter out pages that already exist and limit to the website's limit
+    const pageLimit = website?.page_import_limit || 500; // Default to 500 if not set
+    const newPages = processedPages
+      .filter(page => !existingUrls.has(page.url))
+      .slice(0, pageLimit);
 
-    console.log(`Found ${newPages.length} new pages out of ${processedPages.length} total pages`);
+    console.log(`Found ${newPages.length} new pages to import`);
+    
+    let warning = null;
+    if (processedPages.length > pageLimit) {
+      warning = `Total pages found (${processedPages.length}) exceeds the website's limit of ${pageLimit} pages. Only the first ${pageLimit} pages will be imported.`;
+      console.log('Warning:', warning);
+    }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         sitemap_url: sitemap.url,
         pages: newPages,
         total_pages: processedPages.length,
-        new_pages: newPages.length
+        new_pages: newPages.length,
+        warning
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

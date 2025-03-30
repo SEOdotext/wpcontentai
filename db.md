@@ -445,6 +445,16 @@
     "data_type": "text"
   },
   {
+    "table_name": "websites",
+    "column_name": "page_import_limit",
+    "data_type": "integer"
+  },
+  {
+    "table_name": "websites",
+    "column_name": "key_content_limit",
+    "data_type": "integer"
+  },
+  {
     "table_name": "wordpress_categories",
     "column_name": "id",
     "data_type": "uuid"

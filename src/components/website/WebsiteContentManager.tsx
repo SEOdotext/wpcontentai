@@ -376,7 +376,12 @@ const WebsiteContentManager = forwardRef<WebsiteContentManagerRef, {
             <TableBody>
               {filteredContent.map((content) => (
                 <TableRow key={content.id}>
-                  <TableCell className="font-medium">{content.title}</TableCell>
+                  <TableCell 
+                    className="font-medium cursor-pointer hover:text-primary"
+                    onClick={() => setSelectedContent(content)}
+                  >
+                    {content.title}
+                  </TableCell>
                   <TableCell>
                     <a 
                       href={content.url} 

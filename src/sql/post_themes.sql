@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS post_themes (
   image TEXT,
   image_generation_error TEXT,
   post_content TEXT,
-  CONSTRAINT valid_status CHECK (status IN ('pending', 'generated', 'published'))
+  CONSTRAINT valid_status CHECK (status IN ('pending', 'approved', 'published'))
 );
 
 -- Enable Row Level Security

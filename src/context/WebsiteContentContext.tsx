@@ -376,6 +376,16 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       
       console.log(`Retrieved ${data.pages.length} sitemap pages from sitemap at ${data.sitemap_url}`);
       
+      // Show warning if we hit the page limit
+      if (data.warning) {
+        console.log('Warning from sitemap function:', data.warning);
+        toast({
+          title: 'Page Limit Reached',
+          description: data.warning,
+          variant: 'default',
+        });
+      }
+      
       // Convert the returned data to WebsiteContent format
       const sitemapPages: WebsiteContent[] = data.pages.map((page: any) => ({
         id: page.id,

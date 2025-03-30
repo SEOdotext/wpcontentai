@@ -70,7 +70,7 @@ function generateFocusedKeywords(title: string, userKeywords: string[], subjectM
     .slice(0, 2);
   
   if (relevantSubjects.length > 0) {
-    result.push(...relevantSubjects);
+    result.push(...relevantSubjects.map(s => s.replace(/:/g, '').trim()));
   } else {
     const partialMatches = subjectMatters
       .filter(subject => {
@@ -80,34 +80,17 @@ function generateFocusedKeywords(title: string, userKeywords: string[], subjectM
       .slice(0, 2);
     
     if (partialMatches.length > 0) {
-      result.push(...partialMatches);
+      result.push(...partialMatches.map(s => s.replace(/:/g, '').trim()));
     }
   }
   
-  // 2. Add domain-specific terms
-  const domainTerms = [
-    "personale udlejning", 
-    "udenlandsk arbejdskraft", 
-    "rekruttering", 
-    "vikarbureau",
-    "arbejdsmarked"
-  ];
-  
-  const relevantDomainTerms = domainTerms
-    .filter(term => lowerTitle.includes(term.toLowerCase()))
-    .slice(0, 2);
-  
-  if (relevantDomainTerms.length > 0) {
-    result.push(...relevantDomainTerms);
-  }
-  
-  // 3. Add relevant user keywords
+  // 2. Add relevant user keywords
   const relevantUserKeywords = userKeywords
     .filter(keyword => lowerTitle.includes(keyword.toLowerCase()))
     .slice(0, 2);
   
   if (relevantUserKeywords.length > 0) {
-    result.push(...relevantUserKeywords);
+    result.push(...relevantUserKeywords.map(s => s.replace(/:/g, '').trim()));
   }
   
   return result;
@@ -197,8 +180,8 @@ serve(async (req) => {
     const existingTitles = existingPosts?.map(post => post.subject_matter) || [];
     const existingContent = sitemapContent?.map(content => content.title) || [];
     
-    // Format categories for the prompt
-    const categoriesList = categories?.map(cat => `${cat.name} (${cat.description || 'No description'})`).join('\n') || '';
+    // Format categories for the prompt with IDs
+    const categoriesList = categories?.map(cat => `${cat.id}: ${cat.name}`).join('\n') || '';
 
     const prompt = `Generate 5 unique blog post ideas for a website. Consider the following:
 
@@ -206,8 +189,8 @@ Keywords to include: ${allKeywords.join(', ')}
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
 Subject matters: ${subject_matters.join(', ') || pubSettings?.subject_matters?.join(', ') || 'general'}
 
-Available categories:
-${categoriesList}
+Available categories (use category IDs):
+${categories?.map(cat => `- ${cat.id}: ${cat.name}`).join('\n') || 'No categories available'}
 
 Avoid these existing topics:
 ${existingTitles.join('\n')}
@@ -217,17 +200,19 @@ ${existingContent.join('\n')}
 
 For each idea, provide:
 1. A compelling title
-2. 3-5 relevant keywords
+2. 3-5 relevant keywords (avoid using colons in keywords)
 3. A brief description (max 100 words)
-4. Up to 5 most relevant categories from the available list above
+4. Up to 5 most relevant category IDs from the available list above
 
 Important rules:
 1. For Danish titles: Only capitalize the first word and proper nouns
 2. For English titles: Capitalize main words following standard English title case
 3. Keywords should be category-oriented and domain-specific
 4. Avoid generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig
-5. Categories must be selected from the provided list only
+5. Categories MUST be selected from the provided list only - use category IDs
 6. Each post should have 1-5 relevant categories
+7. Do NOT use colons in any keywords
+8. Category IDs must be valid UUIDs from the provided list
 
 Format the response as JSON with this structure:
 {
@@ -236,7 +221,7 @@ Format the response as JSON with this structure:
       "title": "string",
       "keywords": ["string"],
       "description": "string",
-      "categories": ["string"]
+      "categories": ["uuid"] // Use category IDs here
     }
   ]
 }`;
@@ -271,44 +256,52 @@ Format the response as JSON with this structure:
 
     const openaiData = await openaiResponse.json();
     
+    // Log the raw OpenAI response
+    console.log('Raw OpenAI response:', JSON.stringify(openaiData, null, 2));
+    
     // Extract JSON from markdown code blocks if present
     let content = openaiData.choices[0].message.content;
+    console.log('Raw content from OpenAI:', content);
+    
     const jsonMatch = content.match(/```(?:json)?\n([\s\S]*?)\n```/);
     if (jsonMatch) {
       content = jsonMatch[1];
+      console.log('Extracted JSON content:', content);
     }
     
     // Parse the cleaned content
     const ideas = JSON.parse(content);
+    console.log('Parsed ideas:', JSON.stringify(ideas, null, 2));
 
     // Process titles for Danish content and create keywordsByTitle
     const processedTitles: string[] = [];
     const keywordsByTitle: { [title: string]: string[] } = {};
+    const categoriesByTitle: { [title: string]: string[] } = {};
     
     ideas.ideas.forEach((idea: PostIdea) => {
       const isDanish = isDanishContent(idea.title);
       const processedTitle = isDanish ? formatDanishTitle(idea.title) : idea.title;
       processedTitles.push(processedTitle);
-      keywordsByTitle[processedTitle] = generateFocusedKeywords(processedTitle, idea.keywords, subject_matters);
+      // Use the original keywords from the AI response
+      keywordsByTitle[processedTitle] = idea.keywords;
+      categoriesByTitle[processedTitle] = idea.categories;
     });
 
     // Use the first title's keywords as the default set
     const defaultKeywords = keywordsByTitle[processedTitles[0]] || [];
 
     // Process the ideas and create post themes with categories
-    const parsedIdeas = JSON.parse(content).ideas;
-
-    // Create post themes and category associations
-    for (const idea of parsedIdeas) {
-      // Create post theme
+    for (const idea of ideas.ideas) {
+      // Create post theme with proper array type for keywords
       const { data: postTheme, error: postThemeError } = await supabaseClient
         .from('post_themes')
         .insert({
           website_id,
           subject_matter: idea.title,
-          keywords: idea.keywords,
+          keywords: idea.keywords as string[], // Ensure it's treated as an array
           post_content: idea.description,
-          status: 'draft'
+          status: 'draft',
+          categories: [] // Initialize empty jsonb array
         })
         .select()
         .single();
@@ -318,14 +311,9 @@ Format the response as JSON with this structure:
         continue;
       }
 
-      // Get category IDs for the selected categories
-      const categoryIds = categories
-        ?.filter(cat => idea.categories.includes(cat.name))
-        .map(cat => cat.id) || [];
-
-      // Create category associations
-      if (categoryIds.length > 0) {
-        const categoryAssociations = categoryIds.map(categoryId => ({
+      // Create category associations using the junction table
+      if (idea.categories && idea.categories.length > 0) {
+        const categoryAssociations = idea.categories.map((categoryId: string) => ({
           post_theme_id: postTheme.id,
           wordpress_category_id: categoryId
         }));
@@ -336,6 +324,7 @@ Format the response as JSON with this structure:
 
         if (categoryError) {
           console.error('Error creating category associations:', categoryError);
+          console.error('Category associations attempted:', categoryAssociations);
         }
       }
     }
@@ -346,7 +335,7 @@ Format the response as JSON with this structure:
         titles: processedTitles,
         keywords: defaultKeywords,
         keywordsByTitle,
-        categoriesByTitle: {}
+        categoriesByTitle
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

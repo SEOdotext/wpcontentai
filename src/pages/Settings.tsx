@@ -35,6 +35,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
+import { Website } from "@/types/website";
 
 // Configuration
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
@@ -121,6 +123,26 @@ interface Category {
   count: number;
   created_at: string;
   updated_at: string;
+}
+
+interface Website {
+  id: string;
+  name: string;
+  url: string;
+  organisation_id: string;
+  created_at: string;
+  updated_at?: string;
+  language?: string;
+  enable_ai_image_generation?: boolean;
+  image_prompt?: string;
+  page_import_limit?: number;
+  key_content_limit?: number;
+}
+
+interface Organisation {
+  id: string;
+  name: string;
+  created_at: string;
 }
 
 const Settings = () => {
@@ -2235,6 +2257,80 @@ const Settings = () => {
                       )}
                       <p className="text-sm text-muted-foreground">
                         This affects how content is generated, including capitalization rules for headings and language-specific formatting.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Import Limits</CardTitle>
+                    <CardDescription>
+                      Configure limits for page imports and key content
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Page Import Limit</Label>
+                      <div className="flex items-center space-x-2">
+                        <Slider
+                          value={[currentWebsite?.page_import_limit || 500]}
+                          onValueChange={async (value) => {
+                            if (!currentWebsite) {
+                              toast.error("Please select a website first");
+                              return;
+                            }
+                            try {
+                              await updateWebsite(currentWebsite.id, {
+                                page_import_limit: value[0]
+                              });
+                              toast.success(`Page import limit updated to ${value[0]} pages`);
+                            } catch (error) {
+                              console.error('Failed to update page import limit:', error);
+                              toast.error('Failed to update page import limit');
+                            }
+                          }}
+                          min={100}
+                          max={5000}
+                          step={100}
+                          className="w-[200px]"
+                        />
+                        <span className="w-16 text-right">{currentWebsite?.page_import_limit || 500}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Maximum number of pages that can be imported at once. Higher limits may take longer to process.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Key Content Limit</Label>
+                      <div className="flex items-center space-x-2">
+                        <Slider
+                          value={[currentWebsite?.key_content_limit || 10]}
+                          onValueChange={async (value) => {
+                            if (!currentWebsite) {
+                              toast.error("Please select a website first");
+                              return;
+                            }
+                            try {
+                              await updateWebsite(currentWebsite.id, {
+                                key_content_limit: value[0]
+                              });
+                              toast.success(`Key content limit updated to ${value[0]} pages`);
+                            } catch (error) {
+                              console.error('Failed to update key content limit:', error);
+                              toast.error('Failed to update key content limit');
+                            }
+                          }}
+                          min={5}
+                          max={50}
+                          step={5}
+                          className="w-[200px]"
+                        />
+                        <span className="w-16 text-right">{currentWebsite?.key_content_limit || 10}</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Maximum number of key content pages that can be marked. These pages are used as reference for content generation.
                       </p>
                     </div>
                   </CardContent>

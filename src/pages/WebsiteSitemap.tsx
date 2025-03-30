@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useWebsites } from '@/context/WebsitesContext';
 import { useWebsiteContent } from '@/context/WebsiteContentContext';
 import Header from '@/components/Header';
@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { Badge } from "@/components/ui/badge";
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Website } from '@/types/website';
 
 const WebsiteSitemap = () => {
   const { currentWebsite } = useWebsites();
@@ -25,19 +26,45 @@ const WebsiteSitemap = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [isScrapingCornerstone, setIsScrapingCornerstone] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [customSitemapUrl, setCustomSitemapUrl] = useState('');
-  const [maxPages, setMaxPages] = useState(50);
+  const [maxPages, setMaxPages] = useState(10);
   const [useSitemap, setUseSitemap] = useState(true);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const navigate = useNavigate();
-  
+  const [website, setWebsite] = useState<Website | null>(null);
+  const [customSitemapUrl, setCustomSitemapUrl] = useState('');
+
   // Check if we have any cornerstone content
   const hasContent = websiteContent.length > 0;
   const hasCornerstoneContent = websiteContent.some(content => content.is_cornerstone);
   const cornerstoneCount = websiteContent.filter(content => content.is_cornerstone).length;
+  const importedCount = websiteContent.length; // Count of all imported pages
 
   // Create a ref to access WebsiteContentManager methods
   const websiteContentManagerRef = useRef<WebsiteContentManagerRef>(null);
+
+  // Fetch website details including limits
+  useEffect(() => {
+    const fetchWebsite = async () => {
+      if (!currentWebsite?.id) return;
+      
+      const { data, error } = await supabase
+        .from('websites')
+        .select('*')
+        .eq('id', currentWebsite.id)
+        .single();
+        
+      if (error) {
+        console.error('Error fetching website:', error);
+        return;
+      }
+      
+      setWebsite(data);
+      // Set initial maxPages to website's limit or default to 10
+      setMaxPages(data?.page_import_limit || 10);
+    };
+    
+    fetchWebsite();
+  }, [currentWebsite?.id]);
 
   const handleImportPages = async () => {
     if (!currentWebsite) return;
@@ -162,6 +189,11 @@ const WebsiteSitemap = () => {
                         <>
                           <Download className="h-4 w-4 mr-2" />
                           Import Pages
+                          {importedCount > 0 && (
+                            <Badge variant="secondary" className="ml-2 h-5 px-1.5 bg-white/20">
+                              {importedCount}
+                            </Badge>
+                          )}
                         </>
                       )}
                     </Button>
@@ -290,23 +322,32 @@ const WebsiteSitemap = () => {
                       {!useSitemap && (
                         <div className="space-y-4">
                           <div className="space-y-2">
-                            <div className="flex justify-between items-center">
-                              <Label htmlFor="maxPages">Number of Pages to Crawl</Label>
-                              <span className="text-sm font-medium">{maxPages} pages</span>
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <Label>Maximum Pages to Import</Label>
+                                <p className="text-sm text-muted-foreground">
+                                  Select how many pages to import (max {website?.page_import_limit || 500})
+                                </p>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  Higher numbers will take longer but provide more comprehensive results.
+                                  Start with a lower number to test the import process.
+                                </p>
+                                <p className="text-sm text-primary mt-1">
+                                  Need to import more pages? You can upgrade your page import limit in website settings.
+                                </p>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                <Slider
+                                  value={[maxPages]}
+                                  onValueChange={(value) => setMaxPages(value[0])}
+                                  min={1}
+                                  max={website?.page_import_limit || 500}
+                                  step={1}
+                                  className="w-[200px]"
+                                />
+                                <span className="w-12 text-right">{maxPages}</span>
+                              </div>
                             </div>
-                            <Slider
-                              id="maxPages"
-                              min={10}
-                              max={100}
-                              step={10}
-                              value={[maxPages]}
-                              onValueChange={(value) => setMaxPages(value[0])}
-                              className="py-2"
-                            />
-                            <p className="text-sm text-muted-foreground">
-                              Higher numbers will take longer but provide more comprehensive results.
-                              Start with a lower number to test the import process.
-                            </p>
                           </div>
                         </div>
                       )}
