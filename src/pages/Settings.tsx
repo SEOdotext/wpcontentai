@@ -1905,6 +1905,7 @@ const Settings = () => {
                         </div>
                         
                         {/* Add WordPress Publish Status selector */}
+                        <Separator className="my-6" />
                         <div className="space-y-2">
                           <div className="flex items-center space-x-2">
                             <Switch
@@ -1921,6 +1922,8 @@ const Settings = () => {
                           </p>
                         </div>
                         
+                        {/* Add WordPress Categories section with divider */}
+                        <Separator className="my-6" />
                         {renderCategoriesSection()}
                         
                         {/* Test Post Feedback - Show only when a test post has been created */}
