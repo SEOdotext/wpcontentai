@@ -63,11 +63,14 @@ const WebsiteManager = () => {
     
     setIsAdding(true);
     try {
-      const success = await addWebsite(newWebsiteName, formattedUrl);
-      if (success) {
-        setNewWebsiteName('');
-        setNewWebsiteUrl('');
-      }
+      await addWebsite({
+        name: newWebsiteName,
+        url: formattedUrl,
+        language: 'en',
+        enable_ai_image_generation: false
+      });
+      setNewWebsiteName('');
+      setNewWebsiteUrl('');
     } finally {
       setIsAdding(false);
     }
@@ -78,17 +81,14 @@ const WebsiteManager = () => {
     
     setIsEditing(true);
     try {
-      const success = await updateWebsite(editingWebsite.id, {
+      await updateWebsite(editingWebsite.id, {
         name: editingWebsite.name,
         url: editingWebsite.url,
         language: editingWebsite.language,
         enable_ai_image_generation: editingWebsite.enable_ai_image_generation,
         image_prompt: editingWebsite.image_prompt
       });
-      
-      if (success) {
-        setEditingWebsite(null);
-      }
+      setEditingWebsite(null);
     } finally {
       setIsEditing(false);
     }

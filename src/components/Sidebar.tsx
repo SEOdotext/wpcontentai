@@ -48,7 +48,10 @@ export function AppSidebar() {
                   className={currentWebsite?.id === website.id ? 'bg-primary/10 font-medium' : ''}
                 >
                   <Globe className="h-4 w-4 mr-2" />
-                  <span>{website.name}</span>
+                  <div className="flex flex-col">
+                    <span>{website.name}</span>
+                    <span className="text-xs text-muted-foreground">{website.organisation_name}</span>
+                  </div>
                 </DropdownMenuItem>
               ))}
               <DropdownMenuItem asChild>

@@ -41,14 +41,13 @@ BEGIN
 
     -- If user doesn't exist, create them
     IF NOT v_user_exists THEN
-        -- Create auth user
-        INSERT INTO auth.users (email)
+        -- Create user profile first
+        INSERT INTO user_profiles (email)
         VALUES (p_email)
         RETURNING id INTO v_user_id;
 
-        -- Create user profile
-        INSERT INTO user_profiles (id, email)
-        VALUES (v_user_id, p_email);
+        -- Note: The actual user creation in auth.users will be handled by the application
+        -- using Supabase's auth.signUp() function
     END IF;
 
     -- Create organization membership

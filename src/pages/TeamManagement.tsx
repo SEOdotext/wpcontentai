@@ -68,11 +68,10 @@ const TeamManagement = () => {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [websiteAccess, setWebsiteAccess] = useState<WebsiteAccess[]>([]);
   const [loading, setLoading] = useState(true);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'admin' | 'member'>('member');
   const [selectedWebsites, setSelectedWebsites] = useState<string[]>([]);
-  const [isInviting, setIsInviting] = useState(false);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [isUpdatingAccess, setIsUpdatingAccess] = useState(false);
   const [isUpdatingRole, setIsUpdatingRole] = useState(false);
@@ -81,18 +80,18 @@ const TeamManagement = () => {
   const [activeTab, setActiveTab] = useState<'invite' | 'add'>('add');
 
   // Fetch team members and website access
-    const fetchTeamData = async () => {
-      if (!organisation?.id) return;
-      
-      setLoading(true);
-      try {
+  const fetchTeamData = async () => {
+    if (!organisation?.id) return;
+    
+    setLoading(true);
+    try {
       console.log('Fetching team members for organisation:', organisation.id);
-        // Fetch team members for this organization
+      // Fetch team members for this organization
       const { data: memberships, error: membershipsError } = await supabase
         .from('organisation_memberships')
         .select('id, role, created_at, member_id')
-          .eq('organisation_id', organisation.id);
-        
+        .eq('organisation_id', organisation.id);
+      
       if (membershipsError) {
         console.error('Error fetching memberships:', membershipsError);
         throw membershipsError;
@@ -139,118 +138,158 @@ const TeamManagement = () => {
           organisation_id: organisation.id
         };
       }).filter((member): member is TeamMember => member !== null);
-        
+      
       console.log('Final team members:', typedMembers);
-        setTeamMembers(typedMembers);
+      setTeamMembers(typedMembers);
+      
+      // Check if website_access table exists
+      try {
+        // Fetch website access
+        const { data: access, error: accessError } = await supabase
+          .from('website_access')
+          .select(`
+            id,
+            user_id,
+            website_id,
+            created_at
+          `)
+          .in('user_id', typedMembers.map(m => m.id));
         
-        // Check if website_access table exists
-        try {
-          // Fetch website access
-          const { data: access, error: accessError } = await supabase
-            .from('website_access')
-            .select(`
-              id,
-              user_id,
-              website_id,
-              created_at
-            `)
-            .in('user_id', typedMembers.map(m => m.id));
+        if (accessError) {
+          console.error('Error fetching website access:', accessError);
+          throw accessError;
+        }
+        
+        console.log('Found website access:', access);
+        
+        // Fetch website details separately
+        if (access && access.length > 0) {
+          const websiteIds = [...new Set(access.map(a => a.website_id))];
+          console.log('Fetching website details for:', websiteIds);
           
-          if (accessError) throw accessError;
+          const { data: websiteDetails, error: websiteError } = await supabase
+            .from('websites')
+            .select('id, name, url')
+            .in('id', websiteIds);
           
-          // Fetch website details separately
-          if (access && access.length > 0) {
-            const websiteIds = [...new Set(access.map(a => a.website_id))];
-            
-            const { data: websiteDetails, error: websiteError } = await supabase
-              .from('websites')
-              .select('id, name, url')
-              .in('id', websiteIds);
-            
-            if (websiteError) throw websiteError;
-            
-            // Combine the data
-            const accessWithWebsites = access.map(a => ({
-              ...a,
-              website: websiteDetails?.find(w => w.id === a.website_id)
-            }));
-            
-            setWebsiteAccess(accessWithWebsites);
-          } else {
-            setWebsiteAccess([]);
+          if (websiteError) {
+            console.error('Error fetching website details:', websiteError);
+            throw websiteError;
           }
-        } catch (error) {
-          console.error('Error fetching website access:', error);
+          
+          console.log('Found website details:', websiteDetails);
+          
+          // Combine the data
+          const accessWithWebsites = access.map(a => ({
+            ...a,
+            website: websiteDetails?.find(w => w.id === a.website_id)
+          }));
+          
+          console.log('Final website access:', accessWithWebsites);
+          setWebsiteAccess(accessWithWebsites);
+        } else {
+          console.log('No website access found');
           setWebsiteAccess([]);
         }
       } catch (error) {
-        console.error('Error fetching team data:', error);
-        toast.error('Failed to load team members');
-      } finally {
-        setLoading(false);
+        console.error('Error fetching website access:', error);
+        setWebsiteAccess([]);
       }
-    };
-    
+    } catch (error) {
+      console.error('Error fetching team data:', error);
+      toast.error('Failed to load team members');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   // Initial data fetch
   useEffect(() => {
     fetchTeamData();
   }, [organisation?.id]);
 
   // Invite a new team member
-  const handleInviteTeamMember = async () => {
-    if (!inviteEmail.trim() || !organisation?.id) return;
-    
-    setIsInviting(true);
+  const handleInviteTeamMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!organisation?.id) return;
+
     try {
-      console.log('Sending invitation for:', inviteEmail.trim());
-      // Handle invitation using the new RPC function
-      const { data, error } = await supabase.rpc('handle_organisation_invitation', {
-        p_email: inviteEmail.trim(),
-        p_organisation_id: organisation.id,
-        p_role: inviteRole,
-        p_website_ids: selectedWebsites
+      console.log('Sending invitation for:', email);
+      
+      // First, create the user in Supabase Auth
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email: email,
+        password: Math.random().toString(36).slice(-12), // Generate a random password
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            role: role,
+            organisation_id: organisation.id
+          }
+        }
       });
 
-      if (error) {
-        console.error('Error from handle_organisation_invitation:', error);
-        throw error;
+      if (signUpError) {
+        console.error('Error creating auth user:', signUpError);
+        throw signUpError;
       }
 
-      console.log('Invitation response:', data);
+      if (!authData.user?.id) {
+        throw new Error('Failed to create user');
+      }
 
-      if (data.status === 'success') {
-        // Send invitation email
-        const { error: emailError } = await supabase.rpc('send_invitation_email', {
-          p_user_id: data.user_id,
+      // Now call the RPC function to add the user to the organization
+      const { data: invitationResponse, error: invitationError } = await supabase
+        .rpc('handle_organisation_invitation', {
+          p_email: email,
           p_organisation_id: organisation.id,
-          p_is_new_user: data.is_new_user
+          p_role: role,
+          p_website_ids: role === 'member' ? selectedWebsites : []
         });
 
-        if (emailError) {
-          console.error('Error sending invitation email:', emailError);
-          // Don't throw here, as the user is already added
+      if (invitationError) {
+        console.error('Error sending invitation:', invitationError);
+        throw invitationError;
+      }
+
+      console.log('Invitation response:', invitationResponse);
+
+      if (invitationResponse.status === 'success') {
+        // Try to send invitation email, but don't fail if it doesn't work
+        try {
+          const { error: emailError } = await supabase.rpc('send_invitation_email', {
+            p_user_id: invitationResponse.user_id,
+            p_organisation_id: organisation.id,
+            p_is_new_user: true
+          });
+
+          if (emailError) {
+            console.error('Error sending invitation email:', emailError);
+            // Don't throw here, as the user is already added
+            toast.warning('User added but email sending failed. Please configure email service in Supabase.');
+          }
+        } catch (emailError) {
+          console.error('Error in email sending:', emailError);
+          toast.warning('User added but email sending failed. Please configure email service in Supabase.');
         }
 
-        toast.success(data.message);
-      
-      // Reset form
-      setInviteEmail('');
-      setInviteRole('member');
-      setSelectedWebsites([]);
-      setIsDialogOpen(false);
-        
-        // Refresh team members list
+        // Always refresh team data, regardless of the response
         console.log('Refreshing team data...');
         await fetchTeamData();
+
+        toast.success('Team member invited successfully');
+        setEmail('');
+        setRole('member');
+        setSelectedWebsites([]);
+        setIsInviteDialogOpen(false);
+      } else if (invitationResponse.message === 'User is already a member of this organization') {
+        toast.info('This user is already a member of your organization.');
       } else {
-        console.error('Invitation failed:', data.message);
-        toast.error(data.message);
+        toast.error(invitationResponse.message || 'Failed to invite team member');
       }
     } catch (error) {
-      console.error('Error inviting team member:', error);
+      console.error('Error in handleInviteTeamMember:', error);
       toast.error('Failed to invite team member');
-    } finally {
-      setIsInviting(false);
     }
   };
 
@@ -343,7 +382,7 @@ const TeamManagement = () => {
       }
       
       toast.success('Website access updated successfully');
-      setIsDialogOpen(false);
+      setIsInviteDialogOpen(false);
     } catch (error) {
       console.error('Error updating website access:', error);
       toast.error('Failed to update website access');
@@ -385,7 +424,7 @@ const TeamManagement = () => {
       .map(access => access.website_id);
     
     setSelectedWebsites(memberWebsiteIds);
-    setIsDialogOpen(true);
+    setIsInviteDialogOpen(true);
   };
 
   // Add existing user to organization by email
@@ -398,7 +437,7 @@ const TeamManagement = () => {
       const { data, error } = await supabase.rpc('handle_organisation_invitation', {
         p_email: existingUserEmail.trim(),
         p_organisation_id: organisation.id,
-        p_role: inviteRole,
+        p_role: role,
         p_website_ids: selectedWebsites
       });
 
@@ -416,9 +455,9 @@ const TeamManagement = () => {
             
             // Reset form
             setExistingUserEmail('');
-            setInviteRole('member');
+            setRole('member');
             setSelectedWebsites([]);
-            setIsDialogOpen(false);
+            setIsInviteDialogOpen(false);
         
         // Refresh team members list
         fetchTeamData();
@@ -447,8 +486,8 @@ const TeamManagement = () => {
 
               <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold">Team Management</h1>
-                <Dialog open={isDialogOpen && !selectedMember} onOpenChange={(open) => {
-                  setIsDialogOpen(open);
+                <Dialog open={isInviteDialogOpen && !selectedMember} onOpenChange={(open) => {
+                  setIsInviteDialogOpen(open);
                   if (!open) setSelectedMember(null);
                 }}>
                   <DialogTrigger asChild>
@@ -473,8 +512,8 @@ const TeamManagement = () => {
                               id="email"
                               type="email"
                               placeholder="colleague@example.com"
-                              value={inviteEmail}
-                              onChange={(e) => setInviteEmail(e.target.value)}
+                              value={email}
+                              onChange={(e) => setEmail(e.target.value)}
                             />
                         <p className="text-xs text-muted-foreground">
                           Enter the email address of the person you want to invite. They will receive an invitation to join your organization.
@@ -486,8 +525,8 @@ const TeamManagement = () => {
                               Role
                             </label>
                             <Select
-                              value={inviteRole}
-                              onValueChange={(value) => setInviteRole(value as 'admin' | 'member')}
+                              value={role}
+                              onValueChange={(value) => setRole(value as 'admin' | 'member')}
                             >
                           <SelectTrigger id="role">
                                 <SelectValue placeholder="Select a role" />
@@ -499,7 +538,7 @@ const TeamManagement = () => {
                             </Select>
                           </div>
                           
-                          {inviteRole === 'member' && (
+                          {role === 'member' && (
                             <div className="space-y-2">
                               <label className="text-sm font-medium">
                                 Website Access
@@ -537,16 +576,9 @@ const TeamManagement = () => {
                     <DialogFooter>
                         <Button
                           onClick={handleInviteTeamMember}
-                          disabled={isInviting || !inviteEmail.trim()}
+                          disabled={!email.trim()}
                         >
-                          {isInviting ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Sending Invitation...
-                            </>
-                          ) : (
-                            'Send Invitation'
-                          )}
+                          Invite
                         </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -694,8 +726,8 @@ const TeamManagement = () => {
       </div>
 
       {/* Dialog for managing website access */}
-      <Dialog open={isDialogOpen && !!selectedMember} onOpenChange={(open) => {
-        setIsDialogOpen(open);
+      <Dialog open={isInviteDialogOpen && !!selectedMember} onOpenChange={(open) => {
+        setIsInviteDialogOpen(open);
         if (!open) setSelectedMember(null);
       }}>
         <DialogContent>

@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Database } from '../integrations/supabase/types';
 
 type Website = Database['public']['Tables']['websites']['Row'];
-type WebsiteInsert = Database['public']['Tables']['websites']['Insert'];
+type WebsiteInsert = Omit<Database['public']['Tables']['websites']['Insert'], 'organisation_id'>;
 type WebsiteUpdate = Database['public']['Tables']['websites']['Update'];
 
 interface WebsitesContextType {
@@ -58,6 +58,17 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
 
+      // Get organization details
+      const { data: orgData, error: orgError } = await supabase
+        .from('organisations')
+        .select('*')
+        .eq('id', membership.organisation_id)
+        .single();
+
+      if (orgError) {
+        throw orgError;
+      }
+
       // Then fetch websites for that organisation
       const { data, error } = await supabase
         .from('websites')
@@ -68,25 +79,31 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw error;
       }
 
-      setWebsites(data || []);
+      // Add organization name to each website
+      const websitesWithOrg = data.map(website => ({
+        ...website,
+        organisation_name: orgData.name
+      }));
+
+      setWebsites(websitesWithOrg || []);
 
       // Check if there's a saved website ID in localStorage
       const savedWebsiteId = localStorage.getItem('currentWebsiteId');
       
       if (savedWebsiteId) {
         // Find the website with the saved ID
-        const savedWebsite = data.find(website => website.id === savedWebsiteId);
+        const savedWebsite = websitesWithOrg.find(website => website.id === savedWebsiteId);
         if (savedWebsite) {
           console.log("Restoring previously selected website:", savedWebsite.name);
           setCurrentWebsite(savedWebsite as Website);
         } else {
           // Fallback to first website if saved ID not found
           console.log("Saved website ID not found, using first website");
-          setCurrentWebsite(data[0] as Website);
+          setCurrentWebsite(websitesWithOrg[0] as Website);
         }
       } else if (!currentWebsite) {
         // Set first website as current if none is saved and none is selected
-        setCurrentWebsite(data[0] as Website);
+        setCurrentWebsite(websitesWithOrg[0] as Website);
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to fetch websites'));
@@ -171,6 +188,12 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (error) {
         throw error;
       }
+
+      // Refresh the websites list
+      await fetchWebsites();
+      
+      // Show success toast
+      toast.success('Website added successfully');
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to add website'));
       throw err;

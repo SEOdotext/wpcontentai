@@ -629,3 +629,16 @@ export type CompositeTypes<
   : PublicCompositeTypeNameOrOptions extends keyof PublicSchema["CompositeTypes"]
     ? PublicSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
+
+export type Website = {
+  id: string;
+  name: string;
+  url: string;
+  organisation_id: string;
+  organisation_name: string;
+  created_at: string;
+  updated_at?: string;
+  language?: string;
+  enable_ai_image_generation?: boolean;
+  image_prompt?: string;
+};
