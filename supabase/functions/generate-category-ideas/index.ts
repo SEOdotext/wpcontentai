@@ -120,8 +120,6 @@ ${existingCategories.map(c => `- ${c}`).join('\n')}
 
 Format each category exactly like this, one per line:
 Category Name|category-name-slug
-Digital Marketing|digital-marketing
-Content Strategy|content-strategy`
           },
           {
             role: 'user',
