@@ -48,6 +48,7 @@ interface TeamMember {
   last_name: string;
   role: 'admin' | 'member';
   created_at: string;
+  organisation_id: string;
 }
 
 interface WebsiteAccess {
@@ -86,18 +87,33 @@ const TeamManagement = () => {
       
       setLoading(true);
       try {
-        // Fetch team members
+        // Fetch team members for this organization
         const { data: members, error: membersError } = await supabase
-          .from('user_profiles')
-          .select('*')
+          .from('organization_memberships')
+          .select(`
+            id,
+            role,
+            created_at,
+            user:user_profiles (
+              id,
+              email,
+              first_name,
+              last_name
+            )
+          `)
           .eq('organisation_id', organisation.id);
         
         if (membersError) throw membersError;
         
-        // Cast the role to the correct type
+        // Transform the data to match our interface
         const typedMembers = members.map(member => ({
-          ...member,
-          role: member.role as 'admin' | 'member'
+          id: member.user.id,
+          email: member.user.email,
+          first_name: member.user.first_name,
+          last_name: member.user.last_name,
+          role: member.role as 'admin' | 'member',
+          created_at: member.created_at,
+          organisation_id: organisation.id
         }));
         
         setTeamMembers(typedMembers);
@@ -113,7 +129,7 @@ const TeamManagement = () => {
               website_id,
               created_at
             `)
-            .in('user_id', members.map(m => m.id));
+            .in('user_id', typedMembers.map(m => m.id));
           
           if (accessError) throw accessError;
           
@@ -140,12 +156,11 @@ const TeamManagement = () => {
           }
         } catch (error) {
           console.error('Error fetching website access:', error);
-          // If the website_access table doesn't exist yet, just continue with empty access
           setWebsiteAccess([]);
         }
       } catch (error) {
         console.error('Error fetching team data:', error);
-        toast.error('Failed to load team data');
+        toast.error('Failed to load team members');
       } finally {
         setLoading(false);
       }
@@ -317,28 +332,20 @@ const TeamManagement = () => {
 
   // Add existing user to organization by email
   const handleAddExistingUser = async () => {
-    if (!existingUserEmail.trim() || !organisation?.id) return;
+    if (!organisation?.id) return;
     
     setIsAddingExistingUser(true);
     try {
-      const emailToSearch = existingUserEmail.trim().toLowerCase();
-      console.log('Searching for user with email (case insensitive):', emailToSearch);
-      
-      // Check if user exists by email in user_profiles (case insensitive)
-      const { data: existingUsers, error: userCheckError } = await supabase
+      // Check if user exists
+      const { data: existingUsers, error: userError } = await supabase
         .from('user_profiles')
         .select('*')
-        .ilike('email', emailToSearch);
+        .eq('email', existingUserEmail.trim());
       
-      if (userCheckError) {
-        console.error('Error checking for existing user:', userCheckError);
-        throw userCheckError;
-      }
-      
-      console.log('Search results:', existingUsers);
+      if (userError) throw userError;
       
       if (!existingUsers || existingUsers.length === 0) {
-        console.log('User not found with email:', emailToSearch);
+        console.log('User not found with email:', existingUserEmail);
         
         // Try direct ID lookup if the input looks like a UUID
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -355,34 +362,37 @@ const TeamManagement = () => {
             console.log('Found user by ID:', userById[0]);
             const existingUser = userById[0];
             
-            // Continue with the user found by ID
-            if (existingUser.organisation_id === organisation.id) {
+            // Check if user is already in this organization
+            const { data: existingMembership } = await supabase
+              .from('organization_memberships')
+              .select('*')
+              .eq('user_id', existingUser.id)
+              .eq('organisation_id', organisation.id)
+              .single();
+            
+            if (existingMembership) {
               console.log('User already in organization:', organisation.id);
               toast.info('This user is already in your organization.');
               return;
             }
             
-            // Update user's organization
-            console.log('Updating user organization to:', organisation.id);
-            const { error: updateError } = await supabase
-              .from('user_profiles')
-              .update({ 
+            // Add user to organization
+            console.log('Adding user to organization:', organisation.id);
+            const { error: membershipError } = await supabase
+              .from('organization_memberships')
+              .insert({
+                user_id: existingUser.id,
                 organisation_id: organisation.id,
                 role: inviteRole
-              })
-              .eq('id', existingUser.id);
+              });
             
-            if (updateError) {
-              console.error('Error updating user organization:', updateError);
-              if (updateError.message?.includes('permission') || updateError.code === '42501') {
-                toast.error('Permission denied. You may not have the right access level to add this user.');
-              } else {
-                toast.error(`Failed to add user: ${updateError.message}`);
-              }
-              throw updateError;
+            if (membershipError) {
+              console.error('Error adding user to organization:', membershipError);
+              toast.error('Failed to add user to organization');
+              return;
             }
             
-            // Handle website access and state updates as before
+            // If member role, add website access
             if (inviteRole === 'member' && selectedWebsites.length > 0) {
               try {
                 console.log('Adding website access for user:', existingUser.id);
@@ -408,8 +418,8 @@ const TeamManagement = () => {
             // Refresh data
             const updatedUser = {
               ...existingUser,
-              organisation_id: organisation.id,
-              role: inviteRole as 'admin' | 'member'
+              role: inviteRole as 'admin' | 'member',
+              organisation_id: organisation.id
             };
             
             setTeamMembers(prev => [...prev, updatedUser]);
@@ -433,31 +443,33 @@ const TeamManagement = () => {
       console.log('Found user:', existingUser);
       
       // Check if user is already in this organization
-      if (existingUser.organisation_id === organisation.id) {
+      const { data: existingMembership } = await supabase
+        .from('organization_memberships')
+        .select('*')
+        .eq('user_id', existingUser.id)
+        .eq('organisation_id', organisation.id)
+        .single();
+      
+      if (existingMembership) {
         console.log('User already in organization:', organisation.id);
         toast.info('This user is already in your organization.');
         return;
       }
       
-      // Update user's organization
-      console.log('Updating user organization to:', organisation.id);
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ 
+      // Add user to organization
+      console.log('Adding user to organization:', organisation.id);
+      const { error: membershipError } = await supabase
+        .from('organization_memberships')
+        .insert({
+          user_id: existingUser.id,
           organisation_id: organisation.id,
           role: inviteRole
-        })
-        .eq('id', existingUser.id);
+        });
       
-      if (updateError) {
-        console.error('Error updating user organization:', updateError);
-        // Check if this might be a permissions issue
-        if (updateError.message?.includes('permission') || updateError.code === '42501') {
-          toast.error('Permission denied. You may not have the right access level to add this user.');
-        } else {
-          toast.error(`Failed to add user: ${updateError.message}`);
-        }
-        throw updateError;
+      if (membershipError) {
+        console.error('Error adding user to organization:', membershipError);
+        toast.error('Failed to add user to organization');
+        return;
       }
       
       // If member role, add website access
@@ -486,8 +498,8 @@ const TeamManagement = () => {
       // Refresh data
       const updatedUser = {
         ...existingUser,
-        organisation_id: organisation.id,
-        role: inviteRole as 'admin' | 'member'
+        role: inviteRole as 'admin' | 'member',
+        organisation_id: organisation.id
       };
       
       setTeamMembers(prev => [...prev, updatedUser]);

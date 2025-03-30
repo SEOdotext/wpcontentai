@@ -31,6 +31,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [organisation, setOrganisation] = useState<Organisation | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasOrganisation, setHasOrganisation] = useState<boolean>(false);
+  const [organizations, setOrganizations] = useState<Organisation[]>([]);
   const navigate = useNavigate();
 
   // Load the organisation on mount
@@ -47,48 +48,44 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           return;
         }
         
-        // Get user profile to get the organisation_id
-        const { data: profileData, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('organisation_id')
-          .eq('id', sessionData.session.user.id)
-          .single();
+        // Get user's organization memberships
+        const { data: memberships, error: membershipError } = await supabase
+          .from('organization_memberships')
+          .select(`
+            organisation_id,
+            role,
+            organisation:organisations (
+              id,
+              name
+            )
+          `)
+          .eq('user_id', sessionData.session.user.id);
         
-        if (profileError) {
-          console.error("Error fetching user profile:", profileError);
-          console.error("Full error details:", JSON.stringify(profileError, null, 2));
+        if (membershipError) {
+          console.error("Error fetching organization memberships:", membershipError);
+          console.error("Full error details:", JSON.stringify(membershipError, null, 2));
           setIsLoading(false);
           return;
         }
         
-        if (!profileData.organisation_id) {
-          console.log("User has no organisation");
+        if (!memberships || memberships.length === 0) {
+          console.log("User has no organizations");
           setHasOrganisation(false);
           setIsLoading(false);
           return;
         }
         
-        // Fetch organisation details
-        const { data: orgData, error: orgError } = await supabase
-          .from('organisations')
-          .select('*')
-          .eq('id', profileData.organisation_id)
-          .single();
-        
-        if (orgError) {
-          console.error("Error fetching organisation:", orgError);
-          console.error("Full error details:", JSON.stringify(orgError, null, 2));
-          setHasOrganisation(false);
-          setIsLoading(false);
-          return;
-        }
-        
-        console.log("Organisation loaded:", orgData);
-        setOrganisation(orgData as Organisation);
+        // Set the first organization as the current one
+        const currentOrg = memberships[0].organisation;
+        setOrganisation(currentOrg);
         setHasOrganisation(true);
+        
+        // Store all organizations for later use
+        setOrganizations(memberships.map(m => m.organisation));
+        
       } catch (error) {
-        console.error("Error in fetchOrganisation:", error);
-        toast.error("Failed to load your organisation data");
+        console.error("Error checking organization:", error);
+        setHasOrganisation(false);
       } finally {
         setIsLoading(false);
       }
@@ -96,6 +93,36 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     
     fetchOrganisation();
   }, []);
+
+  // Add function to switch organizations
+  const switchOrganisation = async (orgId: string) => {
+    try {
+      setIsLoading(true);
+      
+      // Get organization details
+      const { data: orgData, error: orgError } = await supabase
+        .from('organisations')
+        .select('*')
+        .eq('id', orgId)
+        .single();
+      
+      if (orgError) throw orgError;
+      
+      // Update current organization
+      setOrganisation(orgData);
+      
+      // Redirect to home page
+      navigate('/');
+      
+      return true;
+    } catch (error) {
+      console.error("Error switching organization:", error);
+      toast.error("Failed to switch organization");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Create a new organisation
   const createOrganisation = async (name: string): Promise<boolean> => {
@@ -109,33 +136,31 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return false;
       }
       
-      // Create organisation
+      // Create organization
       const { data: orgData, error: orgError } = await supabase
         .from('organisations')
-        .insert({ name })
+        .insert([{ name }])
         .select()
         .single();
       
-      if (orgError) {
-        console.error("Error creating organisation:", orgError);
-        toast.error("Failed to create organisation");
-        return false;
-      }
+      if (orgError) throw orgError;
       
-      // Update user profile with organisation_id
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ organisation_id: orgData.id })
-        .eq('id', sessionData.session.user.id);
+      // Add user as admin to the organization
+      const { error: membershipError } = await supabase
+        .from('organization_memberships')
+        .insert({
+          user_id: sessionData.session.user.id,
+          organisation_id: orgData.id,
+          role: 'admin'
+        });
       
-      if (updateError) {
-        console.error("Error updating user profile:", updateError);
-        toast.error("Failed to link organisation to your profile");
-        return false;
-      }
+      if (membershipError) throw membershipError;
       
-      setOrganisation(orgData as Organisation);
+      // Update state
+      setOrganisation(orgData);
       setHasOrganisation(true);
+      setOrganizations(prev => [...prev, orgData]);
+      
       toast.success("Organisation created successfully");
       
       // Redirect to home after organization is created
@@ -165,21 +190,22 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       console.log('Updating organisation:', { id, updates });
       
-      // First verify the user has access to this organisation
-      const { data: profileData, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('organisation_id')
-        .eq('id', sessionData.session.user.id)
+      // First verify the user has admin access to this organisation
+      const { data: membershipData, error: membershipError } = await supabase
+        .from('organization_memberships')
+        .select('role')
+        .eq('user_id', sessionData.session.user.id)
+        .eq('organisation_id', id)
         .single();
 
-      if (profileError) {
-        console.error("Error verifying user access:", profileError);
+      if (membershipError) {
+        console.error("Error verifying user access:", membershipError);
         toast.error("Failed to verify user access");
         return false;
       }
 
-      if (profileData.organisation_id !== id) {
-        console.error("User does not have access to this organisation");
+      if (membershipData.role !== 'admin') {
+        console.error("User does not have admin access to this organisation");
         toast.error("You don't have permission to update this organisation");
         return false;
       }
@@ -192,20 +218,18 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .select()
         .single();
       
-      if (orgError) {
-        console.error("Error updating organisation:", orgError);
-        console.error("Full error details:", JSON.stringify(orgError, null, 2));
-        toast.error("Failed to update organisation");
-        return false;
-      }
+      if (orgError) throw orgError;
       
-      console.log('Organisation updated successfully:', orgData);
-      setOrganisation(orgData as Organisation);
+      // Update state
+      setOrganisation(orgData);
+      setOrganizations(prev => prev.map(org => 
+        org.id === id ? orgData : org
+      ));
+      
       toast.success("Organisation updated successfully");
       return true;
     } catch (error) {
       console.error("Error in updateOrganisation:", error);
-      console.error("Full error details:", JSON.stringify(error, null, 2));
       toast.error("Failed to update organisation");
       return false;
     } finally {

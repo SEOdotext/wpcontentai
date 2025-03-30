@@ -209,34 +209,34 @@ export type Database = {
       }
       websites: {
         Row: {
-          created_at: string
           id: string
           name: string
-          organisation_id: string | null
-          updated_at: string
           url: string
+          organisation_id: string
+          created_at: string
+          updated_at?: string
           language?: string
           enable_ai_image_generation?: boolean
           image_prompt?: string
         }
         Insert: {
-          created_at?: string
           id?: string
           name: string
-          organisation_id?: string | null
-          updated_at?: string
           url: string
+          organisation_id: string
+          created_at?: string
+          updated_at?: string
           language?: string
           enable_ai_image_generation?: boolean
           image_prompt?: string
         }
         Update: {
-          created_at?: string
           id?: string
           name?: string
-          organisation_id?: string | null
-          updated_at?: string
           url?: string
+          organisation_id?: string
+          created_at?: string
+          updated_at?: string
           language?: string
           enable_ai_image_generation?: boolean
           image_prompt?: string
@@ -248,7 +248,7 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organisations"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       wordpress_settings: {
@@ -424,6 +424,48 @@ export type Database = {
             columns: ["post_theme_id"]
             isOneToOne: false
             referencedRelation: "post_themes"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      organisation_memberships: {
+        Row: {
+          id: string
+          member_id: string
+          organisation_id: string
+          role: 'admin' | 'user'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          member_id: string
+          organisation_id: string
+          role?: 'admin' | 'user'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          member_id?: string
+          organisation_id?: string
+          role?: 'admin' | 'user'
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organisation_memberships_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organisation_memberships_organisation_id_fkey"
+            columns: ["organisation_id"]
+            isOneToOne: false
+            referencedRelation: "organisations"
             referencedColumns: ["id"]
           }
         ]
