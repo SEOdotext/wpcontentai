@@ -364,8 +364,7 @@ Notice that the "categories" field contains an array of string UUIDs, not object
           subject_matter: idea.title,
           keywords: idea.keywords as string[], // Ensure it's treated as an array
           post_content: idea.description,
-          status: 'pending',
-          categories: [] // Initialize empty jsonb array
+          status: 'pending'
         })
         .select()
         .single();
@@ -382,15 +381,16 @@ Notice that the "categories" field contains an array of string UUIDs, not object
       if (idea.categories && Array.isArray(idea.categories) && idea.categories.length > 0) {
         // Filter out any invalid category IDs - only keep non-empty strings that exist in the category map
         const validCategoryIds = idea.categories
-          .filter(categoryId => 
+          .filter((categoryId: string) => 
             categoryId && 
             typeof categoryId === 'string' && 
             categoryId.trim() !== '' && 
             categoryMap[categoryId.trim()] !== undefined
           )
-          .map(categoryId => categoryId.trim());
+          .map((categoryId: string) => categoryId.trim());
           
         if (validCategoryIds.length > 0) {
+          console.log(`Creating category associations for post theme ${postTheme.id}:`, validCategoryIds);
           // Create associations one by one to avoid batch errors
           for (const categoryId of validCategoryIds) {
             const { error: categoryError } = await supabaseClient
@@ -409,6 +409,8 @@ Notice that the "categories" field contains an array of string UUIDs, not object
         } else {
           console.warn('No valid category IDs found for post theme:', postTheme.id);
         }
+      } else {
+        console.log('No categories to associate with post theme:', postTheme.id);
       }
     }
 

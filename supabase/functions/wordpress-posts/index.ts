@@ -215,25 +215,35 @@ serve(async (req) => {
       throw new Error('Missing required fields')
     }
     
-    // Get post theme data from database
+    // Get post theme with categories from junction table
     const { data: postTheme, error: postThemeError } = await supabaseClient
       .from('post_themes')
-      .select('*')
+      .select(`
+        *,
+        post_theme_categories!inner (
+          wordpress_category:wordpress_category_id (
+            id,
+            wp_category_id
+          )
+        )
+      `)
       .eq('id', post_theme_id)
       .single();
-    
+
     if (postThemeError) {
-      throw new Error('Failed to retrieve post theme data');
+      console.error('Error fetching post theme:', postThemeError);
+      throw new Error(`Failed to fetch post theme: ${postThemeError.message}`);
     }
 
     if (!postTheme) {
-      throw new Error('Post theme not found');
+      throw new Error(`Post theme not found with ID: ${post_theme_id}`);
     }
 
-    if (!postTheme.post_content) {
-      throw new Error('Post has no content');
-    }
-    
+    // Extract category IDs from the junction table
+    const categoryIds = postTheme.post_theme_categories
+      .map(link => link.wordpress_category.wp_category_id)
+      .filter(id => id !== null);
+
     // Log detailed image information
     console.log('Post theme data:', {
       id: post_theme_id,
@@ -324,16 +334,7 @@ serve(async (req) => {
       status: postStatus,
       ...(uploadedImageId && { featured_media: uploadedImageId }),
       // Add categories if they exist
-      ...(postTheme.categories && postTheme.categories.length > 0 && { 
-        categories: await getCategoryIds(
-          supabaseClient, 
-          website_id, 
-          postTheme.categories,
-          wpSettings.wp_url,
-          wpSettings.wp_username,
-          wpSettings.wp_application_password
-        ) 
-      })
+      ...(categoryIds.length > 0 && { categories: categoryIds })
     }
     
     // Make the API request to WordPress

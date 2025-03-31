@@ -21,8 +21,6 @@ interface PostThemeRow {
   wp_post_url: string | null;
   wp_sent_date: string | null;
   image_generation_error?: string | null;
-  // Categories will be fetched separately through the junction table
-  categories?: { id: string; name: string }[];
 }
 
 export interface PostTheme {
@@ -211,12 +209,17 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
           throw categoryError;
         }
 
+        console.log(`Fetched category links for themes ${themeIds}:`, categoryLinks);
+
         // Add categories from this chunk to our map
         (categoryLinks || []).forEach(link => {
           const themeId = link.post_theme_id;
           if (!categoriesByTheme[themeId]) categoriesByTheme[themeId] = [];
-          if (link.wordpress_category) {
-            categoriesByTheme[themeId].push(link.wordpress_category);
+          if (link.wordpress_category && typeof link.wordpress_category === 'object' && 'id' in link.wordpress_category && 'name' in link.wordpress_category) {
+            categoriesByTheme[themeId].push({
+              id: link.wordpress_category.id as string,
+              name: link.wordpress_category.name as string
+            });
           }
         });
       }
