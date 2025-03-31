@@ -146,7 +146,7 @@ interface Organisation {
 }
 
 const Settings = () => {
-  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt, imageModel, setImageModel, negativePrompt, setNegativePrompt } = useSettings();
+  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, restoreDefaultWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt, imageModel, setImageModel, negativePrompt, setNegativePrompt } = useSettings();
   const { currentWebsite, updateWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
   const { addPostTheme } = usePostThemes();
@@ -2147,6 +2147,40 @@ const Settings = () => {
                         </Button>
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Writing Style Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Writing Style</CardTitle>
+                    <CardDescription>
+                      Define your preferred writing style and tone for content generation
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="writing-style">Content Writing Style</Label>
+                      <Textarea
+                        id="writing-style"
+                        value={styleInput}
+                        onChange={(e) => setStyleInput(e.target.value)}
+                        placeholder="e.g., Professional, Conversational, Technical, Educational. You can also add specific details about tone, vocabulary level, and writing approach."
+                        className="min-h-[200px]"
+                      />
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={restoreDefaultWritingStyle}
+                        >
+                          Restore Default
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Specify your preferred writing style to guide content generation. This affects tone, vocabulary, and overall presentation.
+                    </p>
                   </CardContent>
                 </Card>
 

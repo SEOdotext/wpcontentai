@@ -27,6 +27,7 @@ interface SettingsContextType {
   setPublicationFrequency: (days: number) => void;
   writingStyle: string;
   setWritingStyle: (style: string) => void;
+  restoreDefaultWritingStyle: () => void;
   subjectMatters: string[];
   setSubjectMatters: (subjects: string[]) => void;
   wordpressTemplate: string;
@@ -42,7 +43,7 @@ interface SettingsContextType {
 
 const defaultSettings = {
   publicationFrequency: 7, // Default to weekly
-  writingStyle: 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through.', // Default writing style
+  writingStyle: 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through. Structure your content to grab attention with a strong hook, provide context that connects with your reader, deliver clear value, back it up with proof, and end with a clear action step. This natural flow helps both readers and AI understand your message better.',
   subjectMatters: [], // Empty array for default subjects
   wordpressTemplate: `<!-- WordPress Post HTML Structure Example -->
 <article class="post">
@@ -89,6 +90,7 @@ const SettingsContext = createContext<SettingsContextType>({
   ...defaultSettings,
   setPublicationFrequency: () => {},
   setWritingStyle: () => {},
+  restoreDefaultWritingStyle: () => {},
   setSubjectMatters: () => {},
   setWordpressTemplate: () => {},
   setImagePrompt: () => {},
@@ -432,13 +434,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, prompt);
   };
 
+  // Add handler for restoring default writing style
+  const handleRestoreDefaultWritingStyle = () => {
+    setWritingStyle(defaultSettings.writingStyle);
+    updateSettingsInDatabase(publicationFrequency, defaultSettings.writingStyle, subjectMatters);
+  };
+
   return (
     <SettingsContext.Provider 
       value={{ 
         publicationFrequency, 
         setPublicationFrequency: handleSetPublicationFrequency, 
         writingStyle, 
-        setWritingStyle: handleSetWritingStyle, 
+        setWritingStyle: handleSetWritingStyle,
+        restoreDefaultWritingStyle: handleRestoreDefaultWritingStyle,
         subjectMatters, 
         setSubjectMatters: handleSetSubjectMatters,
         wordpressTemplate,
