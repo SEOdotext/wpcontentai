@@ -42,10 +42,10 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
 
-      // First get the user's organisation_id from organisation_memberships
+      // First get the user's organisation_id and role from organisation_memberships
       const { data: membership, error: membershipError } = await supabase
         .from('organisation_memberships')
-        .select('organisation_id')
+        .select('organisation_id, role')
         .eq('member_id', user.id)
         .single();
 
@@ -69,20 +69,55 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         throw orgError;
       }
 
-      // Then fetch websites for that organisation
-      const { data, error } = await supabase
-        .from('websites')
-        .select('*')
-        .eq('organisation_id', membership.organisation_id);
+      let websitesData;
 
-      if (error) {
-        throw error;
+      // For admins, fetch all websites in the organization
+      if (membership.role === 'admin') {
+        const { data, error } = await supabase
+          .from('websites')
+          .select('*')
+          .eq('organisation_id', membership.organisation_id);
+
+        if (error) {
+          throw error;
+        }
+        
+        websitesData = data;
+      } 
+      // For members, only fetch websites they have access to
+      else {
+        // Get website IDs the user has access to
+        const { data: websiteAccess, error: accessError } = await supabase
+          .from('website_access')
+          .select('website_id')
+          .eq('user_id', user.id);
+
+        if (accessError) {
+          throw accessError;
+        }
+
+        if (!websiteAccess || websiteAccess.length === 0) {
+          setWebsites([]);
+          return;
+        }
+
+        // Get the websites by their IDs
+        const websiteIds = websiteAccess.map(access => access.website_id);
+        const { data, error } = await supabase
+          .from('websites')
+          .select('*')
+          .in('id', websiteIds);
+
+        if (error) {
+          throw error;
+        }
+        
+        websitesData = data;
       }
 
       // Add organization name to each website
-      const websitesWithOrg = data.map(website => ({
-        ...website,
-        organisation_name: orgData.name
+      const websitesWithOrg = websitesData.map(website => ({
+        ...website
       }));
 
       setWebsites(websitesWithOrg || []);
@@ -99,9 +134,9 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         } else {
           // Fallback to first website if saved ID not found
           console.log("Saved website ID not found, using first website");
-          setCurrentWebsite(websitesWithOrg[0] as Website);
+          setCurrentWebsite(websitesWithOrg.length > 0 ? websitesWithOrg[0] as Website : null);
         }
-      } else if (!currentWebsite) {
+      } else if (!currentWebsite && websitesWithOrg.length > 0) {
         // Set first website as current if none is saved and none is selected
         setCurrentWebsite(websitesWithOrg[0] as Website);
       }
