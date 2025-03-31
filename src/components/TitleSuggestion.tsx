@@ -11,6 +11,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { usePostThemes } from '@/context/PostThemesContext';
 import { useWebsites } from '@/context/WebsitesContext';
 import { CalendarIcon } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface TitleSuggestionProps {
   id: string;
@@ -268,21 +269,32 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
           <div className="mt-1 flex items-center gap-2">
             {getStatusBadge()}
             <div className="flex flex-wrap gap-1">
-              {categories.map((category) => (
-                <Badge 
-                  key={`cat-${category.id}`}
-                  variant="secondary"
-                  className="bg-secondary/50 text-secondary-foreground"
-                >
-                  <span>{category.name}</span>
-                  <button
-                    onClick={(e) => handleRemoveCategory(category, e)}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex flex-wrap gap-1">
+                      {categories.map((category) => (
+                        <Badge 
+                          key={`cat-${category.id}`}
+                          variant="secondary"
+                          className="bg-secondary/50 text-secondary-foreground"
+                        >
+                          <span>{category.name}</span>
+                          <button
+                            onClick={(e) => handleRemoveCategory(category, e)}
+                            className="ml-1 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Categories help organize your content on WordPress</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </div>
@@ -353,28 +365,37 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       </div>
       
       {safeKeywords.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {safeKeywords.map((keyword, index) => (
-            <Badge 
-              key={index}
-              variant="outline" 
-              className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 pr-1"
-            >
-              <span>{keyword}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-3 w-3 rounded-full p-0 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
-                onClick={(e) => handleRemoveKeyword(keyword, e)}
-                disabled={status === 'published'}
-              >
-                <X className="h-2 w-2" />
-                <span className="sr-only">Remove keyword</span>
-              </Button>
-            </Badge>
-          ))}
-        </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {safeKeywords.map((keyword, index) => (
+                  <Badge 
+                    key={index}
+                    variant="outline" 
+                    className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 pr-1"
+                  >
+                    <span>{keyword}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-3 w-3 rounded-full p-0 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
+                      onClick={(e) => handleRemoveKeyword(keyword, e)}
+                      disabled={status === 'published'}
+                    >
+                      <X className="h-2 w-2" />
+                      <span className="sr-only">Remove keyword</span>
+                    </Button>
+                  </Badge>
+                ))}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Keywords help with SEO and content organization</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
     </div>
   );
