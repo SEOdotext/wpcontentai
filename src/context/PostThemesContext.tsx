@@ -161,6 +161,11 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
   // Function to fetch post themes from the database
   const fetchPostThemes = async () => {
     try {
+      if (!currentWebsite?.id) {
+        console.log('No current website selected, skipping post themes fetch');
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
 
