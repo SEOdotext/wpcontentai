@@ -33,6 +33,7 @@ interface GeneratePostIdeasResponse {
   keywords: string[];
   keywordsByTitle: { [title: string]: string[] };
   categoriesByTitle: { [title: string]: string[] };
+  postThemes: { [title: string]: { id: string } };
 }
 
 // Helper function to detect if content is likely in Danish
@@ -331,37 +332,30 @@ Notice that the "categories" field contains an array of string UUIDs, not object
       // Use the original keywords from the AI response
       keywordsByTitle[processedTitle] = idea.keywords;
       
-      // Keep the original category IDs
-      categoriesByTitle[processedTitle] = Array.isArray(idea.categories) 
-        ? idea.categories.filter(id => id && typeof id === 'string' && categoryMap[id])
-        : [];
+      // Make sure we NEVER return null or invalid categories
+      if (Array.isArray(idea.categories)) {
+        // Strictly filter to only include valid UUIDs that exist in the category map
+        const validCategories = idea.categories.filter(id => 
+          id && 
+          typeof id === 'string' && 
+          id.trim() !== '' && 
+          categoryMap[id.trim()] !== undefined
+        ).map(id => id.trim());
+        
+        categoriesByTitle[processedTitle] = validCategories;
+      } else {
+        // Always ensure we have an array, even if empty
+        categoriesByTitle[processedTitle] = [];
+      }
     });
 
     // Use the first title's keywords as the default set
     const defaultKeywords = keywordsByTitle[processedTitles[0]] || [];
 
     // Process the ideas and create post themes with categories
-    for (const idea of ideas.ideas) {
-      // Ensure categories are in the correct format
-      let safeCategories: string[] = [];
-      if (idea.categories) {
-        // Make sure categories is an array
-        if (Array.isArray(idea.categories)) {
-          safeCategories = idea.categories
-            .filter((cat): cat is string => typeof cat === 'string' && cat.trim() !== '')
-            .map(cat => cat.trim());
-        } else if (typeof idea.categories === 'string') {
-          // Handle case where categories might be a single string
-          safeCategories = [idea.categories.trim()];
-        }
-        
-        // Log any category format issues
-        if (safeCategories.length === 0 && idea.categories && 
-            (Array.isArray(idea.categories) ? idea.categories.length > 0 : true)) {
-          console.warn('Categories were provided but none were valid:', idea.categories);
-        }
-      }
+    const postThemes: { [title: string]: { id: string } } = {};
 
+    for (const idea of ideas.ideas) {
       // Create post theme with proper array type for keywords
       const { data: postTheme, error: postThemeError } = await supabaseClient
         .from('post_themes')
@@ -370,7 +364,7 @@ Notice that the "categories" field contains an array of string UUIDs, not object
           subject_matter: idea.title,
           keywords: idea.keywords as string[], // Ensure it's treated as an array
           post_content: idea.description,
-          status: 'draft',
+          status: 'pending',
           categories: [] // Initialize empty jsonb array
         })
         .select()
@@ -381,29 +375,36 @@ Notice that the "categories" field contains an array of string UUIDs, not object
         continue;
       }
 
+      // Store the post theme ID for the frontend reference
+      postThemes[idea.title] = { id: postTheme.id };
+
       // Create category associations using the junction table
-      if (safeCategories.length > 0) {
-        // Filter out any invalid category IDs
-        const validCategoryIds = safeCategories
-          .filter(categoryId => categoryMap[categoryId] !== undefined);
+      if (idea.categories && Array.isArray(idea.categories) && idea.categories.length > 0) {
+        // Filter out any invalid category IDs - only keep non-empty strings that exist in the category map
+        const validCategoryIds = idea.categories
+          .filter(categoryId => 
+            categoryId && 
+            typeof categoryId === 'string' && 
+            categoryId.trim() !== '' && 
+            categoryMap[categoryId.trim()] !== undefined
+          )
+          .map(categoryId => categoryId.trim());
           
         if (validCategoryIds.length > 0) {
-          const categoryAssociations = validCategoryIds.map(categoryId => ({
-            post_theme_id: postTheme.id,
-            wordpress_category_id: categoryId
-          }));
-
-          console.log('Creating category associations:', JSON.stringify(categoryAssociations, null, 2));
-
-          const { error: categoryError } = await supabaseClient
-            .from('post_theme_categories')
-            .insert(categoryAssociations);
-
-          if (categoryError) {
-            console.error('Error creating category associations:', categoryError);
-            console.error('Category associations attempted:', categoryAssociations);
-          } else {
-            console.log(`Successfully associated ${categoryAssociations.length} categories with post theme ${postTheme.id}`);
+          // Create associations one by one to avoid batch errors
+          for (const categoryId of validCategoryIds) {
+            const { error: categoryError } = await supabaseClient
+              .from('post_theme_categories')
+              .insert({
+                post_theme_id: postTheme.id,
+                wordpress_category_id: categoryId
+              });
+            
+            if (categoryError) {
+              console.error(`Error creating category association for ${categoryId}:`, categoryError);
+            } else {
+              console.log(`Successfully associated category ${categoryId} with post theme ${postTheme.id}`);
+            }
           }
         } else {
           console.warn('No valid category IDs found for post theme:', postTheme.id);
@@ -411,13 +412,18 @@ Notice that the "categories" field contains an array of string UUIDs, not object
       }
     }
 
+    // Log categories for debugging
+    console.log('Categories by title to be returned to frontend:', JSON.stringify(categoriesByTitle, null, 2));
+    console.log('Post themes to be returned to frontend:', JSON.stringify(postThemes, null, 2));
+    
     return new Response(
       JSON.stringify({
         success: true,
         titles: processedTitles,
         keywords: defaultKeywords,
         keywordsByTitle,
-        categoriesByTitle
+        categoriesByTitle,
+        postThemes
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

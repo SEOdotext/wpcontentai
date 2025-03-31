@@ -360,6 +360,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
 
       // Store categories by title
       setCategoriesByTitle(result.categoriesByTitle || {});
+      console.log('API response:', result); // Add for debugging
 
       // Validate furthestFutureDate
       const minValidTimestamp = new Date('2020-01-01').getTime();
@@ -372,20 +373,54 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         baseDate = new Date();
       }
 
-      // Create post themes for each title
+      // If the backend already created post themes, just refresh our list
+      if (result.postThemes && Object.keys(result.postThemes).length > 0) {
+        console.log('Post themes already created by backend:', result.postThemes);
+        await fetchPostThemes();
+        
+        // Clear input
+        setInputValue('');
+        
+        toast.success(`Generated ${result.titles.length} content suggestions for you`);
+        return;
+      }
+
+      // Legacy fallback - Create post themes for each title
       const creationPromises = result.titles.map((title, index) => {
         // Add days based on index to space out the posts
         const postDate = addDays(baseDate, index + 1);
         
         // Ensure we have valid arrays for keywords
-        const titleKeywords = result.keywordsByTitle?.[title] || result.keywords || [];
-        const safeKeywords = Array.isArray(titleKeywords) ? titleKeywords : [];
+        let safeKeywords: string[] = [];
+        if (result.keywordsByTitle && result.keywordsByTitle[title]) {
+          // Ensure keywords is an array of strings
+          const titleKeywords = result.keywordsByTitle[title];
+          safeKeywords = Array.isArray(titleKeywords) ? titleKeywords : [];
+        } else if (Array.isArray(result.keywords)) {
+          safeKeywords = result.keywords;
+        }
+        
+        // Get categories for this title
+        let safeCategories: { id: string; name: string }[] = [];
+        if (result.categoriesByTitle && result.categoriesByTitle[title]) {
+          const titleCategories = result.categoriesByTitle[title];
+          if (Array.isArray(titleCategories)) {
+            safeCategories = titleCategories.map(catId => {
+              // If it's already an object with id/name, use it
+              if (typeof catId === 'object' && catId !== null && 'id' in catId) {
+                return catId as { id: string; name: string };
+              }
+              // Otherwise convert string ID to object
+              return { id: String(catId), name: 'Category' };
+            });
+          }
+        }
         
         return addPostTheme({
           website_id: currentWebsite.id,
           subject_matter: title,
           keywords: safeKeywords,
-          categories: result.categoriesByTitle?.[title] || [],
+          categories: safeCategories,
           status: 'pending',
           scheduled_date: postDate.toISOString(),
           post_content: null,
