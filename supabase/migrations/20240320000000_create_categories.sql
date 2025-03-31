@@ -13,6 +13,11 @@ CREATE TABLE IF NOT EXISTS wordpress_categories (
     UNIQUE(website_id, wp_category_id)
 );
 
+-- Add indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_wordpress_categories_website_id ON wordpress_categories(website_id);
+CREATE INDEX IF NOT EXISTS idx_wordpress_categories_name ON wordpress_categories(name);
+CREATE INDEX IF NOT EXISTS idx_wordpress_categories_wp_category_id ON wordpress_categories(wp_category_id);
+
 -- Add RLS policies
 ALTER TABLE wordpress_categories ENABLE ROW LEVEL SECURITY;
 

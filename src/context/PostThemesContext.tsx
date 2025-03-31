@@ -164,36 +164,33 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       setIsLoading(true);
       setError(null);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No user found');
-
-      // First fetch the post themes
-      const { data: themes, error: fetchError } = await supabase
+      // Fetch post themes
+      const { data: themes, error: themesError } = await supabase
         .from('post_themes')
         .select('*')
         .eq('website_id', currentWebsite.id)
-        .order('scheduled_date', { ascending: true });
+        .order('created_at', { ascending: false });
 
-      if (fetchError) {
-        console.error('Database fetch error:', fetchError);
-        throw fetchError;
+      if (themesError) {
+        console.error('Error fetching post themes:', themesError);
+        setError(themesError.message);
+        return;
       }
 
-      if (!themes || themes.length === 0) {
-        console.log('No themes found for website:', currentWebsite.id);
+      if (!themes) {
         setPostThemes([]);
         return;
       }
 
-      // Fetch categories in chunks to avoid URL length limits
-      const CHUNK_SIZE = 100;
-      const categoriesByTheme: Record<string, { id: string; name: string }[]> = {};
+      // Process themes in chunks to avoid URL length limits
+      const CHUNK_SIZE = 50;
+      const categoriesByTheme = new Map<string, Array<{ id: string; name: string }>>();
       
       for (let i = 0; i < themes.length; i += CHUNK_SIZE) {
         const chunk = themes.slice(i, i + CHUNK_SIZE);
-        const themeIds = chunk.map(t => t.id);
+        const themeIds = chunk.map(theme => theme.id);
         
-        const { data: categoryLinks, error: categoryError } = await supabase
+        const { data: categories, error: categoriesError } = await supabase
           .from('post_theme_categories')
           .select(`
             post_theme_id,
@@ -204,49 +201,36 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
           `)
           .in('post_theme_id', themeIds);
 
-        if (categoryError) {
-          console.error('Error fetching categories:', categoryError);
-          throw categoryError;
+        if (categoriesError) {
+          console.error('Error fetching categories:', categoriesError);
+          continue; // Skip this chunk but continue with others
         }
 
-        console.log(`Fetched category links for themes ${themeIds}:`, categoryLinks);
-
-        // Add categories from this chunk to our map
-        (categoryLinks || []).forEach(link => {
-          const themeId = link.post_theme_id;
-          if (!categoriesByTheme[themeId]) categoriesByTheme[themeId] = [];
-          if (link.wordpress_category && typeof link.wordpress_category === 'object' && 'id' in link.wordpress_category && 'name' in link.wordpress_category) {
-            categoriesByTheme[themeId].push({
-              id: link.wordpress_category.id as string,
-              name: link.wordpress_category.name as string
-            });
-          }
-        });
+        if (categories) {
+          categories.forEach(cat => {
+            if (!categoriesByTheme.has(cat.post_theme_id)) {
+              categoriesByTheme.set(cat.post_theme_id, []);
+            }
+            if (cat.wordpress_category) {
+              categoriesByTheme.get(cat.post_theme_id)?.push({
+                id: cat.wordpress_category.id,
+                name: cat.wordpress_category.name
+              });
+            }
+          });
+        }
       }
 
-      const typedThemes: PostTheme[] = themes.map((theme: PostThemeRow) => ({
-        id: theme.id,
-        website_id: theme.website_id,
-        subject_matter: theme.subject_matter,
-        keywords: Array.isArray(theme.keywords) ? theme.keywords : [],
-        post_content: theme.post_content || null,
-        status: theme.status as 'pending' | 'approved' | 'published',
-        scheduled_date: theme.scheduled_date,
-        created_at: theme.created_at,
-        updated_at: theme.updated_at,
-        image: theme.image || null,
-        wp_post_id: theme.wp_post_id || null,
-        wp_post_url: theme.wp_post_url || null,
-        wp_sent_date: theme.wp_sent_date || null,
-        image_generation_error: theme.image_generation_error || undefined,
-        categories: categoriesByTheme[theme.id] || []
+      // Combine themes with their categories
+      const themesWithCategories = themes.map(theme => ({
+        ...theme,
+        categories: categoriesByTheme.get(theme.id) || []
       }));
 
-      setPostThemes(typedThemes);
-    } catch (error) {
-      console.error('Error fetching post themes:', error);
-      setError(error instanceof Error ? error : new Error('Failed to fetch post themes'));
-      toast.error('Failed to load post themes');
+      setPostThemes(themesWithCategories);
+    } catch (err) {
+      console.error('Error in fetchPostThemes:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setIsLoading(false);
     }
