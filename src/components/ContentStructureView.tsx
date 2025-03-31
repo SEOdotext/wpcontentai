@@ -28,16 +28,17 @@ interface TitleSuggestionProps {
   title: string;
   keywords: string[];
   categories: { id: string; name: string }[];
-  selected: boolean;
-  onSelect: () => void;
-  onRemove: () => void;
+  selected?: boolean;
+  onSelect?: (id: string) => void;
+  onRemove?: (id: string) => void;
+  className?: string;
   date: Date;
-  onUpdateDate: (newDate: Date) => void;
-  onLiked: () => void;
+  onUpdateDate?: (date: Date) => void;
+  onLiked?: () => void;
   status: 'pending' | 'approved' | 'published';
-  onUpdateKeywords: (keywords: string[]) => void;
-  onUpdateCategories: (categories: { id: string; name: string }[]) => void;
-  isGeneratingContent: boolean;
+  onUpdateKeywords?: (id: string, keywords: string[]) => void;
+  onUpdateCategories?: (id: string, categories: { id: string; name: string }[]) => void;
+  isGeneratingContent?: boolean;
 }
 
 // Helper function to format titles with proper Danish capitalization
@@ -103,6 +104,10 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   
   // Add state for furthest future date
   const [furthestFutureDate, setFurthestFutureDate] = useState<Date>(new Date());
+  
+  // Add pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 30;
   
   // Cleanup on unmount
   useEffect(() => {
@@ -626,6 +631,16 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       };
     });
 
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredTitleSuggestions.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedSuggestions = filteredTitleSuggestions.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+  // Reset to first page when view mode changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [viewMode]);
+
   // Get the appropriate view title and description
   const getViewInfo = () => {
     switch (viewMode) {
@@ -748,7 +763,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       
       {isLoading ? (
         <div className="space-y-4">
-          {filteredTitleSuggestions.length > 0 && (
+          {paginatedSuggestions.length > 0 && (
             <div className="grid gap-4">
               {viewMode !== 'pending' && (
                 <Alert className={`mb-2 ${viewInfo.alertClass}`}>
@@ -757,29 +772,29 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   </AlertDescription>
                 </Alert>
               )}
-              {filteredTitleSuggestions.map((title) => (
+              {paginatedSuggestions.map((suggestion) => (
                 <TitleSuggestion
-                  key={title.id}
-                  id={title.id}
-                  title={title.title}
-                  keywords={title.keywords}
-                  categories={title.categories}
-                  selected={selectedTitleId === title.id}
-                  onSelect={() => handleSelectTitle(title.id)}
-                  onRemove={() => handleRemoveTitle(title.id)}
-                  date={title.date}
+                  key={suggestion.id}
+                  id={suggestion.id}
+                  title={suggestion.title}
+                  keywords={suggestion.keywords}
+                  categories={suggestion.categories}
+                  selected={suggestion.id === selectedTitleId}
+                  onSelect={handleSelectTitle}
+                  onRemove={handleRemoveTitle}
+                  date={suggestion.date}
                   onUpdateDate={(newDate) => {
                     if (newDate instanceof Date) {
-                      handleUpdateTitleDate(title.id, newDate);
+                      handleUpdateTitleDate(suggestion.id, newDate);
                     } else {
                       console.error('Invalid date received from calendar:', newDate);
                     }
                   }}
-                  onLiked={() => handleTitleLiked(title.id)}
-                  status={title.status}
-                  onUpdateKeywords={(keywords) => handleUpdateKeywords(title.id, keywords)}
-                  onUpdateCategories={(categories) => handleUpdateCategories(title.id, categories)}
-                  isGeneratingContent={isGeneratingContent(title.id)}
+                  onLiked={() => handleTitleLiked(suggestion.id)}
+                  status={suggestion.status}
+                  onUpdateKeywords={handleUpdateKeywords}
+                  onUpdateCategories={handleUpdateCategories}
+                  isGeneratingContent={isGeneratingContent(suggestion.id)}
                 />
               ))}
             </div>
@@ -793,7 +808,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
             </span>
           </div>
         </div>
-      ) : filteredTitleSuggestions.length > 0 ? (
+      ) : paginatedSuggestions.length > 0 ? (
         <div className="grid gap-4">
           {viewMode !== 'pending' && (
             <Alert className={`mb-2 ${viewInfo.alertClass}`}>
@@ -802,29 +817,29 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               </AlertDescription>
             </Alert>
           )}
-          {filteredTitleSuggestions.map((title) => (
+          {paginatedSuggestions.map((suggestion) => (
             <TitleSuggestion
-              key={title.id}
-              id={title.id}
-              title={title.title}
-              keywords={title.keywords}
-              categories={title.categories}
-              selected={selectedTitleId === title.id}
-              onSelect={() => handleSelectTitle(title.id)}
-              onRemove={() => handleRemoveTitle(title.id)}
-              date={title.date}
+              key={suggestion.id}
+              id={suggestion.id}
+              title={suggestion.title}
+              keywords={suggestion.keywords}
+              categories={suggestion.categories}
+              selected={suggestion.id === selectedTitleId}
+              onSelect={handleSelectTitle}
+              onRemove={handleRemoveTitle}
+              date={suggestion.date}
               onUpdateDate={(newDate) => {
                 if (newDate instanceof Date) {
-                  handleUpdateTitleDate(title.id, newDate);
+                  handleUpdateTitleDate(suggestion.id, newDate);
                 } else {
                   console.error('Invalid date received from calendar:', newDate);
                 }
               }}
-              onLiked={() => handleTitleLiked(title.id)}
-              status={title.status}
-              onUpdateKeywords={(keywords) => handleUpdateKeywords(title.id, keywords)}
-              onUpdateCategories={(categories) => handleUpdateCategories(title.id, categories)}
-              isGeneratingContent={isGeneratingContent(title.id)}
+              onLiked={() => handleTitleLiked(suggestion.id)}
+              status={suggestion.status}
+              onUpdateKeywords={handleUpdateKeywords}
+              onUpdateCategories={handleUpdateCategories}
+              isGeneratingContent={isGeneratingContent(suggestion.id)}
             />
           ))}
         </div>
@@ -858,6 +873,31 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                 : () => setViewMode('pending')
           }
         />
+      )}
+      
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-2 mt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </Button>
+        </div>
       )}
     </div>
   );
