@@ -353,10 +353,14 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         // Add days based on index to space out the posts
         const postDate = addDays(furthestFutureDate, index + 1);
         
+        // Ensure we have valid arrays for keywords
+        const titleKeywords = result.keywordsByTitle?.[title] || result.keywords || [];
+        const safeKeywords = Array.isArray(titleKeywords) ? titleKeywords : [];
+        
         return addPostTheme({
           website_id: currentWebsite.id,
           subject_matter: title,
-          keywords: result.keywordsByTitle?.[title] || result.keywords,
+          keywords: safeKeywords,
           categories: result.categoriesByTitle?.[title] || [],
           status: 'pending',
           scheduled_date: postDate.toISOString(),

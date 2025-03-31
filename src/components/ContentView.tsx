@@ -85,6 +85,9 @@ const ContentView: React.FC<ContentViewProps> = ({
     }
   }, [isGeneratingContent, hasContent]);
 
+  // Ensure keywords is always a valid array
+  const safeKeywords = Array.isArray(keywords) ? keywords : [];
+
   return (
     <Sheet open={true} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <SheetPortal>
@@ -230,10 +233,10 @@ const ContentView: React.FC<ContentViewProps> = ({
                 </div>
               )}
               
-              {keywords.length > 0 && (
+              {safeKeywords.length > 0 && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <Tag className="h-3 w-3" />
-                  <span>{keywords.length} keywords</span>
+                  <span>{safeKeywords.length} keywords</span>
                 </div>
               )}
               
@@ -372,13 +375,13 @@ const ContentView: React.FC<ContentViewProps> = ({
             )}
             
             {/* Keywords Section */}
-            {keywords.length > 0 && (
+            {safeKeywords.length > 0 && (
               <>
                 <Separator className="mt-0 mb-3 shrink-0" />
                 <div className="px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6 shrink-0">
                   <h3 className="text-sm font-medium mb-2">Keywords:</h3>
                   <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
-                    {keywords.map((keyword, index) => (
+                    {safeKeywords.map((keyword, index) => (
                       <Badge 
                         key={index}
                         variant="outline" 

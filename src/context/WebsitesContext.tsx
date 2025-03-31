@@ -3,7 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Database } from '../integrations/supabase/types';
 
-type Website = Database['public']['Tables']['websites']['Row'];
+type Website = Database['public']['Tables']['websites']['Row'] & {
+  organisation_name?: string;
+};
 type WebsiteInsert = Omit<Database['public']['Tables']['websites']['Insert'], 'organisation_id'>;
 type WebsiteUpdate = Database['public']['Tables']['websites']['Update'];
 
@@ -71,7 +73,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       let websitesData;
 
-      // For admins, fetch all websites in the organization
+      // If the user is an admin, they can see all websites in the organization
       if (membership.role === 'admin') {
         const { data, error } = await supabase
           .from('websites')
@@ -84,10 +86,10 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         websitesData = data;
       } 
-      // For members, only fetch websites they have access to
+      // If the user is a member, they can only see websites they have access to
       else {
-        // Get website IDs the user has access to
-        const { data: websiteAccess, error: accessError } = await supabase
+        // Get websites the user has access to from website_access table
+        const { data: accessibleWebsites, error: accessError } = await supabase
           .from('website_access')
           .select('website_id')
           .eq('user_id', user.id);
@@ -96,13 +98,16 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           throw accessError;
         }
 
-        if (!websiteAccess || websiteAccess.length === 0) {
+        if (!accessibleWebsites || accessibleWebsites.length === 0) {
           setWebsites([]);
+          setCurrentWebsite(null);
           return;
         }
 
-        // Get the websites by their IDs
-        const websiteIds = websiteAccess.map(access => access.website_id);
+        // Extract website IDs the user has access to
+        const websiteIds = accessibleWebsites.map(access => access.website_id);
+
+        // Get the actual website details
         const { data, error } = await supabase
           .from('websites')
           .select('*')
@@ -111,13 +116,14 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (error) {
           throw error;
         }
-        
+
         websitesData = data;
       }
 
       // Add organization name to each website
       const websitesWithOrg = websitesData.map(website => ({
-        ...website
+        ...website,
+        organisation_name: orgData.name
       }));
 
       setWebsites(websitesWithOrg || []);
@@ -126,17 +132,20 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const savedWebsiteId = localStorage.getItem('currentWebsiteId');
       
       if (savedWebsiteId) {
-        // Find the website with the saved ID
+        // Find the website with the saved ID among the accessible websites
         const savedWebsite = websitesWithOrg.find(website => website.id === savedWebsiteId);
         if (savedWebsite) {
           console.log("Restoring previously selected website:", savedWebsite.name);
           setCurrentWebsite(savedWebsite as Website);
+        } else if (websitesWithOrg.length > 0) {
+          // If the saved website is no longer accessible, use the first accessible one
+          console.log("Saved website ID not accessible or not found, using first website");
+          setCurrentWebsite(websitesWithOrg[0] as Website);
         } else {
-          // Fallback to first website if saved ID not found
-          console.log("Saved website ID not found, using first website");
-          setCurrentWebsite(websitesWithOrg.length > 0 ? websitesWithOrg[0] as Website : null);
+          // Reset current website if user has no access to any websites
+          setCurrentWebsite(null);
         }
-      } else if (!currentWebsite && websitesWithOrg.length > 0) {
+      } else if (websitesWithOrg.length > 0 && !currentWebsite) {
         // Set first website as current if none is saved and none is selected
         setCurrentWebsite(websitesWithOrg[0] as Website);
       }

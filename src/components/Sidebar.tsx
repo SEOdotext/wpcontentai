@@ -14,13 +14,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Link, useLocation } from 'react-router-dom';
 import { useWebsites } from '@/context/WebsitesContext';
-import { cn } from '@/lib/utils';
-import { Loader2, AlertCircle, Plus } from 'lucide-react';
 
 export function AppSidebar() {
   const { websites, currentWebsite, setCurrentWebsite, isLoading } = useWebsites();
@@ -35,40 +32,31 @@ export function AppSidebar() {
         <div className="px-3 mb-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="justify-start w-full overflow-hidden">
-                <Globe className="h-4 w-4 mr-2" />
-                {isLoading ? (
-                  <span>Loading websites...</span>
-                ) : currentWebsite ? (
-                  <span className="truncate">{currentWebsite.name}</span>
-                ) : (
-                  <span>Select a website</span>
-                )}
+              <Button variant="outline" className="w-full justify-between">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  <span>{isLoading ? 'Loading...' : (currentWebsite?.name || 'Select Website')}</span>
+                </div>
+                <ChevronDown className="h-4 w-4 ml-2 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-[200px]">
-              {isLoading ? (
-                <DropdownMenuItem disabled>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Loading websites...
-                </DropdownMenuItem>
-              ) : websites.length === 0 ? (
-                <DropdownMenuItem disabled>
-                  <AlertCircle className="h-4 w-4 mr-2" />
-                  No accessible websites
-                </DropdownMenuItem>
+              {websites.length === 0 ? (
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  No websites available
+                </div>
               ) : (
                 websites.map((website) => (
-                  <DropdownMenuItem
+                  <DropdownMenuItem 
                     key={website.id}
                     onClick={() => setCurrentWebsite(website)}
-                    className={cn(
-                      "cursor-pointer",
-                      website.id === currentWebsite?.id && "bg-accent"
-                    )}
+                    className={currentWebsite?.id === website.id ? 'bg-primary/10 font-medium' : ''}
                   >
                     <Globe className="h-4 w-4 mr-2" />
-                    <span className="truncate">{website.name}</span>
+                    <div className="flex flex-col">
+                      <span>{website.name}</span>
+                      <span className="text-xs text-muted-foreground">{website.organisation_name}</span>
+                    </div>
                   </DropdownMenuItem>
                 ))
               )}
@@ -80,13 +68,6 @@ export function AppSidebar() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          
-          {websites.length === 0 && !isLoading && (
-            <div className="mt-2 p-2 text-xs text-amber-600 bg-amber-50 rounded-md border border-amber-200">
-              <AlertCircle className="h-3 w-3 inline-block mr-1" />
-              You don't have access to any websites. Please contact your administrator.
-            </div>
-          )}
         </div>
         <SidebarMenu>
           <SidebarMenuItem>

@@ -33,7 +33,7 @@ interface TitleSuggestionProps {
 const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   id,
   title,
-  keywords,
+  keywords = [],
   categories = [],
   selected = false,
   onSelect,
@@ -47,11 +47,15 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   onUpdateCategories,
   isGeneratingContent = false,
 }) => {
-  const [liked, setLiked] = useState(false);
-  const [disliked, setDisliked] = useState(false);
   const { publicationFrequency } = useSettings();
   const { postThemes, updatePostTheme, deletePostTheme, getNextPublicationDate } = usePostThemes();
   const { currentWebsite } = useWebsites();
+  
+  // Ensure keywords is always a valid array
+  const safeKeywords = Array.isArray(keywords) ? keywords : [];
+  
+  const [liked, setLiked] = useState(status === 'approved');
+  const [disliked, setDisliked] = useState(false);
   
   /**
    * Handles the approval (like) action for a title suggestion
@@ -165,7 +169,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     e.stopPropagation();
     
     // Filter out the removed keyword
-    const updatedKeywords = keywords.filter(k => k !== keyword);
+    const updatedKeywords = safeKeywords.filter(k => k !== keyword);
     
     // Update in the database
     updatePostTheme(id, { keywords: updatedKeywords })
@@ -187,7 +191,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     if (!newKeyword.trim()) return;
     
     // Add the new keyword
-    const updatedKeywords = [...keywords, newKeyword.trim()];
+    const updatedKeywords = [...safeKeywords, newKeyword.trim()];
     
     // Update in the database
     updatePostTheme(id, { keywords: updatedKeywords })
@@ -341,9 +345,9 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         </div>
       </div>
       
-      {keywords.length > 0 && (
+      {safeKeywords.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mt-3">
-          {keywords.map((keyword, index) => (
+          {safeKeywords.map((keyword, index) => (
             <Badge 
               key={index}
               variant="outline" 

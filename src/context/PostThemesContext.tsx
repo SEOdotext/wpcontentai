@@ -217,7 +217,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         id: theme.id,
         website_id: theme.website_id,
         subject_matter: theme.subject_matter,
-        keywords: theme.keywords || [],
+        keywords: Array.isArray(theme.keywords) ? theme.keywords : [],
         post_content: theme.post_content || null,
         status: theme.status as 'pending' | 'approved' | 'published',
         scheduled_date: theme.scheduled_date,
@@ -321,6 +321,16 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
   const updatePostTheme = async (id: string, updates: Partial<PostTheme>, showToast: boolean = true): Promise<boolean> => {
     try {
       console.log('Updating post theme:', { id, updates });
+      
+      // Ensure keywords is always an array if it's being updated
+      if (updates.keywords !== undefined) {
+        updates.keywords = Array.isArray(updates.keywords) ? updates.keywords : [];
+      }
+      
+      // Ensure categories is always an array if it's being updated
+      if (updates.categories !== undefined) {
+        updates.categories = Array.isArray(updates.categories) ? updates.categories : [];
+      }
       
       // Handle category updates separately
       if (updates.categories) {
