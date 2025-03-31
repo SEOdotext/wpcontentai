@@ -56,7 +56,7 @@ BEGIN
         p_role
     );
 
-    -- Now create user profile (this will work because the user is in the org)
+    -- Now create user profile if it doesn't exist
     INSERT INTO user_profiles (
         id,
         email,
@@ -65,7 +65,8 @@ BEGIN
         v_user_id,
         p_email,
         'user'
-    );
+    )
+    ON CONFLICT (id) DO NOTHING;
 
     -- If role is member and website_ids are provided, create website access
     IF p_role = 'member' AND p_website_ids IS NOT NULL THEN
@@ -77,6 +78,7 @@ BEGIN
     RETURN jsonb_build_object(
         'status', 'success',
         'user_id', v_user_id,
+        'is_new_user', NOT EXISTS (SELECT 1 FROM user_profiles WHERE id = v_user_id),
         'message', 'User added to organization'
     );
 END;

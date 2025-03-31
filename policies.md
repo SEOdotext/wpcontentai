@@ -347,7 +347,7 @@
     "roles": "{public}",
     "cmd": "INSERT",
     "qual": null,
-    "with_check": "(EXISTS ( SELECT 1\n   FROM organisation_memberships organisation_memberships_1\n  WHERE ((organisation_memberships_1.member_id = auth.uid()) AND (organisation_memberships_1.organisation_id = organisation_memberships_1.organisation_id) AND (organisation_memberships_1.role = 'admin'::text))))"
+    "with_check": "(EXISTS ( SELECT 1\n   FROM organisation_memberships\n  WHERE ((member_id = auth.uid()) AND (role = 'admin'::text))))"
   },
   {
     "schemaname": "public",
@@ -547,6 +547,26 @@
     "roles": "{public}",
     "cmd": "SELECT",
     "qual": "true",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "user_profiles",
+    "policyname": "Allow creating new user profiles",
+    "permissive": "PERMISSIVE",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "true"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "website_access",
+    "policyname": "Admins can manage website access for new users",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(EXISTS ( SELECT 1\n   FROM organisation_memberships\n  WHERE ((member_id = auth.uid()) AND (role = 'admin'::text))))",
     "with_check": null
   }
 ]

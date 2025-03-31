@@ -216,7 +216,7 @@ const TeamManagement = () => {
     try {
       console.log('Sending invitation for:', email);
       
-      // First, create the user in Supabase Auth
+      // First create the auth user
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: email,
         password: Math.random().toString(36).slice(-12), // Generate a random password
@@ -235,10 +235,10 @@ const TeamManagement = () => {
       }
 
       if (!authData.user?.id) {
-        throw new Error('Failed to create user');
+        throw new Error('Failed to create auth user');
       }
 
-      // Now call the RPC function to add the user to the organization
+      // Now call the RPC function to handle the invitation
       const { data: invitationResponse, error: invitationError } = await supabase
         .rpc('handle_organisation_invitation', {
           p_email: email,
@@ -255,29 +255,19 @@ const TeamManagement = () => {
       console.log('Invitation response:', invitationResponse);
 
       if (invitationResponse.status === 'success') {
-        // Try to send invitation email, but don't fail if it doesn't work
-        try {
-          const { error: emailError } = await supabase.rpc('send_invitation_email', {
-            p_user_id: invitationResponse.user_id,
-            p_organisation_id: organisation.id,
-            p_is_new_user: true
-          });
+        // Send invitation email
+        await supabase.rpc('send_invitation_email', {
+          p_user_id: invitationResponse.user_id,
+          p_organisation_id: organisation.id,
+          p_is_new_user: invitationResponse.is_new_user
+        });
 
-          if (emailError) {
-            console.error('Error sending invitation email:', emailError);
-            // Don't throw here, as the user is already added
-            toast.warning('User added but email sending failed. Please configure email service in Supabase.');
-          }
-        } catch (emailError) {
-          console.error('Error in email sending:', emailError);
-          toast.warning('User added but email sending failed. Please configure email service in Supabase.');
-        }
-
+        toast.success('Team member added successfully');
+        
         // Always refresh team data, regardless of the response
         console.log('Refreshing team data...');
         await fetchTeamData();
 
-        toast.success('Team member invited successfully');
         setEmail('');
         setRole('member');
         setSelectedWebsites([]);
