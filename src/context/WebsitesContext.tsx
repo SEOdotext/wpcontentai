@@ -64,6 +64,9 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       console.log('User membership data:', membership);
       console.log('User role:', membership.role);
+      
+      // Store the user's role in localStorage for access across the app
+      localStorage.setItem('userRole', membership.role);
 
       // Get organization details
       const { data: orgData, error: orgError } = await supabase

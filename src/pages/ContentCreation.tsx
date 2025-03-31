@@ -38,8 +38,14 @@ const ContentCreation = () => {
       setHasError(false);
     }
 
-    // Check specifically for missing organisation
-    if (currentWebsite && !currentWebsite.organisation_id) {
+    // Only admins should see the missing organisation warning
+    // For members, we assume the organization exists since they have access through website_access
+    // Get user role from localStorage (set during authentication)
+    const userRole = localStorage.getItem('userRole') || 'member';
+    const isAdmin = userRole === 'admin';
+
+    // Check specifically for missing organisation - only for admins
+    if (currentWebsite && !currentWebsite.organisation_id && isAdmin) {
       console.log('Website missing organisation_id:', currentWebsite);
       setMissingOrganisation(true);
       // Only show toast once when detected

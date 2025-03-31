@@ -103,6 +103,9 @@ const TeamManagement = () => {
       }
       
       setCurrentUserRole(data.role as 'admin' | 'member');
+      
+      // Store the user's role in localStorage for access across the app
+      localStorage.setItem('userRole', data.role);
     } catch (error) {
       console.error('Error in fetchCurrentUserRole:', error);
     }
