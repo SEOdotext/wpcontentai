@@ -22,7 +22,7 @@ interface TitleSuggestionProps {
   onRemove?: (id: string) => void;
   className?: string;
   date: Date;
-  onUpdateDate?: (id: string, date: Date) => void;
+  onUpdateDate?: (date: Date) => void;
   onLiked?: () => void;
   status: 'pending' | 'approved' | 'published';
   onUpdateKeywords?: (id: string, keywords: string[]) => void;
@@ -144,15 +144,22 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     if (!selectedDate || !onUpdateDate) return;
     
     try {
-      // Update the post theme's scheduled date
+      // Ensure the date is valid
+      if (!(selectedDate instanceof Date) || isNaN(selectedDate.getTime())) {
+        console.error('Invalid date selected:', selectedDate);
+        toast.error('Invalid date selected');
+        return;
+      }
+      
+      // First call the parent's onUpdateDate handler to trigger parent component update
+      onUpdateDate(selectedDate);
+      
+      // Then update the post theme's scheduled date
       const updated = await updatePostTheme(id, { 
         scheduled_date: selectedDate.toISOString() 
       }, false);
       
       if (updated) {
-        // Call the parent's onUpdateDate handler
-        onUpdateDate(id, selectedDate);
-        
         toast.success("Publication date updated", {
           description: `Content scheduled for ${format(selectedDate, 'MMM dd, yyyy')}`
         });

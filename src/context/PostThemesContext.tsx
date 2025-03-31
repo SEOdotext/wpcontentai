@@ -115,6 +115,8 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       
       // Find the absolute latest date through a simple loop
       let latestTimestamp = 0;
+      const currentTimestamp = new Date().getTime();
+      const minValidTimestamp = new Date('2020-01-01').getTime(); // No dates before 2020 are valid
       
       for (const theme of websiteThemes) {
         if (!theme.scheduled_date) continue;
@@ -122,6 +124,12 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         try {
           const dateObj = new Date(theme.scheduled_date);
           const timestamp = dateObj.getTime();
+          
+          // Skip invalid dates, dates from 1970, or dates too far in the past
+          if (isNaN(timestamp) || timestamp < minValidTimestamp) {
+            console.warn('Skipping invalid or too old date:', theme.scheduled_date);
+            continue;
+          }
           
           if (timestamp > latestTimestamp) {
             latestTimestamp = timestamp;

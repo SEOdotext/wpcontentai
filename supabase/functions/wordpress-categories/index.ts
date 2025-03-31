@@ -98,11 +98,13 @@ serve(async (req) => {
         throw new Error('Failed to delete existing categories');
       }
 
+      console.log(`Inserting ${categories.length} WordPress categories for website ${websiteId}`);
+
       // Insert new categories
-      const { error: insertError } = await supabaseClient
-        .from('wordpress_categories')
-        .insert(
-          categories.map((category: any) => ({
+      for (const category of categories) {
+        const { data: insertedCategory, error: insertError } = await supabaseClient
+          .from('wordpress_categories')
+          .insert({
             website_id: websiteId,
             wp_category_id: category.id,
             name: category.name,
@@ -110,19 +112,35 @@ serve(async (req) => {
             description: category.description || '',
             parent_id: category.parent || 0,
             count: category.count || 0
-          }))
-        );
+          })
+          .select()
+          .single();
 
-      if (insertError) {
-        console.error('Error inserting categories:', insertError);
-        throw new Error('Failed to insert categories');
+        if (insertError) {
+          console.error('Error inserting category:', insertError, 'Category:', category);
+          throw new Error(`Failed to insert category: ${category.name}`);
+        }
+        
+        console.log(`Inserted category: ${category.name} with ID: ${insertedCategory.id}, WP ID: ${category.id}`);
+      }
+
+      // Fetch the inserted categories to return in the response
+      const { data: insertedCategories, error: fetchError } = await supabaseClient
+        .from('wordpress_categories')
+        .select('*')
+        .eq('website_id', websiteId);
+        
+      if (fetchError) {
+        console.error('Error fetching inserted categories:', fetchError);
+      } else {
+        console.log(`Successfully inserted and fetched ${insertedCategories?.length || 0} categories`);
       }
 
       return new Response(
         JSON.stringify({
           success: true,
           message: 'Categories fetched and stored successfully',
-          categories
+          categories: insertedCategories
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

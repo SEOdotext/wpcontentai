@@ -289,19 +289,32 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
 
         if (error) throw error;
 
+        // Define a minimum valid timestamp (2020-01-01)
+        const minValidTimestamp = new Date('2020-01-01').getTime();
+
         // If we have a date in approved/published posts, use that as the base
-        if (themesData && themesData.length > 0) {
+        if (themesData && themesData.length > 0 && themesData[0].scheduled_date) {
+          // Validate the date first
           const baseDate = new Date(themesData[0].scheduled_date);
+          const timestamp = baseDate.getTime();
+          
+          if (isNaN(timestamp) || timestamp < minValidTimestamp) {
+            console.warn('Invalid date found in database:', themesData[0].scheduled_date);
+            // Use today as fallback
+            setFurthestFutureDate(addDays(new Date(), publicationFrequency));
+            return;
+          }
+          
           // Add the publication frequency to get the next available date
           const nextDate = addDays(baseDate, publicationFrequency);
           setFurthestFutureDate(nextDate);
         } else {
           // If no dates in approved/published posts, use today as base
-          setFurthestFutureDate(new Date());
+          setFurthestFutureDate(addDays(new Date(), publicationFrequency));
         }
       } catch (error) {
         console.error('Error getting furthest future date:', error);
-        setFurthestFutureDate(new Date());
+        setFurthestFutureDate(addDays(new Date(), publicationFrequency));
       }
     };
 
@@ -348,10 +361,21 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       // Store categories by title
       setCategoriesByTitle(result.categoriesByTitle || {});
 
+      // Validate furthestFutureDate
+      const minValidTimestamp = new Date('2020-01-01').getTime();
+      let baseDate = furthestFutureDate;
+      const timestamp = baseDate.getTime();
+      
+      // If furthestFutureDate is invalid or too old, use today instead
+      if (isNaN(timestamp) || timestamp < minValidTimestamp) {
+        console.warn('Using today as base date because furthestFutureDate is invalid:', baseDate);
+        baseDate = new Date();
+      }
+
       // Create post themes for each title
       const creationPromises = result.titles.map((title, index) => {
         // Add days based on index to space out the posts
-        const postDate = addDays(furthestFutureDate, index + 1);
+        const postDate = addDays(baseDate, index + 1);
         
         // Ensure we have valid arrays for keywords
         const titleKeywords = result.keywordsByTitle?.[title] || result.keywords || [];
@@ -390,7 +414,32 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   };
 
   const handleUpdateTitleDate = async (id: string, newDate: Date) => {
-    await updatePostTheme(id, { scheduled_date: newDate.toISOString() });
+    // Validate that newDate is actually a Date object before using it
+    if (!newDate || !(newDate instanceof Date) || isNaN(newDate.getTime())) {
+      console.error('Invalid date provided to handleUpdateTitleDate:', newDate);
+      toast.error('Invalid date selected');
+      return;
+    }
+    
+    try {
+      // Update the theme with the new date
+      const success = await updatePostTheme(id, { scheduled_date: newDate.toISOString() });
+      
+      if (success) {
+        // Refresh post themes to get updated data
+        await fetchPostThemes();
+        
+        // Update the furthest future date if needed
+        if (!currentWebsite?.id) return;
+        
+        toast.success('Date updated successfully');
+      } else {
+        toast.error('Failed to update date');
+      }
+    } catch (error) {
+      console.error('Error updating date:', error);
+      toast.error('Failed to update date');
+    }
   };
 
   const handleUpdateKeywords = async (id: string, keywords: string[]) => {
@@ -416,14 +465,33 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       const postToUpdate = postThemes.find(theme => theme.id === id);
       if (!postToUpdate) return;
 
+      // Validate the date
+      let approvedDate;
+      try {
+        approvedDate = new Date(postToUpdate.scheduled_date);
+        const timestamp = approvedDate.getTime();
+        const minValidTimestamp = new Date('2020-01-01').getTime();
+        
+        // If we have an invalid or too old date, use today instead
+        if (isNaN(timestamp) || timestamp < minValidTimestamp) {
+          console.warn('Found invalid date in approved post, using today:', postToUpdate.scheduled_date);
+          approvedDate = new Date();
+        }
+      } catch (e) {
+        console.error('Error parsing date in handleTitleLiked:', e);
+        approvedDate = new Date();
+      }
+
       // Calculate new dates for pending posts based on the approved post's date
-      const approvedDate = new Date(postToUpdate.scheduled_date);
       const newBaseDate = addDays(approvedDate, publicationFrequency);
 
       // Update the liked post's status to approved while keeping its date
       const { error: updateError } = await supabase
         .from('post_themes')
-        .update({ status: 'approved' })
+        .update({ 
+          status: 'approved',
+          scheduled_date: approvedDate.toISOString() // Ensure we store a valid date
+        })
         .eq('id', id);
 
       if (updateError) throw updateError;
@@ -450,8 +518,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       setPostThemes(prev =>
         prev.map(theme => {
           if (theme.id === id) {
-            // Keep the approved post's date unchanged
-            return { ...theme, status: 'approved' };
+            // Keep the approved post's date unchanged but ensure it's valid
+            return { 
+              ...theme, 
+              status: 'approved',
+              scheduled_date: approvedDate.toISOString()
+            };
           }
           if (pendingThemes.some(pending => pending.id === theme.id)) {
             // Update pending posts' dates
@@ -489,15 +561,35 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     })
     // Sort by created_at date, newest first
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .map(theme => ({
-      id: theme.id,
-      title: theme.subject_matter,
-      keywords: theme.keywords || [],
-      categories: theme.categories || [],
-      // For pending posts, use the furthest future date from approved posts
-      date: theme.status === 'pending' ? furthestFutureDate : new Date(theme.scheduled_date),
-      status: theme.status
-    }));
+    .map(theme => {
+      // Create a date object from the theme's scheduled_date
+      let themeDate: Date;
+      try {
+        if (!theme.scheduled_date || theme.scheduled_date === '') {
+          // If no date, use furthest future date for pending posts
+          themeDate = theme.status === 'pending' ? furthestFutureDate : new Date();
+        } else {
+          themeDate = new Date(theme.scheduled_date);
+          // Validate the date - if it's invalid, use a fallback
+          if (isNaN(themeDate.getTime())) {
+            console.warn('Invalid date in theme, using fallback:', theme.id, theme.scheduled_date);
+            themeDate = theme.status === 'pending' ? furthestFutureDate : new Date();
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing date:', theme.scheduled_date, e);
+        themeDate = theme.status === 'pending' ? furthestFutureDate : new Date();
+      }
+      
+      return {
+        id: theme.id,
+        title: theme.subject_matter,
+        keywords: theme.keywords || [],
+        categories: theme.categories || [],
+        date: themeDate,
+        status: theme.status
+      };
+    });
 
   // Get the appropriate view title and description
   const getViewInfo = () => {
@@ -641,7 +733,13 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   onSelect={() => handleSelectTitle(title.id)}
                   onRemove={() => handleRemoveTitle(title.id)}
                   date={title.date}
-                  onUpdateDate={(newDate) => handleUpdateTitleDate(title.id, newDate)}
+                  onUpdateDate={(newDate) => {
+                    if (newDate instanceof Date) {
+                      handleUpdateTitleDate(title.id, newDate);
+                    } else {
+                      console.error('Invalid date received from calendar:', newDate);
+                    }
+                  }}
                   onLiked={() => handleTitleLiked(title.id)}
                   status={title.status}
                   onUpdateKeywords={(keywords) => handleUpdateKeywords(title.id, keywords)}
@@ -680,7 +778,13 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               onSelect={() => handleSelectTitle(title.id)}
               onRemove={() => handleRemoveTitle(title.id)}
               date={title.date}
-              onUpdateDate={(newDate) => handleUpdateTitleDate(title.id, newDate)}
+              onUpdateDate={(newDate) => {
+                if (newDate instanceof Date) {
+                  handleUpdateTitleDate(title.id, newDate);
+                } else {
+                  console.error('Invalid date received from calendar:', newDate);
+                }
+              }}
               onLiked={() => handleTitleLiked(title.id)}
               status={title.status}
               onUpdateKeywords={(keywords) => handleUpdateKeywords(title.id, keywords)}

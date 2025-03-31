@@ -32,7 +32,7 @@ interface GeneratePostIdeasResponse {
   titles: string[];
   keywords: string[];
   keywordsByTitle: { [title: string]: string[] };
-  categoriesByTitle: { [title: string]: string[] };
+  categoriesByTitle: { [title: string]: { id: string; name: string }[] };
 }
 
 // Helper function to detect if content is likely in Danish
@@ -209,19 +209,19 @@ Important rules:
 2. For English titles: Capitalize main words following standard English title case
 3. Keywords should be category-oriented and domain-specific
 4. Avoid generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig
-5. Categories MUST be selected from the provided list only - use category IDs
+5. Categories MUST be selected from the provided list only - use category IDs exactly as shown
 6. Each post should have 1-5 relevant categories
 7. Do NOT use colons in any keywords
-8. Category IDs must be valid UUIDs from the provided list
+8. Category IDs must be valid UUIDs from the provided list - do not modify or format them in any way
 
-Format the response as JSON with this structure:
+Format your response as pure JSON with NO markdown formatting and this exact structure:
 {
   "ideas": [
     {
       "title": "string",
       "keywords": ["string"],
       "description": "string",
-      "categories": ["uuid"] // Use category IDs here
+      "categories": ["category_id_1", "category_id_2"] 
     }
   ]
 }`;
@@ -245,6 +245,7 @@ Format the response as JSON with this structure:
             content: prompt
           }
         ],
+        response_format: { type: "json_object" },
         temperature: 0.7,
         max_tokens: 1000
       })
@@ -269,22 +270,50 @@ Format the response as JSON with this structure:
       console.log('Extracted JSON content:', content);
     }
     
-    // Parse the cleaned content
-    const ideas = JSON.parse(content);
-    console.log('Parsed ideas:', JSON.stringify(ideas, null, 2));
+    // Parse the cleaned content with better error handling
+    let ideas;
+    try {
+      ideas = JSON.parse(content);
+      console.log('Parsed ideas:', JSON.stringify(ideas, null, 2));
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError);
+      console.error('Content that failed to parse:', content);
+      throw new Error(`Failed to parse OpenAI response as JSON: ${parseError.message}`);
+    }
+    
+    // Validate expected structure
+    if (!ideas || !ideas.ideas || !Array.isArray(ideas.ideas)) {
+      console.error('Invalid ideas structure:', ideas);
+      throw new Error('OpenAI response does not match expected format');
+    }
 
     // Process titles for Danish content and create keywordsByTitle
     const processedTitles: string[] = [];
     const keywordsByTitle: { [title: string]: string[] } = {};
-    const categoriesByTitle: { [title: string]: string[] } = {};
+    const categoriesByTitle: { [title: string]: { id: string; name: string }[] } = {};
+    
+    // Create a map of category IDs to their full objects for quick lookup
+    const categoryMap: { [id: string]: { id: string; name: string } } = {};
+    if (categories) {
+      categories.forEach(cat => {
+        categoryMap[cat.id] = { id: cat.id, name: cat.name };
+      });
+    }
     
     ideas.ideas.forEach((idea: PostIdea) => {
       const isDanish = isDanishContent(idea.title);
       const processedTitle = isDanish ? formatDanishTitle(idea.title) : idea.title;
       processedTitles.push(processedTitle);
+      
       // Use the original keywords from the AI response
       keywordsByTitle[processedTitle] = idea.keywords;
-      categoriesByTitle[processedTitle] = idea.categories;
+      
+      // Transform category IDs to objects with id and name
+      categoriesByTitle[processedTitle] = Array.isArray(idea.categories) 
+        ? idea.categories
+            .filter(id => id && typeof id === 'string' && categoryMap[id]) // Filter out any invalid category IDs
+            .map(id => categoryMap[id])
+        : [];
     });
 
     // Use the first title's keywords as the default set
@@ -313,18 +342,31 @@ Format the response as JSON with this structure:
 
       // Create category associations using the junction table
       if (idea.categories && idea.categories.length > 0) {
-        const categoryAssociations = idea.categories.map((categoryId: string) => ({
-          post_theme_id: postTheme.id,
-          wordpress_category_id: categoryId
-        }));
+        // Filter out any invalid category IDs
+        const validCategoryIds = idea.categories
+          .filter((categoryId: string) => categoryId && typeof categoryId === 'string' && categoryMap[categoryId])
+          .map((categoryId: string) => categoryId);
+          
+        if (validCategoryIds.length > 0) {
+          const categoryAssociations = validCategoryIds.map((categoryId: string) => ({
+            post_theme_id: postTheme.id,
+            wordpress_category_id: categoryId
+          }));
 
-        const { error: categoryError } = await supabaseClient
-          .from('post_theme_categories')
-          .insert(categoryAssociations);
+          console.log('Creating category associations:', JSON.stringify(categoryAssociations, null, 2));
 
-        if (categoryError) {
-          console.error('Error creating category associations:', categoryError);
-          console.error('Category associations attempted:', categoryAssociations);
+          const { error: categoryError } = await supabaseClient
+            .from('post_theme_categories')
+            .insert(categoryAssociations);
+
+          if (categoryError) {
+            console.error('Error creating category associations:', categoryError);
+            console.error('Category associations attempted:', categoryAssociations);
+          } else {
+            console.log(`Successfully associated ${categoryAssociations.length} categories with post theme ${postTheme.id}`);
+          }
+        } else {
+          console.warn('No valid category IDs found for post theme:', postTheme.id);
         }
       }
     }
