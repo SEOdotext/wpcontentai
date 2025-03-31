@@ -49,14 +49,16 @@ interface TeamMember {
   role: 'admin' | 'member';
   created_at: string;
   organisation_id: string;
+  website_access?: WebsiteAccessResponse[];
 }
 
-interface WebsiteAccess {
+interface WebsiteAccessResponse {
   id: string;
   user_id: string;
   website_id: string;
   created_at: string;
-  website?: {
+  website: {
+    id: string;
     name: string;
     url: string;
   };
@@ -66,7 +68,7 @@ const TeamManagement = () => {
   const { organisation } = useOrganisation();
   const { websites } = useWebsites();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [websiteAccess, setWebsiteAccess] = useState<WebsiteAccess[]>([]);
+  const [websiteAccess, setWebsiteAccess] = useState<WebsiteAccessResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'admin' | 'member'>('member');
@@ -86,115 +88,50 @@ const TeamManagement = () => {
     setLoading(true);
     try {
       console.log('Fetching team members for organisation:', organisation.id);
-      // Fetch team members for this organization
-      const { data: memberships, error: membershipsError } = await supabase
-        .from('organisation_memberships')
-        .select('id, role, created_at, member_id')
-        .eq('organisation_id', organisation.id);
       
-      if (membershipsError) {
-        console.error('Error fetching memberships:', membershipsError);
-        throw membershipsError;
+      // Call the RPC function to get team data - this handles all the data fetching in one go
+      const { data, error } = await supabase.rpc('get_team_data', {
+        organisation_id: organisation.id
+      });
+      
+      if (error) {
+        console.error('Error fetching team data:', error);
+        throw error;
       }
       
-      console.log('Found memberships:', memberships);
-
-      if (!memberships || memberships.length === 0) {
-        console.log('No memberships found');
+      console.log('Team data response:', JSON.stringify(data, null, 2));
+      
+      if (!data || !data.team_members) {
+        console.log('No team members found');
         setTeamMembers([]);
+        setWebsiteAccess([]);
         return;
       }
-
-      // Get user profiles for all members
-      const memberIds = memberships.map(m => m.member_id);
-      console.log('Fetching user profiles for:', memberIds);
       
-      const { data: userProfiles, error: profilesError } = await supabase
-        .from('user_profiles')
-        .select('id, email, first_name, last_name')
-        .in('id', memberIds);
+      // Set team members
+      const teamMembersData = data.team_members as TeamMember[];
+      console.log('Team members data:', JSON.stringify(teamMembersData, null, 2));
+      setTeamMembers(teamMembersData);
       
-      if (profilesError) {
-        console.error('Error fetching user profiles:', profilesError);
-        throw profilesError;
-      }
+      // Extract and set website access
+      const accessData: WebsiteAccessResponse[] = [];
       
-      console.log('Found user profiles:', userProfiles);
-      
-      // Combine the data
-      const typedMembers = memberships.map(membership => {
-        const userProfile = userProfiles?.find(profile => profile.id === membership.member_id);
-        if (!userProfile) {
-          console.error('User profile not found for member:', membership.member_id);
-          return null;
+      // Process website access data from team members
+      teamMembersData.forEach(member => {
+        if (member.website_access && Array.isArray(member.website_access)) {
+          member.website_access.forEach((access: WebsiteAccessResponse) => {
+            // Add user_id to each access entry if not already present
+            accessData.push({
+              ...access,
+              user_id: member.id // Ensure user_id is set correctly
+            });
+          });
         }
-        return {
-          id: userProfile.id,
-          email: userProfile.email,
-          first_name: userProfile.first_name,
-          last_name: userProfile.last_name,
-          role: membership.role as 'admin' | 'member',
-          created_at: membership.created_at,
-          organisation_id: organisation.id
-        };
-      }).filter((member): member is TeamMember => member !== null);
+      });
       
-      console.log('Final team members:', typedMembers);
-      setTeamMembers(typedMembers);
+      console.log('Processed website access:', accessData);
+      setWebsiteAccess(accessData);
       
-      // Check if website_access table exists
-      try {
-        // Fetch website access
-        const { data: access, error: accessError } = await supabase
-          .from('website_access')
-          .select(`
-            id,
-            user_id,
-            website_id,
-            created_at
-          `)
-          .in('user_id', typedMembers.map(m => m.id));
-        
-        if (accessError) {
-          console.error('Error fetching website access:', accessError);
-          throw accessError;
-        }
-        
-        console.log('Found website access:', access);
-        
-        // Fetch website details separately
-        if (access && access.length > 0) {
-          const websiteIds = [...new Set(access.map(a => a.website_id))];
-          console.log('Fetching website details for:', websiteIds);
-          
-          const { data: websiteDetails, error: websiteError } = await supabase
-            .from('websites')
-            .select('id, name, url')
-            .in('id', websiteIds);
-          
-          if (websiteError) {
-            console.error('Error fetching website details:', websiteError);
-            throw websiteError;
-          }
-          
-          console.log('Found website details:', websiteDetails);
-          
-          // Combine the data
-          const accessWithWebsites = access.map(a => ({
-            ...a,
-            website: websiteDetails?.find(w => w.id === a.website_id)
-          }));
-          
-          console.log('Final website access:', accessWithWebsites);
-          setWebsiteAccess(accessWithWebsites);
-        } else {
-          console.log('No website access found');
-          setWebsiteAccess([]);
-        }
-      } catch (error) {
-        console.error('Error fetching website access:', error);
-        setWebsiteAccess([]);
-      }
     } catch (error) {
       console.error('Error fetching team data:', error);
       toast.error('Failed to load team members');
@@ -254,12 +191,12 @@ const TeamManagement = () => {
 
       console.log('Invitation response:', invitationResponse);
 
-      if (invitationResponse.status === 'success') {
+      if (invitationResponse && invitationResponse.status === 'success') {
         // Send invitation email
         await supabase.rpc('send_invitation_email', {
           p_user_id: invitationResponse.user_id,
           p_organisation_id: organisation.id,
-          p_is_new_user: invitationResponse.is_new_user
+          p_is_new_user: invitationResponse.is_new_user || false
         });
 
         toast.success('Team member added successfully');
@@ -272,10 +209,10 @@ const TeamManagement = () => {
         setRole('member');
         setSelectedWebsites([]);
         setIsInviteDialogOpen(false);
-      } else if (invitationResponse.message === 'User is already a member of this organization') {
+      } else if (invitationResponse && invitationResponse.message === 'User is already a member of this organization') {
         toast.info('This user is already a member of your organization.');
       } else {
-        toast.error(invitationResponse.message || 'Failed to invite team member');
+        toast.error((invitationResponse && invitationResponse.message) || 'Failed to invite team member');
       }
     } catch (error) {
       console.error('Error in handleInviteTeamMember:', error);
@@ -285,23 +222,35 @@ const TeamManagement = () => {
 
   // Update member role
   const handleUpdateRole = async (memberId: string, newRole: 'admin' | 'member') => {
+    if (!organisation?.id) return;
+    
     setIsUpdatingRole(true);
     try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({ role: newRole })
-        .eq('id', memberId);
+      console.log(`Updating role for member ${memberId} to ${newRole} in org ${organisation.id}`);
       
-      if (error) throw error;
+      // Use the RPC function to update the role
+      const { data, error } = await supabase.rpc('update_user_role', {
+        p_user_id: memberId,
+        p_organisation_id: organisation.id,
+        p_new_role: newRole
+      });
       
-      // Update local state
-      setTeamMembers(prev => 
-        prev.map(member => 
-          member.id === memberId ? { ...member, role: newRole } : member
-        )
-      );
+      console.log('Response from update_user_role:', { data, error });
       
-      toast.success('Member role updated successfully');
+      if (error) {
+        console.error('Error calling update_user_role:', error);
+        throw error;
+      }
+      
+      if (data && data.status === 'success') {
+        toast.success('Member role updated successfully. Reloading...');
+        
+        // Force a full page reload to ensure we get the latest data
+        window.location.reload();
+      } else {
+        console.error('Function returned error:', data);
+        toast.error((data && data.message) || 'Failed to update member role');
+      }
     } catch (error) {
       console.error('Error updating member role:', error);
       toast.error('Failed to update member role');
@@ -384,20 +333,26 @@ const TeamManagement = () => {
   // Remove team member
   const handleRemoveTeamMember = async (memberId: string) => {
     if (!confirm('Are you sure you want to remove this team member?')) return;
+    if (!organisation?.id) return;
     
     try {
-      const { error } = await supabase
-        .from('user_profiles')
-        .delete()
-        .eq('id', memberId);
+      // Use the new RPC function to remove the user from the organization
+      const { data, error } = await supabase.rpc('remove_user_from_organisation', {
+        p_user_id: memberId,
+        p_organisation_id: organisation.id
+      });
       
       if (error) throw error;
       
-      // Update local state
-      setTeamMembers(prev => prev.filter(member => member.id !== memberId));
-      setWebsiteAccess(prev => prev.filter(access => access.user_id !== memberId));
-      
-      toast.success('Team member removed successfully');
+      if (data && data.status === 'success') {
+        // Update local state
+        setTeamMembers(prev => prev.filter(member => member.id !== memberId));
+        setWebsiteAccess(prev => prev.filter(access => access.user_id !== memberId));
+        
+        toast.success('Team member removed successfully');
+      } else {
+        toast.error((data && data.message) || 'Failed to remove team member');
+      }
     } catch (error) {
       console.error('Error removing team member:', error);
       toast.error('Failed to remove team member');
@@ -423,7 +378,7 @@ const TeamManagement = () => {
     
     setIsAddingExistingUser(true);
     try {
-      // Handle invitation using the new RPC function
+      // Handle invitation using the existing RPC function
       const { data, error } = await supabase.rpc('handle_organisation_invitation', {
         p_email: existingUserEmail.trim(),
         p_organisation_id: organisation.id,
@@ -433,26 +388,26 @@ const TeamManagement = () => {
 
       if (error) throw error;
 
-      if (data.status === 'success') {
+      if (data && data.status === 'success') {
         // Send invitation email
         await supabase.rpc('send_invitation_email', {
           p_user_id: data.user_id,
           p_organisation_id: organisation.id,
-          p_is_new_user: data.is_new_user
+          p_is_new_user: data.is_new_user || false
         });
 
-        toast.success(data.message);
+        toast.success(data.message || 'User added to organization successfully');
             
-            // Reset form
-            setExistingUserEmail('');
-            setRole('member');
-            setSelectedWebsites([]);
-            setIsInviteDialogOpen(false);
+        // Reset form
+        setExistingUserEmail('');
+        setRole('member');
+        setSelectedWebsites([]);
+        setIsInviteDialogOpen(false);
         
         // Refresh team members list
         fetchTeamData();
       } else {
-        toast.error(data.message);
+        toast.error((data && data.message) || 'Failed to add user to organization');
       }
     } catch (error) {
       console.error('Error adding existing user:', error);

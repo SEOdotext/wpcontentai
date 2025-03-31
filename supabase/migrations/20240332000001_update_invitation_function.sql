@@ -17,6 +17,7 @@ SET search_path = public
 AS $$
 DECLARE
     v_user_id UUID;
+    v_user_exists BOOLEAN;
 BEGIN
     -- Check if user exists in auth.users
     SELECT id INTO v_user_id

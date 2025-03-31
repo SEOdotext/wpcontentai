@@ -295,36 +295,6 @@
     "data_type": "text"
   },
   {
-    "table_name": "user_profiles",
-    "column_name": "id",
-    "data_type": "uuid"
-  },
-  {
-    "table_name": "user_profiles",
-    "column_name": "email",
-    "data_type": "text"
-  },
-  {
-    "table_name": "user_profiles",
-    "column_name": "first_name",
-    "data_type": "text"
-  },
-  {
-    "table_name": "user_profiles",
-    "column_name": "last_name",
-    "data_type": "text"
-  },
-  {
-    "table_name": "user_profiles",
-    "column_name": "role",
-    "data_type": "text"
-  },
-  {
-    "table_name": "user_profiles",
-    "column_name": "created_at",
-    "data_type": "timestamp with time zone"
-  },
-  {
     "table_name": "website_access",
     "column_name": "id",
     "data_type": "uuid"
