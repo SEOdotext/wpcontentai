@@ -52,13 +52,18 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .single();
 
       if (membershipError) {
+        console.error('Error fetching membership:', membershipError);
         throw membershipError;
       }
 
       if (!membership) {
+        console.log('No organization membership found for user');
         setWebsites([]);
         return;
       }
+
+      console.log('User membership data:', membership);
+      console.log('User role:', membership.role);
 
       // Get organization details
       const { data: orgData, error: orgError } = await supabase
@@ -88,6 +93,61 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } 
       // If the user is a member, they can only see websites they have access to
       else {
+        console.log('User is a member, fetching accessible websites');
+        
+        // Try an alternative approach - first try to get the user's team data which includes website access
+        const { data: teamData, error: teamError } = await supabase.rpc('get_team_data', {
+          organisation_id: membership.organisation_id
+        });
+        
+        if (teamError) {
+          console.error('Error fetching team data:', teamError);
+        } else if (teamData && teamData.team_members) {
+          console.log('Found team data:', teamData);
+          
+          // Find the current user in the team members
+          const currentUserData = teamData.team_members.find((member: any) => member.id === user.id);
+          
+          if (currentUserData && currentUserData.website_access && currentUserData.website_access.length > 0) {
+            console.log('Found user website access via team data:', currentUserData.website_access);
+            
+            // Extract website info directly from the team data
+            const userWebsites = currentUserData.website_access.map((access: any) => ({
+              ...access.website,
+              organisation_name: orgData.name
+            }));
+            
+            console.log('Extracted websites for user:', userWebsites);
+            
+            if (userWebsites.length > 0) {
+              setWebsites(userWebsites);
+              
+              // Check if there's a saved website ID in localStorage
+              const savedWebsiteId = localStorage.getItem('currentWebsiteId');
+              
+              if (savedWebsiteId) {
+                // Find the website with the saved ID among the accessible websites
+                const savedWebsite = userWebsites.find(website => website.id === savedWebsiteId);
+                if (savedWebsite) {
+                  console.log("Restoring previously selected website:", savedWebsite.name);
+                  setCurrentWebsite(savedWebsite as Website);
+                } else if (userWebsites.length > 0) {
+                  // If the saved website is no longer accessible, use the first accessible one
+                  console.log("Saved website ID not accessible or not found, using first website");
+                  setCurrentWebsite(userWebsites[0] as Website);
+                }
+              } else if (userWebsites.length > 0) {
+                // Set first website as current if none is saved
+                setCurrentWebsite(userWebsites[0] as Website);
+              }
+              
+              setIsLoading(false);
+              return; // Exit early as we've set everything up
+            }
+          }
+        }
+        
+        // Fall back to the original approach if team data method fails
         // Get websites the user has access to from website_access table
         const { data: accessibleWebsites, error: accessError } = await supabase
           .from('website_access')
@@ -95,10 +155,14 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .eq('user_id', user.id);
 
         if (accessError) {
+          console.error('Error fetching website access:', accessError);
           throw accessError;
         }
 
+        console.log('Accessible websites:', accessibleWebsites);
+
         if (!accessibleWebsites || accessibleWebsites.length === 0) {
+          console.log('No website access found for user');
           setWebsites([]);
           setCurrentWebsite(null);
           return;
@@ -106,6 +170,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         // Extract website IDs the user has access to
         const websiteIds = accessibleWebsites.map(access => access.website_id);
+        console.log('Website IDs user has access to:', websiteIds);
 
         // Get the actual website details
         const { data, error } = await supabase
@@ -114,9 +179,11 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .in('id', websiteIds);
 
         if (error) {
+          console.error('Error fetching websites by IDs:', error);
           throw error;
         }
 
+        console.log('Fetched websites for member:', data);
         websitesData = data;
       }
 
