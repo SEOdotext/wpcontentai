@@ -32,7 +32,7 @@ interface GeneratePostIdeasResponse {
   titles: string[];
   keywords: string[];
   keywordsByTitle: { [title: string]: string[] };
-  categoriesByTitle: { [title: string]: { id: string; name: string }[] };
+  categoriesByTitle: { [title: string]: string[] };
 }
 
 // Helper function to detect if content is likely in Danish
@@ -201,8 +201,8 @@ ${existingContent.join('\n')}
 For each idea, provide:
 1. A compelling title
 2. 3-5 relevant keywords (avoid using colons in keywords)
-3. A brief description (max 100 words)
-4. Up to 5 most relevant category IDs from the available list above
+3. A brief description (max 50 words - be very concise)
+4. Up to 3 most relevant category IDs from the available list above
 
 Important rules:
 1. For Danish titles: Only capitalize the first word and proper nouns
@@ -210,21 +210,25 @@ Important rules:
 3. Keywords should be category-oriented and domain-specific
 4. Avoid generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig
 5. Categories MUST be selected from the provided list only - use category IDs exactly as shown
-6. Each post should have 1-5 relevant categories
+6. Each post should have 1-3 relevant categories (not more)
 7. Do NOT use colons in any keywords
 8. Category IDs must be valid UUIDs from the provided list - do not modify or format them in any way
+9. IMPORTANT: When referring to categories, use ONLY the UUID strings, not objects with id/name properties
+10. BE CONCISE - keep descriptions short and simple (max 50 words)
 
 Format your response as pure JSON with NO markdown formatting and this exact structure:
 {
   "ideas": [
     {
-      "title": "string",
-      "keywords": ["string"],
-      "description": "string",
-      "categories": ["category_id_1", "category_id_2"] 
+      "title": "[TITLE]",
+      "keywords": ["[KEYWORD1]", "[KEYWORD2]", "[KEYWORD3]"],
+      "description": "[DESCRIPTION]",
+      "categories": ["[UUID1]", "[UUID2]"]
     }
   ]
-}`;
+}
+
+Notice that the "categories" field contains an array of string UUIDs, not objects. Do not include category names in this array, only the UUIDs exactly as they appear in the available categories list above.`;
 
     // Call OpenAI API
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -247,7 +251,7 @@ Format your response as pure JSON with NO markdown formatting and this exact str
         ],
         response_format: { type: "json_object" },
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 2000
       })
     });
 
@@ -278,7 +282,26 @@ Format your response as pure JSON with NO markdown formatting and this exact str
     } catch (parseError) {
       console.error('JSON parsing error:', parseError);
       console.error('Content that failed to parse:', content);
-      throw new Error(`Failed to parse OpenAI response as JSON: ${parseError.message}`);
+      
+      // Try to fix incomplete JSON if possible
+      if (parseError.message.includes('Unexpected end of JSON input')) {
+        try {
+          // Check if we can recover by adding closing brackets
+          const fixedContent = content + ']}';
+          const partialIdeas = JSON.parse(fixedContent);
+          if (partialIdeas && partialIdeas.ideas && Array.isArray(partialIdeas.ideas)) {
+            console.log('Recovered partial ideas from incomplete JSON');
+            ideas = partialIdeas;
+          } else {
+            throw new Error('Could not recover valid structure from incomplete JSON');
+          }
+        } catch (recoveryError) {
+          console.error('Recovery attempt failed:', recoveryError);
+          throw new Error(`Failed to parse OpenAI response as JSON: ${parseError.message}`);
+        }
+      } else {
+        throw new Error(`Failed to parse OpenAI response as JSON: ${parseError.message}`);
+      }
     }
     
     // Validate expected structure
@@ -290,7 +313,7 @@ Format your response as pure JSON with NO markdown formatting and this exact str
     // Process titles for Danish content and create keywordsByTitle
     const processedTitles: string[] = [];
     const keywordsByTitle: { [title: string]: string[] } = {};
-    const categoriesByTitle: { [title: string]: { id: string; name: string }[] } = {};
+    const categoriesByTitle: { [title: string]: string[] } = {};
     
     // Create a map of category IDs to their full objects for quick lookup
     const categoryMap: { [id: string]: { id: string; name: string } } = {};
@@ -308,11 +331,9 @@ Format your response as pure JSON with NO markdown formatting and this exact str
       // Use the original keywords from the AI response
       keywordsByTitle[processedTitle] = idea.keywords;
       
-      // Transform category IDs to objects with id and name
+      // Keep the original category IDs
       categoriesByTitle[processedTitle] = Array.isArray(idea.categories) 
-        ? idea.categories
-            .filter(id => id && typeof id === 'string' && categoryMap[id]) // Filter out any invalid category IDs
-            .map(id => categoryMap[id])
+        ? idea.categories.filter(id => id && typeof id === 'string' && categoryMap[id])
         : [];
     });
 
@@ -321,6 +342,26 @@ Format your response as pure JSON with NO markdown formatting and this exact str
 
     // Process the ideas and create post themes with categories
     for (const idea of ideas.ideas) {
+      // Ensure categories are in the correct format
+      let safeCategories: string[] = [];
+      if (idea.categories) {
+        // Make sure categories is an array
+        if (Array.isArray(idea.categories)) {
+          safeCategories = idea.categories
+            .filter((cat): cat is string => typeof cat === 'string' && cat.trim() !== '')
+            .map(cat => cat.trim());
+        } else if (typeof idea.categories === 'string') {
+          // Handle case where categories might be a single string
+          safeCategories = [idea.categories.trim()];
+        }
+        
+        // Log any category format issues
+        if (safeCategories.length === 0 && idea.categories && 
+            (Array.isArray(idea.categories) ? idea.categories.length > 0 : true)) {
+          console.warn('Categories were provided but none were valid:', idea.categories);
+        }
+      }
+
       // Create post theme with proper array type for keywords
       const { data: postTheme, error: postThemeError } = await supabaseClient
         .from('post_themes')
@@ -341,14 +382,13 @@ Format your response as pure JSON with NO markdown formatting and this exact str
       }
 
       // Create category associations using the junction table
-      if (idea.categories && idea.categories.length > 0) {
+      if (safeCategories.length > 0) {
         // Filter out any invalid category IDs
-        const validCategoryIds = idea.categories
-          .filter((categoryId: string) => categoryId && typeof categoryId === 'string' && categoryMap[categoryId])
-          .map((categoryId: string) => categoryId);
+        const validCategoryIds = safeCategories
+          .filter(categoryId => categoryMap[categoryId] !== undefined);
           
         if (validCategoryIds.length > 0) {
-          const categoryAssociations = validCategoryIds.map((categoryId: string) => ({
+          const categoryAssociations = validCategoryIds.map(categoryId => ({
             post_theme_id: postTheme.id,
             wordpress_category_id: categoryId
           }));
