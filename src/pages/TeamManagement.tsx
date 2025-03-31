@@ -80,7 +80,34 @@ const TeamManagement = () => {
   const [existingUserEmail, setExistingUserEmail] = useState('');
   const [isAddingExistingUser, setIsAddingExistingUser] = useState(false);
   const [activeTab, setActiveTab] = useState<'invite' | 'add'>('add');
+  const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'member' | null>(null);
 
+  // Fetch the current user's role
+  const fetchCurrentUserRole = async () => {
+    if (!organisation?.id) return;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from('organisation_memberships')
+        .select('role')
+        .eq('member_id', user.id)
+        .eq('organisation_id', organisation.id)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching current user role:', error);
+        return;
+      }
+      
+      setCurrentUserRole(data.role as 'admin' | 'member');
+    } catch (error) {
+      console.error('Error in fetchCurrentUserRole:', error);
+    }
+  };
+  
   // Fetch team members and website access
   const fetchTeamData = async () => {
     if (!organisation?.id) return;
@@ -142,13 +169,14 @@ const TeamManagement = () => {
   
   // Initial data fetch
   useEffect(() => {
+    fetchCurrentUserRole();
     fetchTeamData();
   }, [organisation?.id]);
 
   // Invite a new team member
   const handleInviteTeamMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!organisation?.id) return;
+    if (!organisation?.id || currentUserRole !== 'admin') return;
 
     try {
       console.log('Sending invitation for:', email);
@@ -222,7 +250,7 @@ const TeamManagement = () => {
 
   // Update member role
   const handleUpdateRole = async (memberId: string, newRole: 'admin' | 'member') => {
-    if (!organisation?.id) return;
+    if (!organisation?.id || currentUserRole !== 'admin') return;
     
     setIsUpdatingRole(true);
     try {
@@ -261,7 +289,7 @@ const TeamManagement = () => {
 
   // Update website access
   const handleUpdateWebsiteAccess = async () => {
-    if (!selectedMember) return;
+    if (!selectedMember || currentUserRole !== 'admin') return;
     
     setIsUpdatingAccess(true);
     try {
@@ -333,7 +361,7 @@ const TeamManagement = () => {
   // Remove team member
   const handleRemoveTeamMember = async (memberId: string) => {
     if (!confirm('Are you sure you want to remove this team member?')) return;
-    if (!organisation?.id) return;
+    if (!organisation?.id || currentUserRole !== 'admin') return;
     
     try {
       // Use the new RPC function to remove the user from the organization
@@ -361,6 +389,8 @@ const TeamManagement = () => {
 
   // Open dialog to manage website access
   const openManageAccessDialog = (member: TeamMember) => {
+    if (currentUserRole !== 'admin') return;
+    
     setSelectedMember(member);
     
     // Set selected websites based on current access
@@ -374,7 +404,7 @@ const TeamManagement = () => {
 
   // Add existing user to organization by email
   const handleAddExistingUser = async () => {
-    if (!organisation?.id) return;
+    if (!organisation?.id || currentUserRole !== 'admin') return;
     
     setIsAddingExistingUser(true);
     try {
@@ -429,310 +459,328 @@ const TeamManagement = () => {
                 <title>Team Management | WP Content AI</title>
               </Helmet>
 
-              <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold">Team Management</h1>
-                <Dialog open={isInviteDialogOpen && !selectedMember} onOpenChange={(open) => {
-                  setIsInviteDialogOpen(open);
-                  if (!open) setSelectedMember(null);
-                }}>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Invite Team Member
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Invite Team Member</DialogTitle>
-                      <DialogDescription>
-                        Invite a new team member to your organization. They will receive an email invitation to join.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                          <div className="space-y-2">
-                            <label htmlFor="email" className="text-sm font-medium">
-                              Email Address
-                            </label>
-                            <Input
-                              id="email"
-                              type="email"
-                              placeholder="colleague@example.com"
-                              value={email}
-                              onChange={(e) => setEmail(e.target.value)}
-                            />
-                        <p className="text-xs text-muted-foreground">
-                          Enter the email address of the person you want to invite. They will receive an invitation to join your organization.
-                        </p>
-                          </div>
-                          
-                          <div className="space-y-2">
-                        <label htmlFor="role" className="text-sm font-medium">
-                              Role
-                            </label>
-                            <Select
-                              value={role}
-                              onValueChange={(value) => setRole(value as 'admin' | 'member')}
-                            >
-                          <SelectTrigger id="role">
-                                <SelectValue placeholder="Select a role" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="admin">Admin (Full Access)</SelectItem>
-                                <SelectItem value="member">Member (Limited Access)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          {role === 'member' && (
-                            <div className="space-y-2">
-                              <label className="text-sm font-medium">
-                                Website Access
-                              </label>
-                              <div className="border rounded-md p-4 max-h-60 overflow-y-auto space-y-2">
-                                {websites.length === 0 ? (
-                                  <p className="text-sm text-muted-foreground">No websites available</p>
-                                ) : (
-                                  websites.map((website) => (
-                                    <div key={website.id} className="flex items-center space-x-2">
-                                      <Checkbox
-                                    id={`website-${website.id}`}
-                                        checked={selectedWebsites.includes(website.id)}
-                                        onCheckedChange={(checked) => {
-                                          if (checked) {
-                                            setSelectedWebsites([...selectedWebsites, website.id]);
-                                          } else {
-                                            setSelectedWebsites(selectedWebsites.filter(id => id !== website.id));
-                                          }
-                                        }}
-                                      />
-                                      <label
-                                    htmlFor={`website-${website.id}`}
-                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                      >
-                                        {website.name}
-                                      </label>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
-                            </div>
-                          )}
+              {currentUserRole !== 'admin' ? (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-destructive" />
+                      <CardTitle>Permission Required</CardTitle>
                     </div>
-                    <DialogFooter>
-                        <Button
-                          onClick={handleInviteTeamMember}
-                          disabled={!email.trim()}
-                        >
-                          Invite
+                  </CardHeader>
+                  <CardContent>
+                    <p>You must be an admin to access the team management page.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center">
+                    <h1 className="text-2xl font-bold">Team Management</h1>
+                    <Dialog open={isInviteDialogOpen && !selectedMember} onOpenChange={(open) => {
+                      setIsInviteDialogOpen(open);
+                      if (!open) setSelectedMember(null);
+                    }}>
+                      <DialogTrigger asChild>
+                        <Button>
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Invite Team Member
                         </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              <Separator />
-
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    <CardTitle>Team Members</CardTitle>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Invite Team Member</DialogTitle>
+                          <DialogDescription>
+                            Invite a new team member to your organization. They will receive an email invitation to join.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                              <div className="space-y-2">
+                                <label htmlFor="email" className="text-sm font-medium">
+                                  Email Address
+                                </label>
+                                <Input
+                                  id="email"
+                                  type="email"
+                                  placeholder="colleague@example.com"
+                                  value={email}
+                                  onChange={(e) => setEmail(e.target.value)}
+                                />
+                            <p className="text-xs text-muted-foreground">
+                              Enter the email address of the person you want to invite. They will receive an invitation to join your organization.
+                            </p>
+                              </div>
+                              
+                              <div className="space-y-2">
+                            <label htmlFor="role" className="text-sm font-medium">
+                                  Role
+                                </label>
+                                <Select
+                                  value={role}
+                                  onValueChange={(value) => setRole(value as 'admin' | 'member')}
+                                >
+                              <SelectTrigger id="role">
+                                    <SelectValue placeholder="Select a role" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="admin">Admin (Full Access)</SelectItem>
+                                    <SelectItem value="member">Member (Limited Access)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              
+                              {role === 'member' && (
+                                <div className="space-y-2">
+                                  <label className="text-sm font-medium">
+                                    Website Access
+                                  </label>
+                                  <div className="border rounded-md p-4 max-h-60 overflow-y-auto space-y-2">
+                                    {websites.length === 0 ? (
+                                      <p className="text-sm text-muted-foreground">No websites available</p>
+                                    ) : (
+                                      websites.map((website) => (
+                                        <div key={website.id} className="flex items-center space-x-2">
+                                          <Checkbox
+                                        id={`website-${website.id}`}
+                                            checked={selectedWebsites.includes(website.id)}
+                                            onCheckedChange={(checked) => {
+                                              if (checked) {
+                                                setSelectedWebsites([...selectedWebsites, website.id]);
+                                              } else {
+                                                setSelectedWebsites(selectedWebsites.filter(id => id !== website.id));
+                                              }
+                                            }}
+                                          />
+                                          <label
+                                        htmlFor={`website-${website.id}`}
+                                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                          >
+                                            {website.name}
+                                          </label>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                        </div>
+                        <DialogFooter>
+                            <Button
+                              onClick={handleInviteTeamMember}
+                              disabled={!email.trim()}
+                            >
+                              Invite
+                            </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
-                  <CardDescription>
-                    Manage your team members and their access to websites
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {loading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : teamMembers.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-muted-foreground">No team members found</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Invite team members to collaborate on your content
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Show a message if the website_access table doesn't exist */}
-                      {websiteAccess.length === 0 && teamMembers.some(m => m.role === 'member') && (
-                        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                          <p className="text-yellow-800 font-medium">Database Setup Required</p>
-                          <p className="text-sm text-yellow-700 mt-1">
-                            The website access table needs to be created. Please run the SQL script from the fix_website_access_dashboard.sql file in the Supabase SQL Editor.
+
+                  <Separator />
+
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        <CardTitle>Team Members</CardTitle>
+                      </div>
+                      <CardDescription>
+                        Manage your team members and their access to websites
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {loading ? (
+                        <div className="flex justify-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : teamMembers.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-muted-foreground">No team members found</p>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Invite team members to collaborate on your content
                           </p>
                         </div>
-                      )}
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Name</TableHead>
-                            <TableHead>Email</TableHead>
-                            <TableHead>Role</TableHead>
-                            <TableHead>Website Access</TableHead>
-                            <TableHead>Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {teamMembers.map((member) => {
-                            const memberAccess = websiteAccess.filter(
-                              (access) => access.user_id === member.id
-                            );
-                            
-                            return (
-                              <TableRow key={member.id}>
-                                <TableCell>
-                                  {member.first_name || member.last_name
-                                    ? `${member.first_name} ${member.last_name}`.trim()
-                                    : 'Unnamed User'}
-                                </TableCell>
-                                <TableCell>{member.email}</TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
-                                      {member.role === 'admin' ? (
-                                        <Shield className="h-3 w-3 mr-1" />
-                                      ) : (
-                                        <Users className="h-3 w-3 mr-1" />
-                                      )}
-                                      {member.role === 'admin' ? 'Admin' : 'Member'}
-                                    </Badge>
-                                    <Select
-                                      value={member.role}
-                                      onValueChange={(value) => 
-                                        handleUpdateRole(member.id, value as 'admin' | 'member')
-                                      }
-                                      disabled={isUpdatingRole}
-                                    >
-                                      <SelectTrigger className="w-[110px] h-8">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="admin">Admin</SelectItem>
-                                        <SelectItem value="member">Member</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  {member.role === 'admin' ? (
-                                    <span className="text-sm text-muted-foreground">
-                                      Full access
-                                    </span>
-                                  ) : memberAccess.length === 0 ? (
-                                    <span className="text-sm text-muted-foreground">
-                                      No access
-                                    </span>
-                                  ) : (
-                                    <div className="flex flex-wrap gap-1">
-                                      {memberAccess.map((access) => (
-                                        <Badge key={access.id} variant="outline" className="text-xs">
-                                          <Globe className="h-3 w-3 mr-1" />
-                                          {access.website?.name || 'Unknown website'}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  )}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2">
-                                    {member.role === 'member' && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => openManageAccessDialog(member)}
-                                      >
-                                        Manage Access
-                                      </Button>
-                                    )}
-                                    <Button
-                                      variant="destructive"
-                                      size="icon"
-                                      onClick={() => handleRemoveTeamMember(member.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
+                      ) : (
+                        <>
+                          {/* Show a message if the website_access table doesn't exist */}
+                          {websiteAccess.length === 0 && teamMembers.some(m => m.role === 'member') && (
+                            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                              <p className="text-yellow-800 font-medium">Database Setup Required</p>
+                              <p className="text-sm text-yellow-700 mt-1">
+                                The website access table needs to be created. Please run the SQL script from the fix_website_access_dashboard.sql file in the Supabase SQL Editor.
+                              </p>
+                            </div>
+                          )}
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Name</TableHead>
+                                <TableHead>Email</TableHead>
+                                <TableHead>Role</TableHead>
+                                <TableHead>Website Access</TableHead>
+                                <TableHead>Actions</TableHead>
                               </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                            </TableHeader>
+                            <TableBody>
+                              {teamMembers.map((member) => {
+                                const memberAccess = websiteAccess.filter(
+                                  (access) => access.user_id === member.id
+                                );
+                                
+                                return (
+                                  <TableRow key={member.id}>
+                                    <TableCell>
+                                      {member.first_name || member.last_name
+                                        ? `${member.first_name} ${member.last_name}`.trim()
+                                        : 'Unnamed User'}
+                                    </TableCell>
+                                    <TableCell>{member.email}</TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
+                                          {member.role === 'admin' ? (
+                                            <Shield className="h-3 w-3 mr-1" />
+                                          ) : (
+                                            <Users className="h-3 w-3 mr-1" />
+                                          )}
+                                          {member.role === 'admin' ? 'Admin' : 'Member'}
+                                        </Badge>
+                                        <Select
+                                          value={member.role}
+                                          onValueChange={(value) => 
+                                            handleUpdateRole(member.id, value as 'admin' | 'member')
+                                          }
+                                          disabled={isUpdatingRole}
+                                        >
+                                          <SelectTrigger className="w-[110px] h-8">
+                                            <SelectValue />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="admin">Admin</SelectItem>
+                                            <SelectItem value="member">Member</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      {member.role === 'admin' ? (
+                                        <span className="text-sm text-muted-foreground">
+                                          Full access
+                                        </span>
+                                      ) : memberAccess.length === 0 ? (
+                                        <span className="text-sm text-muted-foreground">
+                                          No access
+                                        </span>
+                                      ) : (
+                                        <div className="flex flex-wrap gap-1">
+                                          {memberAccess.map((access) => (
+                                            <Badge key={access.id} variant="outline" className="text-xs">
+                                              <Globe className="h-3 w-3 mr-1" />
+                                              {access.website?.name || 'Unknown website'}
+                                            </Badge>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2">
+                                        {member.role === 'member' && (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => openManageAccessDialog(member)}
+                                          >
+                                            Manage Access
+                                          </Button>
+                                        )}
+                                        <Button
+                                          variant="destructive"
+                                          size="icon"
+                                          onClick={() => handleRemoveTeamMember(member.id)}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              )}
             </div>
           </main>
         </div>
       </div>
 
-      {/* Dialog for managing website access */}
-      <Dialog open={isInviteDialogOpen && !!selectedMember} onOpenChange={(open) => {
-        setIsInviteDialogOpen(open);
-        if (!open) setSelectedMember(null);
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Manage Website Access</DialogTitle>
-            <DialogDescription>
-              Select which websites this team member can access
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Website Access for {selectedMember?.email}
-              </label>
-              <div className="border rounded-md p-4 max-h-60 overflow-y-auto space-y-2">
-                {websites.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No websites available</p>
-                ) : (
-                  websites.map((website) => (
-                    <div key={website.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`manage-website-${website.id}`}
-                        checked={selectedWebsites.includes(website.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedWebsites([...selectedWebsites, website.id]);
-                          } else {
-                            setSelectedWebsites(selectedWebsites.filter(id => id !== website.id));
-                          }
-                        }}
-                      />
-                      <label
-                        htmlFor={`manage-website-${website.id}`}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                      >
-                        {website.name}
-                      </label>
-                    </div>
-                  ))
-                )}
+      {/* Dialog for managing website access - only visible to admins */}
+      {currentUserRole === 'admin' && (
+        <Dialog open={isInviteDialogOpen && !!selectedMember} onOpenChange={(open) => {
+          setIsInviteDialogOpen(open);
+          if (!open) setSelectedMember(null);
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Manage Website Access</DialogTitle>
+              <DialogDescription>
+                Select which websites this team member can access
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Website Access for {selectedMember?.email}
+                </label>
+                <div className="border rounded-md p-4 max-h-60 overflow-y-auto space-y-2">
+                  {websites.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No websites available</p>
+                  ) : (
+                    websites.map((website) => (
+                      <div key={website.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`manage-website-${website.id}`}
+                          checked={selectedWebsites.includes(website.id)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedWebsites([...selectedWebsites, website.id]);
+                            } else {
+                              setSelectedWebsites(selectedWebsites.filter(id => id !== website.id));
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`manage-website-${website.id}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                          {website.name}
+                        </label>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={handleUpdateWebsiteAccess}
-              disabled={isUpdatingAccess}
-            >
-              {isUpdatingAccess ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                'Save Changes'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button
+                onClick={handleUpdateWebsiteAccess}
+                disabled={isUpdatingAccess}
+              >
+                {isUpdatingAccess ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </SidebarProvider>
   );
 };
