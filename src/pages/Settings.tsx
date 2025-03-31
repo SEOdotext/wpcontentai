@@ -2153,66 +2153,132 @@ const Settings = () => {
                 {/* WordPress HTML Template Card */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>WordPress HTML Template</CardTitle>
+                    <CardTitle>Content Formatting</CardTitle>
                     <CardDescription>
-                      Customize the HTML structure used for generated WordPress content
+                      Learn how your content will be structured and formatted when published to WordPress, optimized for maximum GPT ranking impact
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <div className="flex justify-between items-center">
-                        <Label htmlFor="wpTemplate">Content Structure</Label>
-                        <div className="space-x-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={handleOpenWpFormat}
-                          >
-                            {wpFormatOpen ? "Close Editor" : "Edit Template"}
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={handleRestoreDefaultTemplate}
-                            disabled={!wpFormatOpen}
-                          >
-                            Restore Default
-                          </Button>
-                        </div>
+                        <Label>Content Structure & Output Format</Label>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={handleOpenWpFormat}
+                        >
+                          {wpFormatOpen ? "Close Editor" : "Edit HTML Template"}
+                        </Button>
                       </div>
                       
                       {wpFormatOpen ? (
-                        <div className="mt-2 border rounded-md p-3 bg-muted/30">
-                          <p className="text-sm mb-2">Edit the HTML template that will be used for WordPress posts:</p>
-                          <Textarea
-                            id="wpTemplate"
-                            value={htmlTemplate}
-                            onChange={(e) => setHtmlTemplate(e.target.value)}
-                            className="font-mono h-60 text-sm"
-                          />
-                          <div className="mt-3 flex justify-end">
-                            <Button 
-                              size="sm"
-                              onClick={handleSaveTemplate}
-                            >
-                              Save Template
-                            </Button>
+                        <div className="mt-2 space-y-6">
+                          <div className="border rounded-md p-3 bg-muted/30">
+                            <p className="text-sm mb-2">Edit the HTML template that will be used to format and structure your WordPress posts:</p>
+                            <Textarea
+                              id="wpTemplate"
+                              value={htmlTemplate}
+                              onChange={(e) => setHtmlTemplate(e.target.value)}
+                              className="font-mono h-60 text-sm"
+                            />
+                            <div className="mt-3 flex justify-end gap-2">
+                              <Button 
+                                variant="outline"
+                                size="sm"
+                                onClick={handleRestoreDefaultTemplate}
+                              >
+                                Restore Default
+                              </Button>
+                              <Button 
+                                size="sm"
+                                onClick={handleSaveTemplate}
+                              >
+                                Save Template
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="border rounded-md p-4 bg-muted/30 space-y-4">
+                            <div>
+                              <h4 className="font-medium mb-2">Strategic Text Sequences (STS) Formula</h4>
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">Hook</span>
+                                  <ArrowRight className="h-4 w-4" />
+                                  <span className="font-medium">Context</span>
+                                  <ArrowRight className="h-4 w-4" />
+                                  <span className="font-medium">Value</span>
+                                  <ArrowRight className="h-4 w-4" />
+                                  <span className="font-medium">Proof</span>
+                                  <ArrowRight className="h-4 w-4" />
+                                  <span className="font-medium">Action</span>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  This formula is specifically designed to help ChatGPT understand, process, and rank your content more effectively. It creates a logical flow that AI models can easily parse and prioritize.
+                                </p>
+                              </div>
+                            </div>
+
+                            <div>
+                              <h4 className="font-medium mb-2">Best Practices for GPT Ranking</h4>
+                              <div className="space-y-3">
+                                <div className="space-y-1">
+                                  <p className="text-sm font-medium">🎯 Clear Structure</p>
+                                  <p className="text-sm text-muted-foreground">Define a clear structure for GPT to follow and align with user intent (awareness → interest → decision)</p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-sm font-medium">📚 Authoritative Content</p>
+                                  <p className="text-sm text-muted-foreground">Use structured educational content with FAQs, guides, and well-labeled headings</p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-sm font-medium">💡 Quotable Content</p>
+                                  <p className="text-sm text-muted-foreground">Write short, bold statements that could be used in AI-generated summaries</p>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       ) : (
-                        <div className="mt-2 border rounded-md p-3 bg-muted/30">
-                          <p className="text-sm text-muted-foreground mb-2">Current WordPress post structure:</p>
-                          <div className="font-mono text-xs p-3 bg-muted rounded border overflow-auto max-h-32">
-                            <pre className="whitespace-pre-wrap break-all text-muted-foreground">{htmlTemplate}</pre>
+                        <div className="mt-2 border rounded-md p-4 bg-muted/30 space-y-4">
+                          <div>
+                            <h4 className="font-medium mb-2">Strategic Text Sequences (STS) Formula</h4>
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">Hook</span>
+                                <ArrowRight className="h-4 w-4" />
+                                <span className="font-medium">Context</span>
+                                <ArrowRight className="h-4 w-4" />
+                                <span className="font-medium">Value</span>
+                                <ArrowRight className="h-4 w-4" />
+                                <span className="font-medium">Proof</span>
+                                <ArrowRight className="h-4 w-4" />
+                                <span className="font-medium">Action</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                This formula is specifically designed to help ChatGPT understand, process, and rank your content more effectively. It creates a logical flow that AI models can easily parse and prioritize.
+                              </p>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-3">
-                            Click "Edit Template" to customize how content is structured in WordPress
-                          </p>
+
+                          <div>
+                            <h4 className="font-medium mb-2">Best Practices for GPT Ranking</h4>
+                            <div className="space-y-3">
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium">🎯 Clear Structure</p>
+                                <p className="text-sm text-muted-foreground">Define a clear structure for GPT to follow and align with user intent (awareness → interest → decision)</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium">📚 Authoritative Content</p>
+                                <p className="text-sm text-muted-foreground">Use structured educational content with FAQs, guides, and well-labeled headings</p>
+                              </div>
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium">💡 Quotable Content</p>
+                                <p className="text-sm text-muted-foreground">Write short, bold statements that could be used in AI-generated summaries</p>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       )}
-                      <p className="text-sm text-muted-foreground mt-2">
-                        This template defines the HTML structure of posts sent to WordPress. Your content will be inserted where <code>{'<!-- Content will be inserted here -->'}</code> appears.
-                      </p>
                     </div>
                   </CardContent>
                 </Card>
