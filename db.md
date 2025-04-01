@@ -185,11 +185,6 @@
     "data_type": "text"
   },
   {
-    "table_name": "post_themes",
-    "column_name": "categories",
-    "data_type": "jsonb"
-  },
-  {
     "table_name": "publication_settings",
     "column_name": "id",
     "data_type": "uuid"

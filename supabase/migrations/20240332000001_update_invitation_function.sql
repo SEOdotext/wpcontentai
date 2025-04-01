@@ -17,7 +17,6 @@ SET search_path = public
 AS $$
 DECLARE
     v_user_id UUID;
-    v_user_exists BOOLEAN;
 BEGIN
     -- Check if user exists in auth.users
     SELECT id INTO v_user_id
@@ -33,17 +32,14 @@ BEGIN
             WHERE member_id = v_user_id
             AND organisation_id = p_organisation_id
         ) THEN
+            -- If they're already a member, just return success
             RETURN jsonb_build_object(
-                'status', 'error',
+                'status', 'success',
+                'user_id', v_user_id,
+                'is_new_user', false,
                 'message', 'User is already a member of this organization'
             );
         END IF;
-    ELSE
-        -- Return error - user needs to be created first
-        RETURN jsonb_build_object(
-            'status', 'error',
-            'message', 'User does not exist. Please create the user first using Supabase Auth.'
-        );
     END IF;
 
     -- Create organization membership first (this bypasses RLS due to SECURITY DEFINER)
@@ -57,30 +53,15 @@ BEGIN
         p_role
     );
 
-    -- Now create user profile if it doesn't exist
-    INSERT INTO user_profiles (
-        id,
-        email,
-        role
-    ) VALUES (
-        v_user_id,
-        p_email,
-        'user'
-    )
-    ON CONFLICT (id) DO NOTHING;
-
-    -- If role is member and website_ids are provided, create website access
-    IF p_role = 'member' AND p_website_ids IS NOT NULL THEN
-        INSERT INTO website_access (user_id, website_id)
-        SELECT v_user_id, unnest(p_website_ids);
-    END IF;
-
     -- Return success response
     RETURN jsonb_build_object(
         'status', 'success',
         'user_id', v_user_id,
-        'is_new_user', NOT EXISTS (SELECT 1 FROM user_profiles WHERE id = v_user_id),
-        'message', 'User added to organization'
+        'is_new_user', v_user_id IS NULL,
+        'message', CASE 
+            WHEN v_user_id IS NULL THEN 'New user created and added to organization'
+            ELSE 'Existing user added to organization'
+        END
     );
 END;
 $$;

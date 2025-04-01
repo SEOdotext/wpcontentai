@@ -1339,6 +1339,12 @@
   },
   {
     "routine_schema": "public",
+    "routine_name": "update_user_role",
+    "routine_type": "FUNCTION",
+    "data_type": "jsonb"
+  },
+  {
+    "routine_schema": "public",
     "routine_name": "update_website_content_updated_at",
     "routine_type": "FUNCTION",
     "data_type": "trigger"

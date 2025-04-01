@@ -421,6 +421,26 @@
   },
   {
     "schemaname": "public",
+    "tablename": "wordpress_categories",
+    "policyname": "Users can view wordpress categories",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "wordpress_categories",
+    "policyname": "Users can manage wordpress categories",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(EXISTS ( SELECT 1\n   FROM (organisation_memberships om\n     JOIN websites w ON ((w.organisation_id = om.organisation_id)))\n  WHERE ((om.member_id = auth.uid()) AND (w.id = wordpress_categories.website_id))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
     "tablename": "publish_queue",
     "policyname": "Service role can do everything",
     "permissive": "PERMISSIVE",
@@ -448,5 +468,45 @@
     "cmd": "INSERT",
     "qual": null,
     "with_check": "(post_theme_id IN ( SELECT post_themes.id\n   FROM post_themes\n  WHERE (post_themes.website_id IN ( SELECT website_access.website_id\n           FROM website_access\n          WHERE (website_access.user_id = auth.uid())))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "wordpress_categories",
+    "policyname": "Users can view categories for their websites",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "wordpress_categories",
+    "policyname": "Users can insert categories for their websites",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "wordpress_categories",
+    "policyname": "Users can update categories for their websites",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "wordpress_categories",
+    "policyname": "Users can delete categories for their websites",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "DELETE",
+    "qual": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))",
+    "with_check": null
   }
 ]

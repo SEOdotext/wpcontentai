@@ -212,7 +212,7 @@ const TeamManagement = () => {
           p_email: email,
           p_organisation_id: organisation.id,
           p_role: role,
-          p_website_ids: role === 'member' ? selectedWebsites : []
+          p_website_ids: [] // Pass empty array for website IDs
         });
 
       if (invitationError) {
@@ -223,12 +223,14 @@ const TeamManagement = () => {
       console.log('Invitation response:', invitationResponse);
 
       if (invitationResponse && invitationResponse.status === 'success') {
-        // Send invitation email
-        await supabase.rpc('send_invitation_email', {
-          p_user_id: invitationResponse.user_id,
-          p_organisation_id: organisation.id,
-          p_is_new_user: invitationResponse.is_new_user || false
-        });
+        // Only send invitation email for new users
+        if (invitationResponse.is_new_user) {
+          await supabase.rpc('send_invitation_email', {
+            p_user_id: invitationResponse.user_id,
+            p_organisation_id: organisation.id,
+            p_is_new_user: true
+          });
+        }
 
         toast.success('Team member added successfully');
         
@@ -238,7 +240,6 @@ const TeamManagement = () => {
 
         setEmail('');
         setRole('member');
-        setSelectedWebsites([]);
         setIsInviteDialogOpen(false);
       } else if (invitationResponse && invitationResponse.message === 'User is already a member of this organization') {
         toast.info('This user is already a member of your organization.');
@@ -520,7 +521,7 @@ const TeamManagement = () => {
                                   value={role}
                                   onValueChange={(value) => setRole(value as 'admin' | 'member')}
                                 >
-                              <SelectTrigger id="role">
+                                  <SelectTrigger id="role">
                                     <SelectValue placeholder="Select a role" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -529,41 +530,6 @@ const TeamManagement = () => {
                                   </SelectContent>
                                 </Select>
                               </div>
-                              
-                              {role === 'member' && (
-                                <div className="space-y-2">
-                                  <label className="text-sm font-medium">
-                                    Website Access
-                                  </label>
-                                  <div className="border rounded-md p-4 max-h-60 overflow-y-auto space-y-2">
-                                    {websites.length === 0 ? (
-                                      <p className="text-sm text-muted-foreground">No websites available</p>
-                                    ) : (
-                                      websites.map((website) => (
-                                        <div key={website.id} className="flex items-center space-x-2">
-                                          <Checkbox
-                                        id={`website-${website.id}`}
-                                            checked={selectedWebsites.includes(website.id)}
-                                            onCheckedChange={(checked) => {
-                                              if (checked) {
-                                                setSelectedWebsites([...selectedWebsites, website.id]);
-                                              } else {
-                                                setSelectedWebsites(selectedWebsites.filter(id => id !== website.id));
-                                              }
-                                            }}
-                                          />
-                                          <label
-                                        htmlFor={`website-${website.id}`}
-                                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                          >
-                                            {website.name}
-                                          </label>
-                                        </div>
-                                      ))
-                                    )}
-                                  </div>
-                                </div>
-                              )}
                         </div>
                         <DialogFooter>
                             <Button
