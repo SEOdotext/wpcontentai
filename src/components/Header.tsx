@@ -16,6 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { useOrganisation } from '@/context/OrganisationContext';
+import { AnimatedLogo } from '@/components/Logo';
 
 const Header: React.FC = () => {
   const location = useLocation();

@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Link, useLocation } from 'react-router-dom';
 import { useWebsites } from '@/context/WebsitesContext';
+import { Logo } from '@/components/Logo';
 
 export function AppSidebar() {
   const { websites, currentWebsite, setCurrentWebsite, isLoading } = useWebsites();
@@ -25,8 +26,8 @@ export function AppSidebar() {
   
   return (
     <Sidebar className="border-r border-border/50">
-      <SidebarHeader className="h-16 flex items-center px-6">
-        <span className="font-semibold text-lg text-primary">WPcontentAI</span>
+      <SidebarHeader className="h-16 flex items-center px-6 pt-[15px]">
+        <Logo />
       </SidebarHeader>
       <SidebarContent>
         <div className="px-3 mb-4">
