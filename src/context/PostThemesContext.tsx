@@ -428,7 +428,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('No access token found');
 
-      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v2', {
+      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v3', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

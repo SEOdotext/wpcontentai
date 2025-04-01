@@ -12,7 +12,7 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:functions:serve": "supabase functions serve",
-    "supabase:functions:deploy": "supabase functions deploy wordpress-connect && supabase functions deploy wordpress-posts"
+    "supabase:functions:deploy": "supabase functions deploy wordpress-connect && supabase functions deploy wordpress-posts && supabase functions deploy generate-content-v3"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
