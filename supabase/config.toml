@@ -31,3 +31,14 @@ entrypoint = "./functions/process-publish-queue/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/process-publish-queue/*.html" ]
+
+[functions.check-scheduled-posts]
+enabled = true
+verify_jwt = false
+import_map = "./functions/check-scheduled-posts/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/check-scheduled-posts/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/check-scheduled-posts/*.html" ]
