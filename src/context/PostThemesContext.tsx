@@ -28,7 +28,7 @@ export interface PostTheme {
   website_id: string;
   subject_matter: string;
   keywords: string[];
-  status: 'pending' | 'approved' | 'published' | 'textgenerated';
+  status: 'pending' | 'approved' | 'published' | 'textgenerated' | 'generated' | 'declined' | 'generatingidea';
   scheduled_date?: string | null;
   created_at: string;
   updated_at: string;
@@ -299,7 +299,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         keywords: rowData.keywords,
         categories: categories || [],
         post_content: rowData.post_content || null,
-        status: rowData.status as 'pending' | 'approved' | 'published' | 'textgenerated',
+        status: rowData.status as 'pending' | 'approved' | 'published' | 'textgenerated' | 'generated' | 'declined' | 'generatingidea',
         scheduled_date: rowData.scheduled_date,
         created_at: rowData.created_at,
         updated_at: rowData.updated_at,
@@ -472,7 +472,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         keywords: rowData.keywords,
         categories: rowData.categories || [],
         post_content: rowData.post_content || null,
-        status: rowData.status as 'pending' | 'approved' | 'published' | 'textgenerated',
+        status: rowData.status as 'pending' | 'approved' | 'published' | 'textgenerated' | 'generated' | 'declined' | 'generatingidea',
         scheduled_date: rowData.scheduled_date,
         created_at: rowData.created_at,
         updated_at: rowData.updated_at,

@@ -36,13 +36,13 @@ interface CalendarContent {
   description: string;
   dateCreated: string;
   date: string;
-  contentStatus: 'draft' | 'published' | 'scheduled' | 'content-ready';
+  contentStatus: 'draft' | 'published' | 'scheduled' | 'content-ready' | 'generated' | 'declined' | 'generatingidea';
   keywords: Keyword[];
   categories: string[];
   wpSentDate?: string;
   wpPostUrl?: string;
   preview_image_url?: string;
-  status: 'pending' | 'textgenerated' | 'approved' | 'published';
+  status: 'pending' | 'approved' | 'published' | 'textgenerated' | 'generated' | 'declined' | 'generatingidea';
 }
 
 interface WordPressSettings {
@@ -68,7 +68,7 @@ const ContentCalendar = () => {
   const [sendingToWPId, setSendingToWPId] = useState<string | null>(null);
   const [isGeneratingContent, setIsGeneratingContent] = useState(false);
   const [generatingContentId, setGeneratingContentId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'all' | 'not-generated' | 'not-sent'>('all');
+  const [viewMode, setViewMode] = useState<'all' | 'not-generated' | 'not-sent' | 'sent'>('all');
   const { currentWebsite } = useWebsites();
   const { 
     postThemes, 
@@ -153,7 +153,10 @@ const ContentCalendar = () => {
   
   // Filter post themes to show approved and textgenerated ones
   const approvedPostThemes = postThemes.filter(theme => 
-    theme.status === 'approved' || theme.status === 'textgenerated'
+    theme.status === 'approved' || 
+    theme.status === 'textgenerated' || 
+    theme.status === 'generated' || 
+    theme.status === 'published'
   );
   
   // Use approvedPostThemes instead of postThemes in the calendar view
@@ -163,13 +166,14 @@ const ContentCalendar = () => {
     description: theme.post_content || '',
     dateCreated: theme.created_at,
     date: theme.scheduled_date,
-    contentStatus: theme.status === 'textgenerated' ? 'content-ready' : 'scheduled',
+    contentStatus: theme.status === 'textgenerated' || theme.status === 'generated' ? 'content-ready' : 
+                  theme.status === 'published' ? 'published' : 'scheduled',
     keywords: theme.keywords.map(k => ({ text: k })),
     categories: theme.categories.map(c => c.name),
     wpSentDate: theme.wp_sent_date,
     wpPostUrl: theme.wp_post_url,
     preview_image_url: theme.image,
-    status: theme.status as 'pending' | 'approved' | 'published' | 'textgenerated'
+    status: theme.status
   }));
 
   // Update allContent only when calendarContent changes
@@ -205,9 +209,11 @@ const ContentCalendar = () => {
   const getFilteredContent = React.useCallback((content: CalendarContent[]) => {
     switch (viewMode) {
       case 'not-generated':
-        return content.filter(item => !item.description);
+        return content.filter(item => !item.description || item.description.trim().length === 0);
       case 'not-sent':
         return content.filter(item => !item.wpSentDate);
+      case 'sent':
+        return content.filter(item => item.wpSentDate);
       default:
         return content;
     }
@@ -231,6 +237,11 @@ const ContentCalendar = () => {
         return {
           title: "Not Sent",
           description: "Content that hasn't been sent to WordPress yet."
+        };
+      case 'sent':
+        return {
+          title: "Sent",
+          description: "Content that has been sent to WordPress."
         };
       default:
         return {
@@ -926,6 +937,14 @@ const ContentCalendar = () => {
                         >
                           Not Sent
                         </Button>
+                        <Button
+                          variant={viewMode === 'sent' ? "default" : "ghost"}
+                          size="sm"
+                          className="text-xs h-7 px-2"
+                          onClick={() => setViewMode('sent')}
+                        >
+                          Sent
+                        </Button>
                       </div>
                     </div>
                     
@@ -1006,7 +1025,6 @@ const ContentCalendar = () => {
                                         )}
                                       </Button>
                                     )}
-
                                     {/* Image Status Icon */}
                                     {!(content.contentStatus === 'published' && !!content.wpSentDate) && 
                                      content.description && 
@@ -1166,3 +1184,4 @@ const ContentCalendar = () => {
 };
 
 export default ContentCalendar;
+
