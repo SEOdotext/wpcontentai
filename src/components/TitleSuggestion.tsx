@@ -25,7 +25,7 @@ interface TitleSuggestionProps {
   date: Date;
   onUpdateDate?: (date: Date) => void;
   onLiked?: () => void;
-  status: 'pending' | 'approved' | 'published';
+  status: 'pending' | 'approved' | 'published' | 'textgenerated';
   onUpdateKeywords?: (id: string, keywords: string[]) => void;
   onUpdateCategories?: (id: string, categories: { id: string; name: string }[]) => void;
   isGeneratingContent?: boolean;
@@ -246,6 +246,8 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Approved</Badge>;
       case 'published':
         return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Published</Badge>;
+      case 'textgenerated':
+        return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Text Generated</Badge>;
       default:
         return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pending</Badge>;
     }

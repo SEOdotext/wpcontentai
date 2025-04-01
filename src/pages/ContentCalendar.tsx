@@ -36,13 +36,13 @@ interface CalendarContent {
   description: string;
   dateCreated: string;
   date: string;
-  contentStatus: 'draft' | 'published' | 'scheduled';
+  contentStatus: 'draft' | 'published' | 'scheduled' | 'content-ready';
   keywords: Keyword[];
   categories: string[];
   wpSentDate?: string;
   wpPostUrl?: string;
   preview_image_url?: string;
-  status: 'pending' | 'generated' | 'published';
+  status: 'pending' | 'textgenerated' | 'approved' | 'published';
 }
 
 interface WordPressSettings {
@@ -161,9 +161,11 @@ const ContentCalendar = () => {
       description: theme.post_content || '',
       dateCreated: theme.created_at,
       date: theme.scheduled_date,
-      contentStatus: (theme.status === 'pending' ? 'draft' : 
-                     theme.status === 'generated' ? 'scheduled' : 
-                     theme.status === 'published' ? 'published' : 'draft') as 'draft' | 'published' | 'scheduled',
+      contentStatus: (
+        theme.status === 'pending' ? 'draft' : 
+        theme.status === 'textgenerated' ? 'content-ready' :
+        theme.status === 'approved' ? 'scheduled' : 
+        theme.status === 'published' ? 'published' : 'draft') as 'draft' | 'published' | 'scheduled' | 'content-ready',
       keywords: theme.keywords.map(k => ({ text: k })),
       categories: theme.categories || [],
       wpSentDate: theme.wp_sent_date,

@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowLeft, Calendar as CalendarIcon, RefreshCw, Tag, Trash, X, Send, FileEdit, Loader2, ExternalLink, Image, Plus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Calendar as CalendarIcon, RefreshCw, Tag, Trash, X, Send, FileEdit, Loader2, ExternalLink, Image as ImageIcon, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -12,15 +12,37 @@ import {
   SheetOverlay,
   SheetPortal,
 } from '@/components/ui/sheet';
+import { format, parseISO } from 'date-fns';
+
+// Define a proper keyword type that supports both string and object formats
+interface KeywordType {
+  text: string;
+}
+
+// Define a proper category type
+interface Category {
+  id: string;
+  name: string;
+}
+
+// Type guard function to check if an object is a Category
+function isCategory(obj: any): obj is Category {
+  return typeof obj === 'object' && obj !== null && 'id' in obj && 'name' in obj;
+}
+
+// Type guard function to check if an object is a KeywordType
+function isKeywordType(obj: any): obj is KeywordType {
+  return typeof obj === 'object' && obj !== null && 'text' in obj;
+}
 
 interface ContentViewProps {
   title: string;
   description?: string;
   fullContent?: string;
-  keywords?: Keyword[];
-  categories?: string[];
+  keywords?: Array<KeywordType | string>;
+  categories?: Array<Category | string>;
   dateCreated?: string;
-  status?: 'draft' | 'published' | 'scheduled';
+  status?: 'draft' | 'published' | 'scheduled' | 'content-ready';
   wpSentDate?: string;
   wpPostUrl?: string;
   preview_image_url?: string;
@@ -85,7 +107,7 @@ const ContentView: React.FC<ContentViewProps> = ({
     }
   }, [isGeneratingContent, hasContent]);
 
-  // Ensure keywords is always a valid array
+  // Make safe versions of keywords and categories arrays
   const safeKeywords = Array.isArray(keywords) ? keywords : [];
 
   return (
@@ -167,9 +189,9 @@ const ContentView: React.FC<ContentViewProps> = ({
                     {isGeneratingImage ? (
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
                     ) : preview_image_url ? (
-                      <Image className="h-4 w-4 fill-purple-800" />
+                      <ImageIcon className="h-4 w-4 fill-purple-800" />
                     ) : (
-                      <Image className="h-4 w-4 text-purple-600" />
+                      <ImageIcon className="h-4 w-4 text-purple-600" />
                     )}
                   </Button>
                 )}
@@ -387,7 +409,7 @@ const ContentView: React.FC<ContentViewProps> = ({
                         variant="outline" 
                         className="bg-blue-50 text-blue-700 border-blue-200 text-xs"
                       >
-                        {typeof keyword === 'string' ? keyword : keyword.text}
+                        {isKeywordType(keyword) ? keyword.text : typeof keyword === 'string' ? keyword : 'Unknown keyword'}
                       </Badge>
                     ))}
                   </div>
@@ -408,7 +430,7 @@ const ContentView: React.FC<ContentViewProps> = ({
                         variant="outline" 
                         className="bg-green-50 text-green-700 border-green-200 text-xs"
                       >
-                        {category}
+                        {isCategory(category) ? category.name : typeof category === 'string' ? category : 'Unknown category'}
                       </Badge>
                     ))}
                   </div>

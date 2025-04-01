@@ -28,7 +28,7 @@ export interface PostTheme {
   website_id: string;
   subject_matter: string;
   keywords: string[];
-  status: 'pending' | 'approved' | 'published';
+  status: 'pending' | 'approved' | 'published' | 'textgenerated';
   scheduled_date: string;
   created_at: string;
   updated_at: string;
@@ -296,7 +296,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         keywords: rowData.keywords,
         categories: categories || [],
         post_content: rowData.post_content || null,
-        status: rowData.status as 'pending' | 'approved' | 'published',
+        status: rowData.status as 'pending' | 'approved' | 'published' | 'textgenerated',
         scheduled_date: rowData.scheduled_date,
         created_at: rowData.created_at,
         updated_at: rowData.updated_at,
@@ -442,6 +442,12 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       // Wait for a short time to allow the database to update
       await new Promise(resolve => setTimeout(resolve, 1000));
 
+      // Update the status to 'textgenerated' to indicate that text content has been generated
+      await supabase
+        .from('post_themes')
+        .update({ status: 'textgenerated' })
+        .eq('id', postThemeId);
+
       // Fetch the updated post theme from the database
       const { data: updatedTheme, error: fetchError } = await supabase
         .from('post_themes')
@@ -463,7 +469,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         keywords: rowData.keywords,
         categories: rowData.categories || [],
         post_content: rowData.post_content || null,
-        status: rowData.status as 'pending' | 'approved' | 'published',
+        status: rowData.status as 'pending' | 'approved' | 'published' | 'textgenerated',
         scheduled_date: rowData.scheduled_date,
         created_at: rowData.created_at,
         updated_at: rowData.updated_at,

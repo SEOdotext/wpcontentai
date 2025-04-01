@@ -11,7 +11,7 @@ export interface ContentCardProps {
   description?: string;
   keywords?: Keyword[];
   dateCreated?: string;
-  contentStatus?: 'draft' | 'published' | 'scheduled';
+  contentStatus?: 'draft' | 'published' | 'scheduled' | 'content-ready';
   className?: string;
 }
 

@@ -363,7 +363,6 @@ Notice that the "categories" field contains an array of string UUIDs, not object
           website_id,
           subject_matter: idea.title,
           keywords: idea.keywords as string[], // Ensure it's treated as an array
-          post_content: idea.description,
           status: 'pending'
         })
         .select()

@@ -541,7 +541,7 @@ serve(async (req) => {
         
         if (queueStatus.status === 'failed') {
           console.error('Image generation failed:', queueStatus.error);
-          break;
+          throw new Error('Image generation failed: ' + (queueStatus.error || 'Unknown error'));
         }
         
         // Wait 2 seconds before next check
@@ -550,7 +550,7 @@ serve(async (req) => {
       }
       
       if (!imageUrl) {
-        console.log('Image generation did not complete in time, proceeding without image');
+        throw new Error('Image generation timed out after 60 seconds');
       }
     }
     
