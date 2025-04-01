@@ -9,8 +9,8 @@ console.log("WordPress Posts function started")
 
 // Get allowed origins from environment variables
 const ALLOWED_ORIGINS = {
-  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://websitetexts.com'],
-  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.websitetexts.com', 'http://localhost:8080']
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080']
 };
 
 // Function to determine if origin is allowed
@@ -342,116 +342,4 @@ serve(async (req) => {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + btoa(`${wpSettings.wp_username}:${wpSettings.wp_application_password}`)
-      },
-      body: JSON.stringify(postData)
-    })
-    
-    if (!response.ok) {
-      // Try to get more detailed error
-      let errorMessage = `WordPress API error: ${response.status} ${response.statusText}`
-      try {
-        const errorData = await response.json()
-        if (errorData.message) {
-          errorMessage = errorData.message
-        }
-      } catch (e) {
-        // Use default error message if can't parse
-      }
-      throw new Error(errorMessage)
-    }
-    
-    // Parse the response to get the post details
-    const postResponse = await response.json()
-    
-    // If we uploaded an image, set it as the featured image
-    if (postTheme.image && postResponse.id) {
-      try {
-        // Set the featured image for the post
-        const featuredImageResponse = await fetch(`${wpSettings.wp_url}/wp-json/wp/v2/posts/${postResponse.id}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Basic ' + btoa(`${wpSettings.wp_username}:${wpSettings.wp_application_password}`)
-          },
-          body: JSON.stringify({
-            featured_media: postResponse.featured_media || postResponse.id
-          })
-        });
-
-        if (!featuredImageResponse.ok) {
-          console.error('Failed to set featured image:', await featuredImageResponse.text());
-        } else {
-          console.log('Successfully set featured image for post');
-        }
-      } catch (featuredImageError) {
-        console.error('Error setting featured image:', featuredImageError);
-      }
-    }
-    
-    // Update post theme with WordPress information
-    console.log('Updating post theme with WordPress information:', {
-      postId: post_theme_id,
-      wpPostId: postResponse.id.toString(),
-      wpPostUrl: postResponse.link,
-      wpImageUrl
-    });
-    
-    const { error: updateError } = await supabaseClient
-      .from('post_themes')
-      .update({
-        status: 'published',
-        wp_post_id: postResponse.id.toString(),
-        wp_post_url: postResponse.link,
-        wp_sent_date: new Date().toISOString(),
-        ...(wpImageUrl && { wp_image_url: wpImageUrl })
-      })
-      .eq('id', post_theme_id);
-
-    if (updateError) {
-      console.error('Error updating post theme:', {
-        postId: post_theme_id,
-        error: updateError.message
-      });
-      // Don't throw here as the post was created successfully
-    } else {
-      console.log('Successfully updated post theme with WordPress information');
-    }
-    
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `Post ${action === 'create' ? 'created' : 'updated'} successfully`,
-        post: {
-          id: postResponse.id,
-          title: postResponse.title.rendered,
-          status: postResponse.status,
-          url: postResponse.link
-        }
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      },
-    )
-    
-  } catch (error) {
-    console.error(`Error in WordPress Posts function: ${error.message}`)
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message || 'Unknown error occurred'
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
-      },
-    )
-  }
-})
-
-// To invoke:
-// curl -i --location --request POST 'http://localhost:54321/functions/v1/wordpress-posts' \
-//   --header 'Authorization: Bearer <JWT>' \
-//   --header 'Content-Type: application/json' \
-//   --data '{"website_id":"abc-123","title":"Test Post","content":"This is a test post","status":"draft","action":"create"}' 
+        'Authorization': 'Basic ' + btoa(`

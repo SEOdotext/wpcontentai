@@ -10,5 +10,5 @@ include = ["**/*"]
 NODE_VERSION = "18"
 
 [env.production]
-name = "wpcontentai"
-route = "wpcontentai.com/*" 
+name = "contentgardener"
+route = "contentgardener.ai/*" 

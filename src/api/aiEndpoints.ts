@@ -179,7 +179,7 @@ export const fetchWebsiteContent = async (url: string, websiteId?: string): Prom
             method: 'GET',
             headers: {
               'Accept': 'text/html,application/xhtml+xml,application/xml',
-              'User-Agent': 'Mozilla/5.0 (compatible; WPContentAI/1.0)'
+              'User-Agent': 'Mozilla/5.0 (compatible; ContentGardener.ai/1.0)'
             }
           }
         })

@@ -45,7 +45,7 @@ async function fetchWithTimeout(url: string, timeout = 5000): Promise<Response> 
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; WPContentAI/1.0; +https://wpcontentai.com)'
+        'User-Agent': 'Mozilla/5.0 (compatible; ContentGardener/1.0; +https://contentgardener.ai)'
       }
     });
     clearTimeout(id);

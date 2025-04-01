@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { HelmetProvider } from 'react-helmet-async';
+import { SidebarProvider } from "./components/ui/sidebar";
+import { Loader2 } from "lucide-react";
 import Index from "./pages/Index";
 import ContentCalendar from "./pages/ContentCalendar";
 import ContentCreation from "./pages/ContentCreation";
@@ -21,8 +23,6 @@ import { PostThemesProvider } from "./context/PostThemesContext";
 import { WebsiteContentProvider } from "./context/WebsiteContentContext";
 import { useEffect, useState } from "react";
 import { supabase } from "./integrations/supabase/client";
-import { SidebarProvider } from "./components/ui/sidebar";
-import { Loader2 } from "lucide-react";
 import TeamManagement from "./pages/TeamManagement";
 
 const queryClient = new QueryClient({
@@ -140,99 +140,209 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
 };
 
 const App = () => (
-  <HelmetProvider>
-    <QueryClientProvider client={queryClient}>
+  <QueryClientProvider client={queryClient}>
+    <HelmetProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route path="/*" element={
+          <Route path="/setup" element={
             <AuthWrapper>
-              <OrganisationProvider>
-                <WebsitesProvider>
-                  <SettingsProvider>
-                    <PostThemesProvider>
-                      <WebsiteContentProvider>
-                        <TooltipProvider>
-                          <Toaster />
-                          <Sonner />
-                          <Routes>
-                            <Route path="/setup" element={
-                              <ProtectedRoute requireOrg={false}>
-                                <SidebarProvider>
-                                  <OrganisationSetup />
-                                </SidebarProvider>
-                              </ProtectedRoute>
-                            } />
-                            <Route path="/" element={
-                              <ProtectedRoute>
-                                <SidebarProvider>
-                                  <Index />
-                                </SidebarProvider>
-                              </ProtectedRoute>
-                            } />
-                            <Route path="/calendar" element={
-                              <ProtectedRoute>
-                                <SidebarProvider>
-                                  <ContentCalendar />
-                                </SidebarProvider>
-                              </ProtectedRoute>
-                            } />
-                            <Route path="/create" element={
-                              <ProtectedRoute>
-                                <SidebarProvider>
-                                  <ContentCreation />
-                                </SidebarProvider>
-                              </ProtectedRoute>
-                            } />
-                            <Route path="/settings" element={
-                              <ProtectedRoute>
-                                <SidebarProvider>
-                                  <Settings />
-                                </SidebarProvider>
-                              </ProtectedRoute>
-                            } />
-                            <Route path="/organization" element={
-                              <ProtectedRoute>
-                                <SidebarProvider>
-                                  <Organization />
-                                </SidebarProvider>
-                              </ProtectedRoute>
-                            } />
-                            <Route path="/websites" element={
-                              <ProtectedRoute>
-                                <SidebarProvider>
-                                  <WebsiteManager />
-                                </SidebarProvider>
-                              </ProtectedRoute>
-                            } />
-                            <Route path="/team-management" element={
-                              <ProtectedRoute>
-                                <SidebarProvider>
-                                  <TeamManagement />
-                                </SidebarProvider>
-                              </ProtectedRoute>
-                            } />
-                            <Route path="/sitemap" element={
-                              <ProtectedRoute>
-                                <SidebarProvider>
-                                  <WebsiteSitemap />
-                                </SidebarProvider>
-                              </ProtectedRoute>
-                            } />
-                            <Route path="*" element={<NotFound />} />
-                          </Routes>
-                        </TooltipProvider>
-                      </WebsiteContentProvider>
-                    </PostThemesProvider>
-                  </SettingsProvider>
-                </WebsitesProvider>
-              </OrganisationProvider>
+              <ProtectedRoute requireOrg={false}>
+                <SidebarProvider>
+                  <OrganisationSetup />
+                </SidebarProvider>
+              </ProtectedRoute>
             </AuthWrapper>
           } />
+          <Route path="/" element={
+            <AuthWrapper>
+              <ProtectedRoute>
+                <SidebarProvider>
+                  <OrganisationProvider>
+                    <WebsitesProvider>
+                      <SettingsProvider>
+                        <PostThemesProvider>
+                          <WebsiteContentProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <Index />
+                            </TooltipProvider>
+                          </WebsiteContentProvider>
+                        </PostThemesProvider>
+                      </SettingsProvider>
+                    </WebsitesProvider>
+                  </OrganisationProvider>
+                </SidebarProvider>
+              </ProtectedRoute>
+            </AuthWrapper>
+          } />
+          <Route path="/calendar" element={
+            <AuthWrapper>
+              <ProtectedRoute>
+                <SidebarProvider>
+                  <OrganisationProvider>
+                    <WebsitesProvider>
+                      <SettingsProvider>
+                        <PostThemesProvider>
+                          <WebsiteContentProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <ContentCalendar />
+                            </TooltipProvider>
+                          </WebsiteContentProvider>
+                        </PostThemesProvider>
+                      </SettingsProvider>
+                    </WebsitesProvider>
+                  </OrganisationProvider>
+                </SidebarProvider>
+              </ProtectedRoute>
+            </AuthWrapper>
+          } />
+          <Route path="/create" element={
+            <AuthWrapper>
+              <ProtectedRoute>
+                <SidebarProvider>
+                  <OrganisationProvider>
+                    <WebsitesProvider>
+                      <SettingsProvider>
+                        <PostThemesProvider>
+                          <WebsiteContentProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <ContentCreation />
+                            </TooltipProvider>
+                          </WebsiteContentProvider>
+                        </PostThemesProvider>
+                      </SettingsProvider>
+                    </WebsitesProvider>
+                  </OrganisationProvider>
+                </SidebarProvider>
+              </ProtectedRoute>
+            </AuthWrapper>
+          } />
+          <Route path="/settings" element={
+            <AuthWrapper>
+              <ProtectedRoute>
+                <SidebarProvider>
+                  <OrganisationProvider>
+                    <WebsitesProvider>
+                      <SettingsProvider>
+                        <PostThemesProvider>
+                          <WebsiteContentProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <Settings />
+                            </TooltipProvider>
+                          </WebsiteContentProvider>
+                        </PostThemesProvider>
+                      </SettingsProvider>
+                    </WebsitesProvider>
+                  </OrganisationProvider>
+                </SidebarProvider>
+              </ProtectedRoute>
+            </AuthWrapper>
+          } />
+          <Route path="/organization" element={
+            <AuthWrapper>
+              <ProtectedRoute>
+                <SidebarProvider>
+                  <OrganisationProvider>
+                    <WebsitesProvider>
+                      <SettingsProvider>
+                        <PostThemesProvider>
+                          <WebsiteContentProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <Organization />
+                            </TooltipProvider>
+                          </WebsiteContentProvider>
+                        </PostThemesProvider>
+                      </SettingsProvider>
+                    </WebsitesProvider>
+                  </OrganisationProvider>
+                </SidebarProvider>
+              </ProtectedRoute>
+            </AuthWrapper>
+          } />
+          <Route path="/websites" element={
+            <AuthWrapper>
+              <ProtectedRoute>
+                <SidebarProvider>
+                  <OrganisationProvider>
+                    <WebsitesProvider>
+                      <SettingsProvider>
+                        <PostThemesProvider>
+                          <WebsiteContentProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <WebsiteManager />
+                            </TooltipProvider>
+                          </WebsiteContentProvider>
+                        </PostThemesProvider>
+                      </SettingsProvider>
+                    </WebsitesProvider>
+                  </OrganisationProvider>
+                </SidebarProvider>
+              </ProtectedRoute>
+            </AuthWrapper>
+          } />
+          <Route path="/team-management" element={
+            <AuthWrapper>
+              <ProtectedRoute>
+                <SidebarProvider>
+                  <OrganisationProvider>
+                    <WebsitesProvider>
+                      <SettingsProvider>
+                        <PostThemesProvider>
+                          <WebsiteContentProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <TeamManagement />
+                            </TooltipProvider>
+                          </WebsiteContentProvider>
+                        </PostThemesProvider>
+                      </SettingsProvider>
+                    </WebsitesProvider>
+                  </OrganisationProvider>
+                </SidebarProvider>
+              </ProtectedRoute>
+            </AuthWrapper>
+          } />
+          <Route path="/sitemap" element={
+            <AuthWrapper>
+              <ProtectedRoute>
+                <SidebarProvider>
+                  <OrganisationProvider>
+                    <WebsitesProvider>
+                      <SettingsProvider>
+                        <PostThemesProvider>
+                          <WebsiteContentProvider>
+                            <TooltipProvider>
+                              <Toaster />
+                              <Sonner />
+                              <WebsiteSitemap />
+                            </TooltipProvider>
+                          </WebsiteContentProvider>
+                        </PostThemesProvider>
+                      </SettingsProvider>
+                    </WebsitesProvider>
+                  </OrganisationProvider>
+                </SidebarProvider>
+              </ProtectedRoute>
+            </AuthWrapper>
+          } />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
-    </QueryClientProvider>
-  </HelmetProvider>
+    </HelmetProvider>
+  </QueryClientProvider>
 );
 
 export default App;

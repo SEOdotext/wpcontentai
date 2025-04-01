@@ -69,3 +69,21 @@ if (likedPost) {
 2. Use `addDays()` for consistent date manipulation
 3. Always convert dates to ISO strings when storing in the database
 4. Validate dates before saving to ensure they follow the rules 
+
+
+# Content Creation Date Logic
+
+## Overview
+The date setting in content creation follows a specific pattern to ensure consistent content scheduling:
+
+1. When new content is generated:
+   - The first post gets the next available publication date
+   - Each subsequent post is scheduled one day after the previous post
+   - This ensures even distribution of content
+
+2. When a post is approved (liked):
+   - The approved post keeps its scheduled date
+   - All other pending posts are shifted one day forward
+   - This maintains the one-day spacing between posts
+
+> **IMPORTANT**: All date calculations should use `getNextPublicationDate()` from `PostThemesContext.tsx`. Do not implement custom date calculation logic in components.

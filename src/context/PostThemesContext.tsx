@@ -111,7 +111,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       // Get themes with valid statuses for the current website
       const websiteThemes = postThemes.filter(theme => 
         theme.website_id === currentWebsite.id && 
-        ['approved', 'published', 'textgenerated'].includes(theme.status)
+        !['pending', 'declined'].includes(theme.status)
       );
       
       // Find the absolute latest date through a simple loop

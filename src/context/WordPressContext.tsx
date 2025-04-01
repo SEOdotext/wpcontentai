@@ -178,7 +178,7 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           <ol className="list-decimal pl-4 mt-2 space-y-1">
             <li>Log in to your WordPress admin if needed</li>
             <li>Scroll down to "Application Passwords"</li>
-            <li>Enter "WP Content AI" as the name</li>
+            <li>Enter "ContentGardener.ai" as the name</li>
             <li>Click "Add New Application Password"</li>
             <li>Copy the generated password</li>
             <li>Return here to complete the setup</li>

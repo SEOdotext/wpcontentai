@@ -510,7 +510,7 @@ serve(async (req) => {
       console.log('Waiting for image generation to complete...');
       
       // Poll the image generation queue for status
-      const maxAttempts = 30; // 30 attempts * 2 second delay = 60 seconds max wait
+      const maxAttempts = 60; // 60 attempts * 2 second delay = 120 seconds max wait
       let attempts = 0;
       
       while (attempts < maxAttempts) {
@@ -550,7 +550,7 @@ serve(async (req) => {
       }
       
       if (!imageUrl) {
-        throw new Error('Image generation timed out after 60 seconds');
+        throw new Error('Image generation timed out after 120 seconds');
       }
     }
     

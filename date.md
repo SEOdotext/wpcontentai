@@ -20,3 +20,8 @@ getFurthestFutureDate should look at published and generated
 
 
 Make sure that multiple posts can be added 1 by 1 without reloading by making sure that all other posts also have updated date, when approving a post.
+
+In the create: http://localhost:8080/create we are not including the correct statuses
+we should use all except pending and declined for pushing the latest date forward
+
+status = ANY (ARRAY['pending'::text, 'approved'::text, 'generated'::text, 'published'::text, 'declined'::text, 'generatingidea'::text, 'textgenerated'::text])

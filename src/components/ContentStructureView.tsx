@@ -16,7 +16,7 @@ import { Tables } from '@/types/supabase';
 
 type PostTheme = Tables['post_themes']['Row'] & {
   categories: { id: string; name: string }[];
-  status: 'pending' | 'approved' | 'published' | 'generatingidea' | 'textgenerated';
+  status: 'pending' | 'approved' | 'published' | 'generated' | 'declined' | 'generatingidea' | 'textgenerated';
 };
 
 interface ContentStructureViewProps {
@@ -35,7 +35,7 @@ interface TitleSuggestionProps {
   date: Date;
   onUpdateDate?: (date: Date) => void;
   onLiked?: () => void;
-  status: 'pending' | 'approved' | 'published';
+  status: 'pending' | 'approved' | 'published' | 'generated' | 'declined' | 'generatingidea' | 'textgenerated';
   onUpdateKeywords?: (id: string, keywords: string[]) => void;
   onUpdateCategories?: (id: string, categories: { id: string; name: string }[]) => void;
   isGeneratingContent?: boolean;
@@ -276,54 +276,14 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     getNextPublicationDate
   ]);
   
-  // Update furthest future date when needed
+  // Update furthest future date when post themes change
   useEffect(() => {
-    const updateFurthestDate = async () => {
-      if (!currentWebsite?.id) return;
-      
-      try {
-        // Get the furthest future date from approved, published, and textgenerated content
-        const { data: themesData, error } = await supabase
-          .from('post_themes')
-          .select('scheduled_date')
-          .eq('website_id', currentWebsite.id)
-          .in('status', ['approved', 'published', 'textgenerated'])
-          .order('scheduled_date', { ascending: false })
-          .limit(1);
-
-        if (error) throw error;
-
-        // Define a minimum valid timestamp (2020-01-01)
-        const minValidTimestamp = new Date('2020-01-01').getTime();
-
-        // If we have a date in published/generated posts, use that as the base
-        if (themesData && themesData.length > 0 && themesData[0].scheduled_date) {
-          // Validate the date first
-          const baseDate = new Date(themesData[0].scheduled_date);
-          const timestamp = baseDate.getTime();
-          
-          if (isNaN(timestamp) || timestamp < minValidTimestamp) {
-            console.warn('Invalid date found in database:', themesData[0].scheduled_date);
-            // Use today as fallback
-            setFurthestFutureDate(addDays(new Date(), publicationFrequency));
-            return;
-          }
-          
-          // Add the publication frequency to get the next available date
-          const nextDate = addDays(baseDate, publicationFrequency);
-          setFurthestFutureDate(nextDate);
-        } else {
-          // If no dates in published/generated posts, use today as base
-          setFurthestFutureDate(addDays(new Date(), publicationFrequency));
-        }
-      } catch (error) {
-        console.error('Error getting furthest future date:', error);
-        setFurthestFutureDate(addDays(new Date(), publicationFrequency));
-      }
-    };
-
-    updateFurthestDate();
-  }, [currentWebsite?.id, publicationFrequency, postThemes]);
+    if (currentWebsite?.id) {
+      const nextDate = getNextPublicationDate();
+      console.log('Setting furthest future date to:', nextDate);
+      setFurthestFutureDate(nextDate);
+    }
+  }, [currentWebsite?.id, postThemes, getNextPublicationDate]);
   
   // Update handleGenerateTitleSuggestions to use furthest future date
   const handleGenerateTitleSuggestions = async () => {
@@ -503,18 +463,24 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       // Validate the date
       let approvedDate;
       try {
-        approvedDate = new Date(postToUpdate.scheduled_date);
-        const timestamp = approvedDate.getTime();
-        const minValidTimestamp = new Date('2020-01-01').getTime();
-        
-        // If we have an invalid or too old date, use today instead
-        if (isNaN(timestamp) || timestamp < minValidTimestamp) {
-          console.warn('Found invalid date in approved post, using today:', postToUpdate.scheduled_date);
-          approvedDate = new Date();
+        if (!postToUpdate.scheduled_date) {
+          // If no date is set, use the furthest future date
+          console.log('No date set for approved post, using furthest future date:', furthestFutureDate);
+          approvedDate = furthestFutureDate;
+        } else {
+          approvedDate = new Date(postToUpdate.scheduled_date);
+          const timestamp = approvedDate.getTime();
+          const minValidTimestamp = new Date('2020-01-01').getTime();
+          
+          // If we have an invalid or too old date, use furthest future date instead
+          if (isNaN(timestamp) || timestamp < minValidTimestamp) {
+            console.warn('Found invalid date in approved post, using furthest future date:', postToUpdate.scheduled_date);
+            approvedDate = furthestFutureDate;
+          }
         }
       } catch (e) {
         console.error('Error parsing date in handleTitleLiked:', e);
-        approvedDate = new Date();
+        approvedDate = furthestFutureDate;
       }
 
       // Update the liked post's status to approved while keeping its date
