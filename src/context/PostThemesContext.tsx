@@ -12,7 +12,7 @@ interface PostThemeRow {
   subject_matter: string;
   keywords: string[];
   status: string;
-  scheduled_date: string;
+  scheduled_date?: string | null;
   created_at: string;
   updated_at: string;
   post_content: string | null;
@@ -29,7 +29,7 @@ export interface PostTheme {
   subject_matter: string;
   keywords: string[];
   status: 'pending' | 'approved' | 'published' | 'textgenerated';
-  scheduled_date: string;
+  scheduled_date?: string | null;
   created_at: string;
   updated_at: string;
   post_content: string | null;
@@ -108,8 +108,11 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         return result;
       }
 
-      // Get all themes for the current website
-      const websiteThemes = postThemes.filter(theme => theme.website_id === currentWebsite.id);
+      // Get themes with valid statuses for the current website
+      const websiteThemes = postThemes.filter(theme => 
+        theme.website_id === currentWebsite.id && 
+        ['approved', 'published', 'textgenerated'].includes(theme.status)
+      );
       
       // Find the absolute latest date through a simple loop
       let latestTimestamp = 0;

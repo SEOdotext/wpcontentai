@@ -16,7 +16,7 @@ import { Tables } from '@/types/supabase';
 
 type PostTheme = Tables['post_themes']['Row'] & {
   categories: { id: string; name: string }[];
-  status: 'pending' | 'approved' | 'published';
+  status: 'pending' | 'approved' | 'published' | 'generatingidea' | 'textgenerated';
 };
 
 interface ContentStructureViewProps {
@@ -233,7 +233,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
             keywords: result.keywordsByTitle?.[title] || result.keywords,
             categories: result.categoriesByTitle?.[title] || [],
             status: 'pending',
-            scheduled_date: publicationDate.toISOString(),
             post_content: null,
             image: null,
             wp_post_id: null,
@@ -283,12 +282,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       if (!currentWebsite?.id) return;
       
       try {
-        // Get the furthest future date from approved and published posts
+        // Get the furthest future date from approved, published, and textgenerated content
         const { data: themesData, error } = await supabase
           .from('post_themes')
           .select('scheduled_date')
           .eq('website_id', currentWebsite.id)
-          .in('status', ['approved', 'published'])
+          .in('status', ['approved', 'published', 'textgenerated'])
           .order('scheduled_date', { ascending: false })
           .limit(1);
 
@@ -297,7 +296,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         // Define a minimum valid timestamp (2020-01-01)
         const minValidTimestamp = new Date('2020-01-01').getTime();
 
-        // If we have a date in approved/published posts, use that as the base
+        // If we have a date in published/generated posts, use that as the base
         if (themesData && themesData.length > 0 && themesData[0].scheduled_date) {
           // Validate the date first
           const baseDate = new Date(themesData[0].scheduled_date);
@@ -314,7 +313,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           const nextDate = addDays(baseDate, publicationFrequency);
           setFurthestFutureDate(nextDate);
         } else {
-          // If no dates in approved/published posts, use today as base
+          // If no dates in published/generated posts, use today as base
           setFurthestFutureDate(addDays(new Date(), publicationFrequency));
         }
       } catch (error) {
@@ -391,10 +390,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       }
 
       // Legacy fallback - Create post themes for each title
-      const creationPromises = result.titles.map((title, index) => {
-        // Add days based on index to space out the posts
-        const postDate = addDays(baseDate, index + 1);
-        
+      const creationPromises = result.titles.map((title) => {
         // Ensure we have valid arrays for keywords
         let safeKeywords: string[] = [];
         if (result.keywordsByTitle && result.keywordsByTitle[title]) {
@@ -427,7 +423,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           keywords: safeKeywords,
           categories: safeCategories,
           status: 'pending',
-          scheduled_date: postDate.toISOString(),
           post_content: null,
           image: null,
           wp_post_id: null,
@@ -522,15 +517,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         approvedDate = new Date();
       }
 
-      // Calculate new dates for pending posts based on the approved post's date
-      const newBaseDate = addDays(approvedDate, publicationFrequency);
-
       // Update the liked post's status to approved while keeping its date
       const { error: updateError } = await supabase
         .from('post_themes')
         .update({ 
           status: 'approved',
-          scheduled_date: approvedDate.toISOString() // Ensure we store a valid date
+          scheduled_date: approvedDate.toISOString() // Keep the same date
         })
         .eq('id', id);
 
@@ -546,7 +538,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         supabase
           .from('post_themes')
           .update({ 
-            scheduled_date: newBaseDate.toISOString(),
+            scheduled_date: addDays(approvedDate, publicationFrequency).toISOString(),
             status: 'pending'
           })
           .eq('id', theme.id)
@@ -558,7 +550,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       setPostThemes(prev =>
         prev.map(theme => {
           if (theme.id === id) {
-            // Keep the approved post's date unchanged but ensure it's valid
+            // Keep the approved post's date unchanged
             return { 
               ...theme, 
               status: 'approved',
@@ -566,10 +558,10 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
             };
           }
           if (pendingThemes.some(pending => pending.id === theme.id)) {
-            // Update pending posts' dates
+            // Update pending posts' dates to be after the approved post
             return { 
               ...theme, 
-              scheduled_date: newBaseDate.toISOString(),
+              scheduled_date: addDays(approvedDate, publicationFrequency).toISOString(),
               status: 'pending'
             };
           }
@@ -578,7 +570,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       );
 
       // Update the furthest future date
-      setFurthestFutureDate(newBaseDate);
+      setFurthestFutureDate(addDays(approvedDate, publicationFrequency));
 
       toast.success('Post approved');
     } catch (error) {

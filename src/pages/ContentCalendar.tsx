@@ -151,29 +151,26 @@ const ContentCalendar = () => {
     };
   }, []);
   
-  // Memoize the calendar content conversion
-  const calendarContent = React.useMemo(() => {
-    if (!postThemes || !currentWebsite) return [];
-    
-    return postThemes.map(theme => ({
-      id: theme.id,
-      title: theme.subject_matter,
-      description: theme.post_content || '',
-      dateCreated: theme.created_at,
-      date: theme.scheduled_date,
-      contentStatus: (
-        theme.status === 'pending' ? 'draft' : 
-        theme.status === 'textgenerated' ? 'content-ready' :
-        theme.status === 'approved' ? 'scheduled' : 
-        theme.status === 'published' ? 'published' : 'draft') as 'draft' | 'published' | 'scheduled' | 'content-ready',
-      keywords: theme.keywords.map(k => ({ text: k })),
-      categories: theme.categories || [],
-      wpSentDate: theme.wp_sent_date,
-      wpPostUrl: theme.wp_post_url,
-      preview_image_url: theme.image || null,
-      status: theme.status
-    }));
-  }, [postThemes, currentWebsite]);
+  // Filter post themes to show approved and textgenerated ones
+  const approvedPostThemes = postThemes.filter(theme => 
+    theme.status === 'approved' || theme.status === 'textgenerated'
+  );
+  
+  // Use approvedPostThemes instead of postThemes in the calendar view
+  const calendarContent = approvedPostThemes.map(theme => ({
+    id: theme.id,
+    title: theme.subject_matter,
+    description: theme.post_content || '',
+    dateCreated: theme.created_at,
+    date: theme.scheduled_date,
+    contentStatus: theme.status === 'textgenerated' ? 'content-ready' : 'scheduled',
+    keywords: theme.keywords.map(k => ({ text: k })),
+    categories: theme.categories.map(c => c.name),
+    wpSentDate: theme.wp_sent_date,
+    wpPostUrl: theme.wp_post_url,
+    preview_image_url: theme.image,
+    status: theme.status as 'pending' | 'approved' | 'published' | 'textgenerated'
+  }));
 
   // Update allContent only when calendarContent changes
   useEffect(() => {
@@ -357,7 +354,7 @@ const ContentCalendar = () => {
           setSelectedContent(prev => ({
             ...prev!,
             description: updatedTheme.post_content || '',
-            contentStatus: updatedTheme.status === 'generated' ? 'scheduled' : 'draft',
+            contentStatus: updatedTheme.status === 'textgenerated' ? 'content-ready' : 'draft',
             status: updatedTheme.status
           }));
         }

@@ -2,6 +2,8 @@ On the /create
 
 Date settings
 
+These dates should just be the same and only set in the frontend with the logic from the file! 
+
 All dates shown in the frontend should be the furthest in the future + settings amount of dates.
 
 The dates in the frontend can be updated by the user.
