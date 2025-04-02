@@ -154,7 +154,7 @@ async function getWordPressSettings(supabaseClient: any, websiteId: string) {
 async function generateContent(postThemeId: string, token: string) {
   console.log('Generating content for post:', postThemeId);
   
-  const contentResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v2', {
+  const contentResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v3', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
