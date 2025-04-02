@@ -29,6 +29,49 @@ function isAllowedOrigin(origin: string | null): boolean {
   return allowedOrigins.includes(origin);
 }
 
+// Enhanced logging function
+async function logToQueue(supabaseClient: any, jobId: string, level: string, message: string, metadata?: any) {
+  console.log(`[${level.toUpperCase()}] ${message}`, metadata || '');
+  
+  try {
+    // First get current result to preserve existing logs
+    const { data: currentJob } = await supabaseClient
+      .from('publish_queue')
+      .select('result')
+      .eq('id', jobId)
+      .single();
+    
+    // Create or update logs array in result
+    const currentResult = currentJob?.result || {};
+    const logs = currentResult.logs || [];
+    
+    // Add new log entry
+    logs.push({
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      metadata
+    });
+    
+    // Update the result field with the new logs
+    const { error } = await supabaseClient
+      .from('publish_queue')
+      .update({
+        result: {
+          ...currentResult,
+          logs
+        }
+      })
+      .eq('id', jobId);
+      
+    if (error) {
+      console.error('Error updating log in result:', error);
+    }
+  } catch (error) {
+    console.error('Error in logToQueue:', error);
+  }
+}
+
 serve(async (req) => {
   // Get the origin from the request
   const origin = req.headers.get('origin');
@@ -53,6 +96,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Log function start
+    console.log('Starting process-publish-queue function');
+
     // Get the next job from the queue
     const { data: jobs, error: jobError } = await supabaseClient
       .from('publish_queue')
@@ -67,6 +113,7 @@ serve(async (req) => {
     }
 
     if (!jobs || jobs.length === 0) {
+      console.log('No pending jobs in queue');
       return new Response(
         JSON.stringify({ 
           success: true,
@@ -79,6 +126,12 @@ serve(async (req) => {
 
     const job = jobs[0];
     console.log('Processing job:', job.id);
+    
+    await logToQueue(supabaseClient, job.id, 'info', 'Starting job processing', {
+      function: 'process-publish-queue',
+      jobId: job.id,
+      postThemeId: job.post_theme_id
+    });
 
     // Update job status to processing
     const { error: updateError } = await supabaseClient
@@ -91,28 +144,47 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Error updating job status:', updateError);
+      await logToQueue(supabaseClient, job.id, 'error', 'Failed to update job status', {
+        error: updateError.message
+      });
       throw new Error(`Failed to update job status: ${updateError.message}`);
     }
+
+    await logToQueue(supabaseClient, job.id, 'info', 'Calling generate-and-publish function', {
+      postThemeId: job.post_theme_id
+    });
 
     // Call the generate-and-publish function with the job data
     const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-and-publish', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${job.user_token}`,
-        'X-Queue-Processing': 'true'
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'X-Queue-Processing': 'true',
+        'X-Original-User-Token': job.user_token // Pass the original token for reference if needed
       },
       body: JSON.stringify({ postThemeId: job.post_theme_id })
     });
 
     const result = await response.json();
+    
+    await logToQueue(supabaseClient, job.id, response.ok ? 'info' : 'error', 
+      response.ok ? 'Generate and publish completed' : 'Generate and publish failed', 
+      { 
+        statusCode: response.status,
+        result: result
+      }
+    );
 
     // Update job status based on result
     const { error: finalUpdateError } = await supabaseClient
       .from('publish_queue')
       .update({
         status: response.ok ? 'completed' : 'failed',
-        result: result,
+        result: {
+          ...result,
+          logs: result.logs || [] // Preserve logs if they exist
+        },
         completed_at: new Date().toISOString(),
         error: response.ok ? null : result.error
       })
@@ -120,8 +192,15 @@ serve(async (req) => {
 
     if (finalUpdateError) {
       console.error('Error updating final job status:', finalUpdateError);
+      await logToQueue(supabaseClient, job.id, 'error', 'Failed to update final job status', {
+        error: finalUpdateError.message
+      });
       throw new Error(`Failed to update final job status: ${finalUpdateError.message}`);
     }
+
+    await logToQueue(supabaseClient, job.id, 'info', 'Job processing completed', {
+      status: response.ok ? 'completed' : 'failed'
+    });
 
     return new Response(
       JSON.stringify({

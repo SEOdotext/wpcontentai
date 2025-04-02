@@ -42,3 +42,15 @@ entrypoint = "./functions/check-scheduled-posts/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/check-scheduled-posts/*.html" ]
+
+[functions.reset-stalled-jobs]
+enabled = true
+verify_jwt = false
+import_map = "./functions/reset-stalled-jobs/deno.json"
+entrypoint = "./functions/reset-stalled-jobs/index.ts"
+
+[functions.wordpress-posts]
+enabled = true
+verify_jwt = false
+import_map = "./functions/wordpress-posts/deno.json"
+entrypoint = "./functions/wordpress-posts/index.ts"

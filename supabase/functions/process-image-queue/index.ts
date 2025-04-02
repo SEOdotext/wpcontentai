@@ -29,6 +29,49 @@ function isAllowedOrigin(origin: string | null): boolean {
   return allowedOrigins.includes(origin);
 }
 
+// Enhanced logging function to update queue job result
+async function logToImageQueue(supabaseClient: any, jobId: string, level: string, message: string, metadata?: any) {
+  console.log(`[${level.toUpperCase()}] ${message}`, metadata || '');
+  
+  try {
+    // First get current result to preserve existing data
+    const { data: currentJob } = await supabaseClient
+      .from('image_generation_queue')
+      .select('result')
+      .eq('id', jobId)
+      .single();
+    
+    // Create or update logs array in result
+    const currentResult = currentJob?.result || {};
+    const logs = currentResult.logs || [];
+    
+    // Add new log entry
+    logs.push({
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      metadata
+    });
+    
+    // Update the result field with the new logs
+    const { error } = await supabaseClient
+      .from('image_generation_queue')
+      .update({
+        result: {
+          ...currentResult,
+          logs
+        }
+      })
+      .eq('id', jobId);
+      
+    if (error) {
+      console.error('Error updating log in result:', error);
+    }
+  } catch (error) {
+    console.error('Error in logToImageQueue:', error);
+  }
+}
+
 serve(async (req) => {
   // Get the origin from the request
   const origin = req.headers.get('origin');
@@ -52,6 +95,8 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    console.log('Starting process-image-queue function');
 
     // Get pending image generation jobs
     const { data: pendingJobs, error: fetchError } = await supabaseClient
@@ -78,19 +123,26 @@ serve(async (req) => {
     const results = await Promise.all(pendingJobs.map(async (job) => {
       try {
         console.log(`Processing job ${job.id} for post ${job.post_theme_id}`);
+        await logToImageQueue(supabaseClient, job.id, 'info', 'Starting image generation', {
+          postThemeId: job.post_theme_id
+        });
 
         // Mark job as processing
         await supabaseClient
           .from('image_generation_queue')
           .update({ status: 'processing' })
           .eq('id', job.id);
+        
+        await logToImageQueue(supabaseClient, job.id, 'info', 'Calling image-trigger function');
 
         // Call the image generation function
         const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/image-trigger', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${job.user_token}`
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            'X-Queue-Processing': 'true',
+            'X-Original-User-Token': job.user_token // Pass the original token for reference if needed
           },
           body: JSON.stringify({
             postId: job.post_theme_id,
@@ -99,11 +151,55 @@ serve(async (req) => {
         });
 
         if (!response.ok) {
-          throw new Error(`Image generation failed: ${await response.text()}`);
+          const errorText = await response.text();
+          
+          // Check if this is a content policy violation
+          const isPolicyViolation = errorText.includes('content_policy_violation') || 
+                                    errorText.includes('safety system') ||
+                                    errorText.includes('not allowed by our safety system');
+          
+          await logToImageQueue(supabaseClient, job.id, 'error', 'Image generation failed', {
+            status: response.status,
+            error: errorText,
+            isPolicyViolation
+          });
+          
+          // Mark job as failed with appropriate error messages
+          await supabaseClient
+            .from('image_generation_queue')
+            .update({
+              status: 'failed',
+              error: isPolicyViolation 
+                ? 'Image generation failed due to content policy violation' 
+                : `Image generation failed: ${errorText}`,
+              completed_at: new Date().toISOString(),
+              result: {
+                error: errorText,
+                policyViolation: isPolicyViolation
+              }
+            })
+            .eq('id', job.id);
+          
+          // Also update the post_themes table with the error
+          await supabaseClient
+            .from('post_themes')
+            .update({ 
+              image_generation_error: isPolicyViolation 
+                ? 'Image generation failed due to content policy violation' 
+                : `Image generation failed: ${errorText.substring(0, 255)}`,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', job.post_theme_id);
+          
+          throw new Error(`Image generation failed: ${errorText}`);
         }
 
         const result = await response.json();
         console.log('Image generation result:', result);
+        await logToImageQueue(supabaseClient, job.id, 'info', 'Image generation result received', {
+          success: !!result.imageUrl,
+          imageUrl: result.imageUrl || null
+        });
 
         if (result.imageUrl) {
           // Image was generated immediately
@@ -112,9 +208,17 @@ serve(async (req) => {
             .update({
               status: 'completed',
               completed_at: new Date().toISOString(),
-              image_url: result.imageUrl
+              image_url: result.imageUrl,
+              result: {
+                ...result,
+                logs: result.logs || []
+              }
             })
             .eq('id', job.id);
+          
+          await logToImageQueue(supabaseClient, job.id, 'info', 'Image generation completed', {
+            imageUrl: result.imageUrl
+          });
 
           // Update post_themes table
           await supabaseClient
@@ -125,17 +229,29 @@ serve(async (req) => {
           return { jobId: job.id, status: 'completed', imageUrl: result.imageUrl };
         } else {
           // Image is still being generated
+          await logToImageQueue(supabaseClient, job.id, 'info', 'Image generation in progress');
           return { jobId: job.id, status: 'processing' };
         }
       } catch (error) {
         console.error(`Error processing job ${job.id}:`, error);
+        await logToImageQueue(supabaseClient, job.id, 'error', 'Image generation failed', {
+          error: error.message
+        });
 
         // Mark job as failed
         await supabaseClient
           .from('image_generation_queue')
           .update({
             status: 'failed',
-            error: error.message
+            error: error.message,
+            result: {
+              error: error.message,
+              logs: (await supabaseClient
+                .from('image_generation_queue')
+                .select('result')
+                .eq('id', job.id)
+                .single()).data?.result?.logs || []
+            }
           })
           .eq('id', job.id);
 

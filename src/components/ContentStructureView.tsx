@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import TitleSuggestion from './TitleSuggestion';
 import EmptyState from './EmptyState';
 import { cn } from '@/lib/utils';
-import { addDays, format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { useSettings } from '@/context/SettingsContext';
 import { usePostThemes } from '@/context/PostThemesContext';
 import { useWebsites } from '@/context/WebsitesContext';
@@ -13,6 +13,16 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/types/supabase';
+
+/**
+ * IMPORTANT: Date Calculation
+ * 
+ * All date calculations in this component use the centralized getNextPublicationDate function
+ * from PostThemesContext. This ensures consistent date logic throughout the application.
+ * 
+ * Do not implement custom date calculation logic or manage separate date state.
+ * Always use getNextPublicationDate for determining the next publication date.
+ */
 
 type PostTheme = Tables['post_themes']['Row'] & {
   categories: { id: string; name: string }[];
@@ -101,9 +111,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   
   // Add categoriesByTitle state
   const [categoriesByTitle, setCategoriesByTitle] = useState<{ [title: string]: { id: string; name: string }[] }>({});
-  
-  // Add state for furthest future date
-  const [furthestFutureDate, setFurthestFutureDate] = useState<Date>(new Date());
   
   // Add pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -276,16 +283,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     getNextPublicationDate
   ]);
   
-  // Update furthest future date when post themes change
-  useEffect(() => {
-    if (currentWebsite?.id) {
-      const nextDate = getNextPublicationDate();
-      console.log('Setting furthest future date to:', nextDate);
-      setFurthestFutureDate(nextDate);
-    }
-  }, [currentWebsite?.id, postThemes, getNextPublicationDate]);
-  
-  // Update handleGenerateTitleSuggestions to use furthest future date
+  // Update handleGenerateTitleSuggestions to use getNextPublicationDate directly
   const handleGenerateTitleSuggestions = async () => {
     if (!currentWebsite?.id || isGenerating) return;
     
@@ -326,14 +324,14 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       setCategoriesByTitle(result.categoriesByTitle || {});
       console.log('API response:', result); // Add for debugging
 
-      // Validate furthestFutureDate
+      // Validate baseDate using getNextPublicationDate
       const minValidTimestamp = new Date('2020-01-01').getTime();
-      let baseDate = furthestFutureDate;
+      let baseDate = getNextPublicationDate();
       const timestamp = baseDate.getTime();
       
-      // If furthestFutureDate is invalid or too old, use today instead
+      // If baseDate is invalid or too old, use today instead
       if (isNaN(timestamp) || timestamp < minValidTimestamp) {
-        console.warn('Using today as base date because furthestFutureDate is invalid:', baseDate);
+        console.warn('Using today as base date because calculation returned invalid date:', baseDate);
         baseDate = new Date();
       }
 
@@ -424,9 +422,6 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         // Refresh post themes to get updated data
         await fetchPostThemes();
         
-        // Update the furthest future date if needed
-        if (!currentWebsite?.id) return;
-        
         toast.success('Date updated successfully');
       } else {
         toast.error('Failed to update date');
@@ -453,7 +448,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     // This will be handled by the TitleSuggestion component
   };
 
-  // Update handleTitleLiked to maintain the liked post's date and update other posts
+  // Update handleTitleLiked to use getNextPublicationDate
   const handleTitleLiked = async (id: string) => {
     try {
       // Get the current post's date before updating
@@ -464,79 +459,52 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       let approvedDate;
       try {
         if (!postToUpdate.scheduled_date) {
-          // If no date is set, use the furthest future date
-          console.log('No date set for approved post, using furthest future date:', furthestFutureDate);
-          approvedDate = furthestFutureDate;
+          // If no date is set, use getNextPublicationDate
+          const nextDate = getNextPublicationDate();
+          console.log('No date set for approved post, using calculated next date:', nextDate);
+          approvedDate = nextDate;
         } else {
           approvedDate = new Date(postToUpdate.scheduled_date);
           const timestamp = approvedDate.getTime();
           const minValidTimestamp = new Date('2020-01-01').getTime();
           
-          // If we have an invalid or too old date, use furthest future date instead
+          // If we have an invalid or too old date, use calculated date instead
           if (isNaN(timestamp) || timestamp < minValidTimestamp) {
-            console.warn('Found invalid date in approved post, using furthest future date:', postToUpdate.scheduled_date);
-            approvedDate = furthestFutureDate;
+            const nextDate = getNextPublicationDate();
+            console.warn('Found invalid date in approved post, using calculated next date:', postToUpdate.scheduled_date, nextDate);
+            approvedDate = nextDate;
           }
         }
       } catch (e) {
         console.error('Error parsing date in handleTitleLiked:', e);
-        approvedDate = furthestFutureDate;
+        approvedDate = getNextPublicationDate();
       }
 
       // Update the liked post's status to approved while keeping its date
-      const { error: updateError } = await supabase
-        .from('post_themes')
-        .update({ 
-          status: 'approved',
-          scheduled_date: approvedDate.toISOString() // Keep the same date
-        })
-        .eq('id', id);
+      const success = await updatePostTheme(id, {
+        status: 'approved',
+        scheduled_date: approvedDate.toISOString()
+      });
 
-      if (updateError) throw updateError;
+      if (!success) throw new Error('Failed to update post theme');
 
       // Get all pending posts except the one being approved
       const pendingThemes = postThemes.filter(theme => 
         theme.status === 'pending' && theme.id !== id
       );
 
-      // Update each pending post's date to be after the approved post
+      // Update each pending post's date using the context function
       const updatePromises = pendingThemes.map(theme => 
-        supabase
-          .from('post_themes')
-          .update({ 
-            scheduled_date: addDays(approvedDate, publicationFrequency).toISOString(),
-            status: 'pending'
-          })
-          .eq('id', theme.id)
+        updatePostTheme(theme.id, {
+          scheduled_date: addDays(approvedDate, publicationFrequency).toISOString(),
+          status: 'pending'
+        }, false) // Don't show toast for each update
       );
 
       await Promise.all(updatePromises);
 
-      // Update local state for all posts in a single operation
-      setPostThemes(prev =>
-        prev.map(theme => {
-          if (theme.id === id) {
-            // Keep the approved post's date unchanged
-            return { 
-              ...theme, 
-              status: 'approved',
-              scheduled_date: approvedDate.toISOString()
-            };
-          }
-          if (pendingThemes.some(pending => pending.id === theme.id)) {
-            // Update pending posts' dates to be after the approved post
-            return { 
-              ...theme, 
-              scheduled_date: addDays(approvedDate, publicationFrequency).toISOString(),
-              status: 'pending'
-            };
-          }
-          return theme;
-        })
-      );
-
-      // Update the furthest future date
-      setFurthestFutureDate(addDays(approvedDate, publicationFrequency));
+      // Refresh post themes to get all the latest data
+      await fetchPostThemes();
 
       toast.success('Post approved');
     } catch (error) {
@@ -564,19 +532,19 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       let themeDate: Date;
       try {
         if (!theme.scheduled_date || theme.scheduled_date === '') {
-          // If no date, use furthest future date for pending posts
-          themeDate = theme.status === 'pending' ? furthestFutureDate : new Date();
+          // If no date, calculate proper next date for pending posts
+          themeDate = theme.status === 'pending' ? getNextPublicationDate() : new Date();
         } else {
           themeDate = new Date(theme.scheduled_date);
           // Validate the date - if it's invalid, use a fallback
           if (isNaN(themeDate.getTime())) {
             console.warn('Invalid date in theme, using fallback:', theme.id, theme.scheduled_date);
-            themeDate = theme.status === 'pending' ? furthestFutureDate : new Date();
+            themeDate = theme.status === 'pending' ? getNextPublicationDate() : new Date();
           }
         }
       } catch (e) {
         console.error('Error parsing date:', theme.scheduled_date, e);
-        themeDate = theme.status === 'pending' ? furthestFutureDate : new Date();
+        themeDate = theme.status === 'pending' ? getNextPublicationDate() : new Date();
       }
       
       return {

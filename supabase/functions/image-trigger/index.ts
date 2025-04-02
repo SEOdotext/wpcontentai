@@ -175,12 +175,70 @@ async function generateImageAsync(
     
     if (!response.ok) {
       let errorMessage = `Edge function error: ${response.status} ${response.statusText}`;
+      let errorData;
+      
       try {
-        const errorData = await response.json();
+        errorData = await response.json();
         errorMessage = errorData.error || errorMessage;
       } catch (e) {
         // Fallback to the status error if JSON parsing fails
+        try {
+          // Try getting the error as text
+          const errorText = await response.text();
+          errorMessage = errorText || errorMessage;
+        } catch (textError) {
+          // If that also fails, stick with the status error
+        }
       }
+      
+      // Check for content policy violation
+      const isPolicyViolation = errorMessage.includes('content_policy_violation') || 
+                                errorMessage.includes('safety system') ||
+                                errorMessage.includes('not allowed by our safety system');
+      
+      if (isPolicyViolation) {
+        console.error('Content policy violation detected:', errorMessage);
+        
+        // Update both database tables to mark this as a failed policy job
+        const errorSummary = 'Image generation failed due to content policy violation';
+        
+        // Update post_themes table
+        await supabaseClient
+          .from('post_themes')
+          .update({ 
+            image_generation_error: errorSummary,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', postId);
+        
+        // Check if this came from a queue job and update it
+        const { data: queueJobs } = await supabaseClient
+          .from('image_generation_queue')
+          .select('id')
+          .eq('post_theme_id', postId)
+          .eq('status', 'processing')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        
+        if (queueJobs && queueJobs.length > 0) {
+          await supabaseClient
+            .from('image_generation_queue')
+            .update({
+              status: 'failed',
+              error: errorSummary,
+              completed_at: new Date().toISOString(),
+              result: {
+                error: errorMessage,
+                policyViolation: true
+              }
+            })
+            .eq('id', queueJobs[0].id);
+        }
+        
+        // Throw error to stop processing
+        throw new Error(errorSummary);
+      }
+      
       throw new Error(errorMessage);
     }
     

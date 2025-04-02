@@ -1202,31 +1202,54 @@ const Settings = () => {
         return;
       }
 
+      // Create test post content
+      const title = `Test Post from ContentGardener.ai - ${new Date().toLocaleTimeString()}`;
+      const content = `
+        <h2>This is a test post from ContentGardener.ai</h2>
+        <p>This post was automatically generated on ${new Date().toLocaleString()} to verify your WordPress connection is working correctly.</p>
+        <p>If you can see this post in your WordPress admin, your connection is properly configured!</p>
+        <p>You can safely delete this post after verification.</p>
+      `;
+
+      // Create a temporary post theme
+      const { data: postTheme, error: postThemeError } = await supabase
+        .from('post_themes')
+        .insert([{
+          website_id: currentWebsite.id,
+          subject_matter: title,
+          post_content: content,
+          status: 'pending',
+          keywords: [],
+          image: null,
+          wp_post_id: null,
+          wp_post_url: null,
+          wp_sent_date: null
+        }])
+        .select()
+        .single();
+
+      if (postThemeError) {
+        console.error('Error creating test post theme:', postThemeError);
+        toast.error('Failed to create test post');
+        setSendingTestPost(false);
+        return;
+      }
+
       // Prepare headers with authentication
       const headers: HeadersInit = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${sessionData.session.access_token}`
       };
       
-      // Create test post content using the existing posts endpoint
-      const testPost = {
-        title: `Test Post from WP Content AI - ${new Date().toLocaleTimeString()}`,
-        content: `
-          <h2>This is a test post from WP Content AI</h2>
-          <p>This post was automatically generated on ${new Date().toLocaleString()} to verify your WordPress connection is working correctly.</p>
-          <p>If you can see this post in your WordPress admin, your connection is properly configured!</p>
-          <p>You can safely delete this post after verification.</p>
-        `,
-        status: 'draft', // Send as draft to avoid publishing test content
-        website_id: currentWebsite.id,
-        action: 'create' // Required parameter for the wordpress-posts function
-      };
-      
       // Send request to existing Edge Function
       const response = await fetch(`${SUPABASE_FUNCTIONS_URL}/wordpress-posts`, {
         method: 'POST',
         headers,
-        body: JSON.stringify(testPost),
+        body: JSON.stringify({
+          website_id: currentWebsite.id,
+          post_theme_id: postTheme.id,
+          action: 'create'
+        }),
       });
       
       console.log(`Test post response status: ${response.status} ${response.statusText}`);
@@ -2628,7 +2651,7 @@ const Settings = () => {
                   <ol className="list-decimal pl-4 space-y-2 text-sm text-muted-foreground">
                     <li>In your WordPress admin, go to <b>Users → Profile</b></li>
                     <li>Scroll down to <b>Application Passwords</b> section</li>
-                    <li>Enter "WP Content AI" as the name</li>
+                    <li>Enter "ContentGardener.ai" as the name</li>
                     <li>Click <b>Add New Application Password</b></li>
                     <li>Copy the generated password <b>exactly as shown</b> - it should look like: xxxx xxxx xxxx xxxx</li>
                     <li>Paste it below along with your WordPress username</li>

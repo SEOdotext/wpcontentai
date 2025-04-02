@@ -15,6 +15,57 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
+// Enhanced logging function to update queue job result
+async function logToQueue(supabaseClient: any, postThemeId: string, level: string, message: string, metadata?: any) {
+  console.log(`[${level.toUpperCase()}] ${message}`, metadata || '');
+  
+  try {
+    // Find the job in the queue
+    const { data: jobs } = await supabaseClient
+      .from('publish_queue')
+      .select('id, result')
+      .eq('post_theme_id', postThemeId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    
+    if (!jobs || jobs.length === 0) {
+      console.log('No queue job found for this post theme:', postThemeId);
+      return;
+    }
+    
+    const job = jobs[0];
+    
+    // Create or update logs array in result
+    const currentResult = job.result || {};
+    const logs = currentResult.logs || [];
+    
+    // Add new log entry
+    logs.push({
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      metadata
+    });
+    
+    // Update the result field with the new logs
+    const { error } = await supabaseClient
+      .from('publish_queue')
+      .update({
+        result: {
+          ...currentResult,
+          logs
+        }
+      })
+      .eq('id', job.id);
+      
+    if (error) {
+      console.error('Error updating log in result:', error);
+    }
+  } catch (error) {
+    console.error('Error in logToQueue:', error);
+  }
+}
+
 /**
  * Waits for image generation to complete by polling the post_themes table
  * @param supabaseClient The Supabase client
@@ -154,11 +205,14 @@ async function getWordPressSettings(supabaseClient: any, websiteId: string) {
 async function generateContent(postThemeId: string, token: string) {
   console.log('Generating content for post:', postThemeId);
   
+  // Use the service role key instead of user token
   const contentResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v3', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+      'X-Queue-Processing': 'true',
+      'X-Original-User-Token': token // Pass the original token for reference if needed
     },
     body: JSON.stringify({ postThemeId })
   });
@@ -422,6 +476,12 @@ serve(async (req) => {
         console.error('Error triggering queue processing:', await queueResponse.text());
       }
 
+      // Log job creation
+      await logToQueue(supabaseClient, postThemeId, 'info', 'Job added to publish queue', {
+        function: 'generate-and-publish',
+        isQueueProcessing: false
+      });
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -436,12 +496,14 @@ serve(async (req) => {
     // This section runs when processing a job from the queue
     
     console.log('Starting processing for post theme ID:', postThemeId);
+    await logToQueue(supabaseClient, postThemeId, 'info', 'Starting content generation and publishing', {
+      function: 'generate-and-publish',
+      isQueueProcessing: true
+    });
     
     // Step 1: Fetch the most recent post theme data
     const postTheme = await getPostTheme(supabaseClient, postThemeId);
-    console.log('Retrieved post theme:', {
-      id: postTheme.id,
-      subject: postTheme.subject_matter,
+    await logToQueue(supabaseClient, postThemeId, 'info', 'Retrieved post theme data', {
       hasContent: !!postTheme.post_content,
       hasImage: !!postTheme.image
     });
@@ -528,11 +590,25 @@ serve(async (req) => {
     if (!imageUrl && website.enable_ai_image_generation) {
       console.log('Waiting for image generation to complete...');
       
-      // Poll the image generation queue for status
+      // Poll both the queue and post_themes table for status
       const maxAttempts = 60; // 60 attempts * 2 second delay = 120 seconds max wait
       let attempts = 0;
       
       while (attempts < maxAttempts) {
+        // First check post_themes table directly
+        const { data: postTheme, error: postError } = await supabaseClient
+          .from('post_themes')
+          .select('image')
+          .eq('id', postThemeId)
+          .single();
+        
+        if (!postError && postTheme?.image) {
+          imageUrl = postTheme.image;
+          console.log('Found image URL in post_themes:', imageUrl);
+          break;
+        }
+        
+        // If not found in post_themes, check the queue
         const { data: queueStatus, error: statusError } = await supabaseClient
           .from('image_generation_queue')
           .select('status, image_url, error')
@@ -616,6 +692,27 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in generate-and-publish function:', error);
+    
+    // Log the error before responding
+    try {
+      // Use the postThemeId from the request if available
+      const requestBody = await req.json().catch(() => ({}));
+      const currentPostThemeId = requestBody.postThemeId;
+      
+      if (currentPostThemeId) {
+        const supabaseClient = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+        
+        await logToQueue(supabaseClient, currentPostThemeId, 'error', 'Function failed', {
+          error: error instanceof Error ? error.message : 'Unknown error occurred'
+        });
+      }
+    } catch (logError) {
+      console.error('Failed to log error:', logError);
+    }
+    
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error occurred'

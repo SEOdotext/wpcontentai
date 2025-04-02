@@ -191,23 +191,44 @@ serve(async (req) => {
   }
   
   try {
-    // Create Supabase client using auth from request
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    )
+    // Create Supabase client with different auth methods based on request
+    let supabaseClient;
+    let userId;
     
-    // Get user ID from auth
-    const {
-      data: { user },
-    } = await supabaseClient.auth.getUser()
+    // Check if this is a system request with service role
+    const isSystemAuth = req.headers.get('X-System-Auth') === 'true';
+    const authHeader = req.headers.get('Authorization') || '';
     
-    if (!user) {
-      throw new Error('Not authorized')
+    if (isSystemAuth) {
+      console.log('Processing system request with service role key');
+      // Create client with service role key
+      supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      
+      // For system requests, we'll use a generic system user ID
+      userId = 'system';
+    } else {
+      // Create client with user's token
+      supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      
+      // Verify user is authenticated
+      const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('Authentication error:', userError || 'No user found');
+        throw new Error('Not authorized');
+      }
+      
+      userId = user.id;
     }
     
-    // Extract request data - now we only need minimal data
+    // Extract request data
     const { website_id, post_theme_id, action } = await req.json() as PostRequest
     
     // Validate input
@@ -220,7 +241,7 @@ serve(async (req) => {
       .from('post_themes')
       .select(`
         *,
-        post_theme_categories!inner (
+        post_theme_categories:post_theme_categories (
           wordpress_category:wordpress_category_id (
             id,
             wp_category_id
@@ -239,9 +260,9 @@ serve(async (req) => {
       throw new Error(`Post theme not found with ID: ${post_theme_id}`);
     }
 
-    // Extract category IDs from the junction table
-    const categoryIds = postTheme.post_theme_categories
-      .map(link => link.wordpress_category.wp_category_id)
+    // Extract category IDs from the junction table (if any)
+    const categoryIds = (postTheme.post_theme_categories || [])
+      .map(link => link.wordpress_category?.wp_category_id)
       .filter(id => id !== null);
 
     // Log detailed image information
@@ -372,7 +393,7 @@ serve(async (req) => {
     await supabaseClient
       .from('wordpress_logs')
       .insert({
-        user_id: user.id,
+        user_id: userId,
         post_theme_id,
         action,
         wordpress_post_id: responseData.id,

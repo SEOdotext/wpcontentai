@@ -5,6 +5,19 @@ import { useWebsites } from './WebsitesContext';
 import { useSettings } from './SettingsContext';
 import { addDays, format } from 'date-fns';
 
+/**
+ * IMPORTANT: Centralized Date Calculation
+ * 
+ * This context provides the centralized getNextPublicationDate function that should be used
+ * consistently throughout the app for all date calculations. This ensures we have consistent
+ * date logic for the Content Calendar.
+ * 
+ * The function considers all relevant post statuses (published, approved, generated, textgenerated, etc.)
+ * except "pending" and "declined" when determining the furthest future date.
+ * 
+ * Do not implement custom date calculation logic in components.
+ */
+
 // Define the database response type
 interface PostThemeRow {
   id: string;
@@ -109,6 +122,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       }
 
       // Get themes with valid statuses for the current website
+      // Include all statuses except pending and declined as per date.md
       const websiteThemes = postThemes.filter(theme => 
         theme.website_id === currentWebsite.id && 
         !['pending', 'declined'].includes(theme.status)

@@ -35,52 +35,27 @@ serve(async (req) => {
   // Set CORS headers based on origin
   const corsHeaders = {
     'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-queue-processing, x-original-user-token',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '86400'
   };
 
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    console.log('Handling CORS preflight request');
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Create a Supabase client with the service role key
-    console.log('Creating Supabase admin client');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    console.log('Supabase URL available:', !!supabaseUrl);
-    console.log('Supabase key available:', !!supabaseKey);
-
+    // Check if this is a queue processing request
+    const isQueueProcessing = req.headers.get('X-Queue-Processing') === 'true';
+    console.log('Is queue processing:', isQueueProcessing);
+    
+    // Create Supabase client with the service role key
+    // This ensures we have admin access to the database regardless of the user token
     const supabaseAdmin = createClient(
-      supabaseUrl ?? '',
-      supabaseKey ?? ''
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-
-    // Get the authorization header
-    const authHeader = req.headers.get('Authorization');
-    console.log('Authorization header present:', !!authHeader);
-    
-    if (!authHeader) {
-      throw new Error('No authorization header');
-    }
-
-    // Verify the JWT token
-    const token = authHeader.replace('Bearer ', '');
-    console.log('Verifying JWT token');
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    
-    if (authError) {
-      console.error('Auth error:', authError);
-      throw new Error('Invalid token');
-    }
-    if (!user) {
-      console.error('No user found for token');
-      throw new Error('Invalid token');
-    }
-    console.log('User authenticated:', { id: user.id, email: user.email });
 
     // Validate request body
     const body = await req.json();

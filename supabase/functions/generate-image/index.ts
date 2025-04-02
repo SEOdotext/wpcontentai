@@ -44,30 +44,11 @@ function createSafePrompt(content: string): string {
   // OpenAI limit is 4000, but we'll use much less to be safe
   const MAX_PROMPT_LENGTH = 1500;
   
-  // Start with the title and leave room for the prompt prefix
+  // Only use the title for the prompt
   let safeContent = title;
   
-  // Add as much of the content as we can fit
-  if (content.length > title.length) {
-    const remainingSpace = MAX_PROMPT_LENGTH - safeContent.length - 100; // 100 chars buffer for prefix
-    if (remainingSpace > 0) {
-      // Add a brief excerpt from the content, avoiding cutting in the middle of words
-      let excerpt = content.substring(title.length, title.length + remainingSpace);
-      
-      // Try to end at a sentence or paragraph break if possible
-      const sentenceBreak = excerpt.lastIndexOf('.');
-      const paragraphBreak = excerpt.lastIndexOf('\n');
-      
-      let breakPoint = Math.max(sentenceBreak, paragraphBreak);
-      if (breakPoint > excerpt.length / 2) {
-        excerpt = excerpt.substring(0, breakPoint + 1);
-      }
-      
-      safeContent += ' ' + excerpt.trim();
-    }
-  }
-  
-  return `Create a professional, high-quality blog post header image for the following content: ${safeContent}`;
+  // Add business context and make it more professional
+  return `Create a professional business blog header image that represents business growth and success. The image should be clean, modern, and suitable for a corporate website. Theme: ${safeContent}`;
 }
 
 // Helper to add timeout to fetch requests
@@ -185,7 +166,7 @@ serve(async (req) => {
         const mainTopic = content.split('\n')[0] || content.substring(0, 50);
         const promptTemplate = pubSettings?.image_prompt || website.image_prompt;
         finalPrompt = promptTemplate
-          .replace('{content}', safePrompt.substring(safePrompt.indexOf(': ') + 2))
+          .replace('{content}', mainTopic)  // Only use the title/main topic
           .replace('{title}', mainTopic);
           
         // Ensure the prompt doesn't exceed the limit
