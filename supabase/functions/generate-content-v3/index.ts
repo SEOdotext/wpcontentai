@@ -2,16 +2,24 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Get allowed origins from environment variables
-const ALLOWED_ORIGINS = [
-  'http://localhost:8080',
-  'https://contentgardener.ai',
-  'https://vehcghewfnjkwlwmmrix.supabase.co'
-];
+const ALLOWED_ORIGINS = {
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080']
+};
 
 // Function to determine if origin is allowed
 function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
-  return ALLOWED_ORIGINS.includes(origin);
+  
+  // In development, allow all origins
+  if (Deno.env.get('ENVIRONMENT') === 'development') return true;
+  
+  // Check against allowed origins based on environment
+  const allowedOrigins = Deno.env.get('ENVIRONMENT') === 'production' 
+    ? ALLOWED_ORIGINS.production 
+    : ALLOWED_ORIGINS.staging;
+    
+  return allowedOrigins.includes(origin);
 }
 
 serve(async (req) => {
@@ -26,8 +34,8 @@ serve(async (req) => {
   
   // Set CORS headers based on origin
   const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',  // Allow all origins temporarily
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-system-auth',
+    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '86400'
   };
@@ -35,16 +43,10 @@ serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     console.log('Handling CORS preflight request');
-    return new Response('ok', { 
-      headers: corsHeaders,
-      status: 200 // Ensure we return 200 for preflight
-    });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    const { postThemeId } = await req.json();
-    console.log('Generate content v3 received request for post_theme_id:', postThemeId);
-
     // Create a Supabase client with the service role key
     console.log('Creating Supabase admin client');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -52,39 +54,33 @@ serve(async (req) => {
     console.log('Supabase URL available:', !!supabaseUrl);
     console.log('Supabase key available:', !!supabaseKey);
 
-    // Create initial client with anon key
-    let supabaseClient = createClient(
+    const supabaseAdmin = createClient(
       supabaseUrl ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      supabaseKey ?? ''
     );
 
-    // Check for system auth header
-    const isSystemAuth = req.headers.get('X-System-Auth') === 'true';
+    // Get the authorization header
+    const authHeader = req.headers.get('Authorization');
+    console.log('Authorization header present:', !!authHeader);
     
-    // Get user ID from auth only if not system auth
-    let user;
-    if (!isSystemAuth) {
-      const { data: { user: authUser }, error: authError } = await supabaseClient.auth.getUser();
-      
-      if (authError) {
-        console.error('Auth error:', authError);
-        throw new Error('Invalid token');
-      }
-      if (!authUser) {
-        console.error('No user found for token');
-        throw new Error('Invalid token');
-      }
-      user = authUser;
-      console.log('User authenticated:', { id: user.id, email: user.email });
-    } else {
-      // For system auth, create a service role client
-      supabaseClient = createClient(
-        supabaseUrl ?? '',
-        supabaseKey ?? ''
-      );
-      console.log('Using system authentication');
+    if (!authHeader) {
+      throw new Error('No authorization header');
     }
+
+    // Verify the JWT token
+    const token = authHeader.replace('Bearer ', '');
+    console.log('Verifying JWT token');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    
+    if (authError) {
+      console.error('Auth error:', authError);
+      throw new Error('Invalid token');
+    }
+    if (!user) {
+      console.error('No user found for token');
+      throw new Error('Invalid token');
+    }
+    console.log('User authenticated:', { id: user.id, email: user.email });
 
     // Validate request body
     const body = await req.json();
@@ -97,7 +93,7 @@ serve(async (req) => {
 
     // Get the post theme details from the database
     console.log('Fetching post theme:', postThemeId);
-    const { data: postTheme, error: postThemeError } = await supabaseClient
+    const { data: postTheme, error: postThemeError } = await supabaseAdmin
       .from('post_themes')
       .select('*')
       .eq('id', postThemeId)
@@ -120,7 +116,7 @@ serve(async (req) => {
     });
 
     // Get publication settings (writing style, template, etc.)
-    const { data: settings, error: settingsError } = await supabaseClient
+    const { data: settings, error: settingsError } = await supabaseAdmin
       .from('publication_settings')
       .select('writing_style, subject_matters, wordpress_template')
       .eq('website_id', postTheme.website_id)
@@ -132,7 +128,7 @@ serve(async (req) => {
     }
 
     // Get website content for context and cornerstone pages
-    const { data: websiteContent, error: contentError } = await supabaseClient
+    const { data: websiteContent, error: contentError } = await supabaseAdmin
       .from('website_content')
       .select('content, title, url, is_cornerstone')
       .eq('website_id', postTheme.website_id)
@@ -144,7 +140,7 @@ serve(async (req) => {
     }
 
     // Get website language
-    const { data: website, error: websiteError } = await supabaseClient
+    const { data: website, error: websiteError } = await supabaseAdmin
       .from('websites')
       .select('language')
       .eq('id', postTheme.website_id)
@@ -324,16 +320,16 @@ Use internal links with anchor text that flows naturally in the content.`;
       id: postThemeId,
       updates: {
         post_content: finalContent.substring(0, 100) + '...', // Log first 100 chars
-        status: 'textgenerated', // Change from 'generated' to 'textgenerated'
+        status: 'generated',
         updated_at: new Date().toISOString()
       }
     });
 
-    const { data: updateData, error: updateError } = await supabaseClient
+    const { data: updateData, error: updateError } = await supabaseAdmin
       .from('post_themes')
       .update({
         post_content: finalContent,
-        status: 'textgenerated', // Change from 'generated' to 'textgenerated'
+        status: 'generated',
         updated_at: new Date().toISOString()
       })
       .eq('id', postThemeId)
@@ -356,13 +352,7 @@ Use internal links with anchor text that flows naturally in the content.`;
     console.log('Successfully generated and saved content');
     return new Response(
       JSON.stringify({ success: true }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json'
-        },
-        status: 200
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error in generate-content-v3 function:', error);
@@ -372,10 +362,7 @@ Use internal links with anchor text that flows naturally in the content.`;
         error: error instanceof Error ? error.message : 'Unknown error occurred' 
       }),
       { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json'
-        },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400
       }
     );
