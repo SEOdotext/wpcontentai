@@ -259,15 +259,34 @@ async function triggerAndWaitForImage(supabaseClient: any, postThemeId: string, 
 /**
  * Sends a post to WordPress
  */
-async function sendToWordPress(postThemeId: string, websiteId: string, token: string) {
+async function sendToWordPress(postThemeId: string, websiteId: string, token: string, isQueueProcessing: boolean = false) {
   console.log('Sending post to WordPress:', postThemeId);
+  
+  // For queue processing, use the service role key for WordPress publishing
+  const authToken = isQueueProcessing 
+    ? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') 
+    : token;
+  
+  console.log('Using token type for WordPress:', {
+    isQueueProcessing,
+    usingServiceRole: isQueueProcessing,
+    tokenLength: authToken ? authToken.length : 0
+  });
+  
+  // Add system auth header for queue processing
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${authToken}`
+  };
+  
+  // If using service role key, add a system auth header
+  if (isQueueProcessing) {
+    headers['X-System-Auth'] = 'true';
+  }
   
   const wpResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/wordpress-posts', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
+    headers,
     body: JSON.stringify({
       post_theme_id: postThemeId,
       action: 'create',
@@ -581,7 +600,7 @@ serve(async (req) => {
       isEmpty: updatedPostTheme.image === ''
     });
     
-    const wpResult = await sendToWordPress(postThemeId, updatedPostTheme.website_id, token);
+    const wpResult = await sendToWordPress(postThemeId, updatedPostTheme.website_id, token, isQueueProcessing);
     
     // Step 8: Update post theme with WordPress results
     await updatePostThemeWithResults(supabaseClient, postThemeId, wpResult, updatedPostTheme.image);

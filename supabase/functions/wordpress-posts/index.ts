@@ -293,6 +293,7 @@ serve(async (req) => {
     let finalContent = postTheme.post_content;
     let uploadedImageId: number | undefined;
     let wpImageUrl: string | undefined;
+    
     if (postTheme.image) {
       try {
         console.log('Processing image upload for post:', {
@@ -342,4 +343,64 @@ serve(async (req) => {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + btoa(`
+        'Authorization': 'Basic ' + btoa(`${wpSettings.wp_username}:${wpSettings.wp_application_password}`)
+      },
+      body: JSON.stringify(postData)
+    })
+    
+    if (!response.ok) {
+      throw new Error(`WordPress API error: ${response.status} ${response.statusText}`)
+    }
+    
+    const responseData = await response.json()
+    console.log('WordPress response:', responseData)
+    
+    // Update post theme with WordPress information (only for create action)
+    if (action === 'create') {
+      await supabaseClient
+        .from('post_themes')
+        .update({
+          wp_post_id: responseData.id,
+          wp_post_url: responseData.link,
+          wp_sent_date: new Date().toISOString(),
+          wp_image_url: wpImageUrl
+        })
+        .eq('id', post_theme_id)
+    }
+    
+    // Log WordPress activity
+    await supabaseClient
+      .from('wordpress_logs')
+      .insert({
+        user_id: user.id,
+        post_theme_id,
+        action,
+        wordpress_post_id: responseData.id,
+        wordpress_post_url: responseData.link
+      })
+    
+    console.log('WordPress post update successful:', {
+      postId: post_theme_id,
+      wpResponseData: responseData
+    })
+    
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `Post ${action === 'create' ? 'created' : 'updated'} successfully`,
+        post: responseData
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  } catch (error) {
+    console.error('Error in WordPress Posts function:', error)
+    
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+});
