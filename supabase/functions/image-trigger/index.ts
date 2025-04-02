@@ -46,10 +46,13 @@ serve(async (req) => {
   }
 
   try {
-    // Get the request body with minimal data needed
-    const { postId, websiteId, forceRegenerate = false } = await req.json() as TriggerRequest;
+    const { postId, websiteId } = await req.json();
+    console.log('Image trigger received request for post_theme_id:', postId);
 
-    if (!postId || !websiteId) {
+    // Get the request body with minimal data needed
+    const { postId: reqPostId, websiteId: reqWebsiteId, forceRegenerate = false } = await req.json() as TriggerRequest;
+
+    if (!reqPostId || !reqWebsiteId) {
       throw new Error('Missing required fields: postId and websiteId are required');
     }
 
@@ -63,7 +66,7 @@ serve(async (req) => {
     const { data: website, error: websiteError } = await supabaseClient
       .from('websites')
       .select('enable_ai_image_generation, image_prompt')
-      .eq('id', websiteId)
+      .eq('id', reqWebsiteId)
       .single();
 
     if (websiteError) {
@@ -78,11 +81,11 @@ serve(async (req) => {
     const { data: postTheme, error: postThemeError } = await supabaseClient
       .from('post_themes')
       .select('id, subject_matter, post_content, image')
-      .eq('id', postId)
+      .eq('id', reqPostId)
       .single();
       
     if (postThemeError || !postTheme) {
-      throw new Error(`Post theme not found: ${postThemeError?.message || 'No post with ID ' + postId}`);
+      throw new Error(`Post theme not found: ${postThemeError?.message || 'No post with ID ' + reqPostId}`);
     }
 
     if (!postTheme.post_content) {
@@ -106,7 +109,7 @@ serve(async (req) => {
     }
 
     // Start async image generation process
-    generateImageAsync(postId, websiteId, postTheme, supabaseClient).catch(error => {
+    generateImageAsync(reqPostId, reqWebsiteId, postTheme, supabaseClient).catch(error => {
       console.error('Error in async image generation:', error);
       // Update post theme with error status
       supabaseClient
@@ -115,7 +118,7 @@ serve(async (req) => {
           image_generation_error: error.message,
           updated_at: new Date().toISOString()
         })
-        .eq('id', postId)
+        .eq('id', reqPostId)
         .then(() => console.log('Updated post theme with error status'))
         .catch(e => console.error('Error updating post theme with error:', e));
     });

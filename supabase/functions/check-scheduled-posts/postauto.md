@@ -54,4 +54,21 @@ flowchart TD
     L[Frontend] -->|Manual publish| J
     L -->|Manual image gen| I
     
+---
 
+
+
+Update check-scheduled-posts function:
+Add checks for WordPress connection status (is_connected = true)
+Add filtering based on post status (approved, generated, textgenerated)
+Add appropriate status flags to queue entries so the downstream functions know what processing to perform
+Modify generate-and-publish function:
+Add handling for the status flags from the queue
+Skip content generation for generated and textgenerated posts
+Skip image generation for generated posts
+Update to use generate-content-v3 instead of v2
+This approach requires only two files to be modified and preserves all the existing queue infrastructure while adding the conditional processing logic.
+Implementation steps:
+In check-scheduled-posts, when querying for scheduled posts, join with wordpress_settings and filter for is_connected = true
+Add a processing_type field to the publish_queue table with values like "full", "publish_only", or "with_image"
+In generate-and-publish, check the processing_type and conditionally skip content or image generation steps

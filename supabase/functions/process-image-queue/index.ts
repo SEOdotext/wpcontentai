@@ -85,49 +85,77 @@ serve(async (req) => {
           .update({ status: 'processing' })
           .eq('id', job.id);
 
-        // Call the image generation function
-        const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/image-trigger', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${job.user_token}`
-          },
-          body: JSON.stringify({
-            postId: job.post_theme_id,
-            websiteId: job.website_id
-          })
-        });
+        // Call the image generation function with a timeout
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 60000); // 1 minute timeout
 
-        if (!response.ok) {
-          throw new Error(`Image generation failed: ${await response.text()}`);
+        try {
+          const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/image-trigger', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${job.user_token}`
+            },
+            body: JSON.stringify({
+              postId: job.post_theme_id,
+              websiteId: job.website_id
+            }),
+            signal: controller.signal
+          });
+
+          clearTimeout(timeout);
+
+          if (!response.ok) {
+            throw new Error(`Image generation failed: ${await response.text()}`);
+          }
+
+          const result = await response.json();
+          console.log('Image generation result:', result);
+
+          // Start polling for the image URL
+          let attempts = 0;
+          const maxAttempts = 30; // 30 attempts with 2-second intervals = 60 seconds total
+          const interval = 2000; // 2 seconds
+
+          while (attempts < maxAttempts) {
+            // Check if the image has been generated
+            const { data: postTheme, error } = await supabaseClient
+              .from('post_themes')
+              .select('image')
+              .eq('id', job.post_theme_id)
+              .single();
+
+            if (error) {
+              console.error('Error checking image status:', error);
+            } else if (postTheme?.image) {
+              // Image was generated successfully
+              await supabaseClient
+                .from('image_generation_queue')
+                .update({
+                  status: 'completed',
+                  completed_at: new Date().toISOString(),
+                  image_url: postTheme.image
+                })
+                .eq('id', job.id);
+
+              return { jobId: job.id, status: 'completed', imageUrl: postTheme.image };
+            }
+
+            console.log(`Image not found, attempt ${attempts + 1}/${maxAttempts}`);
+            await new Promise(resolve => setTimeout(resolve, interval));
+            attempts++;
+          }
+
+          // If we get here, we've timed out waiting for the image
+          throw new Error('Image generation timed out after 60 seconds');
+        } catch (fetchError: any) {
+          clearTimeout(timeout);
+          if (fetchError.name === 'AbortError') {
+            throw new Error('Image generation timed out after 60 seconds');
+          }
+          throw fetchError;
         }
-
-        const result = await response.json();
-        console.log('Image generation result:', result);
-
-        if (result.imageUrl) {
-          // Image was generated immediately
-          await supabaseClient
-            .from('image_generation_queue')
-            .update({
-              status: 'completed',
-              completed_at: new Date().toISOString(),
-              image_url: result.imageUrl
-            })
-            .eq('id', job.id);
-
-          // Update post_themes table
-          await supabaseClient
-            .from('post_themes')
-            .update({ image: result.imageUrl })
-            .eq('id', job.post_theme_id);
-
-          return { jobId: job.id, status: 'completed', imageUrl: result.imageUrl };
-        } else {
-          // Image is still being generated
-          return { jobId: job.id, status: 'processing' };
-        }
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Error processing job ${job.id}:`, error);
 
         // Mark job as failed

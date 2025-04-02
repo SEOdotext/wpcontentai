@@ -151,36 +151,56 @@ async function getWordPressSettings(supabaseClient: any, websiteId: string) {
 /**
  * Generates content for a post
  */
-async function generateContent(postThemeId: string, token: string) {
-  console.log('Generating content for post:', postThemeId);
+async function generateContent(postThemeId: string, token: string, isQueueProcessing: boolean = false) {
+  console.log('Generating content for post theme:', postThemeId);
   
-  const contentResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v3', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({ postThemeId })
+  // For queue processing, use the service role key
+  const authToken = isQueueProcessing 
+    ? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') 
+    : token;
+  
+  console.log('Using token type for content generation:', {
+    isQueueProcessing,
+    usingServiceRole: isQueueProcessing,
+    tokenLength: authToken ? authToken.length : 0
   });
   
-  if (!contentResponse.ok) {
-    const errorText = await contentResponse.text();
-    console.error('Content generation failed:', {
-      status: contentResponse.status,
-      statusText: contentResponse.statusText,
-      error: errorText
-    });
-    throw new Error(`Failed to generate content: ${contentResponse.status} ${contentResponse.statusText}`);
+  // Add system auth header for queue processing
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${authToken}`
+  };
+  
+  // If using service role key, add a system auth header
+  if (isQueueProcessing) {
+    headers['X-System-Auth'] = 'true';
   }
   
-  const contentResult = await contentResponse.json();
-  console.log('Content generation successful:', {
-    postThemeId,
-    hasContent: !!contentResult.content,
-    contentLength: contentResult.content?.length || 0
+  const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v3', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      postThemeId
+    })
   });
   
-  return contentResult;
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Content generation failed:', {
+      status: response.status,
+      statusText: response.statusText,
+      error: errorText
+    });
+    throw new Error(`Failed to generate content: ${response.status} ${response.statusText}`);
+  }
+  
+  const result = await response.json();
+  console.log('Content generation successful:', {
+    postThemeId,
+    contentLength: result.content?.length || 0
+  });
+  
+  return result;
 }
 
 /**
@@ -365,6 +385,7 @@ serve(async (req) => {
 
     // Get the request body and authorization header
     const { postThemeId } = await req.json();
+    console.log('Generate and publish received request for post_theme_id:', postThemeId);
     const authHeader = req.headers.get('Authorization');
     console.log('Received request for postThemeId:', postThemeId);
 
@@ -380,15 +401,34 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '');
     console.log('Using auth token for internal function calls');
 
+    // Check if this is a direct call or a queue processing call
+    const isQueueProcessing = req.headers.get('X-Queue-Processing') === 'true';
+
+    // Get user ID from the token
+    let userId: string | undefined;
+    if (!isQueueProcessing) {
+      const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
+      if (userError) {
+        console.error('Error getting user from token:', userError);
+        throw new Error('Invalid token');
+      }
+      if (!user) {
+        console.error('No user found for token');
+        throw new Error('Invalid token');
+      }
+      userId = user.id;
+      console.log('User authenticated:', { id: userId });
+    } else {
+      userId = 'system';
+      console.log('Using system authentication');
+    }
+
     // Validate postThemeId format (should be a valid UUID)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(postThemeId)) {
       throw new Error(`Invalid postThemeId format. Expected UUID, got: ${postThemeId}`);
     }
 
-    // Check if this is a direct call or a queue processing call
-    const isQueueProcessing = req.headers.get('X-Queue-Processing') === 'true';
-    
     if (!isQueueProcessing) {
       // Add job to queue
       console.log('Adding job to publish queue...');
@@ -460,7 +500,7 @@ serve(async (req) => {
     // Step 4: Generate content if not already generated
     if (!postTheme.post_content) {
       console.log('No content found - generating content first');
-      await generateContent(postThemeId, token);
+      await generateContent(postThemeId, token, isQueueProcessing);
       
       // Re-fetch post theme to get the updated content
       const contentUpdatedTheme = await getPostTheme(supabaseClient, postThemeId);
@@ -539,11 +579,22 @@ serve(async (req) => {
           .eq('post_theme_id', postThemeId)
           .order('created_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
         
         if (statusError) {
           console.error('Error checking image queue status:', statusError);
           break;
+        }
+        
+        // If no queue entry exists yet, wait and continue
+        if (!queueStatus) {
+          console.log('No queue entry found yet, waiting...', {
+            postThemeId,
+            attempt: attempts + 1
+          });
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          attempts++;
+          continue;
         }
         
         console.log('Image generation status:', {

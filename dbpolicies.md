@@ -232,12 +232,52 @@
   {
     "schemaname": "public",
     "tablename": "organisation_memberships",
-    "policyname": "Users can insert themselves into organisations",
+    "policyname": "Users can join organizations with admin approval",
     "permissive": "PERMISSIVE",
     "roles": "{public}",
     "cmd": "INSERT",
     "qual": null,
-    "with_check": "(member_id = auth.uid())"
+    "with_check": "((member_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM organisation_memberships organisation_memberships_1\n  WHERE ((organisation_memberships_1.member_id = auth.uid()) AND (organisation_memberships_1.organisation_id = organisation_memberships_1.organisation_id) AND (organisation_memberships_1.role = 'admin'::text)))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "website_access",
+    "policyname": "Users can view website access for their organization",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM (organisation_memberships om1\n     JOIN organisation_memberships om2 ON ((om1.organisation_id = om2.organisation_id)))\n  WHERE ((om1.member_id = auth.uid()) AND (om2.member_id = website_access.user_id))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "website_access",
+    "policyname": "Admin users can insert website access for their organization",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(EXISTS ( SELECT 1\n   FROM (organisation_memberships om1\n     JOIN organisation_memberships om2 ON ((om1.organisation_id = om2.organisation_id)))\n  WHERE ((om1.member_id = auth.uid()) AND (om1.role = 'admin'::text) AND (om2.member_id = website_access.user_id))))"
+  },
+  {
+    "schemaname": "public",
+    "tablename": "website_access",
+    "policyname": "Admin users can update website access for their organization",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM (organisation_memberships om1\n     JOIN organisation_memberships om2 ON ((om1.organisation_id = om2.organisation_id)))\n  WHERE ((om1.member_id = auth.uid()) AND (om1.role = 'admin'::text) AND (om2.member_id = website_access.user_id))))",
+    "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "website_access",
+    "policyname": "Admin users can delete website access for their organization",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "DELETE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM (organisation_memberships om1\n     JOIN organisation_memberships om2 ON ((om1.organisation_id = om2.organisation_id)))\n  WHERE ((om1.member_id = auth.uid()) AND (om1.role = 'admin'::text) AND (om2.member_id = website_access.user_id))))",
+    "with_check": null
   },
   {
     "schemaname": "public",
@@ -288,16 +328,6 @@
     "cmd": "DELETE",
     "qual": "(EXISTS ( SELECT 1\n   FROM ((post_themes pt\n     JOIN websites w ON ((w.id = pt.website_id)))\n     JOIN organisation_memberships om ON ((om.organisation_id = w.organisation_id)))\n  WHERE ((om.member_id = auth.uid()) AND (pt.id = post_theme_categories.post_theme_id))))",
     "with_check": null
-  },
-  {
-    "schemaname": "public",
-    "tablename": "organisation_memberships",
-    "policyname": "Only admins can invite users",
-    "permissive": "PERMISSIVE",
-    "roles": "{public}",
-    "cmd": "INSERT",
-    "qual": null,
-    "with_check": "(EXISTS ( SELECT 1\n   FROM organisation_memberships organisation_memberships_1\n  WHERE ((organisation_memberships_1.member_id = auth.uid()) AND (organisation_memberships_1.role = 'admin'::text))))"
   },
   {
     "schemaname": "public",
@@ -508,5 +538,15 @@
     "cmd": "DELETE",
     "qual": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))",
     "with_check": null
+  },
+  {
+    "schemaname": "public",
+    "tablename": "organisation_memberships",
+    "policyname": "Allow invitation function to bypass RLS",
+    "permissive": "PERMISSIVE",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "true",
+    "with_check": "true"
   }
 ]

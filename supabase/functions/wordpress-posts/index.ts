@@ -192,19 +192,32 @@ serve(async (req) => {
   
   try {
     // Create Supabase client using auth from request
-    const supabaseClient = createClient(
+    let supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     )
     
-    // Get user ID from auth
-    const {
-      data: { user },
-    } = await supabaseClient.auth.getUser()
+    // Check for system auth header
+    const isSystemAuth = req.headers.get('X-System-Auth') === 'true';
     
-    if (!user) {
-      throw new Error('Not authorized')
+    // Get user ID from auth only if not system auth
+    let user;
+    if (!isSystemAuth) {
+      const {
+        data: { user: authUser },
+      } = await supabaseClient.auth.getUser()
+      
+      if (!authUser) {
+        throw new Error('Not authorized')
+      }
+      user = authUser;
+    } else {
+      // For system auth, create a service role client
+      supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
     }
     
     // Extract request data - now we only need minimal data
@@ -220,7 +233,7 @@ serve(async (req) => {
       .from('post_themes')
       .select(`
         *,
-        post_theme_categories!inner (
+        post_theme_categories!left (
           wordpress_category:wordpress_category_id (
             id,
             wp_category_id
@@ -372,7 +385,7 @@ serve(async (req) => {
     await supabaseClient
       .from('wordpress_logs')
       .insert({
-        user_id: user.id,
+        user_id: isSystemAuth ? 'system' : user.id,
         post_theme_id,
         action,
         wordpress_post_id: responseData.id,
