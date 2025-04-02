@@ -74,6 +74,7 @@ export async function checkImageGenerationStatus(postId: string) {
   try {
     console.log('Checking image generation status for post:', postId);
 
+    // First check if the image is already generated
     const { data: postTheme, error } = await supabase
       .from('post_themes')
       .select('image')
@@ -84,10 +85,39 @@ export async function checkImageGenerationStatus(postId: string) {
       throw error;
     }
 
+    // If image exists, return it
+    if (postTheme?.image) {
+      return {
+        success: true,
+        imageUrl: postTheme.image,
+        isGenerating: false
+      };
+    }
+
+    // Check if there are any errors for this post
+    const { data: imageErrors, error: errorsError } = await supabase
+      .from('image_errors')
+      .select('*')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (errorsError) {
+      console.error('Error checking image errors:', errorsError);
+    } else if (imageErrors && imageErrors.length > 0) {
+      // We found an error, return it
+      return {
+        success: false,
+        error: imageErrors[0].error,
+        isGenerating: false
+      };
+    }
+
+    // If no image and no errors, we're still generating
     return {
       success: true,
-      imageUrl: postTheme?.image || null,
-      isGenerating: !postTheme?.image
+      imageUrl: null,
+      isGenerating: true
     };
   } catch (error) {
     console.error('Error checking image generation status:', error);

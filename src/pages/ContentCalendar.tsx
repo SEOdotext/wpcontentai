@@ -544,9 +544,9 @@ const ContentCalendar = () => {
             // Check the database directly for the image status
             const { data: postTheme, error } = await supabase
               .from('post_themes')
-              .select('image')
+              .select('image, image_generation_error, image_generation_status, image_generation_error_type')
               .eq('id', contentId)
-              .single() as { data: Pick<PostTheme, 'image'> | null, error: any };
+              .single() as { data: Pick<PostTheme, 'image' | 'image_generation_error' | 'image_generation_status' | 'image_generation_error_type'> | null, error: any };
 
             if (error) {
               console.error('Error checking image status:', error);
@@ -561,6 +561,25 @@ const ContentCalendar = () => {
             }
 
             console.log('Image generation status:', postTheme);
+
+            // Check for image generation errors
+            if (postTheme?.image_generation_status === 'failed') {
+              clearInterval(pollInterval);
+              
+              // Show error message to user
+              toast.error(`Image generation failed: ${postTheme.image_generation_error || 'Unknown error'}`, {
+                duration: 5000,
+              });
+              
+              // Remove from generating images set
+              setGeneratingImageIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(contentId);
+                return newSet;
+              });
+              
+              return;
+            }
 
             if (postTheme?.image) {
               // Image is ready, update the UI

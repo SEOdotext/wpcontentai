@@ -108,23 +108,49 @@ serve(async (req) => {
     // Start async image generation process
     generateImageAsync(postId, websiteId, postTheme, supabaseClient).catch(error => {
       console.error('Error in async image generation:', error);
-      // Update post theme with error status
+      
+      // Extract useful information from OpenAI content policy violations
+      let errorMessage = error.message;
+      
+      // Parse OpenAI content policy violations
+      if (error.message.includes('content_policy_violation')) {
+        errorMessage = 'The image cannot be generated due to content policy restrictions. Please modify your content to avoid potentially sensitive topics.';
+      }
+      
+      // Update post theme with just the error message in the existing column
       supabaseClient
         .from('post_themes')
         .update({ 
-          image_generation_error: error.message,
+          image_generation_error: errorMessage,
           updated_at: new Date().toISOString()
         })
         .eq('id', postId)
         .then(() => console.log('Updated post theme with error status'))
         .catch(e => console.error('Error updating post theme with error:', e));
+      
+      // Create a separate record in a dedicated image_errors table
+      try {
+        supabaseClient
+          .from('image_errors')
+          .insert({
+            post_id: postId, 
+            error: errorMessage,
+            created_at: new Date().toISOString()
+          })
+          .then(() => console.log('Added error to image_errors table'))
+          .catch(e => console.error('Error adding to image_errors:', e));
+      } catch (e) {
+        console.error('Error logging image error:', e);
+      }
     });
 
-    // Return immediately to indicate the process has started
+    // Return immediately to indicate the process has started, but also advise checking errors
     return new Response(
       JSON.stringify({
         success: true,
         message: 'Image generation started',
+        postId: postId,
+        checkErrors: true,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -175,12 +201,14 @@ async function generateImageAsync(
     
     if (!response.ok) {
       let errorMessage = `Edge function error: ${response.status} ${response.statusText}`;
+      
       try {
         const errorData = await response.json();
         errorMessage = errorData.error || errorMessage;
       } catch (e) {
         // Fallback to the status error if JSON parsing fails
       }
+      
       throw new Error(errorMessage);
     }
     
