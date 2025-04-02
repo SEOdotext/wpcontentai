@@ -10,10 +10,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-system-auth, x-queue-processing',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Max-Age': '86400',
 };
+
+// Status checks array for logging
+interface StatusCheck {
+  timestamp: string;
+  attempt: number;
+  status: string;
+  error?: string;
+}
 
 /**
  * Waits for image generation to complete by polling the post_themes table
@@ -34,6 +42,7 @@ async function waitForImageGeneration(
   
   const startTime = Date.now();
   let imageUrl = null;
+  const statusChecks: StatusCheck[] = [];
   
   while (Date.now() - startTime < maxWaitTime) {
     // Check if the image has been generated
@@ -43,22 +52,50 @@ async function waitForImageGeneration(
       .eq('id', postThemeId)
       .single();
     
+    const currentAttempt = Math.floor((Date.now() - startTime) / interval) + 1;
+    
     if (error) {
       console.error('Error checking image status:', error);
+      statusChecks.push({
+        timestamp: new Date().toISOString(),
+        attempt: currentAttempt,
+        status: 'error',
+        error: error.message
+      });
     } else if (postTheme?.image) {
       imageUrl = postTheme.image;
       console.log(`Found image URL after ${Date.now() - startTime}ms:`, imageUrl);
+      statusChecks.push({
+        timestamp: new Date().toISOString(),
+        attempt: currentAttempt,
+        status: 'success',
+      });
       break;
+    } else {
+      statusChecks.push({
+        timestamp: new Date().toISOString(),
+        attempt: currentAttempt,
+        status: 'waiting',
+      });
+      console.log(`Image not found, waiting ${interval}ms...`);
     }
     
-    console.log(`Image not found, waiting ${interval}ms...`);
     // Wait for the specified interval
     await new Promise(resolve => setTimeout(resolve, interval));
   }
   
   if (!imageUrl) {
     console.log(`Image generation timed out after ${maxWaitTime}ms`);
+    statusChecks.push({
+      timestamp: new Date().toISOString(),
+      attempt: Math.floor((Date.now() - startTime) / interval) + 1,
+      status: 'timeout',
+      error: `Image generation timed out after ${maxWaitTime}ms`
+    });
   }
+  
+  // Return the status checks for logging purposes
+  console.log('Image generation status checks:', JSON.stringify(statusChecks));
   
   return imageUrl;
 }
@@ -154,7 +191,7 @@ async function getWordPressSettings(supabaseClient: any, websiteId: string) {
 async function generateContent(postThemeId: string, token: string) {
   console.log('Generating content for post:', postThemeId);
   
-  const contentResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v2', {
+  const contentResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v3', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -181,79 +218,6 @@ async function generateContent(postThemeId: string, token: string) {
   });
   
   return contentResult;
-}
-
-/**
- * Triggers image generation and waits for it to complete
- */
-async function triggerAndWaitForImage(supabaseClient: any, postThemeId: string, websiteId: string, token: string) {
-  console.log('Triggering image generation for post:', postThemeId);
-  
-  try {
-    // First check if image already exists
-    const { data: existingImage } = await supabaseClient
-      .from('post_themes')
-      .select('image')
-      .eq('id', postThemeId)
-      .single();
-    
-    if (existingImage?.image) {
-      console.log('Image already exists:', existingImage.image);
-      return existingImage.image;
-    }
-    
-    console.log('No existing image found, starting generation process');
-    
-    // Trigger image generation
-    const imageResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/image-trigger', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        postId: postThemeId,
-        websiteId: websiteId
-      })
-    });
-    
-    if (!imageResponse.ok) {
-      const errorText = await imageResponse.text();
-      console.error('Image generation failed:', {
-        status: imageResponse.status,
-        statusText: imageResponse.statusText,
-        error: errorText
-      });
-      return null;
-    }
-    
-    const imageResult = await imageResponse.json();
-    console.log('Image trigger response:', imageResult);
-    
-    if (imageResult.imageUrl) {
-      // Image was generated immediately
-      console.log('Image generated immediately:', imageResult.imageUrl);
-      return imageResult.imageUrl;
-    } else if (imageResult.success && imageResult.isGenerating) {
-      console.log('Image generation started, waiting for completion...');
-      
-      // Wait for the image to be generated by polling the post_themes table
-      const imageUrl = await waitForImageGeneration(supabaseClient, postThemeId);
-      
-      if (imageUrl) {
-        console.log('Image generation completed successfully:', imageUrl);
-        return imageUrl;
-      } else {
-        console.log('Image generation timed out, proceeding without image');
-        return null;
-      }
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error in image generation process:', error);
-    return null;
-  }
 }
 
 /**
@@ -331,6 +295,38 @@ async function updatePostThemeWithResults(
   return !updateError;
 }
 
+/**
+ * Updates the queue job status with detailed progress information
+ */
+async function updateQueueJobStatus(
+  supabaseClient: any,
+  queueJobId: string,
+  status: string,
+  details: any = null
+) {
+  console.log(`Updating queue job status: ${queueJobId} -> ${status}`, details ? 'with details' : 'without details');
+  
+  const updateData: any = {
+    status,
+    updated_at: new Date().toISOString()
+  };
+  
+  if (details) {
+    updateData.result = details;
+  }
+  
+  const { error } = await supabaseClient
+    .from('publish_queue')
+    .update(updateData)
+    .eq('id', queueJobId);
+  
+  if (error) {
+    console.error('Error updating queue job status:', error);
+  } else {
+    console.log(`Successfully updated queue job status to ${status}`);
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -338,6 +334,12 @@ serve(async (req) => {
   }
 
   try {
+    console.log('[generate-and-publish] Function invoked', { 
+      method: req.method,
+      url: req.url,
+      headers: Object.fromEntries(req.headers.entries())
+    });
+
     // Create Supabase client with the service role key
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -345,21 +347,39 @@ serve(async (req) => {
     );
 
     // Get the request body and authorization header
-    const { postThemeId } = await req.json();
+    const requestBody = await req.json();
+    const { postThemeId } = requestBody;
     const authHeader = req.headers.get('Authorization');
-    console.log('Received request for postThemeId:', postThemeId);
+    const systemAuthHeader = req.headers.get('X-System-Auth');
+    
+    console.log('[generate-and-publish] Request details', { 
+      postThemeId,
+      hasAuthHeader: !!authHeader, 
+      systemAuth: systemAuthHeader,
+      body: JSON.stringify(requestBody)
+    });
+    
+    // Add prominent logging for the postThemeId
+    console.log('==================================');
+    console.log(`PROCESSING POST THEME ID: ${postThemeId}`);
+    console.log('==================================');
 
     if (!postThemeId) {
       throw new Error('Missing required field: postThemeId');
     }
 
-    if (!authHeader) {
+    // For system calls with X-System-Auth true, we bypass token validation
+    const isSystemAuth = systemAuthHeader === 'true';
+    if (!isSystemAuth && !authHeader) {
       throw new Error('Missing Authorization header');
     }
 
-    // Extract the token from the Authorization header
-    const token = authHeader.replace('Bearer ', '');
-    console.log('Using auth token for internal function calls');
+    // Extract the token from the Authorization header if needed for function calls
+    // System auth will use the service role key instead
+    const token = isSystemAuth ? 
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '' : 
+      (authHeader ? authHeader.replace('Bearer ', '') : '');
+    console.log('Using auth type:', isSystemAuth ? 'system' : 'user');
 
     // Validate postThemeId format (should be a valid UUID)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -371,26 +391,35 @@ serve(async (req) => {
     const isQueueProcessing = req.headers.get('X-Queue-Processing') === 'true';
     
     if (!isQueueProcessing) {
-      // Add job to queue
-      console.log('Adding job to publish queue...');
+      // Add job to publish queue
+      console.log('[generate-and-publish] Adding job to publish queue...', { postThemeId, token: token ? 'token-present' : 'no-token' });
       const { data: queueJob, error: queueError } = await supabaseClient
         .from('publish_queue')
         .insert({
           post_theme_id: postThemeId,
           status: 'pending',
           created_at: new Date().toISOString(),
-          user_token: token
+          user_token: token,
+          result: { 
+            log: [`Job created at ${new Date().toISOString()}`],
+            postThemeId
+          }
         })
         .select()
         .single();
 
       if (queueError) {
-        console.error('Error adding job to queue:', queueError);
+        console.error('[generate-and-publish] Error adding job to queue:', queueError);
         throw new Error(`Failed to add job to queue: ${queueError.message}`);
       }
 
+      console.log('[generate-and-publish] Job successfully added to queue:', { 
+        queueJobId: queueJob.id,
+        status: queueJob.status
+      });
+
       // Trigger queue processing
-      console.log('Triggering queue processing...');
+      console.log('[generate-and-publish] Triggering queue processing...');
       const queueResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/process-publish-queue', {
         method: 'POST',
         headers: {
@@ -400,7 +429,14 @@ serve(async (req) => {
       });
 
       if (!queueResponse.ok) {
-        console.error('Error triggering queue processing:', await queueResponse.text());
+        const responseText = await queueResponse.text();
+        console.error('[generate-and-publish] Error triggering queue processing:', {
+          status: queueResponse.status,
+          statusText: queueResponse.statusText,
+          responseText
+        });
+      } else {
+        console.log('[generate-and-publish] Queue processing triggered successfully');
       }
 
       return new Response(
@@ -416,50 +452,143 @@ serve(async (req) => {
     // ===== QUEUE PROCESSING LOGIC =====
     // This section runs when processing a job from the queue
     
+    // Get the job record first
+    const { data: queueJob, error: fetchJobError } = await supabaseClient
+      .from('publish_queue')
+      .select('*')
+      .eq('post_theme_id', postThemeId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (fetchJobError) {
+      console.error('Error fetching queue job:', fetchJobError);
+      throw new Error(`Failed to fetch queue job: ${fetchJobError.message}`);
+    }
+
+    const queueJobId = queueJob.id;
+    console.log(`Processing queue job: ${queueJobId} for post theme: ${postThemeId}`);
+
+    // Update status to processing
+    await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+      log: [`Started processing at ${new Date().toISOString()}`],
+      postThemeId,
+      progress: 0
+    });
+
     console.log('Starting processing for post theme ID:', postThemeId);
     
-    // Step 1: Fetch the most recent post theme data
-    const postTheme = await getPostTheme(supabaseClient, postThemeId);
-    console.log('Retrieved post theme:', {
-      id: postTheme.id,
-      subject: postTheme.subject_matter,
-      hasContent: !!postTheme.post_content,
-      hasImage: !!postTheme.image
-    });
-    
-    // Step 2: Fetch website settings
-    const website = await getWebsiteSettings(supabaseClient, postTheme.website_id);
-    
-    // Step 3: Fetch WordPress settings
-    const wpSettings = await getWordPressSettings(supabaseClient, postTheme.website_id);
-    console.log('WordPress settings retrieved:', {
-      url: wpSettings.wp_url,
-      hasCredentials: !!wpSettings.wp_username && !!wpSettings.wp_application_password,
-      publishStatus: wpSettings.publish_status || 'draft'
-    });
-    
-    // Step 4: Generate content if not already generated
-    if (!postTheme.post_content) {
-      console.log('No content found - generating content first');
-      await generateContent(postThemeId, token);
+    try {
+      // Step 1: Fetch the most recent post theme data
+      const postTheme = await getPostTheme(supabaseClient, postThemeId);
+      console.log('Retrieved post theme:', {
+        id: postTheme.id,
+        subject: postTheme.subject_matter,
+        hasContent: !!postTheme.post_content,
+        hasImage: !!postTheme.image,
+        status: postTheme.status
+      });
       
-      // Re-fetch post theme to get the updated content
-      const contentUpdatedTheme = await getPostTheme(supabaseClient, postThemeId);
+      await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+        log: [`Retrieved post theme data at ${new Date().toISOString()}`],
+        postThemeId,
+        progress: 10,
+        postThemeStatus: postTheme.status
+      });
       
-      if (!contentUpdatedTheme.post_content) {
-        throw new Error('Content generation completed but no content was found in the database');
-      }
+      // Step 2: Fetch website settings
+      const website = await getWebsiteSettings(supabaseClient, postTheme.website_id);
       
-      console.log('Content generated successfully, content length:', contentUpdatedTheme.post_content.length);
+      // Step 3: Fetch WordPress settings
+      const wpSettings = await getWordPressSettings(supabaseClient, postTheme.website_id);
+      console.log('WordPress settings retrieved:', {
+        url: wpSettings.wp_url,
+        hasCredentials: !!wpSettings.wp_username && !!wpSettings.wp_application_password,
+        publishStatus: wpSettings.publish_status || 'draft'
+      });
       
-      // Add to image generation queue if enabled
-      if (website.enable_ai_image_generation) {
-        console.log('Adding to image generation queue:', {
+      await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+        log: [`Retrieved website and WordPress settings at ${new Date().toISOString()}`],
+        postThemeId,
+        progress: 20,
+        websiteId: website.id,
+        wpUrl: wpSettings.wp_url
+      });
+      
+      // Step 4: Generate content if needed based on post status
+      if (!postTheme.post_content && postTheme.status === 'approved') {
+        console.log('No content found - generating content first');
+        
+        await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+          log: [`Starting content generation at ${new Date().toISOString()}`],
           postThemeId,
-          websiteId: website.id
+          progress: 30,
+          step: 'content_generation'
         });
         
-        const { data: queueJob, error: queueError } = await supabaseClient
+        await generateContent(postThemeId, token);
+        
+        // Re-fetch post theme to get the updated content
+        const contentUpdatedTheme = await getPostTheme(supabaseClient, postThemeId);
+        
+        if (!contentUpdatedTheme.post_content) {
+          throw new Error('Content generation completed but no content was found in the database');
+        }
+        
+        console.log('Content generated successfully, content length:', contentUpdatedTheme.post_content.length);
+        
+        // Update status to textgenerated
+        await supabaseClient
+          .from('post_themes')
+          .update({ status: 'textgenerated' })
+          .eq('id', postThemeId);
+        
+        await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+          log: [`Content generated successfully at ${new Date().toISOString()}`],
+          postThemeId,
+          progress: 40,
+          contentLength: contentUpdatedTheme.post_content.length
+        });
+      } else {
+        console.log(postTheme.post_content ? 
+          `Using existing content, length: ${postTheme.post_content.length}` :
+          `No content found but post status is ${postTheme.status} - skipping content generation`);
+        
+        await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+          log: [`Using existing content at ${new Date().toISOString()}`],
+          postThemeId,
+          progress: 40,
+          contentExists: !!postTheme.post_content,
+          contentLength: postTheme.post_content?.length || 0
+        });
+      }
+      
+      // Step 5: Generate image if needed
+      let imageUrl = postTheme.image;
+      console.log('Initial image check:', {
+        postThemeId,
+        hasExistingImage: !!imageUrl,
+        existingImageUrl: imageUrl || 'none',
+        postStatus: postTheme.status
+      });
+      
+      // Only generate image for 'approved' or 'textgenerated' status
+      if (!imageUrl && website.enable_ai_image_generation && 
+          (postTheme.status === 'approved' || postTheme.status === 'textgenerated')) {
+        console.log('Adding to image generation queue:', {
+          postThemeId,
+          websiteId: website.id,
+          postStatus: postTheme.status
+        });
+        
+        await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+          log: [`Starting image generation at ${new Date().toISOString()}`],
+          postThemeId,
+          progress: 50,
+          step: 'image_generation'
+        });
+        
+        const { data: imageQueueJob, error: queueError } = await supabaseClient
           .from('image_generation_queue')
           .insert({
             post_theme_id: postThemeId,
@@ -472,10 +601,24 @@ serve(async (req) => {
         
         if (queueError) {
           console.error('Failed to add to image generation queue:', queueError);
+          
+          await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+            log: [`Failed to add to image generation queue at ${new Date().toISOString()}: ${queueError.message}`],
+            postThemeId,
+            progress: 50,
+            error: queueError.message
+          });
         } else {
           console.log('Successfully added to image generation queue:', {
-            jobId: queueJob.id,
-            status: queueJob.status
+            jobId: imageQueueJob.id,
+            status: imageQueueJob.status
+          });
+          
+          await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+            log: [`Added to image generation queue at ${new Date().toISOString()}: ${imageQueueJob.id}`],
+            postThemeId,
+            progress: 55,
+            imageQueueJobId: imageQueueJob.id
           });
           
           // Trigger the queue processor
@@ -488,118 +631,178 @@ serve(async (req) => {
           });
           
           if (!processorResponse.ok) {
-            console.error('Failed to trigger image queue processor:', await processorResponse.text());
+            const errorText = await processorResponse.text();
+            console.error('Failed to trigger image queue processor:', errorText);
+            
+            await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+              log: [`Failed to trigger image queue processor at ${new Date().toISOString()}: ${errorText}`],
+              postThemeId,
+              progress: 55,
+              error: errorText
+            });
           } else {
             console.log('Image queue processor triggered successfully');
+            
+            await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+              log: [`Image queue processor triggered at ${new Date().toISOString()}`],
+              postThemeId,
+              progress: 60
+            });
+          }
+          
+          // Wait for image generation
+          console.log('Waiting for image generation to complete...');
+          
+          await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+            log: [`Waiting for image generation to complete at ${new Date().toISOString()}`],
+            postThemeId,
+            progress: 65,
+            step: 'waiting_for_image'
+          });
+          
+          imageUrl = await waitForImageGeneration(supabaseClient, postThemeId);
+          
+          if (!imageUrl) {
+            const errorMessage = 'Image generation timed out after 120 seconds';
+            console.error(errorMessage);
+            
+            await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+              log: [`Image generation timed out at ${new Date().toISOString()}`],
+              postThemeId,
+              progress: 65,
+              error: errorMessage
+            });
+            
+            throw new Error(errorMessage);
+          } else {
+            // Update status to generated
+            await supabaseClient
+              .from('post_themes')
+              .update({ status: 'generated' })
+              .eq('id', postThemeId);
+            
+            await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+              log: [`Image generated successfully at ${new Date().toISOString()}: ${imageUrl}`],
+              postThemeId,
+              progress: 70,
+              imageUrl
+            });
           }
         }
-      }
-    } else {
-      console.log('Using existing content, length:', postTheme.post_content.length);
-    }
-    
-    // Step 5: Wait for image generation to complete
-    let imageUrl = postTheme.image;
-    console.log('Initial image check:', {
-      postThemeId,
-      hasExistingImage: !!imageUrl,
-      existingImageUrl: imageUrl || 'none'
-    });
-    
-    if (!imageUrl && website.enable_ai_image_generation) {
-      console.log('Waiting for image generation to complete...');
-      
-      // Poll the image generation queue for status
-      const maxAttempts = 60; // 60 attempts * 2 second delay = 120 seconds max wait
-      let attempts = 0;
-      
-      while (attempts < maxAttempts) {
-        const { data: queueStatus, error: statusError } = await supabaseClient
-          .from('image_generation_queue')
-          .select('status, image_url, error')
-          .eq('post_theme_id', postThemeId)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+      } else {
+        console.log(imageUrl ? 
+          'Using existing image' : 
+          `No image found but post status is ${postTheme.status} - skipping image generation`);
         
-        if (statusError) {
-          console.error('Error checking image queue status:', statusError);
-          break;
-        }
-        
-        console.log('Image generation status:', {
+        await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+          log: [`Using existing image at ${new Date().toISOString()}: ${imageUrl || 'none'}`],
           postThemeId,
-          status: queueStatus.status,
-          imageUrl: queueStatus.image_url || 'none',
-          attempt: attempts + 1
+          progress: 70,
+          imageExists: !!imageUrl,
+          imageUrl: imageUrl || null
         });
-        
-        if (queueStatus.status === 'completed' && queueStatus.image_url) {
-          imageUrl = queueStatus.image_url;
-          break;
-        }
-        
-        if (queueStatus.status === 'failed') {
-          console.error('Image generation failed:', queueStatus.error);
-          throw new Error('Image generation failed: ' + (queueStatus.error || 'Unknown error'));
-        }
-        
-        // Wait 2 seconds before next check
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        attempts++;
       }
       
-      if (!imageUrl) {
-        throw new Error('Image generation timed out after 120 seconds');
-      }
-    }
-    
-    // Step 6: Re-fetch the post theme to ensure we have the latest data
-    const updatedPostTheme = await getPostTheme(supabaseClient, postThemeId);
-    console.log('Final post theme data before WordPress publishing:', {
-      postThemeId,
-      hasContent: !!updatedPostTheme.post_content,
-      contentLength: updatedPostTheme.post_content?.length || 0,
-      hasImage: !!updatedPostTheme.image,
-      imageUrl: updatedPostTheme.image || 'none'
-    });
-    
-    // Step 7: Send to WordPress
-    console.log('Sending to WordPress with final data:', {
-      postThemeId,
-      hasImage: !!updatedPostTheme.image,
-      imageUrl: updatedPostTheme.image || 'none',
-      contentLength: updatedPostTheme.post_content?.length || 0
-    });
-    
-    // Log the exact image URL being sent
-    console.log('Image URL being sent to WordPress:', {
-      postThemeId,
-      imageUrl: updatedPostTheme.image,
-      isNull: updatedPostTheme.image === null,
-      isUndefined: updatedPostTheme.image === undefined,
-      isEmpty: updatedPostTheme.image === ''
-    });
-    
-    const wpResult = await sendToWordPress(postThemeId, updatedPostTheme.website_id, token);
-    
-    // Step 8: Update post theme with WordPress results
-    await updatePostThemeWithResults(supabaseClient, postThemeId, wpResult, updatedPostTheme.image);
-    
-    // Return the successful response
-    return new Response(
-      JSON.stringify({
+      // Step 6: Re-fetch the post theme to ensure we have the latest data
+      const updatedPostTheme = await getPostTheme(supabaseClient, postThemeId);
+      console.log('Final post theme data before WordPress publishing:', {
+        postThemeId,
+        status: updatedPostTheme.status,
+        hasContent: !!updatedPostTheme.post_content,
+        contentLength: updatedPostTheme.post_content?.length || 0,
+        hasImage: !!updatedPostTheme.image,
+        imageUrl: updatedPostTheme.image || 'none'
+      });
+      
+      await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+        log: [`Ready to send to WordPress at ${new Date().toISOString()}`],
+        postThemeId,
+        progress: 80,
+        postThemeStatus: updatedPostTheme.status,
+        contentLength: updatedPostTheme.post_content?.length || 0,
+        imageUrl: updatedPostTheme.image || null
+      });
+      
+      // Step 7: Send to WordPress (for all statuses - approved, textgenerated, generated)
+      console.log('Sending to WordPress with final data:', {
+        postThemeId,
+        status: updatedPostTheme.status,
+        hasImage: !!updatedPostTheme.image,
+        imageUrl: updatedPostTheme.image || 'none',
+        contentLength: updatedPostTheme.post_content?.length || 0
+      });
+      
+      await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+        log: [`Sending to WordPress at ${new Date().toISOString()}`],
+        postThemeId,
+        progress: 85,
+        step: 'wordpress_publishing'
+      });
+      
+      const wpResult = await sendToWordPress(postThemeId, updatedPostTheme.website_id, token);
+      
+      await updateQueueJobStatus(supabaseClient, queueJobId, 'processing', {
+        log: [`WordPress publishing successful at ${new Date().toISOString()}`],
+        postThemeId,
+        progress: 90,
+        wpPostId: wpResult.post.id,
+        wpPostUrl: wpResult.post.link
+      });
+      
+      // Step 8: Update post theme with WordPress results
+      await updatePostThemeWithResults(supabaseClient, postThemeId, wpResult, updatedPostTheme.image);
+      
+      await updateQueueJobStatus(supabaseClient, queueJobId, 'completed', {
+        log: [`Process completed successfully at ${new Date().toISOString()}`],
+        postThemeId,
+        progress: 100,
+        wpPostId: wpResult.post.id,
+        wpPostUrl: wpResult.post.link,
         success: true,
         post: wpResult.post
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+      });
+      
+      // Return the successful response
+      return new Response(
+        JSON.stringify({
+          success: true,
+          post: wpResult.post
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
 
-  } catch (error) {
-    console.error('Error in generate-and-publish function:', error);
+    } catch (error: unknown) {
+      console.error('Error during queue job processing:', error);
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      
+      await updateQueueJobStatus(supabaseClient, queueJobId, 'failed', {
+        log: [`Process failed at ${new Date().toISOString()}: ${errorMessage}`],
+        postThemeId,
+        error: errorMessage,
+        errorStack,
+        timestamp: new Date().toISOString()
+      });
+      
+      throw error;
+    }
+
+  } catch (error: unknown) {
+    console.error('[generate-and-publish] Error in function:', error);
+    console.error('[generate-and-publish] Error stack:', error instanceof Error ? error.stack : 'No stack trace available');
+    let postThemeId = 'unknown';
+    try {
+      const reqBody = await req.json();
+      postThemeId = reqBody.postThemeId || 'unknown';
+    } catch (parseError) {
+      console.error('[generate-and-publish] Error parsing request body:', parseError);
+    }
+    
     return new Response(
       JSON.stringify({
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+        error: error instanceof Error ? error.message : 'Unknown error occurred',
+        postThemeId: postThemeId
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

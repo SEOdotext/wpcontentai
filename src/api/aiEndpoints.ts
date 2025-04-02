@@ -264,18 +264,34 @@ const extractTextFromHtml = (html: string): string => {
 
 export const generateAndPublishContent = async (postThemeId: string): Promise<any> => {
   try {
+    console.log(`[Frontend] Calling generate-and-publish function for postThemeId: ${postThemeId}`);
+    
     const { data, error } = await supabase.functions.invoke('generate-and-publish', {
       body: { postThemeId }
     });
 
     if (error) {
-      console.error('Error generating and publishing content:', error);
+      console.error('[Frontend] Error generating and publishing content:', error);
+      console.error('[Frontend] Error details:', {
+        message: error.message,
+        name: error.name,
+        code: error.code,
+        stack: error.stack
+      });
       throw error;
     }
 
+    console.log('[Frontend] Successfully called generate-and-publish function:', data);
     return data;
   } catch (error) {
-    console.error('Error in generateAndPublishContent:', error);
+    console.error('[Frontend] Error in generateAndPublishContent:', error);
+    if (error instanceof Error) {
+      console.error('[Frontend] Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+    }
     throw error;
   }
 };
@@ -308,4 +324,172 @@ export const checkPublishQueueStatus = async (postThemeId: string): Promise<any>
     console.error('Error in checkPublishQueueStatus:', error);
     throw error;
   }
+};
+
+/**
+ * Creates a realtime subscription to the publish queue for a specific post theme
+ * 
+ * @param postThemeId The ID of the post theme to track
+ * @param onUpdate Callback function that will receive updated publish queue data
+ * @returns A function to unsubscribe from the realtime updates
+ */
+export const subscribeToPublishQueue = (
+  postThemeId: string,
+  onUpdate: (data: any) => void
+): (() => void) => {
+  console.log(`[Frontend] Setting up realtime subscription for postThemeId: ${postThemeId}`);
+  
+  // Create a channel for the specific post theme
+  const channel = supabase
+    .channel(`publish_queue_${postThemeId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
+        schema: 'public',
+        table: 'publish_queue',
+        filter: `post_theme_id=eq.${postThemeId}`
+      },
+      (payload) => {
+        console.log(`[Frontend] Realtime update received for postThemeId: ${postThemeId}`, payload);
+        
+        // Fetch the latest status to ensure we have complete data
+        checkPublishQueueStatus(postThemeId)
+          .then(latestData => {
+            console.log(`[Frontend] Latest queue status for postThemeId: ${postThemeId}`, latestData);
+            onUpdate(latestData);
+          })
+          .catch(error => {
+            console.error(`[Frontend] Error fetching latest queue status for postThemeId: ${postThemeId}`, error);
+          });
+      }
+    )
+    .subscribe((status: any) => {
+      console.log(`[Frontend] Subscription status for postThemeId: ${postThemeId}`, status);
+    });
+    
+  // Return unsubscribe function
+  return () => {
+    console.log(`[Frontend] Unsubscribing from realtime updates for postThemeId: ${postThemeId}`);
+    supabase.removeChannel(channel);
+  };
+};
+
+/**
+ * Creates a realtime subscription to the image generation queue for a specific post theme
+ * 
+ * @param postThemeId The ID of the post theme to track
+ * @param onUpdate Callback function that will receive updated image queue data
+ * @returns A function to unsubscribe from the realtime updates
+ */
+export const subscribeToImageQueue = (
+  postThemeId: string,
+  onUpdate: (data: any) => void
+): (() => void) => {
+  console.log(`[Frontend] Setting up image queue subscription for postThemeId: ${postThemeId}`);
+  
+  // Create a channel for the specific post theme
+  const channel = supabase
+    .channel(`image_queue_${postThemeId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*', // Listen for all events (INSERT, UPDATE, DELETE)
+        schema: 'public',
+        table: 'image_generation_queue',
+        filter: `post_theme_id=eq.${postThemeId}`
+      },
+      (payload) => {
+        console.log(`[Frontend] Image queue update received for postThemeId: ${postThemeId}`, payload);
+        onUpdate(payload.new);
+      }
+    )
+    .subscribe((status: any) => {
+      console.log(`[Frontend] Image queue subscription status for postThemeId: ${postThemeId}`, status);
+    });
+    
+  // Return unsubscribe function
+  return () => {
+    console.log(`[Frontend] Unsubscribing from image queue updates for postThemeId: ${postThemeId}`);
+    supabase.removeChannel(channel);
+  };
+};
+
+/**
+ * Creates a realtime subscription to the post_themes table for a specific post theme
+ * to monitor status changes, image updates, etc.
+ * 
+ * @param postThemeId The ID of the post theme to track
+ * @param onUpdate Callback function that will receive updated post theme data
+ * @returns A function to unsubscribe from the realtime updates
+ */
+export const subscribeToPostTheme = (
+  postThemeId: string,
+  onUpdate: (data: any) => void
+): (() => void) => {
+  console.log(`[Frontend] Setting up post theme subscription for postThemeId: ${postThemeId}`);
+  
+  // Create a channel for the specific post theme
+  const channel = supabase
+    .channel(`post_theme_${postThemeId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'post_themes',
+        filter: `id=eq.${postThemeId}`
+      },
+      (payload) => {
+        console.log(`[Frontend] Post theme update received for postThemeId: ${postThemeId}`, payload);
+        onUpdate(payload.new);
+      }
+    )
+    .subscribe((status: any) => {
+      console.log(`[Frontend] Post theme subscription status for postThemeId: ${postThemeId}`, status);
+    });
+    
+  // Return unsubscribe function
+  return () => {
+    console.log(`[Frontend] Unsubscribing from post theme updates for postThemeId: ${postThemeId}`);
+    supabase.removeChannel(channel);
+  };
+};
+
+/**
+ * Combines all subscriptions into a single function for convenience
+ * 
+ * @param postThemeId The ID of the post theme to track
+ * @param callbacks Object containing callback functions for different subscription types
+ * @returns A function to unsubscribe from all realtime updates
+ */
+export const subscribeToAllUpdates = (
+  postThemeId: string,
+  callbacks: {
+    onPublishQueueUpdate?: (data: any) => void;
+    onImageQueueUpdate?: (data: any) => void;
+    onPostThemeUpdate?: (data: any) => void;
+  }
+): (() => void) => {
+  console.log(`[Frontend] Setting up all subscriptions for postThemeId: ${postThemeId}`);
+  
+  const unsubscribers: (() => void)[] = [];
+  
+  if (callbacks.onPublishQueueUpdate) {
+    unsubscribers.push(subscribeToPublishQueue(postThemeId, callbacks.onPublishQueueUpdate));
+  }
+  
+  if (callbacks.onImageQueueUpdate) {
+    unsubscribers.push(subscribeToImageQueue(postThemeId, callbacks.onImageQueueUpdate));
+  }
+  
+  if (callbacks.onPostThemeUpdate) {
+    unsubscribers.push(subscribeToPostTheme(postThemeId, callbacks.onPostThemeUpdate));
+  }
+  
+  // Return a function that unsubscribes from all channels
+  return () => {
+    console.log(`[Frontend] Unsubscribing from all updates for postThemeId: ${postThemeId}`);
+    unsubscribers.forEach(unsubscribe => unsubscribe());
+  };
 }; 

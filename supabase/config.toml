@@ -12,7 +12,7 @@ entrypoint = "./functions/generate-post-ideas/index.ts"
 
 [functions.generate-and-publish]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/generate-and-publish/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -23,7 +23,7 @@ entrypoint = "./functions/generate-and-publish/index.ts"
 
 [functions.process-publish-queue]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/process-publish-queue/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -31,3 +31,33 @@ entrypoint = "./functions/process-publish-queue/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/process-publish-queue/*.html" ]
+
+[functions.image-trigger]
+enabled = true
+verify_jwt = false
+import_map = "./functions/image-trigger/deno.json"
+entrypoint = "./functions/image-trigger/index.ts"
+
+[functions.process-image-queue]
+enabled = true
+verify_jwt = false
+import_map = "./functions/process-image-queue/deno.json"
+entrypoint = "./functions/process-image-queue/index.ts"
+
+[functions.generate-content-v3]
+enabled = true
+verify_jwt = false
+import_map = "./functions/generate-content-v3/deno.json"
+entrypoint = "./functions/generate-content-v3/index.ts"
+
+[functions.wordpress-posts]
+enabled = true
+verify_jwt = false
+import_map = "./functions/wordpress-posts/deno.json"
+entrypoint = "./functions/wordpress-posts/index.ts"
+
+[functions.generate-image]
+enabled = true
+verify_jwt = false
+import_map = "./functions/generate-image/deno.json"
+entrypoint = "./functions/generate-image/index.ts"

@@ -342,4 +342,32 @@ serve(async (req) => {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + btoa(`
+        'Authorization': 'Basic ' + btoa(`${wpSettings.wp_username}:${wpSettings.wp_application_password}`),
+      },
+      body: JSON.stringify(postData)
+    });
+    
+    console.log('WordPress API response:', {
+      status: response.status,
+      ok: response.ok,
+      contentType: response.headers.get('content-type')
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('WordPress API request failed:', {
+        status: response.status,
+        error: errorText
+      });
+      throw new Error(`Failed to update post: ${errorText}`);
+    }
+    
+    const wpResponseData = await response.json();
+    console.log('WordPress API response data:', wpResponseData);
+    
+    return new Response(JSON.stringify(wpResponseData), { headers: corsHeaders });
+  } catch (error) {
+    console.error('Error in WordPress API request:', error);
+    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+  }
+})

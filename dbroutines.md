@@ -24,6 +24,48 @@
     "data_type": "uuid"
   },
   {
+    "routine_schema": "cron",
+    "routine_name": "alter_job",
+    "routine_type": "FUNCTION",
+    "data_type": "void"
+  },
+  {
+    "routine_schema": "cron",
+    "routine_name": "job_cache_invalidate",
+    "routine_type": "FUNCTION",
+    "data_type": "trigger"
+  },
+  {
+    "routine_schema": "cron",
+    "routine_name": "schedule",
+    "routine_type": "FUNCTION",
+    "data_type": "bigint"
+  },
+  {
+    "routine_schema": "cron",
+    "routine_name": "schedule",
+    "routine_type": "FUNCTION",
+    "data_type": "bigint"
+  },
+  {
+    "routine_schema": "cron",
+    "routine_name": "schedule_in_database",
+    "routine_type": "FUNCTION",
+    "data_type": "bigint"
+  },
+  {
+    "routine_schema": "cron",
+    "routine_name": "unschedule",
+    "routine_type": "FUNCTION",
+    "data_type": "boolean"
+  },
+  {
+    "routine_schema": "cron",
+    "routine_name": "unschedule",
+    "routine_type": "FUNCTION",
+    "data_type": "boolean"
+  },
+  {
     "routine_schema": "extensions",
     "routine_name": "algorithm_sign",
     "routine_type": "FUNCTION",
@@ -430,6 +472,66 @@
     "routine_name": "graphql",
     "routine_type": "FUNCTION",
     "data_type": "jsonb"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "_await_response",
+    "routine_type": "FUNCTION",
+    "data_type": "boolean"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "_encode_url_with_params_array",
+    "routine_type": "FUNCTION",
+    "data_type": "text"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "_http_collect_response",
+    "routine_type": "FUNCTION",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "_urlencode_string",
+    "routine_type": "FUNCTION",
+    "data_type": "text"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "check_worker_is_up",
+    "routine_type": "FUNCTION",
+    "data_type": "void"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "http_collect_response",
+    "routine_type": "FUNCTION",
+    "data_type": "USER-DEFINED"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "http_delete",
+    "routine_type": "FUNCTION",
+    "data_type": "bigint"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "http_get",
+    "routine_type": "FUNCTION",
+    "data_type": "bigint"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "http_post",
+    "routine_type": "FUNCTION",
+    "data_type": "bigint"
+  },
+  {
+    "routine_schema": "net",
+    "routine_name": "worker_restart",
+    "routine_type": "FUNCTION",
+    "data_type": "boolean"
   },
   {
     "routine_schema": "pgbouncer",
@@ -1348,6 +1450,12 @@
     "routine_name": "update_website_content_updated_at",
     "routine_type": "FUNCTION",
     "data_type": "trigger"
+  },
+  {
+    "routine_schema": "public",
+    "routine_name": "user_has_website_access",
+    "routine_type": "FUNCTION",
+    "data_type": "boolean"
   },
   {
     "routine_schema": "realtime",
