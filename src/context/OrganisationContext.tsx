@@ -21,18 +21,22 @@ interface OrganisationMembership {
 
 interface OrganisationContextType {
   organisation: Organisation | null;
-  hasOrganisation: boolean;
+  organizations: Organisation[];
   isLoading: boolean;
+  hasOrganisation: boolean;
   createOrganisation: (name: string) => Promise<boolean>;
   updateOrganisation: (id: string, updates: Partial<Organisation>) => Promise<boolean>;
+  completeNewUserSetup: (websiteUrl: string) => Promise<boolean>;
 }
 
 const OrganisationContext = createContext<OrganisationContextType>({
   organisation: null,
-  hasOrganisation: false,
+  organizations: [],
   isLoading: true,
+  hasOrganisation: false,
   createOrganisation: async () => false,
   updateOrganisation: async () => false,
+  completeNewUserSetup: async () => false,
 });
 
 export const useOrganisation = () => useContext(OrganisationContext);
@@ -256,13 +260,95 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   };
 
+  // Complete setup for new users
+  const completeNewUserSetup = async (websiteUrl: string): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      
+      // Check if user is authenticated
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        toast.error("You must be logged in to complete setup");
+        return false;
+      }
+
+      // Generate organization name from website URL
+      const orgName = websiteUrl
+        .replace(/^https?:\/\/(www\.)?/, '')
+        .split('.')[0]
+        .split(/[-_]/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
+      // Create organization
+      const { data: orgData, error: orgError } = await supabase
+        .from('organisations')
+        .insert([{ name: orgName }])
+        .select()
+        .single();
+      
+      if (orgError) throw orgError;
+
+      // Create user profile if it doesn't exist
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .upsert({
+          id: sessionData.session.user.id,
+          email: sessionData.session.user.email,
+          role: 'admin'
+        });
+      
+      if (profileError) throw profileError;
+
+      // Add user as admin to the organization
+      const { error: membershipError } = await supabase
+        .from('organisation_memberships')
+        .insert({
+          member_id: sessionData.session.user.id,
+          organisation_id: orgData.id,
+          role: 'admin'
+        });
+      
+      if (membershipError) throw membershipError;
+
+      // Create website
+      const { data: websiteData, error: websiteError } = await supabase
+        .from('websites')
+        .insert({
+          url: websiteUrl.trim(),
+          name: orgName,
+          organisation_id: orgData.id
+        })
+        .select()
+        .single();
+
+      if (websiteError) throw websiteError;
+
+      // Update state
+      setOrganisation(orgData);
+      setHasOrganisation(true);
+      setOrganizations(prev => [...prev, orgData]);
+      
+      toast.success("Setup completed successfully");
+      return true;
+    } catch (error) {
+      console.error("Error in completeNewUserSetup:", error);
+      toast.error("Failed to complete setup");
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <OrganisationContext.Provider value={{ 
-      organisation, 
-      hasOrganisation, 
-      isLoading, 
+    <OrganisationContext.Provider value={{
+      organisation,
+      organizations,
+      isLoading,
+      hasOrganisation,
       createOrganisation,
-      updateOrganisation
+      updateOrganisation,
+      completeNewUserSetup
     }}>
       {children}
     </OrganisationContext.Provider>

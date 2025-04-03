@@ -15,7 +15,7 @@ import { Helmet } from 'react-helmet-async';
 const OrganisationSetup = () => {
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { createOrganisation, hasOrganisation, isLoading } = useOrganisation();
+  const { completeNewUserSetup, hasOrganisation, isLoading } = useOrganisation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -48,58 +48,13 @@ const OrganisationSetup = () => {
     
     setIsSubmitting(true);
     try {
-      // Generate names from URL
-      const siteName = generateOrgName(websiteUrl);
-      console.log('Generated site name:', siteName);
+      const success = await completeNewUserSetup(websiteUrl);
       
-      const success = await createOrganisation(siteName);
-      console.log('Organization creation result:', success);
-      
-      if (!success) {
-        throw new Error('Failed to create organisation');
+      if (success) {
+        window.location.href = '/'; // Full page refresh to ensure all contexts are updated
+      } else {
+        throw new Error('Failed to complete setup');
       }
-
-      // Get the newly created organization
-      const { data: sessionData } = await supabase.auth.getSession();
-      console.log('Session data:', sessionData);
-      
-      if (!sessionData.session) {
-        throw new Error('No session found');
-      }
-
-      const { data: profileData, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('organisation_id')
-        .eq('id', sessionData.session.user.id)
-        .single();
-
-      console.log('Profile data:', profileData);
-      console.log('Profile error:', profileError);
-
-      if (profileError || !profileData?.organisation_id) {
-        throw new Error('Could not find organization ID');
-      }
-
-      // Then create the website
-      const { data: websiteData, error: websiteError } = await supabase
-        .from('websites')
-        .insert({
-          url: websiteUrl.trim(),
-          name: siteName,
-          organisation_id: profileData.organisation_id
-        })
-        .select()
-        .single();
-
-      console.log('Website data:', websiteData);
-      console.log('Website error:', websiteError);
-
-      if (websiteError) {
-        throw websiteError;
-      }
-
-      toast.success('Setup completed successfully');
-      window.location.href = '/'; // Full page refresh to ensure all contexts are updated
     } catch (error) {
       console.error('Error during setup:', error);
       toast.error('Failed to complete setup');

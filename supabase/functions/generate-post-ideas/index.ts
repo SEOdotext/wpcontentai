@@ -184,9 +184,15 @@ serve(async (req) => {
     // Format categories for the prompt with IDs
     const categoriesList = categories?.map(cat => `${cat.id}: ${cat.name}`).join('\n') || '';
 
-    const prompt = `Generate 5 unique blog post ideas for a website. Consider the following:
+    const prompt = `Generate 5 unique blog post ideas for a website, with each post focusing on the following primary keywords:
+${keywords.join(', ')}
 
-Keywords to include: ${allKeywords.join(', ')}
+Each post should:
+1. Be centered around these keywords and the keywords should be included in the title
+2. Explore different aspects or angles of these topics
+3. Provide unique value while maintaining the keyword focus
+
+Additional context:
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
 Subject matters: ${subject_matters.join(', ') || pubSettings?.subject_matters?.join(', ') || 'general'}
 
@@ -200,7 +206,7 @@ And these existing cornerstone content:
 ${existingContent.join('\n')}
 
 For each idea, provide:
-1. A compelling title
+1. A compelling title that incorporates the keywords naturally
 2. 3-5 relevant keywords (avoid using colons in keywords)
 3. A brief description (max 50 words - be very concise)
 4. Up to 3 most relevant category IDs from the available list above
