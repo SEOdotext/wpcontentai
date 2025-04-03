@@ -41,6 +41,17 @@ const OrganisationSetup = () => {
     };
     
     checkAuth();
+
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth state changed in OrganisationSetup:', session ? 'authenticated' : 'not authenticated');
+      setIsAuthenticated(!!session);
+    });
+
+    return () => {
+      console.log('OrganisationSetup cleanup');
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Log state changes
@@ -84,7 +95,23 @@ const OrganisationSetup = () => {
       
       if (success) {
         console.log('Setup successful, redirecting to home...');
-        window.location.href = '/'; // Full page refresh to ensure all contexts are updated
+        
+        // Generate expected website name (should match what's created in the backend)
+        const websiteName = websiteUrl
+          .replace(/^https?:\/\/(www\.)?/, '')
+          .split('.')[0]
+          .split(/[-_]/)
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        
+        console.log('Expected website name:', websiteName);
+        console.log('Website ID in localStorage:', localStorage.getItem('currentWebsiteId'));
+        
+        // Add delay to ensure all contexts update
+        setTimeout(() => {
+          console.log('Refreshing page to activate new organization and website');
+          window.location.href = '/'; // Full page refresh to ensure all contexts are updated
+        }, 1500);
       } else {
         console.error('Setup failed');
         throw new Error('Failed to complete setup');

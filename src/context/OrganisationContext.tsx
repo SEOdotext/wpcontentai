@@ -58,14 +58,21 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // Fetch user's organizations on mount
   useEffect(() => {
+    console.log('OrganisationProvider mounted');
+    
     const fetchOrganisations = async () => {
       try {
         setIsLoading(true);
         console.log('Starting to fetch organizations...');
         
         const { data: sessionData } = await supabase.auth.getSession();
+        console.log('Session data in fetchOrganisations:', sessionData);
+        
         if (!sessionData.session) {
           console.log('No session found, setting loading to false');
+          setOrganisation(null);
+          setOrganizations([]);
+          setHasOrganisation(false);
           setIsLoading(false);
           return;
         }
@@ -112,6 +119,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     };
 
+    // Initial fetch
     fetchOrganisations();
 
     // Subscribe to auth changes
@@ -127,8 +135,21 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log('OrganisationProvider cleanup');
+      subscription.unsubscribe();
+    };
   }, []);
+
+  // Log context value changes
+  useEffect(() => {
+    console.log('OrganisationContext value updated:', {
+      isLoading,
+      hasOrganisation,
+      organization: organisation,
+      organizations
+    });
+  }, [isLoading, hasOrganisation, organisation, organizations]);
 
   // Add function to switch organizations
   const switchOrganisation = async (orgId: string) => {
@@ -336,6 +357,10 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .single();
 
       if (websiteError) throw websiteError;
+
+      // Set the current website ID in localStorage
+      console.log('Setting currentWebsiteId in localStorage:', websiteData.id);
+      localStorage.setItem('currentWebsiteId', websiteData.id);
 
       // Update state
       setOrganisation(orgData);

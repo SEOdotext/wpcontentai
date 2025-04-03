@@ -38,11 +38,16 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchWebsites = async () => {
     try {
+      console.log("WebsitesContext: Starting to fetch websites...");
+      setIsLoading(true);
+      
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        console.log("WebsitesContext: No authenticated user found");
         setWebsites([]);
         return;
       }
+      console.log("WebsitesContext: Authenticated user found", user.id);
 
       // First get the user's organisation_id and role from organisation_memberships
       const { data: membership, error: membershipError } = await supabase
@@ -52,18 +57,18 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .single();
 
       if (membershipError) {
-        console.error('Error fetching membership:', membershipError);
+        console.error('WebsitesContext: Error fetching membership:', membershipError);
         throw membershipError;
       }
 
       if (!membership) {
-        console.log('No organization membership found for user');
+        console.log('WebsitesContext: No organization membership found for user');
         setWebsites([]);
         return;
       }
 
-      console.log('User membership data:', membership);
-      console.log('User role:', membership.role);
+      console.log('WebsitesContext: User membership data:', membership);
+      console.log('WebsitesContext: User role:', membership.role);
       
       // Store the user's role in localStorage for access across the app
       localStorage.setItem('userRole', membership.role);
@@ -76,27 +81,33 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .single();
 
       if (orgError) {
+        console.error('WebsitesContext: Error fetching organization:', orgError);
         throw orgError;
       }
+      
+      console.log('WebsitesContext: Organization data:', orgData);
 
       let websitesData;
 
       // If the user is an admin, they can see all websites in the organization
       if (membership.role === 'admin') {
+        console.log('WebsitesContext: User is admin, fetching all organization websites');
         const { data, error } = await supabase
           .from('websites')
           .select('*')
           .eq('organisation_id', membership.organisation_id);
 
         if (error) {
+          console.error('WebsitesContext: Error fetching websites:', error);
           throw error;
         }
         
         websitesData = data;
+        console.log('WebsitesContext: Fetched websites:', websitesData);
       } 
       // If the user is a member, they can only see websites they have access to
       else {
-        console.log('User is a member, fetching accessible websites');
+        console.log('WebsitesContext: User is a member, fetching accessible websites');
         
         // Try an alternative approach - first try to get the user's team data which includes website access
         const { data: teamData, error: teamError } = await supabase.rpc('get_team_data', {
@@ -104,15 +115,15 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         });
         
         if (teamError) {
-          console.error('Error fetching team data:', teamError);
+          console.error('WebsitesContext: Error fetching team data:', teamError);
         } else if (teamData && teamData.team_members) {
-          console.log('Found team data:', teamData);
+          console.log('WebsitesContext: Found team data:', teamData);
           
           // Find the current user in the team members
           const currentUserData = teamData.team_members.find((member: any) => member.id === user.id);
           
           if (currentUserData && currentUserData.website_access && currentUserData.website_access.length > 0) {
-            console.log('Found user website access via team data:', currentUserData.website_access);
+            console.log('WebsitesContext: Found user website access via team data:', currentUserData.website_access);
             
             // Extract website info directly from the team data
             const userWebsites = currentUserData.website_access.map((access: any) => ({
@@ -120,7 +131,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               organisation_name: orgData.name
             }));
             
-            console.log('Extracted websites for user:', userWebsites);
+            console.log('WebsitesContext: Extracted websites for user:', userWebsites);
             
             if (userWebsites.length > 0) {
               setWebsites(userWebsites);
@@ -132,11 +143,11 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 // Find the website with the saved ID among the accessible websites
                 const savedWebsite = userWebsites.find(website => website.id === savedWebsiteId);
                 if (savedWebsite) {
-                  console.log("Restoring previously selected website:", savedWebsite.name);
+                  console.log("WebsitesContext: Restoring previously selected website:", savedWebsite.name);
                   setCurrentWebsite(savedWebsite as Website);
                 } else if (userWebsites.length > 0) {
                   // If the saved website is no longer accessible, use the first accessible one
-                  console.log("Saved website ID not accessible or not found, using first website");
+                  console.log("WebsitesContext: Saved website ID not accessible or not found, using first website");
                   setCurrentWebsite(userWebsites[0] as Website);
                 }
               } else if (userWebsites.length > 0) {
@@ -158,14 +169,14 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .eq('user_id', user.id);
 
         if (accessError) {
-          console.error('Error fetching website access:', accessError);
+          console.error('WebsitesContext: Error fetching website access:', accessError);
           throw accessError;
         }
 
-        console.log('Accessible websites:', accessibleWebsites);
+        console.log('WebsitesContext: Accessible websites:', accessibleWebsites);
 
         if (!accessibleWebsites || accessibleWebsites.length === 0) {
-          console.log('No website access found for user');
+          console.log('WebsitesContext: No website access found for user');
           setWebsites([]);
           setCurrentWebsite(null);
           return;
@@ -173,7 +184,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
         // Extract website IDs the user has access to
         const websiteIds = accessibleWebsites.map(access => access.website_id);
-        console.log('Website IDs user has access to:', websiteIds);
+        console.log('WebsitesContext: Website IDs user has access to:', websiteIds);
 
         // Get the actual website details
         const { data, error } = await supabase
@@ -182,11 +193,11 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .in('id', websiteIds);
 
         if (error) {
-          console.error('Error fetching websites by IDs:', error);
+          console.error('WebsitesContext: Error fetching websites by IDs:', error);
           throw error;
         }
 
-        console.log('Fetched websites for member:', data);
+        console.log('WebsitesContext: Fetched websites for member:', data);
         websitesData = data;
       }
 
@@ -195,55 +206,102 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         ...website,
         organisation_name: orgData.name
       }));
+      
+      console.log('WebsitesContext: Websites with organization data:', websitesWithOrg);
 
       setWebsites(websitesWithOrg || []);
 
       // Check if there's a saved website ID in localStorage
       const savedWebsiteId = localStorage.getItem('currentWebsiteId');
+      console.log('WebsitesContext: Saved website ID from localStorage:', savedWebsiteId);
       
       if (savedWebsiteId) {
         // Find the website with the saved ID among the accessible websites
         const savedWebsite = websitesWithOrg.find(website => website.id === savedWebsiteId);
         if (savedWebsite) {
-          console.log("Restoring previously selected website:", savedWebsite.name);
+          console.log("WebsitesContext: Restoring previously selected website:", savedWebsite.name);
           setCurrentWebsite(savedWebsite as Website);
         } else if (websitesWithOrg.length > 0) {
           // If the saved website is no longer accessible, use the first accessible one
-          console.log("Saved website ID not accessible or not found, using first website");
+          console.log("WebsitesContext: Saved website ID not accessible or not found, using first website");
           setCurrentWebsite(websitesWithOrg[0] as Website);
+          localStorage.setItem('currentWebsiteId', websitesWithOrg[0].id);
         } else {
           // Reset current website if user has no access to any websites
+          console.log("WebsitesContext: No accessible websites found, resetting current website");
           setCurrentWebsite(null);
         }
-      } else if (websitesWithOrg.length > 0 && !currentWebsite) {
-        // Set first website as current if none is saved and none is selected
+      } else if (websitesWithOrg.length > 0) {
+        // Set first website as current if none is saved
+        console.log("WebsitesContext: No saved website ID, using first website:", websitesWithOrg[0].name);
         setCurrentWebsite(websitesWithOrg[0] as Website);
+        localStorage.setItem('currentWebsiteId', websitesWithOrg[0].id);
+      } else {
+        console.log("WebsitesContext: No websites available for this user");
       }
     } catch (err) {
+      console.error("WebsitesContext: Error fetching websites:", err);
       setError(err instanceof Error ? err : new Error('Failed to fetch websites'));
       toast.error('Failed to load websites. Using sample data instead.');
       
       // Fall back to sample data if database fetch fails
       provideSampleData();
     } finally {
+      console.log('WebsitesContext: Setting loading to false');
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchWebsites();
+    console.log("WebsitesContext: Provider mounted");
+    
+    // Force immediate fetch on mount
+    (async () => {
+      console.log("WebsitesContext: Initial fetch on mount");
+      await fetchWebsites();
+    })();
 
+    // Set up subscription to websites table changes
     const subscription = supabase
       .channel('websites')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'websites' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'websites' }, (payload) => {
+        console.log("WebsitesContext: Website table changed", payload);
         fetchWebsites();
       })
       .subscribe();
 
+    // Also set up subscription to organisation_memberships table changes
+    const membershipSubscription = supabase
+      .channel('organisation_memberships')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'organisation_memberships' }, (payload) => {
+        console.log("WebsitesContext: Organisation memberships changed", payload);
+        fetchWebsites();
+      })
+      .subscribe();
+
+    // Set up auth state change listener
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("WebsitesContext: Auth state changed", event, session?.user.id);
+      fetchWebsites();
+    });
+
     return () => {
+      console.log("WebsitesContext: Provider unmounting, cleaning up subscriptions");
       subscription.unsubscribe();
+      membershipSubscription.unsubscribe();
+      authSubscription.unsubscribe();
     };
   }, []);
+
+  // Log website state changes for debugging
+  useEffect(() => {
+    console.log("WebsitesContext: Current websites state:", {
+      websites,
+      currentWebsite,
+      currentWebsiteId: currentWebsite?.id,
+      savedWebsiteId: localStorage.getItem('currentWebsiteId')
+    });
+  }, [websites, currentWebsite]);
 
   const provideSampleData = () => {
     const sampleData: Website[] = [
@@ -314,11 +372,33 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const handleSetCurrentWebsite = (website: Website) => {
-    console.log("Setting current website:", website.name, "with ID:", website.id);
+  const handleSetCurrentWebsite = (website: Website | null) => {
+    // Don't proceed if the website is null or undefined
+    if (!website) {
+      console.log("WebsitesContext: Attempted to set null website");
+      return;
+    }
+    
+    console.log("WebsitesContext: Setting current website:", website.name, "with ID:", website.id);
+    
+    // Set the current website in state
     setCurrentWebsite(website);
+    
+    // Always save to localStorage to ensure persistence between page loads
     localStorage.setItem('currentWebsiteId', website.id);
-    console.log("Saved website ID to localStorage:", website.id);
+    console.log("WebsitesContext: Saved website ID to localStorage:", website.id);
+    
+    // Optional: Store additional website data for debugging
+    try {
+      localStorage.setItem('currentWebsiteName', website.name);
+      localStorage.setItem('currentWebsiteData', JSON.stringify({
+        id: website.id,
+        name: website.name,
+        url: website.url
+      }));
+    } catch (error) {
+      console.error("WebsitesContext: Error saving website data to localStorage:", error);
+    }
   };
 
   const deleteWebsite = async (id: string) => {
