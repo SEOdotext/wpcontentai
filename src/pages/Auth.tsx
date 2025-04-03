@@ -27,7 +27,7 @@ const Auth = () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
         setIsAuthenticated(true);
-        navigate('/');
+        navigate('/dashboard');
       } else {
         setIsAuthenticated(false);
       }
@@ -38,7 +38,7 @@ const Auth = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session) {
-          navigate('/');
+          navigate('/dashboard');
         }
       }
     );
@@ -47,7 +47,14 @@ const Auth = () => {
   }, [navigate]);
 
   useEffect(() => {
+    // Check for signup parameter in URL
     const query = new URLSearchParams(window.location.search);
+    const signupParam = query.get('signup');
+    if (signupParam === 'true') {
+      setMode('signup');
+    }
+
+    // Check for error parameters
     const error = query.get('error');
     const errorDescription = query.get('error_description');
     
@@ -83,7 +90,7 @@ const Auth = () => {
         if (error) throw error;
         
         toast.success('Successfully logged in');
-        navigate('/');
+        navigate('/dashboard');
       }
     } catch (error) {
       console.error('Authentication error:', error);
@@ -142,7 +149,7 @@ const Auth = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: import.meta.env.DEV ? 'http://localhost:8081/' : `${window.location.origin}/`
+          redirectTo: import.meta.env.DEV ? 'http://localhost:8081/dashboard' : `${window.location.origin}/dashboard`
         }
       });
       
@@ -170,10 +177,10 @@ const Auth = () => {
   if (mode === 'reset') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Reset Password</CardTitle>
-            <CardDescription>
+        <Card className="w-full max-w-md shadow-lg">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold">Reset Password</CardTitle>
+            <CardDescription className="text-center">
               Enter your email address and we'll send you a link to reset your password
             </CardDescription>
           </CardHeader>
@@ -185,21 +192,22 @@ const Auth = () => {
                 </Alert>
               )}
               
-              <form onSubmit={handlePasswordReset} className="space-y-4">
+              <form onSubmit={handlePasswordReset} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="reset-email">Email</Label>
+                  <Label htmlFor="reset-email" className="text-sm font-medium">Email</Label>
                   <Input
                     id="reset-email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Enter your email"
+                    className="h-10"
                     required
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full flex items-center gap-2" 
+                  className="w-full flex items-center justify-center gap-2 h-10" 
                   disabled={resetLoading}
                 >
                   {resetLoading ? (
@@ -207,16 +215,16 @@ const Auth = () => {
                   ) : (
                     <Mail className="h-4 w-4" />
                   )}
-                  {resetLoading ? 'Sending...' : 'Send Reset Link'}
+                  <span>{resetLoading ? 'Sending...' : 'Send Reset Link'}</span>
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
-                  className="w-full flex items-center gap-2"
+                  className="w-full flex items-center justify-center gap-2"
                   onClick={() => setMode('login')}
                 >
                   <ArrowLeft className="h-4 w-4" />
-                  Back to Login
+                  <span>Back to Login</span>
                 </Button>
               </form>
             </div>
@@ -228,10 +236,10 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>{mode === 'login' ? 'Login' : 'Sign Up'}</CardTitle>
-          <CardDescription>
+      <Card className="w-full max-w-md shadow-lg">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold">{mode === 'login' ? 'Login' : 'Sign Up'}</CardTitle>
+          <CardDescription className="text-center">
             {mode === 'login' 
               ? 'Enter your credentials to access your account' 
               : 'Create a new account to get started'}
@@ -248,7 +256,7 @@ const Auth = () => {
             <Button 
               type="button" 
               variant="outline" 
-              className="w-full flex items-center gap-2" 
+              className="w-full flex items-center justify-center gap-2 h-10" 
               onClick={handleGoogleSignIn}
               disabled={googleLoading}
             >
@@ -257,7 +265,7 @@ const Auth = () => {
               ) : (
                 <FcGoogle className="h-5 w-5" />
               )}
-              {mode === 'login' ? 'Sign in with Google' : 'Sign up with Google'}
+              <span>{mode === 'login' ? 'Sign in with Google' : 'Sign up with Google'}</span>
             </Button>
             
             <div className="relative py-2">
@@ -271,26 +279,28 @@ const Auth = () => {
               </div>
             </div>
             
-            <form onSubmit={handleAuth} className="space-y-4">
+            <form onSubmit={handleAuth} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-sm font-medium">Email</Label>
                 <Input
                   id="email"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email"
+                  className="h-10"
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
+                  className="h-10"
                   required
                 />
                 {mode === 'login' && (
@@ -308,7 +318,7 @@ const Auth = () => {
               </div>
               <Button 
                 type="submit" 
-                className="w-full flex items-center gap-2" 
+                className="w-full flex items-center justify-center gap-2 h-10" 
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -316,7 +326,7 @@ const Auth = () => {
                 ) : (
                   <Mail className="h-4 w-4" />
                 )}
-                {isLoading ? 'Please wait...' : mode === 'login' ? 'Login with Email' : 'Sign Up with Email'}
+                <span>{isLoading ? 'Please wait...' : mode === 'login' ? 'Login with Email' : 'Sign Up with Email'}</span>
               </Button>
               <Button
                 type="button"
