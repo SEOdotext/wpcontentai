@@ -140,7 +140,7 @@ const Index = () => {
                         <Button 
                           className="mt-2 w-full" 
                           variant="outline"
-                          onClick={() => navigate('/content-calendar')}
+                          onClick={() => navigate('/calendar')}
                         >
                           <Calendar className="w-4 h-4 mr-2" />
                           View Content Calendar
@@ -153,7 +153,7 @@ const Index = () => {
                           <span>No upcoming content found</span>
                         </div>
                         <Button 
-                          onClick={() => navigate('/content-calendar')} 
+                          onClick={() => navigate('/calendar')} 
                           variant="outline"
                         >
                           <Calendar className="w-4 h-4 mr-2" />
