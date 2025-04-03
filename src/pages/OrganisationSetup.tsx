@@ -85,6 +85,7 @@ const OrganisationSetup = () => {
     return <Navigate to="/" replace />;
   }
 
+  // Only show the setup form if user is authenticated and has no organization
   return (
     <>
       <Helmet>
@@ -93,48 +94,44 @@ const OrganisationSetup = () => {
       </Helmet>
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
-          <CardHeader className="text-center space-y-4">
-            <div className="w-16 h-16 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
-              <Globe className="h-8 w-8 text-primary" />
-            </div>
-            <div className="space-y-2">
-              <CardTitle className="text-2xl">Welcome to Your Content Platform</CardTitle>
-              <CardDescription>
-                Let's get started by adding your website
-              </CardDescription>
-            </div>
+          <CardHeader>
+            <CardTitle>Complete Your Setup</CardTitle>
+            <CardDescription>
+              Enter your website URL to get started with ContentGardener.ai
+            </CardDescription>
           </CardHeader>
-          <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-6">
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="websiteUrl" className="text-center block">Website URL</Label>
+                <Label htmlFor="website-url">Website URL</Label>
                 <Input
-                  id="websiteUrl"
+                  id="website-url"
+                  type="url"
                   value={websiteUrl}
                   onChange={(e) => setWebsiteUrl(e.target.value)}
                   placeholder="https://example.com"
-                  type="url"
-                  className="text-center"
                   required
                 />
-                <p className="text-sm text-muted-foreground text-center">
-                  Your organization will be created automatically based on your website URL
-                </p>
               </div>
-            </CardContent>
-            <CardFooter className="flex flex-col">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isSubmitting}
+              >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Setting up...
                   </>
                 ) : (
-                  'Complete Setup'
+                  <>
+                    <Globe className="mr-2 h-4 w-4" />
+                    Complete Setup
+                  </>
                 )}
               </Button>
-            </CardFooter>
-          </form>
+            </form>
+          </CardContent>
         </Card>
         <Toaster />
       </div>

@@ -19,6 +19,14 @@ interface OrganisationMembership {
   };
 }
 
+interface OrganisationResponse {
+  organisation: {
+    id: string;
+    name: string;
+    created_at: string;
+  };
+}
+
 interface OrganisationContextType {
   organisation: Organisation | null;
   organizations: Organisation[];
@@ -43,78 +51,72 @@ export const useOrganisation = () => useContext(OrganisationContext);
 
 export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [organisation, setOrganisation] = useState<Organisation | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [hasOrganisation, setHasOrganisation] = useState<boolean>(false);
   const [organizations, setOrganizations] = useState<Organisation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasOrganisation, setHasOrganisation] = useState(false);
   const navigate = useNavigate();
 
-  // Load the organisation on mount
+  // Fetch user's organizations on mount
   useEffect(() => {
-    const fetchOrganisation = async () => {
+    const fetchOrganisations = async () => {
       try {
         setIsLoading(true);
         
-        // Check if user is authenticated
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData.session) {
-          console.log("User not authenticated, cannot fetch organisation");
           setIsLoading(false);
           return;
         }
-        
-        // Get user's organization memberships
-        const { data: memberships, error: membershipError } = await supabase
+
+        const { data: orgs, error } = await supabase
           .from('organisation_memberships')
           .select(`
-            organisation_id,
-            role,
             organisation:organisations (
               id,
               name,
               created_at
             )
           `)
-          .eq('member_id', sessionData.session.user.id) as { data: OrganisationMembership[] | null, error: any };
-        
-        if (membershipError) {
-          console.error("Error fetching organization memberships:", membershipError);
-          console.error("Full error details:", JSON.stringify(membershipError, null, 2));
-          setIsLoading(false);
-          return;
-        }
-        
-        if (!memberships || memberships.length === 0) {
-          console.log("User has no organizations");
+          .eq('member_id', sessionData.session.user.id) as { data: OrganisationResponse[] | null, error: any };
+
+        if (error) throw error;
+
+        if (orgs && orgs.length > 0) {
+          const formattedOrgs = orgs.map(org => ({
+            id: org.organisation.id,
+            name: org.organisation.name,
+            created_at: org.organisation.created_at
+          } as Organisation));
+          
+          setOrganizations(formattedOrgs);
+          setOrganisation(formattedOrgs[0]);
+          setHasOrganisation(true);
+        } else {
           setHasOrganisation(false);
-          setIsLoading(false);
-          return;
         }
-        
-        // Set the first organization as the current one
-        const currentOrg = {
-          id: memberships[0].organisation.id,
-          name: memberships[0].organisation.name,
-          created_at: memberships[0].organisation.created_at
-        } as Organisation;
-        setOrganisation(currentOrg);
-        setHasOrganisation(true);
-        
-        // Store all organizations for later use
-        setOrganizations(memberships.map(m => ({
-          id: m.organisation.id,
-          name: m.organisation.name,
-          created_at: m.organisation.created_at
-        } as Organisation)));
-        
       } catch (error) {
-        console.error("Error checking organization:", error);
-        setHasOrganisation(false);
+        console.error("Error fetching organisations:", error);
+        toast.error("Failed to load organizations");
       } finally {
         setIsLoading(false);
       }
     };
-    
-    fetchOrganisation();
+
+    fetchOrganisations();
+
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        await fetchOrganisations();
+      } else {
+        setOrganisation(null);
+        setOrganizations([]);
+        setHasOrganisation(false);
+        setIsLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Add function to switch organizations
