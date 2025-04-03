@@ -61,13 +61,16 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const fetchOrganisations = async () => {
       try {
         setIsLoading(true);
+        console.log('Starting to fetch organizations...');
         
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData.session) {
+          console.log('No session found, setting loading to false');
           setIsLoading(false);
           return;
         }
 
+        console.log('Fetching organizations for user:', sessionData.session.user.id);
         const { data: orgs, error } = await supabase
           .from('organisation_memberships')
           .select(`
@@ -79,8 +82,12 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           `)
           .eq('member_id', sessionData.session.user.id) as { data: OrganisationResponse[] | null, error: any };
 
-        if (error) throw error;
+        if (error) {
+          console.error('Error fetching organizations:', error);
+          throw error;
+        }
 
+        console.log('Organizations fetched:', orgs);
         if (orgs && orgs.length > 0) {
           const formattedOrgs = orgs.map(org => ({
             id: org.organisation.id,
@@ -92,12 +99,15 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           setOrganisation(formattedOrgs[0]);
           setHasOrganisation(true);
         } else {
+          console.log('No organizations found for user');
           setHasOrganisation(false);
         }
       } catch (error) {
         console.error("Error fetching organisations:", error);
         toast.error("Failed to load organizations");
+        setHasOrganisation(false);
       } finally {
+        console.log('Setting loading to false');
         setIsLoading(false);
       }
     };
@@ -106,6 +116,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     // Subscribe to auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      console.log('Auth state changed:', session ? 'authenticated' : 'not authenticated');
       if (session) {
         await fetchOrganisations();
       } else {
