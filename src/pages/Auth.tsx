@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Separator } from "@/components/ui/separator";
 import { Mail, Loader2, ArrowLeft } from 'lucide-react';
@@ -18,43 +18,68 @@ const Auth = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  // Check if user is already authenticated
   useEffect(() => {
+    // Show the form quickly no matter what
+    const formTimeout = setTimeout(() => {
+      setIsCheckingAuth(false);
+    }, 500);
+
     const checkAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setIsAuthenticated(true);
-        navigate('/dashboard');
-      } else {
-        setIsAuthenticated(false);
+      try {
+        console.log('Auth: Checking if user is already logged in');
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Auth: Session error:', error);
+          setIsCheckingAuth(false);
+          return;
+        }
+        
+        if (data.session) {
+          console.log('Auth: User is already authenticated, redirecting to dashboard');
+          navigate('/dashboard', { replace: true });
+          return;
+        }
+        
+        console.log('Auth: No active session, showing login form');
+        setIsCheckingAuth(false);
+      } catch (error) {
+        console.error('Auth: Error checking auth:', error);
+        setIsCheckingAuth(false);
       }
     };
     
     checkAuth();
     
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session) {
-          navigate('/dashboard');
-        }
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log('Auth: Auth state changed, event:', _event, 'session:', session ? 'exists' : 'null', 'session ID:', session?.user?.id);
+      
+      if (session && (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED')) {
+        console.log('Auth: User authenticated, redirecting to dashboard');
+        navigate('/dashboard', { replace: true });
       }
-    );
+    });
     
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(formTimeout);
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
+  // Check URL parameters for signup mode or errors
   useEffect(() => {
-    // Check for signup parameter in URL
     const query = new URLSearchParams(window.location.search);
     const signupParam = query.get('signup');
     if (signupParam === 'true') {
       setMode('signup');
     }
 
-    // Check for error parameters
     const error = query.get('error');
     const errorDescription = query.get('error_description');
     
@@ -90,7 +115,6 @@ const Auth = () => {
         if (error) throw error;
         
         toast.success('Successfully logged in');
-        navigate('/dashboard');
       }
     } catch (error) {
       console.error('Authentication error:', error);
@@ -114,7 +138,6 @@ const Auth = () => {
     }
     
     try {
-      // Log the reset attempt for debugging
       console.log(`Attempting password reset for: ${email}`);
       
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -129,7 +152,6 @@ const Auth = () => {
         description: 'Check your email for the password reset link',
       });
       
-      // Return to login mode after successful request
       setMode('login');
     } catch (error) {
       console.error('Password reset error:', error);
@@ -165,7 +187,7 @@ const Auth = () => {
     }
   };
 
-  if (isAuthenticated === null) {
+  if (isCheckingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

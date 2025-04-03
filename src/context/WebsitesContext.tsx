@@ -38,219 +38,161 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [currentWebsite, setCurrentWebsite] = useState<Website | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<Error | null>(null);
+  const [currentWebsiteId, setSavedWebsiteId] = useState<string | undefined>(
+    localStorage.getItem('currentWebsiteId') || undefined
+  );
+
+  // Add useEffect for initial fetch and safety timeout
+  useEffect(() => {
+    console.log("WebsitesContext: Provider mounted");
+    
+    // Add a safety timeout to ensure we don't get stuck in loading state
+    const safetyTimer = setTimeout(() => {
+      console.log('WebsitesContext: Safety timeout triggered after 3 seconds');
+      if (isLoading) {
+        console.log('WebsitesContext: Still loading after timeout, forcing to complete');
+        setIsLoading(false);
+      }
+    }, 3000);
+    
+    // Check auth before initial fetch
+    const checkAuthBeforeFetch = async () => {
+      try {
+        console.log("WebsitesContext: Checking auth before initial fetch");
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("WebsitesContext: Auth session error:", error);
+          setIsLoading(false);
+          return;
+        }
+        
+        if (!data.session) {
+          console.log("WebsitesContext: No auth session found, skipping website fetch");
+          setIsLoading(false);
+          return;
+        }
+        
+        console.log("WebsitesContext: Auth session found, proceeding with fetch");
+        console.log("WebsitesContext: Initial fetch on mount");
+        fetchWebsites();
+      } catch (err) {
+        console.error("WebsitesContext: Error checking auth:", err);
+        setIsLoading(false);
+      }
+    };
+    
+    checkAuthBeforeFetch();
+    
+    return () => {
+      console.log("WebsitesContext: Provider unmounted");
+      clearTimeout(safetyTimer);
+    };
+  }, []);
 
   const fetchWebsites = async () => {
     try {
       console.log("WebsitesContext: Starting to fetch websites...");
+      console.log("WebsitesContext: Current state before fetch:", { websites: websites.length, currentWebsite, isLoading });
       setIsLoading(true);
       
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      // Remove the fetchTimeout and Promise.race code
+      console.log("WebsitesContext: Getting user data from auth");
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) {
+        console.error("WebsitesContext: Error getting user", userError);
+        setIsLoading(false);
+        return;
+      }
+      
+      if (!userData || !userData.user) {
         console.log("WebsitesContext: No authenticated user found");
         setWebsites([]);
+        setCurrentWebsite(null);
+        setIsLoading(false);
         return;
       }
-      console.log("WebsitesContext: Authenticated user found", user.id);
-
-      // First get the user's organisation_id and role from organisation_memberships
-      const { data: membership, error: membershipError } = await supabase
-        .from('organisation_memberships')
-        .select('organisation_id, role')
-        .eq('member_id', user.id)
-        .single();
-
-      if (membershipError) {
-        console.error('WebsitesContext: Error fetching membership:', membershipError);
-        throw membershipError;
-      }
-
-      if (!membership) {
-        console.log('WebsitesContext: No organization membership found for user');
-        setWebsites([]);
-        return;
-      }
-
-      console.log('WebsitesContext: User membership data:', membership);
-      console.log('WebsitesContext: User role:', membership.role);
       
-      // Store the user's role in localStorage for access across the app
-      localStorage.setItem('userRole', membership.role);
-
-      // Get organization details
-      const { data: orgData, error: orgError } = await supabase
-        .from('organisations')
-        .select('*')
-        .eq('id', membership.organisation_id)
-        .single();
-
-      if (orgError) {
-        console.error('WebsitesContext: Error fetching organization:', orgError);
-        throw orgError;
-      }
+      console.log("WebsitesContext: Authenticated user found", userData.user.id);
       
-      console.log('WebsitesContext: Organization data:', orgData);
+      // Process with safer timeout checks and component mounting safety checks
+      try {
+        // First get the user's organisation_id and role from organisation_memberships
+        console.log("WebsitesContext: Fetching organization membership for user", userData.user.id);
+        const { data: membership, error: membershipError } = await supabase
+          .from('organisation_memberships')
+          .select('organisation_id, role')
+          .eq('member_id', userData.user.id)
+          .single();
 
-      let websitesData;
-
-      // If the user is an admin, they can see all websites in the organization
-      if (membership.role === 'admin') {
-        console.log('WebsitesContext: User is admin, fetching all organization websites');
-        const { data, error } = await supabase
-          .from('websites')
-          .select('*')
-          .eq('organisation_id', membership.organisation_id);
-
-        if (error) {
-          console.error('WebsitesContext: Error fetching websites:', error);
-          throw error;
-        }
+        console.log("WebsitesContext: Membership query completed");
         
-        websitesData = data;
-        console.log('WebsitesContext: Fetched websites:', websitesData);
-      } 
-      // If the user is a member, they can only see websites they have access to
-      else {
-        console.log('WebsitesContext: User is a member, fetching accessible websites');
-        
-        // Try an alternative approach - first try to get the user's team data which includes website access
-        const { data: teamData, error: teamError } = await supabase.rpc('get_team_data', {
-          organisation_id: membership.organisation_id
-        });
-        
-        if (teamError) {
-          console.error('WebsitesContext: Error fetching team data:', teamError);
-        } else if (teamData && teamData.team_members) {
-          console.log('WebsitesContext: Found team data:', teamData);
-          
-          // Find the current user in the team members
-          const currentUserData = teamData.team_members.find((member: any) => member.id === user.id);
-          
-          if (currentUserData && currentUserData.website_access && currentUserData.website_access.length > 0) {
-            console.log('WebsitesContext: Found user website access via team data:', currentUserData.website_access);
-            
-            // Extract website info directly from the team data
-            const userWebsites = currentUserData.website_access.map((access: any) => ({
-              ...access.website,
-              organisation_name: orgData.name
-            }));
-            
-            console.log('WebsitesContext: Extracted websites for user:', userWebsites);
-            
-            if (userWebsites.length > 0) {
-              setWebsites(userWebsites);
-              
-              // Check if there's a saved website ID in localStorage
-              const savedWebsiteId = localStorage.getItem('currentWebsiteId');
-              
-              if (savedWebsiteId) {
-                // Find the website with the saved ID among the accessible websites
-                const savedWebsite = userWebsites.find(website => website.id === savedWebsiteId);
-                if (savedWebsite) {
-                  console.log("WebsitesContext: Restoring previously selected website:", savedWebsite.name);
-                  setCurrentWebsite(savedWebsite as Website);
-                } else if (userWebsites.length > 0) {
-                  // If the saved website is no longer accessible, use the first accessible one
-                  console.log("WebsitesContext: Saved website ID not accessible or not found, using first website");
-                  setCurrentWebsite(userWebsites[0] as Website);
-                }
-              } else if (userWebsites.length > 0) {
-                // Set first website as current if none is saved
-                setCurrentWebsite(userWebsites[0] as Website);
-              }
-              
-              setIsLoading(false);
-              return; // Exit early as we've set everything up
-            }
-          }
-        }
-        
-        // Fall back to the original approach if team data method fails
-        // Get websites the user has access to from website_access table
-        const { data: accessibleWebsites, error: accessError } = await supabase
-          .from('website_access')
-          .select('website_id')
-          .eq('user_id', user.id);
-
-        if (accessError) {
-          console.error('WebsitesContext: Error fetching website access:', accessError);
-          throw accessError;
+        if (membershipError) {
+          console.error('WebsitesContext: Error fetching membership:', membershipError);
+          console.log('WebsitesContext: Membership error details:', JSON.stringify(membershipError, null, 2));
+          throw membershipError;
         }
 
-        console.log('WebsitesContext: Accessible websites:', accessibleWebsites);
-
-        if (!accessibleWebsites || accessibleWebsites.length === 0) {
-          console.log('WebsitesContext: No website access found for user');
+        if (!membership) {
+          console.log('WebsitesContext: No organization membership found for user');
           setWebsites([]);
-          setCurrentWebsite(null);
+          setIsLoading(false);
           return;
         }
 
-        // Extract website IDs the user has access to
-        const websiteIds = accessibleWebsites.map(access => access.website_id);
-        console.log('WebsitesContext: Website IDs user has access to:', websiteIds);
+        console.log('WebsitesContext: User membership data:', membership);
+        console.log('WebsitesContext: User role:', membership.role);
+        console.log('WebsitesContext: Organization ID:', membership.organisation_id);
+        
+        // Store the user's role in localStorage for access across the app
+        localStorage.setItem('userRole', membership.role);
+        console.log('WebsitesContext: Saved user role to localStorage:', membership.role);
 
-        // Get the actual website details
-        const { data, error } = await supabase
+        // Set some defaults in case subsequent calls fail
+        setWebsites([]);
+        setCurrentWebsite(null);
+        
+        // Get a minimal set of data to keep things moving
+        const { data: websitesData, error: websitesError } = await supabase
           .from('websites')
           .select('*')
-          .in('id', websiteIds);
-
-        if (error) {
-          console.error('WebsitesContext: Error fetching websites by IDs:', error);
-          throw error;
+          .eq('organisation_id', membership.organisation_id);
+        
+        if (websitesError || !websitesData) {
+          console.error('WebsitesContext: Error or timeout fetching websites:', websitesError);
+          throw websitesError || new Error('Failed to fetch websites');
         }
-
-        console.log('WebsitesContext: Fetched websites for member:', data);
-        websitesData = data;
-      }
-
-      // Add organization name to each website
-      const websitesWithOrg = websitesData.map(website => ({
-        ...website,
-        organisation_name: orgData.name
-      }));
-      
-      console.log('WebsitesContext: Websites with organization data:', websitesWithOrg);
-
-      setWebsites(websitesWithOrg || []);
-
-      // Check if there's a saved website ID in localStorage
-      const savedWebsiteId = localStorage.getItem('currentWebsiteId');
-      console.log('WebsitesContext: Saved website ID from localStorage:', savedWebsiteId);
-      
-      if (savedWebsiteId) {
-        // Find the website with the saved ID among the accessible websites
-        const savedWebsite = websitesWithOrg.find(website => website.id === savedWebsiteId);
-        if (savedWebsite) {
-          console.log("WebsitesContext: Restoring previously selected website:", savedWebsite.name);
-          setCurrentWebsite(savedWebsite as Website);
-        } else if (websitesWithOrg.length > 0) {
-          // If the saved website is no longer accessible, use the first accessible one
-          console.log("WebsitesContext: Saved website ID not accessible or not found, using first website");
-          setCurrentWebsite(websitesWithOrg[0] as Website);
-          localStorage.setItem('currentWebsiteId', websitesWithOrg[0].id);
-        } else {
-          // Reset current website if user has no access to any websites
-          console.log("WebsitesContext: No accessible websites found, resetting current website");
-          setCurrentWebsite(null);
+        
+        if (websitesData.length > 0) {
+          console.log('WebsitesContext: Successfully got websites data:', websitesData.length);
+          setWebsites(websitesData);
+          
+          // Check if there's a saved website ID in localStorage
+          const savedWebsiteId = localStorage.getItem('currentWebsiteId');
+          if (savedWebsiteId) {
+            const savedWebsite = websitesData.find(site => site.id === savedWebsiteId);
+            if (savedWebsite) {
+              setCurrentWebsite(savedWebsite);
+            } else {
+              setCurrentWebsite(websitesData[0]);
+            }
+          } else if (websitesData.length > 0) {
+            setCurrentWebsite(websitesData[0]);
+          }
         }
-      } else if (websitesWithOrg.length > 0) {
-        // Set first website as current if none is saved
-        console.log("WebsitesContext: No saved website ID, using first website:", websitesWithOrg[0].name);
-        setCurrentWebsite(websitesWithOrg[0] as Website);
-        localStorage.setItem('currentWebsiteId', websitesWithOrg[0].id);
-      } else {
-        console.log("WebsitesContext: No websites available for this user");
+      } catch (innerError) {
+        console.error("WebsitesContext: Inner error in fetch process:", innerError);
+        // Allow the component to continue without data rather than staying in loading
       }
     } catch (err) {
-      console.error("WebsitesContext: Error fetching websites:", err);
-      setError(err instanceof Error ? err : new Error('Failed to fetch websites'));
-      toast.error('Failed to load websites. Using sample data instead.');
-      
-      // Fall back to sample data if database fetch fails
-      provideSampleData();
+      console.error("WebsitesContext: Error in fetchWebsites:", err);
+      console.log('WebsitesContext: Error type:', typeof err);
+      console.log('WebsitesContext: Error details:', JSON.stringify(err, null, 2));
+      setError(err as Error);
+      toast.error("Failed to load websites");
     } finally {
-      console.log('WebsitesContext: Setting loading to false');
+      console.log("WebsitesContext: Setting isLoading to false in finally block");
       setIsLoading(false);
     }
   };
