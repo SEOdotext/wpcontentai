@@ -200,11 +200,7 @@ function App() {
         <Router basename="/">
           <Routes>
             {/* Public routes */}
-            <Route path="/" element={
-              <AuthRedirector>
-                <LandingPage />
-              </AuthRedirector>
-            } />
+            <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/onboarding" element={<Onboarding />} />
             
