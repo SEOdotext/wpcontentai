@@ -304,31 +304,16 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [websites, currentWebsite]);
 
   const provideSampleData = () => {
-    const sampleData: Website[] = [
-      {
-        id: '1',
-        name: 'Sample Website 1',
-        url: 'https://example.com',
-        organisation_id: '1',
-        created_at: new Date().toISOString(),
-        language: 'en'
-      },
-      {
-        id: '2',
-        name: 'Sample Website 2',
-        url: 'https://example2.com',
-        organisation_id: '1',
-        created_at: new Date().toISOString(),
-        language: 'da'
-      }
-    ];
+    console.log('WebsitesContext: No sample data provided - to avoid masking real issues');
     
-    setWebsites(sampleData);
-    setCurrentWebsite(sampleData[0]);
+    // Set empty arrays/null values instead of fake data
+    setWebsites([]);
+    setCurrentWebsite(null);
     setIsLoading(false);
     
-    // Persist the selected website in localStorage
-    localStorage.setItem('currentWebsite', JSON.stringify(sampleData[0]));
+    // Clear any previously stored website data
+    localStorage.removeItem('currentWebsiteId');
+    localStorage.removeItem('currentWebsite');
   };
 
   const addWebsite = async (website: WebsiteInsert) => {

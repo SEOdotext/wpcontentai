@@ -73,32 +73,41 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         // Fetch WordPress settings for current website
         console.log(`Making Supabase query for WordPress settings with website_id: ${currentWebsite.id}`);
         
-        // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
-        const { data, error } = await supabase
-          .from('wordpress_settings')
-          .select('*')
-          .eq('website_id', currentWebsite.id)
-          .single();
+        try {
+          // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
+          const { data, error } = await supabase
+            .from('wordpress_settings')
+            .select('*')
+            .eq('website_id', currentWebsite.id)
+            .single();
 
-        if (error) {
-          if (error.code === 'PGRST116') { // PGRST116 is "no rows returned"
-            console.log(`No WordPress settings found for website ID: ${currentWebsite.id}`);
-            setSettings(null);
+          if (error) {
+            if (error.code === 'PGRST116') { // PGRST116 is "no rows returned"
+              console.log(`No WordPress settings found for website ID: ${currentWebsite.id}`);
+              setSettings(null);
+            } else if (error.code === '22P02') { // UUID format error
+              console.log(`Invalid UUID format for website ID: ${currentWebsite.id}`);
+              setSettings(null);
+            } else {
+              console.error('Error fetching WordPress settings:', error);
+              throw error;
+            }
+          } else if (data) {
+            console.log('WordPress settings found:', { 
+              id: data.id, 
+              website_id: data.website_id, 
+              is_connected: data.is_connected,
+              wp_url: data.wp_url?.substring(0, 30) + '...',
+              wp_username: data.wp_username 
+            });
+            setSettings(data as unknown as WordPressSettings);
           } else {
-            console.error('Error fetching WordPress settings:', error);
-            throw error;
+            console.log('No WordPress settings returned, but no error either');
+            setSettings(null);
           }
-        } else if (data) {
-          console.log('WordPress settings found:', { 
-            id: data.id, 
-            website_id: data.website_id, 
-            is_connected: data.is_connected,
-            wp_url: data.wp_url?.substring(0, 30) + '...',
-            wp_username: data.wp_username 
-          });
-          setSettings(data as unknown as WordPressSettings);
-        } else {
-          console.log('No WordPress settings returned, but no error either');
+        } catch (queryError) {
+          console.error('Exception in WordPress settings query:', queryError);
+          // Silently fail for database issues - don't show error toast to user
           setSettings(null);
         }
       } catch (error) {

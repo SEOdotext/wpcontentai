@@ -323,17 +323,6 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       if (orgError) throw orgError;
 
-      // Create user profile if it doesn't exist
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .upsert({
-          id: sessionData.session.user.id,
-          email: sessionData.session.user.email,
-          role: 'admin'
-        });
-      
-      if (profileError) throw profileError;
-
       // Add user as admin to the organization
       const { error: membershipError } = await supabase
         .from('organisation_memberships')

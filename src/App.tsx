@@ -1,8 +1,12 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip"; 
 import { OrganisationProvider } from '@/context/OrganisationContext';
 import { WordPressProvider } from '@/context/WordPressContext';
 import { WebsitesProvider } from '@/context/WebsitesContext';
+import { SettingsProvider } from '@/context/SettingsContext';
+import { PostThemesProvider } from '@/context/PostThemesContext';
+import { WebsiteContentProvider } from '@/context/WebsiteContentContext';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import Auth from '@/pages/Auth';
 import Index from '@/pages/Index';
@@ -11,9 +15,26 @@ import Settings from '@/pages/Settings';
 import TeamManagement from '@/pages/TeamManagement';
 import LandingPage from '@/pages/LandingPage';
 import Onboarding from './pages/Onboarding';
+import ContentCalendar from './pages/ContentCalendar';
+import ContentCreation from './pages/ContentCreation';
+import WebsiteManager from './pages/WebsiteManager';
+import WebsiteSitemap from './pages/WebsiteSitemap';
+import Organization from './pages/Organization';
+import NotFound from './pages/NotFound';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { HelmetProvider } from 'react-helmet-async';
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // Auth wrapper component
 const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
@@ -25,20 +46,8 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
     
     const checkAuth = async () => {
       try {
-        // Add timeout to prevent infinite loading
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Auth check timeout')), 5000)
-        );
-        
-        const authCheckPromise = supabase.auth.getSession();
-        
-        // Race between auth check and timeout
-        const result = await Promise.race([
-          authCheckPromise,
-          timeoutPromise
-        ]) as { data: { session: any } };
-        
-        const isLoggedIn = !!result.data.session;
+        const { data } = await supabase.auth.getSession();
+        const isLoggedIn = !!data.session;
         console.log('AuthWrapper: Auth check complete, user is', isLoggedIn ? 'authenticated' : 'not authenticated');
         setIsAuthenticated(isLoggedIn);
         
@@ -48,7 +57,7 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       } catch (error) {
-        console.error('AuthWrapper: Error checking auth (or timeout):', error);
+        console.error('AuthWrapper: Error checking auth:', error);
         setIsAuthenticated(false);
       } finally {
         console.log('AuthWrapper: Setting loading to false');
@@ -94,6 +103,66 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
+// Protected Route component that checks for organisation setup
+const ProtectedRoute = ({ children, requireOrg = true }: { children: React.ReactNode, requireOrg?: boolean }) => {
+  const [hasOrganisation, setHasOrganisation] = useState<boolean | null>(null);
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    const checkOrg = async () => {
+      if (!requireOrg) {
+        setHasOrganisation(true);
+        setIsChecking(false);
+        return;
+      }
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setHasOrganisation(false);
+          return;
+        }
+
+        const { data: memberships, error: membershipError } = await supabase
+          .from('organisation_memberships')
+          .select('*')
+          .eq('member_id', session.user.id);
+
+        if (membershipError) {
+          console.error("Error checking organisation memberships:", membershipError);
+          setHasOrganisation(false);
+        } else {
+          setHasOrganisation(memberships && memberships.length > 0);
+        }
+      } catch (error) {
+        console.error("Error checking organisation:", error);
+        setHasOrganisation(false);
+      } finally {
+        setIsChecking(false);
+      }
+    };
+
+    checkOrg();
+  }, [requireOrg]);
+
+  if (isChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (requireOrg && !hasOrganisation) {
+    return <Navigate to="/setup" replace />;
+  }
+
+  return children;
+};
+
 // Auth redirector - redirects logged-in users to dashboard
 const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
@@ -104,24 +173,12 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
     
     const checkAuth = async () => {
       try {
-        // Add timeout to prevent infinite loading
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Auth check timeout')), 5000)
-        );
-        
-        const authCheckPromise = supabase.auth.getSession();
-        
-        // Race between auth check and timeout
-        const result = await Promise.race([
-          authCheckPromise,
-          timeoutPromise
-        ]) as { data: { session: any } };
-        
-        const isLoggedIn = !!result.data.session;
+        const { data } = await supabase.auth.getSession();
+        const isLoggedIn = !!data.session;
         console.log("AuthRedirector: Auth check complete, user is", isLoggedIn ? "authenticated" : "not authenticated");
         setIsAuthenticated(isLoggedIn);
       } catch (error) {
-        console.error('AuthRedirector: Error checking auth (or timeout):', error);
+        console.error('AuthRedirector: Error checking auth:', error);
         // On error, assume not authenticated and continue
         setIsAuthenticated(false);
       } finally {
@@ -155,55 +212,121 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
 
 function App() {
   return (
-    <Router>
-      <WebsitesProvider>
-        <WordPressProvider>
+    <QueryClientProvider client={queryClient}>
+      <HelmetProvider>
+        <Router>
           <OrganisationProvider>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={
-                <AuthRedirector>
-                  <LandingPage />
-                </AuthRedirector>
-              } />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              
-              {/* Protected routes */}
-              <Route path="/dashboard" element={
-                <SidebarProvider>
-                  <AuthWrapper>
-                    <Index />
-                  </AuthWrapper>
-                </SidebarProvider>
-              } />
-              <Route path="/settings" element={
-                <SidebarProvider>
-                  <AuthWrapper>
-                    <Settings />
-                  </AuthWrapper>
-                </SidebarProvider>
-              } />
-              <Route path="/setup" element={
-                <SidebarProvider>
-                  <AuthWrapper>
-                    <OrganisationSetup />
-                  </AuthWrapper>
-                </SidebarProvider>
-              } />
-              <Route path="/team" element={
-                <SidebarProvider>
-                  <AuthWrapper>
-                    <TeamManagement />
-                  </AuthWrapper>
-                </SidebarProvider>
-              } />
-            </Routes>
-            <Toaster />
+            <WebsitesProvider>
+              <SettingsProvider>
+                <PostThemesProvider>
+                  <WebsiteContentProvider>
+                    <WordPressProvider>
+                      <TooltipProvider>
+                        <Routes>
+                          {/* Public routes */}
+                          <Route path="/" element={
+                            <AuthRedirector>
+                              <LandingPage />
+                            </AuthRedirector>
+                          } />
+                          <Route path="/auth" element={<Auth />} />
+                          <Route path="/onboarding" element={<Onboarding />} />
+                          
+                          {/* Protected routes */}
+                          <Route path="/dashboard" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute>
+                                  <Index />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
+                          <Route path="/calendar" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute>
+                                  <ContentCalendar />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
+                          <Route path="/create" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute>
+                                  <ContentCreation />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
+                          <Route path="/settings" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute>
+                                  <Settings />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
+                          <Route path="/organization" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute>
+                                  <Organization />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
+                          <Route path="/setup" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute requireOrg={false}>
+                                  <OrganisationSetup />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
+                          <Route path="/team" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute>
+                                  <TeamManagement />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
+                          <Route path="/websites" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute>
+                                  <WebsiteManager />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
+                          <Route path="/sitemap" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute>
+                                  <WebsiteSitemap />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
+                          <Route path="*" element={<NotFound />} />
+                        </Routes>
+                        <Toaster />
+                      </TooltipProvider>
+                    </WordPressProvider>
+                  </WebsiteContentProvider>
+                </PostThemesProvider>
+              </SettingsProvider>
+            </WebsitesProvider>
           </OrganisationProvider>
-        </WordPressProvider>
-      </WebsitesProvider>
-    </Router>
+        </Router>
+      </HelmetProvider>
+    </QueryClientProvider>
   );
 }
 
