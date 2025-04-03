@@ -197,7 +197,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
-        <Router>
+        <Router basename="/">
           <Routes>
             {/* Public routes */}
             <Route path="/" element={
@@ -299,6 +299,20 @@ function App() {
                 </AuthWrapper>
               </AppContexts>
             } />
+            
+            {/* Support for /app/* routes to handle redirects from old URLs */}
+            <Route path="/app/dashboard" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/app/calendar" element={<Navigate to="/calendar" replace />} />
+            <Route path="/app/create" element={<Navigate to="/create" replace />} />
+            <Route path="/app/settings" element={<Navigate to="/settings" replace />} />
+            <Route path="/app/organization" element={<Navigate to="/organization" replace />} />
+            <Route path="/app/setup" element={<Navigate to="/setup" replace />} />
+            <Route path="/app/team" element={<Navigate to="/team" replace />} />
+            <Route path="/app/team-management" element={<Navigate to="/team-management" replace />} />
+            <Route path="/app/websites" element={<Navigate to="/websites" replace />} />
+            <Route path="/app/sitemap" element={<Navigate to="/sitemap" replace />} />
+            
+            {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Router>
