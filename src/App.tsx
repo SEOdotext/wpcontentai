@@ -44,13 +44,36 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     console.log('AuthWrapper: Checking auth state...');
     
+    // Start with a timer to ensure minimum loading time
+    let timeoutId = setTimeout(() => {
+      console.log('AuthWrapper: Minimum loading time elapsed');
+      if (!isLoading) return; // Don't do anything if already loaded
+      
+      // If we're still waiting for auth, show a longer loading message
+      const loadingMessage = document.querySelector('.loading-message');
+      if (loadingMessage) {
+        loadingMessage.textContent = 'Still initializing application...';
+      }
+    }, 1500);
+    
     const checkAuth = async () => {
       try {
         const { data } = await supabase.auth.getSession();
         const isLoggedIn = !!data.session;
         console.log('AuthWrapper: Auth check complete, user is', isLoggedIn ? 'authenticated' : 'not authenticated');
+        
         setIsAuthenticated(isLoggedIn);
-        setIsLoading(false);
+        
+        // If logged in, ensure we wait at least 2 seconds total before rendering
+        // This gives contexts time to initialize
+        if (isLoggedIn) {
+          setTimeout(() => {
+            console.log('AuthWrapper: Content initialization complete, rendering now');
+            setIsLoading(false);
+          }, 2000); // Significantly longer delay to avoid race conditions
+        } else {
+          setIsLoading(false);
+        }
       } catch (error) {
         console.error('AuthWrapper: Error checking auth:', error);
         setIsAuthenticated(false);
@@ -60,13 +83,18 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
 
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log('AuthWrapper: Auth state changed, user is', session ? 'authenticated' : 'not authenticated');
       setIsAuthenticated(!!session);
-      setIsLoading(false);
+      if (!session) {
+        setIsLoading(false);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (isLoading) {
@@ -74,7 +102,7 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">Checking authentication...</p>
+          <p className="loading-message text-muted-foreground">Loading application...</p>
         </div>
       </div>
     );
@@ -92,30 +120,19 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
 // Protected Route component that checks for organisation setup
 const ProtectedRoute = ({ children, requireOrg = true }: { children: React.ReactNode, requireOrg?: boolean }) => {
   const { hasOrganisation, isLoading: orgLoading } = useOrganisation();
-  const { isLoading: websitesLoading } = useWebsites();
   
-  // We only care if organization context is loading when requireOrg is true
-  const isLoading = requireOrg ? orgLoading : false;
-  
-  useEffect(() => {
-    console.log('ProtectedRoute: Checking organization status');
-    console.log(`ProtectedRoute: requireOrg=${requireOrg}, hasOrganisation=${hasOrganisation}, orgLoading=${orgLoading}, websitesLoading=${websitesLoading}`);
-  }, [requireOrg, hasOrganisation, orgLoading, websitesLoading]);
-
   // Skip organization check if not required
   if (!requireOrg) {
-    console.log('ProtectedRoute: Organization check not required, proceeding');
     return <>{children}</>;
   }
 
   // Show loading state while checking
-  if (isLoading) {
-    console.log('ProtectedRoute: Organization data still loading');
+  if (orgLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">Loading organization data...</p>
+          <p className="text-muted-foreground">Checking organization...</p>
         </div>
       </div>
     );
@@ -123,11 +140,9 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
 
   // If organization is required but user doesn't have one, redirect to setup
   if (requireOrg && !hasOrganisation) {
-    console.log('ProtectedRoute: No organization found, redirecting to setup');
     return <Navigate to="/setup" replace />;
   }
 
-  console.log('ProtectedRoute: Organization check passed, rendering content');
   return <>{children}</>;
 };
 
@@ -137,20 +152,14 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    console.log("AuthRedirector: Checking auth state...");
-    
     const checkAuth = async () => {
       try {
         const { data } = await supabase.auth.getSession();
         const isLoggedIn = !!data.session;
-        console.log("AuthRedirector: Auth check complete, user is", isLoggedIn ? "authenticated" : "not authenticated");
         setIsAuthenticated(isLoggedIn);
       } catch (error) {
-        console.error('AuthRedirector: Error checking auth:', error);
-        // On error, assume not authenticated and continue
         setIsAuthenticated(false);
       } finally {
-        console.log("AuthRedirector: Setting loading to false");
         setIsLoading(false);
       }
     };
@@ -170,12 +179,34 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (isAuthenticated) {
-    console.log("AuthRedirector: Redirecting to dashboard");
     return <Navigate to="/dashboard" replace />;
   }
 
-  console.log("AuthRedirector: Showing landing page");
   return <>{children}</>;
+};
+
+// Application contexts wrapper
+const AppContexts = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <OrganisationProvider>
+      <WebsitesProvider>
+        <SettingsProvider>
+          <PostThemesProvider>
+            <WebsiteContentProvider>
+              <WordPressProvider>
+                <TooltipProvider>
+                  <SidebarProvider>
+                    {children}
+                    <Toaster />
+                  </SidebarProvider>
+                </TooltipProvider>
+              </WordPressProvider>
+            </WebsiteContentProvider>
+          </PostThemesProvider>
+        </SettingsProvider>
+      </WebsitesProvider>
+    </OrganisationProvider>
+  );
 };
 
 function App() {
@@ -183,214 +214,109 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
         <Router>
-          <OrganisationProvider>
-            <WebsitesProvider>
-              <Routes>
-                {/* Public routes */}
-                <Route path="/" element={
-                  <AuthRedirector>
-                    <LandingPage />
-                  </AuthRedirector>
-                } />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/onboarding" element={<Onboarding />} />
-                
-                {/* Protected routes - Moved the remaining context providers inside routes */}
-                <Route path="/dashboard" element={
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <Index />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="/calendar" element={
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <ContentCalendar />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="/create" element={
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <ContentCreation />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="/settings" element={
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <Settings />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="/organization" element={
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <Organization />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="/setup" element={
-                  <AuthWrapper>
-                    <ProtectedRoute requireOrg={false}>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <OrganisationSetup />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="/team" element={
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <TeamManagement />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="/team-management" element={
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <TeamManagement />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="/websites" element={
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <WebsiteManager />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="/sitemap" element={
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <SettingsProvider>
-                        <PostThemesProvider>
-                          <WebsiteContentProvider>
-                            <WordPressProvider>
-                              <TooltipProvider>
-                                <SidebarProvider>
-                                  <WebsiteSitemap />
-                                </SidebarProvider>
-                              </TooltipProvider>
-                            </WordPressProvider>
-                          </WebsiteContentProvider>
-                        </PostThemesProvider>
-                      </SettingsProvider>
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                } />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-              <Toaster />
-            </WebsitesProvider>
-          </OrganisationProvider>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={
+              <AuthRedirector>
+                <LandingPage />
+              </AuthRedirector>
+            } />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            
+            {/* All protected routes - wrapped in contexts */}
+            <Route path="/dashboard" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute>
+                    <Index />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="/calendar" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute>
+                    <ContentCalendar />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="/create" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute>
+                    <ContentCreation />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="/settings" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute>
+                    <Settings />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="/organization" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute>
+                    <Organization />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="/setup" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute requireOrg={false}>
+                    <OrganisationSetup />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="/team" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute>
+                    <TeamManagement />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="/team-management" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute>
+                    <TeamManagement />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="/websites" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute>
+                    <WebsiteManager />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="/sitemap" element={
+              <AuthWrapper>
+                <AppContexts>
+                  <ProtectedRoute>
+                    <WebsiteSitemap />
+                  </ProtectedRoute>
+                </AppContexts>
+              </AuthWrapper>
+            } />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </Router>
       </HelmetProvider>
     </QueryClientProvider>
