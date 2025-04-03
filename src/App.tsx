@@ -296,6 +296,15 @@ function App() {
                               </AuthWrapper>
                             </SidebarProvider>
                           } />
+                          <Route path="/team-management" element={
+                            <SidebarProvider>
+                              <AuthWrapper>
+                                <ProtectedRoute>
+                                  <TeamManagement />
+                                </ProtectedRoute>
+                              </AuthWrapper>
+                            </SidebarProvider>
+                          } />
                           <Route path="/websites" element={
                             <SidebarProvider>
                               <AuthWrapper>

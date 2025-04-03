@@ -314,6 +314,8 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
 
+      console.log('Creating organization with name:', orgName);
+      
       // Create organization
       const { data: orgData, error: orgError } = await supabase
         .from('organisations')
@@ -321,7 +323,12 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .select()
         .single();
       
-      if (orgError) throw orgError;
+      if (orgError) {
+        console.error('Error creating organization:', orgError);
+        throw orgError;
+      }
+      
+      console.log('Organization created:', orgData);
 
       // Add user as admin to the organization
       const { error: membershipError } = await supabase
@@ -332,24 +339,45 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           role: 'admin'
         });
       
-      if (membershipError) throw membershipError;
+      if (membershipError) {
+        console.error('Error creating organization membership:', membershipError);
+        throw membershipError;
+      }
+      
+      console.log('Organization membership created for user:', sessionData.session.user.id);
 
-      // Create website
+      // Format website URL properly
+      let formattedUrl = websiteUrl.trim();
+      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+        formattedUrl = 'https://' + formattedUrl;
+      }
+
+      // Create website with all required fields
       const { data: websiteData, error: websiteError } = await supabase
         .from('websites')
         .insert({
-          url: websiteUrl.trim(),
+          url: formattedUrl,
           name: orgName,
-          organisation_id: orgData.id
+          organisation_id: orgData.id,
+          language: 'en', // Default language
+          enable_ai_image_generation: false, // Default setting
+          page_import_limit: 100, // Default limit
+          key_content_limit: 20 // Default limit
         })
         .select()
         .single();
 
-      if (websiteError) throw websiteError;
+      if (websiteError) {
+        console.error('Error creating website:', websiteError);
+        throw websiteError;
+      }
+
+      console.log('Website created:', websiteData);
 
       // Set the current website ID in localStorage
       console.log('Setting currentWebsiteId in localStorage:', websiteData.id);
       localStorage.setItem('currentWebsiteId', websiteData.id);
+      localStorage.setItem('currentWebsiteName', websiteData.name);
 
       // Update state
       setOrganisation(orgData);

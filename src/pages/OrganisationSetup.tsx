@@ -88,13 +88,23 @@ const OrganisationSetup = () => {
     
     console.log('Starting setup process...');
     setIsSubmitting(true);
+    
+    // Format URL if needed
+    let formattedUrl = websiteUrl.trim();
+    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+      formattedUrl = 'https://' + formattedUrl;
+      console.log('Formatted URL:', formattedUrl);
+    }
+    
     try {
+      toast.loading('Creating your organization and website...');
       console.log('Calling completeNewUserSetup...');
-      const success = await completeNewUserSetup(websiteUrl);
+      const success = await completeNewUserSetup(formattedUrl);
       console.log('Setup result:', success);
       
       if (success) {
         console.log('Setup successful, redirecting to home...');
+        toast.success('Setup completed! Redirecting to dashboard...');
         
         // Generate expected website name (should match what's created in the backend)
         const websiteName = websiteUrl
@@ -114,11 +124,12 @@ const OrganisationSetup = () => {
         }, 1500);
       } else {
         console.error('Setup failed');
+        toast.error('Setup failed. Please try again or contact support.');
         throw new Error('Failed to complete setup');
       }
     } catch (error) {
       console.error('Error during setup:', error);
-      toast.error('Failed to complete setup');
+      toast.error('Failed to complete setup: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       console.log('Setup process completed');
       setIsSubmitting(false);

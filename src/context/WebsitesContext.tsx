@@ -6,7 +6,10 @@ import { Database } from '../integrations/supabase/types';
 type Website = Database['public']['Tables']['websites']['Row'] & {
   organisation_name?: string;
 };
-type WebsiteInsert = Omit<Database['public']['Tables']['websites']['Insert'], 'organisation_id'>;
+type WebsiteInsert = Omit<Database['public']['Tables']['websites']['Insert'], 'organisation_id'> & {
+  page_import_limit?: number;
+  key_content_limit?: number;
+};
 type WebsiteUpdate = Database['public']['Tables']['websites']['Update'];
 
 interface WebsitesContextType {
@@ -331,28 +334,64 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .single();
 
       if (membershipError) {
+        console.error('Error fetching membership:', membershipError);
         throw membershipError;
       }
 
       if (!membership) {
         throw new Error('User not in any organisation');
       }
+      
+      console.log('Adding website for organization:', membership.organisation_id);
+      
+      // Format URL if needed
+      let formattedUrl = website.url;
+      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+        formattedUrl = 'https://' + formattedUrl;
+      }
+      
+      // Ensure website has all necessary fields with defaults
+      const websiteWithDefaults = {
+        ...website,
+        url: formattedUrl,
+        organisation_id: membership.organisation_id,
+        language: website.language || 'en',
+        enable_ai_image_generation: website.enable_ai_image_generation ?? false,
+        page_import_limit: website.page_import_limit || 100,
+        key_content_limit: website.key_content_limit || 20
+      };
+      
+      console.log('Creating website with data:', websiteWithDefaults);
 
-      const { error } = await supabase
+      const { data: newWebsite, error } = await supabase
         .from('websites')
-        .insert([{ ...website, organisation_id: membership.organisation_id }]);
+        .insert([websiteWithDefaults])
+        .select();
 
       if (error) {
+        console.error('Error creating website:', error);
         throw error;
       }
+      
+      console.log('Website created successfully:', newWebsite);
 
       // Refresh the websites list
       await fetchWebsites();
       
+      // Set as current website if it's the first one
+      if (websites.length === 0 && newWebsite && newWebsite.length > 0) {
+        console.log('Setting newly created website as current:', newWebsite[0].id);
+        localStorage.setItem('currentWebsiteId', newWebsite[0].id);
+        localStorage.setItem('currentWebsiteName', newWebsite[0].name);
+        setCurrentWebsite(newWebsite[0] as Website);
+      }
+      
       // Show success toast
       toast.success('Website added successfully');
     } catch (err) {
+      console.error('Error in addWebsite:', err);
       setError(err instanceof Error ? err : new Error('Failed to add website'));
+      toast.error(err instanceof Error ? err.message : 'Failed to add website');
       throw err;
     }
   };
