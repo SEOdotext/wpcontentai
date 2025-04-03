@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 
-// Auth wrapper component
+// Auth wrapper for protected routes
 const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -25,49 +25,23 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
     
     const checkAuth = async () => {
       try {
-        // Add timeout to prevent infinite loading
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Auth check timeout')), 5000)
-        );
-        
-        const authCheckPromise = supabase.auth.getSession();
-        
-        // Race between auth check and timeout
-        const result = await Promise.race([
-          authCheckPromise,
-          timeoutPromise
-        ]) as { data: { session: any } };
-        
-        const isLoggedIn = !!result.data.session;
+        const { data } = await supabase.auth.getSession();
+        const isLoggedIn = !!data.session;
         console.log('AuthWrapper: Auth check complete, user is', isLoggedIn ? 'authenticated' : 'not authenticated');
         setIsAuthenticated(isLoggedIn);
-        
-        // If authenticated, still add a small delay to ensure contexts have time to initialize
-        if (isLoggedIn) {
-          console.log('AuthWrapper: Adding initialization delay for contexts');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
       } catch (error) {
-        console.error('AuthWrapper: Error checking auth (or timeout):', error);
+        console.error('AuthWrapper: Error checking auth:', error);
         setIsAuthenticated(false);
       } finally {
-        console.log('AuthWrapper: Setting loading to false');
         setIsLoading(false);
       }
     };
 
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log('AuthWrapper: Auth state changed, user is', session ? 'authenticated' : 'not authenticated');
       setIsAuthenticated(!!session);
-      
-      // Add a small delay to ensure contexts have time to initialize
-      if (session) {
-        console.log('AuthWrapper: Adding initialization delay for contexts');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
       setIsLoading(false);
     });
 
@@ -79,7 +53,7 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground">Loading authentication...</p>
         </div>
       </div>
     );
@@ -94,38 +68,22 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-// Auth redirector - redirects logged-in users to dashboard
-const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
+// Check if user is already logged in - for login and landing pages
+const PublicRouteGuard = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    console.log("AuthRedirector: Checking auth state...");
+    console.log("PublicRouteGuard: Checking if user is already logged in...");
     
     const checkAuth = async () => {
       try {
-        // Add timeout to prevent infinite loading
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Auth check timeout')), 5000)
-        );
-        
-        const authCheckPromise = supabase.auth.getSession();
-        
-        // Race between auth check and timeout
-        const result = await Promise.race([
-          authCheckPromise,
-          timeoutPromise
-        ]) as { data: { session: any } };
-        
-        const isLoggedIn = !!result.data.session;
-        console.log("AuthRedirector: Auth check complete, user is", isLoggedIn ? "authenticated" : "not authenticated");
-        setIsAuthenticated(isLoggedIn);
+        const { data } = await supabase.auth.getSession();
+        setIsAuthenticated(!!data.session);
       } catch (error) {
-        console.error('AuthRedirector: Error checking auth (or timeout):', error);
-        // On error, assume not authenticated and continue
+        console.error('PublicRouteGuard: Error checking auth:', error);
         setIsAuthenticated(false);
       } finally {
-        console.log("AuthRedirector: Setting loading to false");
         setIsLoading(false);
       }
     };
@@ -145,64 +103,88 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (isAuthenticated) {
-    console.log("AuthRedirector: Redirecting to dashboard");
+    console.log("PublicRouteGuard: User is logged in, redirecting to dashboard");
     return <Navigate to="/dashboard" replace />;
   }
 
-  console.log("AuthRedirector: Showing landing page");
+  console.log("PublicRouteGuard: User is not logged in, showing public content");
   return <>{children}</>;
 };
 
 function App() {
   return (
     <Router>
-      <WebsitesProvider>
-        <WordPressProvider>
+      <Routes>
+        {/* Public routes - NO auth check needed */}
+        <Route path="/onboarding" element={<Onboarding />} />
+        
+        {/* Public routes - Redirect to Dashboard if already logged in */}
+        <Route path="/" element={
+          <PublicRouteGuard>
+            <LandingPage />
+          </PublicRouteGuard>
+        } />
+        <Route path="/auth" element={
+          <PublicRouteGuard>
+            <Auth />
+          </PublicRouteGuard>
+        } />
+        
+        {/* Protected routes - Wrapped in providers and auth check */}
+        <Route path="/dashboard" element={
           <OrganisationProvider>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={
-                <AuthRedirector>
-                  <LandingPage />
-                </AuthRedirector>
-              } />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              
-              {/* Protected routes */}
-              <Route path="/dashboard" element={
+            <WebsitesProvider>
+              <WordPressProvider>
                 <SidebarProvider>
                   <AuthWrapper>
                     <Index />
                   </AuthWrapper>
                 </SidebarProvider>
-              } />
-              <Route path="/settings" element={
+              </WordPressProvider>
+            </WebsitesProvider>
+          </OrganisationProvider>
+        } />
+        <Route path="/settings" element={
+          <OrganisationProvider>
+            <WebsitesProvider>
+              <WordPressProvider>
                 <SidebarProvider>
                   <AuthWrapper>
                     <Settings />
                   </AuthWrapper>
                 </SidebarProvider>
-              } />
-              <Route path="/setup" element={
+              </WordPressProvider>
+            </WebsitesProvider>
+          </OrganisationProvider>
+        } />
+        <Route path="/setup" element={
+          <OrganisationProvider>
+            <WebsitesProvider>
+              <WordPressProvider>
                 <SidebarProvider>
                   <AuthWrapper>
                     <OrganisationSetup />
                   </AuthWrapper>
                 </SidebarProvider>
-              } />
-              <Route path="/team" element={
+              </WordPressProvider>
+            </WebsitesProvider>
+          </OrganisationProvider>
+        } />
+        <Route path="/team" element={
+          <OrganisationProvider>
+            <WebsitesProvider>
+              <WordPressProvider>
                 <SidebarProvider>
                   <AuthWrapper>
                     <TeamManagement />
                   </AuthWrapper>
                 </SidebarProvider>
-              } />
-            </Routes>
-            <Toaster />
+              </WordPressProvider>
+            </WebsitesProvider>
           </OrganisationProvider>
-        </WordPressProvider>
-      </WebsitesProvider>
+        } />
+      </Routes>
+      <Toaster />
     </Router>
   );
 }
