@@ -27,7 +27,11 @@ const Auth = () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) {
         setIsAuthenticated(true);
-        navigate('/dashboard');
+        console.log('Auth: User is already authenticated, waiting briefly before redirecting');
+        setTimeout(() => {
+          console.log('Auth: Redirecting to dashboard after delay');
+          navigate('/dashboard');
+        }, 1000);
       } else {
         setIsAuthenticated(false);
       }
@@ -38,7 +42,11 @@ const Auth = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session) {
-          navigate('/dashboard');
+          console.log('Auth: Auth state changed, user authenticated, waiting briefly before redirecting');
+          setTimeout(() => {
+            console.log('Auth: Redirecting to dashboard after auth state change delay');
+            navigate('/dashboard');
+          }, 1000);
         }
       }
     );
@@ -117,10 +125,12 @@ const Auth = () => {
       // Log the reset attempt for debugging
       console.log(`Attempting password reset for: ${email}`);
       
+      // Use current origin for localhost testing
+      const currentOrigin = window.location.origin;
+      console.log(`Using redirect URL: ${currentOrigin}/auth/reset-password`);
+      
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: import.meta.env.DEV 
-          ? 'http://localhost:8080/auth/reset-password' 
-          : `${window.location.origin}/auth/reset-password`,
+        redirectTo: `${currentOrigin}/auth/reset-password`,
       });
       
       if (error) throw error;
@@ -146,10 +156,18 @@ const Auth = () => {
       setGoogleLoading(true);
       setAuthError(null);
       
+      // Use current origin for localhost testing
+      const currentOrigin = window.location.origin;
+      const redirectUrl = `${currentOrigin}/`;
+      
+      console.log('Auth: Attempting Google sign-in');
+      console.log(`Auth: Current origin: ${currentOrigin}`);
+      console.log(`Auth: Redirect URL: ${redirectUrl}`);
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: import.meta.env.DEV ? 'http://localhost:8080/dashboard' : `${window.location.origin}/dashboard`
+          redirectTo: redirectUrl
         }
       });
       
