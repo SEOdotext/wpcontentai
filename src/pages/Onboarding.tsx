@@ -72,74 +72,74 @@ const contentTypes: ContentType[] = [
 const contentSteps: ContentStep[] = [
   { 
     id: 1, 
-    name: "Website Analysis", 
-    description: "Analyzing your website structure",
-    detail: "Extracting data from sitemap.xml, homepage HTML, and visible text",
+    name: "Deep Website Analysis", 
+    description: "Analyzing your website structure and content",
+    detail: "Extracting data from your pages to understand your unique tone and style",
     duration: 3000,
     substeps: [
-      "Fetching sitemap.xml",
-      "Analyzing HTML structure",
-      "Processing visible content"
+      "Fetching sitemap.xml and content pages",
+      "Analyzing writing style and structure",
+      "Identifying your unique brand voice"
     ]
   },
   { 
     id: 2, 
-    name: "Understanding Your Content", 
-    description: "Learning your website",
-    detail: "Reading content and understanding your tone of voice",
+    name: "Content Fingerprinting", 
+    description: "Creating your site's content fingerprint",
+    detail: "Building a profile of your site's unique content patterns and style preferences",
     duration: 2500,
     substeps: [
-      "Learning website structure",
-      "Reading your content",
-      "Understanding your tone of voice"
+      "Extracting topic clusters",
+      "Mapping content relationships",
+      "Building your site's writing style profile"
     ]
   },
   { 
     id: 3, 
-    name: "Select Content Type", 
-    description: "Choose your format",
-    detail: "Selecting the best format based on your content",
+    name: "Content Opportunity Analysis", 
+    description: "Finding content gaps",
+    detail: "Discovering what topics your audience wants that your site doesn't yet cover",
     duration: 2000,
     substeps: [
-      "Analyzing content types",
-      "Determining best format",
-      "Preparing recommendations"
+      "Analyzing competitor content gaps",
+      "Identifying keyword opportunities",
+      "Mapping reader interest patterns"
     ]
   },
   { 
     id: 4, 
-    name: "Content Processing", 
-    description: "Research and planning",
-    detail: "Conducting SEO keyword research and prioritizing content",
+    name: "Content Strategy Creation", 
+    description: "Building your personalized content plan",
+    detail: "Creating a tailored content calendar based on your site's unique fingerprint",
     duration: 2500,
     substeps: [
-      "Conducting SEO keyword research",
-      "Prioritizing content topics",
-      "Creating content strategy"
+      "Generating topic clusters",
+      "Creating content outlines",
+      "Building publishing schedules"
     ]
   },
   { 
     id: 5, 
-    name: "Setup Complete", 
-    description: "Ready to create content",
-    detail: "Your WordPress site is now connected and ready for AI content",
+    name: "WordPress Integration", 
+    description: "Connecting your WordPress site",
+    detail: "Setting up seamless publishing of content that matches your site perfectly",
     duration: 2000,
     substeps: [
-      "Connecting to WordPress",
-      "Setting up publishing schedule",
-      "Preparing initial content ideas"
+      "Configuring WordPress connection",
+      "Mapping content categories",
+      "Setting up publishing workflows"
     ]
   }
 ];
 
 // Sample data for website analysis
 const siteAnalysis = {
-  writingStyle: "Friendly and easy to understand",
-  targetAudience: "Everyone who uses computers",
-  toneOfVoice: "Warm and helpful, like talking to a friend",
-  contentTypes: ["Pages about what you do", "Helpful tips and stories", "Success stories"],
-  language: "Simple English",
-  keyPhrases: ["easy solutions", "helpful guidance", "proven results"]
+  writingStyle: "Conversational with expert insights",
+  targetAudience: "Industry professionals seeking in-depth knowledge",
+  toneOfVoice: "Authoritative yet approachable, with a touch of enthusiasm",
+  contentTypes: ["Educational in-depth guides", "Industry trend analyses", "Practical how-to content"],
+  language: "Professional with clear explanations of complex topics",
+  keyPhrases: ["proven solutions", "insider perspective", "actionable insights"]
 };
 
 // Sample data for keyword opportunities
@@ -405,11 +405,11 @@ const Onboarding = () => {
               <LogoAnimation />
               
               <h1 className="text-3xl md:text-4xl font-bold mt-8 mb-4 text-center">
-                Let's set up your content garden
+                Let's understand your website's DNA
               </h1>
               
               <p className="text-lg text-muted-foreground max-w-md text-center mb-8">
-                Enter your website URL to get started. We'll analyze your site and prepare everything for you.
+                Enter your website URL to begin. We'll analyze your content, style, and audience to create perfectly matched content.
               </p>
               
               <form onSubmit={handleUrlSubmit} className="w-full max-w-md">
@@ -443,7 +443,7 @@ const Onboarding = () => {
             >
               <div className="w-full max-w-3xl">
                 <h2 className="text-2xl font-bold mb-8 text-center">
-                  Analyzing <span className="text-primary">{state.websiteUrl}</span>
+                  Analyzing <span className="text-primary">{state.websiteUrl}</span> content fingerprint
                 </h2>
                 
                 <div className="mb-8">
@@ -485,9 +485,9 @@ const Onboarding = () => {
               className="py-8"
             >
               <div className="mb-8 text-center">
-                <h2 className="text-2xl font-bold mb-2">Your website analysis is complete</h2>
+                <h2 className="text-2xl font-bold mb-2">Your website's content profile is ready</h2>
                 <p className="text-muted-foreground">
-                  Based on our analysis, here's what we found about your website:
+                  We've analyzed your site's unique content characteristics:
                 </p>
               </div>
               
@@ -538,9 +538,9 @@ const Onboarding = () => {
               </div>
               
               <div className="mb-8">
-                <h3 className="text-xl font-medium mb-4">Select content type to create</h3>
+                <h3 className="text-xl font-medium mb-4">Select content formats that match your site</h3>
                 <p className="text-muted-foreground mb-6">
-                  Based on your website, we recommend these content types:
+                  Based on your website's content fingerprint, we recommend these formats:
                 </p>
                 
                 <div className="grid md:grid-cols-3 gap-4 mb-8">
@@ -603,17 +603,17 @@ const Onboarding = () => {
                   </div>
                   
                   <h2 className="text-2xl font-bold mb-2">
-                    Setting up your content strategy
+                    Crafting your site-specific content
                   </h2>
                   <p className="text-muted-foreground">
-                    We're finalizing your content plan and preparing your dashboard
+                    We're building content that will feel like a natural extension of your site
                   </p>
                 </div>
                 
                 <div className="mb-10">
                   <Progress value={state.progress} className="h-3 mb-3" />
                   <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Creating your content strategy</span>
+                    <span>Creating content that matches your site's voice</span>
                     <span>{Math.round(state.progress)}%</span>
                   </div>
                 </div>
@@ -627,19 +627,19 @@ const Onboarding = () => {
                   <ul className="space-y-3">
                     <li className="flex items-center">
                       <CheckCircle2 className="h-4 w-4 text-primary mr-2 flex-shrink-0" />
-                      <span className="text-sm">Analyzing your existing content</span>
+                      <span className="text-sm">Analyzing your content structure and patterns</span>
                     </li>
                     <li className="flex items-center">
                       <CheckCircle2 className="h-4 w-4 text-primary mr-2 flex-shrink-0" />
-                      <span className="text-sm">Identifying content gaps and opportunities</span>
+                      <span className="text-sm">Identifying your website's unique tone and style</span>
                     </li>
                     <li className="flex items-center">
                       <CheckCircle2 className="h-4 w-4 text-primary mr-2 flex-shrink-0" />
-                      <span className="text-sm">Setting up WordPress integration</span>
+                      <span className="text-sm">Building content that matches your site perfectly</span>
                     </li>
                     <li className="flex items-center opacity-50">
                       <div className="h-4 w-4 border-2 border-primary/40 border-t-transparent rounded-full animate-spin mr-2 flex-shrink-0"></div>
-                      <span className="text-sm">Creating your personalized content calendar</span>
+                      <span className="text-sm">Creating a personalized content strategy blueprint</span>
                     </li>
                   </ul>
                 </div>
@@ -671,7 +671,7 @@ const Onboarding = () => {
               </h2>
               
               <p className="text-lg text-muted-foreground max-w-md mb-8">
-                Your website is connected and your content strategy is ready. Let's start creating amazing content.
+                Your website's content DNA is mapped and we're ready to create perfectly matched content for your audience.
               </p>
               
               <Button onClick={handleComplete} size="lg" className="px-8">

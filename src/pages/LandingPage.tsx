@@ -105,7 +105,7 @@ const LandingPage = () => {
               transition={{ duration: 0.5, delay: 0.4 }}
               className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-tight"
             >
-              Grow your site with <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">AI-generated</span> content
+              <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">Tailored content</span> that knows your website
             </motion.h1>
             
             <motion.p
@@ -114,7 +114,7 @@ const LandingPage = () => {
               transition={{ duration: 0.5, delay: 0.5 }}
               className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12"
             >
-              Enter your website and watch ContentGardener.ai analyze, create, and publish content that drives traffic and engages your audience.
+              Just enter your website URL. Our AI analyzes your existing content, tone, and audience to create perfectly matched posts that feel like you wrote them yourself.
             </motion.p>
             
             <motion.div
@@ -152,11 +152,11 @@ const LandingPage = () => {
             {/* Testimonial 1 - Lasse from PageVitals */}
             <div className="flex">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex-shrink-0 flex items-center justify-center mr-3">
-                <span className="text-primary font-medium">LP</span>
+                <span className="text-primary font-medium">LS</span>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground italic mb-1">
-                  "ContentGardener.ai generates massive traffic for our site."
+                  "The AI somehow understands our brand voice perfectly. It generates massive traffic for our site."
                 </p>
                 <p className="text-xs font-semibold">Lasse Schou, PageVitals</p>
               </div>
@@ -165,11 +165,11 @@ const LandingPage = () => {
             {/* Testimonial 2 - Theis*/}
             <div className="flex">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex-shrink-0 flex items-center justify-center mr-3">
-                <span className="text-primary font-medium">TM</span>
+                <span className="text-primary font-medium">TH</span>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground italic mb-1">
-                  "In just 1 week our primary keywords are hitting first page."
+                  "In just 1 week our primary keywords are hitting first page. The content matches our site perfectly."
                 </p>
                 <p className="text-xs font-semibold">Theis Hofdal, WorkForceEU</p>
               </div>
@@ -178,11 +178,11 @@ const LandingPage = () => {
             {/* Testimonial 3 - Thomas from denimhunters */}
             <div className="flex">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex-shrink-0 flex items-center justify-center mr-3">
-                <span className="text-primary font-medium">TK</span>
+                <span className="text-primary font-medium">TS</span>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground italic mb-1">
-                  "It's giving great ideas with incredible content understanding."
+                  "It's like the AI reads our entire site. The content understanding is truly incredible."
                 </p>
                 <p className="text-xs font-semibold">Thomas Stege, DenimHunters</p>
               </div>
