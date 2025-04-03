@@ -119,7 +119,7 @@ const Auth = () => {
       
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: import.meta.env.DEV 
-          ? 'http://localhost:8080/auth/reset-password' 
+          ? 'http://localhost:8081/auth/reset-password' 
           : `${window.location.origin}/auth/reset-password`,
       });
       
@@ -149,7 +149,7 @@ const Auth = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: import.meta.env.DEV ? 'http://localhost:8080/dashboard' : `${window.location.origin}/dashboard`
+          redirectTo: import.meta.env.DEV ? 'http://localhost:8081/' : `${window.location.origin}/dashboard`
         }
       });
       
