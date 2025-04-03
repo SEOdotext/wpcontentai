@@ -44,16 +44,11 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     console.log('AuthWrapper: Checking auth state...');
     
-    // Start with a timer to ensure minimum loading time
+    // Always have a minimum loading time to ensure contexts have time to initialize
     let timeoutId = setTimeout(() => {
-      console.log('AuthWrapper: Minimum loading time elapsed');
-      if (!isLoading) return; // Don't do anything if already loaded
-      
-      // If we're still waiting for auth, show a longer loading message
-      const loadingMessage = document.querySelector('.loading-message');
-      if (loadingMessage) {
-        loadingMessage.textContent = 'Still initializing application...';
-      }
+      console.log('AuthWrapper: Minimum loading time elapsed, validating contexts');
+      // Only show content after a minimum loading period
+      setIsLoading(false);
     }, 1500);
     
     const checkAuth = async () => {
@@ -61,23 +56,11 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
         const { data } = await supabase.auth.getSession();
         const isLoggedIn = !!data.session;
         console.log('AuthWrapper: Auth check complete, user is', isLoggedIn ? 'authenticated' : 'not authenticated');
-        
         setIsAuthenticated(isLoggedIn);
-        
-        // If logged in, ensure we wait at least 2 seconds total before rendering
-        // This gives contexts time to initialize
-        if (isLoggedIn) {
-          setTimeout(() => {
-            console.log('AuthWrapper: Content initialization complete, rendering now');
-            setIsLoading(false);
-          }, 2000); // Significantly longer delay to avoid race conditions
-        } else {
-          setIsLoading(false);
-        }
       } catch (error) {
         console.error('AuthWrapper: Error checking auth:', error);
         setIsAuthenticated(false);
-        setIsLoading(false);
+        setIsLoading(false); // On error, show content immediately
       }
     };
 
@@ -86,9 +69,6 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log('AuthWrapper: Auth state changed, user is', session ? 'authenticated' : 'not authenticated');
       setIsAuthenticated(!!session);
-      if (!session) {
-        setIsLoading(false);
-      }
     });
 
     return () => {
@@ -102,7 +82,7 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-          <p className="loading-message text-muted-foreground">Loading application...</p>
+          <p className="loading-message text-muted-foreground">Initializing application...</p>
         </div>
       </div>
     );
@@ -156,8 +136,10 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
       try {
         const { data } = await supabase.auth.getSession();
         const isLoggedIn = !!data.session;
+        console.log('AuthRedirector: Auth check complete, user is', isLoggedIn ? 'authenticated' : 'not authenticated');
         setIsAuthenticated(isLoggedIn);
       } catch (error) {
+        console.error('AuthRedirector: Error checking auth:', error);
         setIsAuthenticated(false);
       } finally {
         setIsLoading(false);
@@ -179,9 +161,11 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
   }
 
   if (isAuthenticated) {
+    console.log('AuthRedirector: User is authenticated, redirecting to dashboard');
     return <Navigate to="/dashboard" replace />;
   }
 
+  console.log('AuthRedirector: User is not authenticated, showing landing page');
   return <>{children}</>;
 };
 
@@ -226,94 +210,94 @@ function App() {
             
             {/* All protected routes - wrapped in contexts */}
             <Route path="/dashboard" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute>
                     <Index />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="/calendar" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute>
                     <ContentCalendar />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="/create" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute>
                     <ContentCreation />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="/settings" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute>
                     <Settings />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="/organization" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute>
                     <Organization />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="/setup" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute requireOrg={false}>
                     <OrganisationSetup />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="/team" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute>
                     <TeamManagement />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="/team-management" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute>
                     <TeamManagement />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="/websites" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute>
                     <WebsiteManager />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="/sitemap" element={
-              <AuthWrapper>
-                <AppContexts>
+              <AppContexts>
+                <AuthWrapper>
                   <ProtectedRoute>
                     <WebsiteSitemap />
                   </ProtectedRoute>
-                </AppContexts>
-              </AuthWrapper>
+                </AuthWrapper>
+              </AppContexts>
             } />
             <Route path="*" element={<NotFound />} />
           </Routes>
