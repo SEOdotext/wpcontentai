@@ -8,11 +8,11 @@ import {
   FileText, 
   BookOpen, 
   Layout, 
-  Search, 
+  ChevronRight,
   CheckCircle2,
   Clock,
-  ChevronRight,
-  Sparkles
+  Sparkles,
+  Wand2
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useToast } from "@/components/ui/use-toast";
@@ -201,20 +201,6 @@ const LogoAnimation = () => (
   </motion.svg>
 );
 
-// Basic validation for website URL
-const isValidUrl = (url: string) => {
-  try {
-    // Make sure it starts with http:// or https://
-    if (!/^https?:\/\//i.test(url)) {
-      url = 'https://' + url;
-    }
-    new URL(url);
-    return true;
-  } catch (e) {
-    return false;
-  }
-};
-
 const Onboarding = () => {
   const [state, setState] = useState<OnboardingState>({
     step: 0,
@@ -228,6 +214,8 @@ const Onboarding = () => {
   const navigate = useNavigate();
   
   useEffect(() => {
+    console.log("Onboarding mounted, websiteUrl:", state.websiteUrl);
+    
     // If we have a website URL already stored, move to step 1
     if (state.websiteUrl && state.step === 0) {
       setTimeout(() => {
@@ -238,20 +226,28 @@ const Onboarding = () => {
 
   const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValidUrl(state.websiteUrl)) {
+    if (!state.websiteUrl) {
       toast({
-        title: "Invalid URL",
-        description: "Please enter a valid website URL",
+        title: "URL Required",
+        description: "Please enter your website URL",
         variant: "destructive"
       });
       return;
     }
     
-    localStorage.setItem('onboardingWebsite', state.websiteUrl);
+    // Format URL if needed
+    let formattedUrl = state.websiteUrl;
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = 'https://' + formattedUrl;
+      setState(prev => ({ ...prev, websiteUrl: formattedUrl }));
+    }
+    
+    localStorage.setItem('onboardingWebsite', formattedUrl);
     handleNextStep();
   };
 
   const handleNextStep = () => {
+    console.log("Moving to next step from:", state.step);
     const nextStep = state.step + 1;
     setState({ ...state, step: nextStep });
     
@@ -261,6 +257,7 @@ const Onboarding = () => {
   };
 
   const startAnalysis = () => {
+    console.log("Starting analysis...");
     setState({ 
       ...state, 
       progress: 0,
@@ -273,6 +270,7 @@ const Onboarding = () => {
     
     const runStep = () => {
       if (currentStep >= contentSteps.length) {
+        console.log("Analysis completed");
         return;
       }
       
@@ -297,10 +295,11 @@ const Onboarding = () => {
         } else {
           // Analysis complete, move to content type selection
           setTimeout(() => {
+            console.log("Moving to content type selection");
             setState(prevState => ({
               ...prevState,
               progress: 100,
-              step: state.step + 1
+              step: prevState.step + 1
             }));
           }, 1000);
         }
@@ -314,6 +313,7 @@ const Onboarding = () => {
   };
 
   const selectContentType = (type: string) => {
+    console.log("Selected content type:", type);
     setState({
       ...state,
       selectedType: type
@@ -330,6 +330,7 @@ const Onboarding = () => {
       return;
     }
     
+    console.log("Moving to content processing step");
     setState({
       ...state,
       step: state.step + 1
@@ -342,6 +343,7 @@ const Onboarding = () => {
   };
   
   const startContentProcessing = () => {
+    console.log("Starting content processing");
     setState({ 
       ...state, 
       progress: 0 
@@ -353,6 +355,7 @@ const Onboarding = () => {
         const newProgress = prevState.progress + 1;
         
         if (newProgress >= 100) {
+          console.log("Content processing completed");
           clearInterval(interval);
           
           // Move to final step after completion
@@ -372,6 +375,7 @@ const Onboarding = () => {
   };
   
   const handleComplete = () => {
+    console.log("Setup complete, navigating to dashboard");
     toast({
       title: "Setup Complete!",
       description: "You're ready to start creating content for your website."
@@ -415,8 +419,8 @@ const Onboarding = () => {
               <form onSubmit={handleUrlSubmit} className="w-full max-w-md">
                 <div className="flex flex-col gap-4">
                   <Input
-                    type="url"
-                    placeholder="https://yourwebsite.com"
+                    type="text"
+                    placeholder="yourdomain.com"
                     className="h-12 text-lg"
                     value={state.websiteUrl}
                     onChange={(e) => setState({ ...state, websiteUrl: e.target.value })}
@@ -599,7 +603,7 @@ const Onboarding = () => {
               <div className="w-full max-w-2xl text-center">
                 <div className="mb-8">
                   <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                    <Sparkles className="h-10 w-10 text-primary animate-pulse" />
+                    <Wand2 className="h-10 w-10 text-primary animate-pulse" />
                   </div>
                   
                   <h2 className="text-2xl font-bold mb-2">

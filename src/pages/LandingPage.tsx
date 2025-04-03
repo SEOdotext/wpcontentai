@@ -46,18 +46,54 @@ const LandingPage = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (website) {
-      // Store the website URL in localStorage or state management
-      localStorage.setItem('onboardingWebsite', website);
-      // Navigate to onboarding flow
+      // Format website URL - add https:// if missing
+      let formattedUrl = website;
+      if (!/^https?:\/\//i.test(formattedUrl)) {
+        formattedUrl = 'https://' + formattedUrl;
+      }
+      
+      // Store the formatted website URL
+      localStorage.setItem('onboardingWebsite', formattedUrl);
       navigate('/onboarding');
     }
   };
 
+  // Apply styles to override any sidebar or parent container styles
+  React.useEffect(() => {
+    // Find the sidebar wrapper parent element and set its max-width to 100%
+    const sidebarWrappers = document.querySelectorAll('.group\\/sidebar-wrapper');
+    if (sidebarWrappers.length > 0) {
+      sidebarWrappers.forEach(wrapper => {
+        const element = wrapper as HTMLElement;
+        element.style.maxWidth = '100%';
+        element.style.width = '100%';
+        element.style.paddingLeft = '0';
+        element.style.marginLeft = '0';
+        element.style.display = 'block';
+      });
+    }
+    
+    return () => {
+      // Clean up when component unmounts
+      const sidebarWrappers = document.querySelectorAll('.group\\/sidebar-wrapper');
+      if (sidebarWrappers.length > 0) {
+        sidebarWrappers.forEach(wrapper => {
+          const element = wrapper as HTMLElement;
+          element.style.maxWidth = '';
+          element.style.width = '';
+          element.style.paddingLeft = '';
+          element.style.marginLeft = '';
+          element.style.display = '';
+        });
+      }
+    };
+  }, []);
+
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-background" style={{ width: "100vw", maxWidth: "100vw", margin: 0, padding: 0 }}>
       {/* Header */}
       <header className="w-full py-4 px-6 border-b border-border/10 bg-background/98 backdrop-blur-lg">
-        <div className="container mx-auto flex justify-between items-center">
+        <div className="w-full max-w-6xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             <Logo className="scale-110" />
           </div>
@@ -70,20 +106,20 @@ const LandingPage = () => {
       </header>
 
       {/* Main content */}
-      <main className="flex-1 flex items-center justify-center py-16 px-4 relative overflow-hidden">
+      <main className="flex-1 flex items-center justify-center py-16 px-4 relative overflow-hidden w-full" style={{ maxWidth: "100vw" }}>
         {/* Background elements */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-1/4 left-1/4 w-1/3 h-1/3 bg-primary/5 rounded-full blur-[120px]"></div>
           <div className="absolute bottom-1/4 right-1/4 w-1/3 h-1/3 bg-primary/5 rounded-full blur-[120px]"></div>
         </div>
 
-        <div className="container max-w-5xl mx-auto">
-          <div className="flex flex-col items-center text-center">
+        <div className="max-w-4xl w-full mx-auto flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center justify-center text-center w-full">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="mb-10"
+              className="mb-10 flex justify-center"
             >
               <LogoAnimation />
             </motion.div>
@@ -92,6 +128,7 @@ const LandingPage = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.3 }}
+              className="flex justify-center w-full"
             >
               <div className="inline-flex items-center py-1 px-3 mb-4 border border-primary/20 rounded-full bg-primary/5">
                 <Sparkles className="h-4 w-4 text-primary mr-2" />
@@ -121,12 +158,12 @@ const LandingPage = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.6 }}
-              className="w-full max-w-lg mx-auto"
+              className="w-full max-w-md mx-auto"
             >
               <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
                 <Input
-                  type="url"
-                  placeholder="Enter your website URL"
+                  type="text"
+                  placeholder="yourdomain.com"
                   className="h-14 text-lg flex-1"
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
@@ -136,7 +173,7 @@ const LandingPage = () => {
                   Get Started <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </form>
-              <p className="mt-3 text-sm text-muted-foreground">
+              <p className="mt-3 text-sm text-muted-foreground text-center">
                 No credit card required • Free 14-day trial • No code needed
               </p>
             </motion.div>
@@ -147,7 +184,7 @@ const LandingPage = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.8 }}
-            className="mt-24 grid md:grid-cols-3 gap-4 bg-muted/30 p-6 rounded-2xl backdrop-blur-sm border border-border/10"
+            className="mt-24 grid md:grid-cols-3 gap-4 bg-muted/30 p-6 rounded-2xl backdrop-blur-sm border border-border/10 w-full"
           >
             {/* Testimonial 1 - Lasse from PageVitals */}
             <div className="flex">
@@ -193,7 +230,7 @@ const LandingPage = () => {
 
       {/* Footer */}
       <footer className="py-6 px-4 border-t border-border/10">
-        <div className="container mx-auto">
+        <div className="w-full max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <p className="text-sm text-muted-foreground mb-4 md:mb-0">
               © {new Date().getFullYear()} ContentGardener.ai. All rights reserved.

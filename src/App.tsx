@@ -91,7 +91,7 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
   }
 
   console.log('AuthWrapper: User authenticated, showing protected content');
-  return children;
+  return <>{children}</>;
 };
 
 // Auth redirector - redirects logged-in users to dashboard
@@ -156,50 +156,55 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
 function App() {
   return (
     <Router>
-      <OrganisationProvider>
-        <WebsitesProvider>
-          <WordPressProvider>
-            <SidebarProvider>
-              <Routes>
-                <Route path="/" element={
-                  <AuthRedirector>
-                    <LandingPage />
-                  </AuthRedirector>
-                } />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/setup" element={
-                  <AuthWrapper>
-                    <OrganisationSetup />
-                  </AuthWrapper>
-                } />
-                <Route path="/dashboard" element={
+      <WebsitesProvider>
+        <WordPressProvider>
+          <OrganisationProvider>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={
+                <AuthRedirector>
+                  <LandingPage />
+                </AuthRedirector>
+              } />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/onboarding" element={<Onboarding />} />
+              
+              {/* Protected routes */}
+              <Route path="/dashboard" element={
+                <SidebarProvider>
                   <AuthWrapper>
                     <Index />
                   </AuthWrapper>
-                } />
-                <Route path="/settings" element={
+                </SidebarProvider>
+              } />
+              <Route path="/settings" element={
+                <SidebarProvider>
                   <AuthWrapper>
                     <Settings />
                   </AuthWrapper>
-                } />
-                <Route path="/team" element={
+                </SidebarProvider>
+              } />
+              <Route path="/setup" element={
+                <SidebarProvider>
+                  <AuthWrapper>
+                    <OrganisationSetup />
+                  </AuthWrapper>
+                </SidebarProvider>
+              } />
+              <Route path="/team" element={
+                <SidebarProvider>
                   <AuthWrapper>
                     <TeamManagement />
                   </AuthWrapper>
-                } />
-                <Route path="/onboarding" element={
-                  <AuthWrapper>
-                    <Onboarding />
-                  </AuthWrapper>
-                } />
-              </Routes>
-              <Toaster />
-            </SidebarProvider>
-          </WordPressProvider>
-        </WebsitesProvider>
-      </OrganisationProvider>
+                </SidebarProvider>
+              } />
+            </Routes>
+            <Toaster />
+          </OrganisationProvider>
+        </WordPressProvider>
+      </WebsitesProvider>
     </Router>
   );
 }
 
-export default App;
+export default App; 
