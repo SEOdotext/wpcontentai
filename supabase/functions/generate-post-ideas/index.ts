@@ -240,6 +240,7 @@ Each post should:
 3. Provide unique value while maintaining the keyword focus
 
 Additional context:
+Current year: 2025
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
 Subject matters: ${subject_matters.join(', ') || pubSettings?.subject_matters?.join(', ') || 'general'}
 
