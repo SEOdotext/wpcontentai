@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Mail, Loader2, ArrowLeft } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { hasAnonymousUser, migrateAnonymousUserToDB } from '@/utils/anonymousUser';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -28,6 +29,20 @@ const Auth = () => {
       if (data.session) {
         setIsAuthenticated(true);
         console.log('Auth: User is already authenticated, waiting briefly before redirecting');
+        
+        // Check if we have anonymous user data to migrate
+        if (hasAnonymousUser()) {
+          console.log('Auth: Anonymous user data found, migrating to database...');
+          const migrationSuccess = await migrateAnonymousUserToDB();
+          if (migrationSuccess) {
+            console.log('Auth: Successfully migrated anonymous user data to database');
+            toast.success('Your progress has been saved to your account');
+          } else {
+            console.error('Auth: Failed to migrate anonymous user data');
+            // Non-critical error, continue with auth
+          }
+        }
+        
         setTimeout(() => {
           console.log('Auth: Redirecting to dashboard after delay');
           navigate('/dashboard');
@@ -40,9 +55,23 @@ const Auth = () => {
     checkAuth();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (_event, session) => {
         if (session) {
           console.log('Auth: Auth state changed, user authenticated, waiting briefly before redirecting');
+          
+          // Check if we have anonymous user data to migrate
+          if (hasAnonymousUser()) {
+            console.log('Auth: Anonymous user data found, migrating to database...');
+            const migrationSuccess = await migrateAnonymousUserToDB();
+            if (migrationSuccess) {
+              console.log('Auth: Successfully migrated anonymous user data to database');
+              toast.success('Your progress has been saved to your account');
+            } else {
+              console.error('Auth: Failed to migrate anonymous user data');
+              // Non-critical error, continue with auth
+            }
+          }
+          
           setTimeout(() => {
             console.log('Auth: Redirecting to dashboard after auth state change delay');
             navigate('/dashboard');
@@ -89,6 +118,8 @@ const Auth = () => {
         if (error) throw error;
         
         toast.success('Check your email to confirm your account');
+        
+        // Note: We'll migrate anonymous data on auth state change after email confirmation
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -98,6 +129,8 @@ const Auth = () => {
         if (error) throw error;
         
         toast.success('Successfully logged in');
+        
+        // Note: We'll migrate anonymous data on auth state change
         navigate('/dashboard');
       }
     } catch (error) {
@@ -164,6 +197,7 @@ const Auth = () => {
       console.log(`Auth: Current origin: ${currentOrigin}`);
       console.log(`Auth: Redirect URL: ${redirectUrl}`);
       
+      // Note: We'll migrate anonymous data on auth state change after OAuth redirect
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

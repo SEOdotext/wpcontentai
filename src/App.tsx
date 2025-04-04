@@ -202,7 +202,14 @@ function App() {
             {/* Public routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/onboarding" element={<Onboarding />} />
+            <Route 
+              path="/onboarding" 
+              element={
+                <AppContexts>
+                  <Onboarding />
+                </AppContexts>
+              } 
+            />
             
             {/* All protected routes - wrapped in contexts */}
             <Route path="/dashboard" element={
