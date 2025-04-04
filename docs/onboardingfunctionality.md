@@ -1,10 +1,11 @@
 OK. Let's edit the flow a bit for the user signup
 
-Front page: Enter the website domain.
-BACKEND: Create website (url entered) and organisation (url without TLD), and anonymous user is created
-(Functions: scrapes the url with )
-**User sees: Starts loader part and does some "operations" for the user
+Front page: Enter the website domain. (in the current input field)
 
+Then
+DB: First: Create website (url entered) and organisation (from url without TLD), + anonymous user is created.
+
+User sees: "Loader part" that does "operations" for the user:
 Setup 1. (Loading page with a ton of operations!)
 - Reading website 
 (Use the "get-sitemap-pages" and the "crawl-website-pages" functions and store the up to 500 urls in website_content)
@@ -13,9 +14,13 @@ Setup 1. (Loading page with a ton of operations!)
 - Suggesting relevant content ideas
 Use "generate-post-ideas" to show the 5 ideas to the user
 
+The backend steps are linked with the frontend, the frontend gets notified about the updates. 
+
 Setup 2. Content Idea
 - Thumbs up and thumbs down for the 5 content ideas generated
 This is a page in the signup quite similar to https://contentgardener.ai/create, reuse the functions if you can. But no sidebar and minimal information. Focus on the generated content ideas. No categories are added here
+If 0 posts are liked, genereate 5 new suggestions
+As the posts are thumbed up and down, "remove them" from the list, similar to frontend
 
 Setup 3. 
 
