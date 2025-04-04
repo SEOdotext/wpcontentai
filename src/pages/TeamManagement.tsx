@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Helmet } from 'react-helmet-async';
-import { Users, UserPlus, Trash2, Loader2, Shield, Globe } from 'lucide-react';
+import { Users, UserPlus, Trash2, Loader2, Shield, Globe, Mail } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { checkEmailConfiguration } from '@/utils/emailDiagnostics';
 
 // Define types
 interface TeamMember {
@@ -81,6 +82,8 @@ const TeamManagement = () => {
   const [isAddingExistingUser, setIsAddingExistingUser] = useState(false);
   const [activeTab, setActiveTab] = useState<'invite' | 'add'>('add');
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'member' | null>(null);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [emailDiagnosticResult, setEmailDiagnosticResult] = useState<any>(null);
 
   // Fetch the current user's role
   const fetchCurrentUserRole = async () => {
@@ -199,7 +202,16 @@ const TeamManagement = () => {
 
       if (signUpError) {
         console.error('Error creating auth user:', signUpError);
-        throw signUpError;
+        
+        // Simple error handling with clear message for email sending failures
+        if (signUpError.message && signUpError.message.includes('sending confirmation email')) {
+          toast.error('Unable to send invitation email. Please check Supabase email settings.');
+          // Log the error for debugging
+          console.log('Email sending error details:', JSON.stringify(signUpError));
+        } else {
+          toast.error(signUpError.message || 'Failed to create user');
+        }
+        return;
       }
 
       if (!authData.user?.id) {
@@ -451,6 +463,34 @@ const TeamManagement = () => {
     }
   };
 
+  // Check email configuration
+  const handleCheckEmailConfiguration = async () => {
+    setIsCheckingEmail(true);
+    try {
+      const result = await checkEmailConfiguration();
+      setEmailDiagnosticResult(result);
+      
+      if (result.success) {
+        if (result.issues && result.issues.length > 0) {
+          toast.warning('Email configuration has issues', {
+            description: result.issues.join(', ')
+          });
+        } else {
+          toast.success('Email configuration appears to be correct');
+        }
+      } else {
+        toast.error('Failed to check email configuration', {
+          description: result.error
+        });
+      }
+    } catch (error) {
+      console.error('Error checking email configuration:', error);
+      toast.error('Failed to check email configuration');
+    } finally {
+      setIsCheckingEmail(false);
+    }
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -479,71 +519,129 @@ const TeamManagement = () => {
                 <>
                   <div className="flex justify-between items-center">
                     <h1 className="text-2xl font-bold">Team Management</h1>
-                    <Dialog open={isInviteDialogOpen && !selectedMember} onOpenChange={(open) => {
-                      setIsInviteDialogOpen(open);
-                      if (!open) setSelectedMember(null);
-                    }}>
-                      <DialogTrigger asChild>
-                        <Button>
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          Invite Team Member
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Invite Team Member</DialogTitle>
-                          <DialogDescription>
-                            Invite a new team member to your organization. They will receive an email invitation to join.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4 py-4">
-                              <div className="space-y-2">
-                                <label htmlFor="email" className="text-sm font-medium">
-                                  Email Address
-                                </label>
-                                <Input
-                                  id="email"
-                                  type="email"
-                                  placeholder="colleague@example.com"
-                                  value={email}
-                                  onChange={(e) => setEmail(e.target.value)}
-                                />
-                            <p className="text-xs text-muted-foreground">
-                              Enter the email address of the person you want to invite. They will receive an invitation to join your organization.
-                            </p>
-                              </div>
-                              
-                              <div className="space-y-2">
-                            <label htmlFor="role" className="text-sm font-medium">
-                                  Role
-                                </label>
-                                <Select
-                                  value={role}
-                                  onValueChange={(value) => setRole(value as 'admin' | 'member')}
-                                >
-                                  <SelectTrigger id="role">
-                                    <SelectValue placeholder="Select a role" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="admin">Admin (Full Access)</SelectItem>
-                                    <SelectItem value="member">Member (Limited Access)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                        </div>
-                        <DialogFooter>
-                            <Button
-                              onClick={handleInviteTeamMember}
-                              disabled={!email.trim()}
-                            >
-                              Invite
-                            </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={handleCheckEmailConfiguration} disabled={isCheckingEmail}>
+                        {isCheckingEmail ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Mail className="h-4 w-4 mr-2" />
+                        )}
+                        Check Email Config
+                      </Button>
+                      <Dialog open={isInviteDialogOpen && !selectedMember} onOpenChange={(open) => {
+                        setIsInviteDialogOpen(open);
+                        if (!open) setSelectedMember(null);
+                      }}>
+                        <DialogTrigger asChild>
+                          <Button>
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Invite Team Member
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Invite Team Member</DialogTitle>
+                            <DialogDescription>
+                              Invite a new team member to your organization. They will receive an email invitation to join.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                  <label htmlFor="email" className="text-sm font-medium">
+                                    Email Address
+                                  </label>
+                                  <Input
+                                    id="email"
+                                    type="email"
+                                    placeholder="colleague@example.com"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                  />
+                              <p className="text-xs text-muted-foreground">
+                                Enter the email address of the person you want to invite. They will receive an invitation to join your organization.
+                              </p>
+                                </div>
+                                
+                                <div className="space-y-2">
+                              <label htmlFor="role" className="text-sm font-medium">
+                                    Role
+                                  </label>
+                                  <Select
+                                    value={role}
+                                    onValueChange={(value) => setRole(value as 'admin' | 'member')}
+                                  >
+                                    <SelectTrigger id="role">
+                                      <SelectValue placeholder="Select a role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="admin">Admin (Full Access)</SelectItem>
+                                      <SelectItem value="member">Member (Limited Access)</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                          </div>
+                          <DialogFooter>
+                              <Button
+                                onClick={handleInviteTeamMember}
+                                disabled={!email.trim()}
+                              >
+                                Invite
+                              </Button>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
                   </div>
 
                   <Separator />
+
+                  {/* Display email diagnostic results if available */}
+                  {emailDiagnosticResult && (
+                    <Card className="mb-4">
+                      <CardHeader>
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-5 w-5" />
+                          <CardTitle>Email Configuration Status</CardTitle>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {emailDiagnosticResult.success ? (
+                          <>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="text-sm font-medium">SMTP Configured:</div>
+                              <div className="text-sm">
+                                {emailDiagnosticResult.details?.smtp_configured ? 
+                                  <span className="text-green-600">Yes</span> : 
+                                  <span className="text-red-600">No</span>
+                                }
+                              </div>
+                              
+                              <div className="text-sm font-medium">Site URL:</div>
+                              <div className="text-sm">{emailDiagnosticResult.details?.site_url}</div>
+                              
+                              <div className="text-sm font-medium">SMTP Host:</div>
+                              <div className="text-sm">{emailDiagnosticResult.details?.smtp_host || 'Not set'}</div>
+                            </div>
+                            
+                            {emailDiagnosticResult.issues && emailDiagnosticResult.issues.length > 0 && (
+                              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+                                <p className="text-yellow-800 font-medium">Issues Detected:</p>
+                                <ul className="list-disc ml-5 text-sm text-yellow-700">
+                                  {emailDiagnosticResult.issues.map((issue: string, index: number) => (
+                                    <li key={index}>{issue}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="text-red-600">
+                            Failed to check: {emailDiagnosticResult.error}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
 
                   <Card>
                     <CardHeader>

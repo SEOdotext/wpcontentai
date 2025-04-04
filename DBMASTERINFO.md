@@ -27,28 +27,63 @@ The application uses the following database components for email functionality:
 1. `auth.users` - Stores user authentication information
 2. `auth.emails` - Used by Supabase to queue and send emails
 3. `send_invitation_email` function - Custom function to send organization invitations
+4. `check_email_configuration` function - Diagnostic function to check email settings
 
-If emails are not being sent, check:
-1. SMTP configuration in Supabase dashboard
-2. Email provider restrictions or spam filters
-3. Application logs for error messages
-4. Email queue in `auth.emails` table
+## Diagnostic Tools
+
+The application includes diagnostic tools to help troubleshoot email issues:
+
+1. **Email Configuration Check Button** - Available to admins on the Team Management page
+   - Shows SMTP configuration status
+   - Displays recent email sending attempts
+   - Identifies common configuration issues
+
+2. **Database Diagnostic Function** - `check_email_configuration()`
+   - Can be called directly from SQL Editor for more detailed information
+   - Logs configuration data to the Supabase logs
 
 ## Troubleshooting Common Issues
 
 1. **"Error sending confirmation email"**:
-   - Verify SMTP settings are correct
+   - Use the "Check Email Config" button to see the current configuration status
+   - Verify SMTP settings in Supabase dashboard
    - Check if your email provider is blocking the sending
-   - Ensure the site URL is properly set
+   - Check Supabase logs for specific error messages
+   - Temporary workaround: The system will attempt to add users even if email sending fails
 
-2. **Invitation emails not received**:
-   - Check spam/junk folders
-   - Verify email address is correct
-   - Check if rate limits are exceeded on your email provider
+2. **Email server connection issues**:
+   - Verify your SMTP server is accessible from Supabase's infrastructure
+   - Some email providers block connections from cloud services
+   - Try using a dedicated transactional email service like SendGrid, Mailgun, or Amazon SES
 
-3. **User sign-up errors**:
-   - Ensure the redirect URL is properly set in authentication settings
-   - Verify that the domain matches the site URL
+3. **Site URL configuration**:
+   - In Supabase dashboard, go to Settings → API
+   - Ensure the site URL is correctly set to your application's URL
+   - For development: http://localhost:8080 (or your dev port)
+   - For production: https://yourdomain.com
+
+4. **Email templates**:
+   - Check Authentication → Email Templates
+   - Ensure all required templates (Confirmation, Invite, Magic Link, etc.) are properly configured
+
+## Manual Email Testing
+
+To manually test email functionality:
+
+```sql
+-- Call the diagnostic function
+SELECT * FROM check_email_configuration();
+
+-- Check the email queue
+SELECT * FROM auth.emails ORDER BY created_at DESC LIMIT 10;
+
+-- Manually send a test invitation
+SELECT * FROM send_invitation_email(
+  '<user_uuid>', 
+  '<organization_uuid>', 
+  TRUE
+);
+```
 
 ## Production vs Development Settings
 
