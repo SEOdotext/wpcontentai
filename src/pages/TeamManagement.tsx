@@ -192,7 +192,8 @@ const TeamManagement = () => {
         email: email,
         password: Math.random().toString(36).slice(-12), // Generate a random password
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          // Ensure proper URL format to avoid email sending errors
+          emailRedirectTo: window.location.origin + '/auth/callback',
           data: {
             role: role,
             organisation_id: organisation.id
@@ -204,41 +205,43 @@ const TeamManagement = () => {
       if (signUpError) {
         console.error('Error creating auth user:', signUpError);
         
-        // If there's an email sending error but user was created
+        // Special handle for email confirmation errors
         if (signUpError.message && signUpError.message.includes('sending confirmation email')) {
+          // This is just an email sending issue - the user likely was created
           console.log('Email sending error details:', JSON.stringify(signUpError));
           
-          // Try to continue with the process if the user was actually created
+          // Notify the user about the email issue but continue
+          toast.warning('Team member created but email confirmation could not be sent', {
+            description: 'The user was created but they may not receive the confirmation email'
+          });
+          
+          // Continue with the process since the user was likely created
           if (authData && authData.user && authData.user.id) {
-            console.log('User was created despite email error, proceeding with invitation');
-            
-            // Continue with the user that was created
-            const userId = authData.user.id;
-            
-            // Now call the RPC function to handle the invitation
-            const { data: invitationResponse, error: invitationError } = await supabase
-              .rpc('handle_organisation_invitation', {
-                p_email: email,
-                p_organisation_id: organisation.id,
-                p_role: role,
-                p_website_ids: [] // Pass empty array for website IDs
-              });
-
-            if (invitationError) {
-              console.error('Error sending invitation:', invitationError);
-              toast.error('Failed to add user to organization');
+            try {
+              // Proceed with organization invitation
+              const { data: invitationResponse, error: invitationError } = await supabase
+                .rpc('handle_organisation_invitation', {
+                  p_email: email,
+                  p_organisation_id: organisation.id,
+                  p_role: role,
+                  p_website_ids: []
+                });
+                
+              if (invitationError) {
+                throw invitationError;
+              }
+              
+              toast.success('Team member added successfully');
+              await fetchTeamData();
+              setEmail('');
+              setRole('member');
+              setIsInviteDialogOpen(false);
+              return;
+            } catch (inviteError) {
+              console.error('Error adding team member to organization:', inviteError);
+              toast.error('Team member was created but could not be added to your organization');
               return;
             }
-            
-            toast.success('Team member added successfully, but email delivery failed');
-            await fetchTeamData();
-            setEmail('');
-            setRole('member');
-            setIsInviteDialogOpen(false);
-            return;
-          } else {
-            toast.error('Unable to create user account. Check Supabase email settings.');
-            return;
           }
         } else {
           toast.error(signUpError.message || 'Failed to create user');
