@@ -473,6 +473,17 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const deleteWebsite = async (id: string) => {
     try {
+      // First, delete any related publication_settings records
+      const { error: settingsError } = await supabase
+        .from('publication_settings')
+        .delete()
+        .eq('website_id', id);
+      
+      if (settingsError) {
+        throw settingsError;
+      }
+      
+      // Now delete the website
       const { error } = await supabase
         .from('websites')
         .delete()
@@ -491,6 +502,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       toast.success('Website deleted successfully');
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to delete website'));
+      toast.error('Failed to delete website: ' + (err instanceof Error ? err.message : 'Unknown error'));
       throw err;
     }
   };
