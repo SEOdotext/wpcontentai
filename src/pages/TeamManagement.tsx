@@ -187,76 +187,30 @@ const TeamManagement = () => {
     try {
       console.log('Sending invitation for:', email);
       
-      // First create the auth user
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: email,
-        password: Math.random().toString(36).slice(-12), // Generate a random password
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            role: role,
-            organisation_id: organisation.id
-          }
-        }
+      // Use the direct invite method to bypass email confirmation
+      const { data, error } = await supabase.rpc('invite_user_to_organisation', {
+        p_email: email,
+        p_organisation_id: organisation.id,
+        p_role: role,
+        p_website_ids: []
       });
-
-      if (signUpError) {
-        console.error('Error creating auth user:', signUpError);
-        
-        // Simple error handling with clear message for email sending failures
-        if (signUpError.message && signUpError.message.includes('sending confirmation email')) {
-          toast.error('Unable to send invitation email. Please check Supabase email settings.');
-          // Log the error for debugging
-          console.log('Email sending error details:', JSON.stringify(signUpError));
-        } else {
-          toast.error(signUpError.message || 'Failed to create user');
-        }
+      
+      if (error) {
+        console.error('Error inviting user:', error);
+        toast.error(error.message || 'Failed to invite user');
         return;
       }
-
-      if (!authData.user?.id) {
-        throw new Error('Failed to create auth user');
-      }
-
-      // Now call the RPC function to handle the invitation
-      const { data: invitationResponse, error: invitationError } = await supabase
-        .rpc('handle_organisation_invitation', {
-          p_email: email,
-          p_organisation_id: organisation.id,
-          p_role: role,
-          p_website_ids: [] // Pass empty array for website IDs
-        });
-
-      if (invitationError) {
-        console.error('Error sending invitation:', invitationError);
-        throw invitationError;
-      }
-
-      console.log('Invitation response:', invitationResponse);
-
-      if (invitationResponse && invitationResponse.status === 'success') {
-        // Only send invitation email for new users
-        if (invitationResponse.is_new_user) {
-          await supabase.rpc('send_invitation_email', {
-            p_user_id: invitationResponse.user_id,
-            p_organisation_id: organisation.id,
-            p_is_new_user: true
-          });
-        }
-
-        toast.success('Team member added successfully');
-        
-        // Always refresh team data, regardless of the response
-        console.log('Refreshing team data...');
+      
+      console.log('Invitation result:', data);
+      
+      if (data && data.status === 'success') {
+        toast.success('Team member invited successfully');
         await fetchTeamData();
-
         setEmail('');
         setRole('member');
         setIsInviteDialogOpen(false);
-      } else if (invitationResponse && invitationResponse.message === 'User is already a member of this organization') {
-        toast.info('This user is already a member of your organization.');
       } else {
-        toast.error((invitationResponse && invitationResponse.message) || 'Failed to invite team member');
+        toast.error((data && data.message) || 'Failed to invite team member');
       }
     } catch (error) {
       console.error('Error in handleInviteTeamMember:', error);
