@@ -4,7 +4,7 @@ import { DOMParser, Element, Node } from "https://deno.land/x/deno_dom@v0.1.38/d
 
 // Get allowed origins from environment variables
 const ALLOWED_ORIGINS = {
-  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai'],
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai', 'https://contentgardener.ai/'],
   staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080']
 };
 

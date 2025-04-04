@@ -8,8 +8,32 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Get allowed origins from environment variables
+const ALLOWED_ORIGINS = {
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai', 'https://contentgardener.ai/'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080']
+};
+
+// Function to determine if origin is allowed
+function isAllowedOrigin(origin: string | null): boolean {
+  if (!origin) return false;
+  
+  // In development, allow all origins
+  if (Deno.env.get('ENVIRONMENT') === 'development') return true;
+  
+  // Check against allowed origins based on environment
+  const allowedOrigins = Deno.env.get('ENVIRONMENT') === 'production' 
+    ? ALLOWED_ORIGINS.production 
+    : ALLOWED_ORIGINS.staging;
+    
+  return allowedOrigins.includes(origin);
+}
+
+// Get the origin
+const origin = typeof Request !== 'undefined' ? new Request('').headers.get('origin') : null;
+
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };

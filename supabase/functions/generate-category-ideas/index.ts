@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 // Get allowed origins from environment variables
 const ALLOWED_ORIGINS = {
-  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai'],
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai', 'https://contentgardener.ai/'],
   staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080']
 };
 
@@ -73,11 +73,11 @@ serve(async (req) => {
 
     if (websiteError) {
       console.error('Database error fetching website:', websiteError);
-      throw new Error(`Failed to fetch website settings: ${websiteError.message}`);
+      throw new Error('Failed to fetch website settings: ' + websiteError.message);
     }
 
     if (!website) {
-      throw new Error(`Website not found with ID: ${websiteId}`);
+      throw new Error('Website not found with ID: ' + websiteId);
     }
 
     // Get recent post themes for content analysis
@@ -90,7 +90,7 @@ serve(async (req) => {
 
     if (postThemesError) {
       console.error('Database error fetching post themes:', postThemesError);
-      throw new Error(`Failed to fetch post themes: ${postThemesError.message}`);
+      throw new Error('Failed to fetch post themes: ' + postThemesError.message);
     }
 
     // Extract keywords and subject matters
@@ -98,32 +98,26 @@ serve(async (req) => {
     const subjectMatters = postThemes.map(theme => theme.subject_matter);
 
     // Generate category ideas using OpenAI with language context
+    const systemPrompt = "You are a content strategist helping to generate category ideas for a WordPress website. Generate 5 unique, relevant category names based on the provided content themes and keywords. Each category should be concise (1-3 words) and use kebab-case for the slug. Generate the categories in the website's language (" + (website.language || 'en') + ").\n\nIMPORTANT: \n1. Do not generate any categories that are already in use. Here are the existing categories to avoid:\n" + existingCategories.map(c => "- " + c).join('\n') + "\n\n2. Category names should be human-readable and NOT contain hyphens. Use spaces and proper capitalization instead.\n3. Only use kebab-case for the slug field, not the category name.\n\nFormat each category exactly like this, one per line:\nCategory Name|category-name-slug\n\nExamples:\nDigital Marketing|digital-marketing\nContent Strategy|content-strategy\nSocial Media Tips|social-media-tips\nBusiness Growth|business-growth";
+    
+    const userPrompt = "Based on these content themes: " + subjectMatters.join(', ') + " and keywords: " + keywords.join(', ') + ", generate 5 category ideas in " + (website.language || 'English') + ". Return only the category-name|slug pairs, one per line, with no additional formatting, numbers, or markers.";
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`
+        'Authorization': 'Bearer ' + Deno.env.get('OPENAI_API_KEY')
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: `You are a content strategist helping to generate category ideas for a WordPress website. Generate 5 unique, relevant category names based on the provided content themes and keywords. Each category should be concise (1-3 words) and use kebab-case for the slug. Generate the categories in the website's language (${website.language || 'en'}).
-
-IMPORTANT: 
-1. Do not generate any categories that are already in use. Here are the existing categories to avoid:
-${existingCategories.map(c => `- ${c}`).join('\n')}
-
-2. Category names should be human-readable and NOT contain hyphens. Use spaces and proper capitalization instead.
-3. Only use kebab-case for the slug field, not the category name.
-
-Format each category exactly like this, one per line:
-Category Name|category-name-slug
+            content: systemPrompt
           },
           {
             role: 'user',
-            content: `Based on these content themes: ${subjectMatters.join(', ')} and keywords: ${keywords.join(', ')}, generate 5 category ideas in ${website.language || 'English'}. Return only the category-name|slug pairs, one per line, with no additional formatting, numbers, or markers.`
+            content: userPrompt
           }
         ],
         temperature: 0.7,
@@ -132,7 +126,7 @@ Category Name|category-name-slug
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+      throw new Error("OpenAI API error: " + response.statusText);
     }
 
     const result = await response.json();
