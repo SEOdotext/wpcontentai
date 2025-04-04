@@ -40,27 +40,52 @@ const queryClient = new QueryClient({
 const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
 
   useEffect(() => {
     console.log('AuthWrapper: Checking auth state...');
     
-    // Always have a minimum loading time to ensure contexts have time to initialize
+    // Force timeout to prevent indefinite loading
+    let forcedTimeoutId = setTimeout(() => {
+      console.log('AuthWrapper: Forced timeout reached, proceeding with cached auth state');
+      // Check localStorage for a session token as fallback
+      const hasLocalToken = localStorage.getItem('supabase.auth.token') !== null;
+      if (!initialCheckComplete) {
+        setInitialCheckComplete(true);
+        if (hasLocalToken) {
+          setIsAuthenticated(true);
+        }
+      }
+      setIsLoading(false);
+    }, 5000); // 5-second safety net
+    
+    // Normal loading timeout for UI smoothness
     let timeoutId = setTimeout(() => {
       console.log('AuthWrapper: Minimum loading time elapsed, validating contexts');
-      // Only show content after a minimum loading period
       setIsLoading(false);
-    }, 1500);
+    }, 800);
     
     const checkAuth = async () => {
       try {
         const { data } = await supabase.auth.getSession();
         const isLoggedIn = !!data.session;
+        
+        // If we have a session, save a flag in localStorage as a fallback
+        if (isLoggedIn) {
+          localStorage.setItem('last_auth_state', 'authenticated');
+        } else {
+          localStorage.removeItem('last_auth_state');
+        }
+        
         console.log('AuthWrapper: Auth check complete, user is', isLoggedIn ? 'authenticated' : 'not authenticated');
         setIsAuthenticated(isLoggedIn);
+        setInitialCheckComplete(true);
       } catch (error) {
         console.error('AuthWrapper: Error checking auth:', error);
-        setIsAuthenticated(false);
-        setIsLoading(false); // On error, show content immediately
+        // Try to recover from error using localStorage
+        const lastAuthState = localStorage.getItem('last_auth_state');
+        setIsAuthenticated(lastAuthState === 'authenticated');
+        setInitialCheckComplete(true);
       }
     };
 
@@ -69,15 +94,23 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       console.log('AuthWrapper: Auth state changed, user is', session ? 'authenticated' : 'not authenticated');
       setIsAuthenticated(!!session);
+      
+      // Update fallback flag
+      if (session) {
+        localStorage.setItem('last_auth_state', 'authenticated');
+      } else {
+        localStorage.removeItem('last_auth_state');
+      }
     });
 
     return () => {
       clearTimeout(timeoutId);
+      clearTimeout(forcedTimeoutId);
       subscription.unsubscribe();
     };
   }, []);
 
-  if (isLoading) {
+  if (isLoading && !initialCheckComplete) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -99,15 +132,56 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
 
 // Protected Route component that checks for organisation setup
 const ProtectedRoute = ({ children, requireOrg = true }: { children: React.ReactNode, requireOrg?: boolean }) => {
-  const { hasOrganisation, isLoading: orgLoading } = useOrganisation();
+  const { hasOrganisation, isLoading: orgLoading, organisation } = useOrganisation();
+  const { currentWebsite, isLoading: websitesLoading } = useWebsites();
+  const [forceShowContent, setForceShowContent] = useState(false);
+  const [redirectToSetup, setRedirectToSetup] = useState(false);
+  
+  // Check localStorage to see if we've previously had an organization
+  const hasCachedOrg = !!localStorage.getItem('currentOrganisation');
+  const hasCachedWebsite = !!localStorage.getItem('currentWebsiteId');
+  
+  // Safety timeout - if org loading takes too long, force-show content
+  useEffect(() => {
+    const safetyTimer = setTimeout(() => {
+      if (orgLoading || websitesLoading) {
+        console.log('Organization loading state persisted too long, showing content anyway');
+        setForceShowContent(true);
+      }
+    }, 3000);
+    
+    return () => clearTimeout(safetyTimer);
+  }, [orgLoading, websitesLoading]);
+  
+  // After a delay, if we're sure the user has no org, redirect to setup
+  useEffect(() => {
+    // Only start this check if we're past loading and requiring an org
+    if (!orgLoading && !websitesLoading && requireOrg) {
+      const setupCheckTimer = setTimeout(() => {
+        // If we definitely have no org data or website data after loading is complete
+        if (!hasOrganisation && !currentWebsite && !hasCachedOrg && !hasCachedWebsite) {
+          console.log('Confirmed user has no organization, redirecting to setup');
+          setRedirectToSetup(true);
+        }
+      }, 1000);
+      
+      return () => clearTimeout(setupCheckTimer);
+    }
+  }, [orgLoading, websitesLoading, hasOrganisation, currentWebsite, hasCachedOrg, hasCachedWebsite, requireOrg]);
   
   // Skip organization check if not required
   if (!requireOrg) {
     return <>{children}</>;
   }
 
-  // Show loading state while checking
-  if (orgLoading) {
+  // Redirect to setup if we're sure the user needs onboarding
+  if (redirectToSetup) {
+    return <Navigate to="/setup" replace />;
+  }
+
+  // Only show loading for a brief period, and only on first load
+  // Show content if we have either cache data or forceShowContent is true
+  if (orgLoading && !currentWebsite && !hasCachedOrg && !hasCachedWebsite && !forceShowContent) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -118,11 +192,7 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
     );
   }
 
-  // If organization is required but user doesn't have one, redirect to setup
-  if (requireOrg && !hasOrganisation) {
-    return <Navigate to="/setup" replace />;
-  }
-
+  // Show content immediately in all other cases - we'll handle redirect later if needed
   return <>{children}</>;
 };
 

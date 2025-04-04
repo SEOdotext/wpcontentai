@@ -49,12 +49,76 @@ const OrganisationContext = createContext<OrganisationContextType>({
 
 export const useOrganisation = () => useContext(OrganisationContext);
 
+// Helper functions for localStorage cache
+const getStoredOrganisation = () => {
+  const storedData = localStorage.getItem('currentOrganisation');
+  if (storedData) {
+    try {
+      return JSON.parse(storedData);
+    } catch (e) {
+      console.error('Error parsing stored organisation data:', e);
+      return null;
+    }
+  }
+  return null;
+};
+
+const getStoredOrganisations = () => {
+  const storedData = localStorage.getItem('organisations');
+  if (storedData) {
+    try {
+      return JSON.parse(storedData);
+    } catch (e) {
+      console.error('Error parsing stored organisations data:', e);
+      return [];
+    }
+  }
+  return [];
+};
+
+const setStoredOrganisation = (org: Organisation | null) => {
+  if (org) {
+    localStorage.setItem('currentOrganisation', JSON.stringify(org));
+  } else {
+    localStorage.removeItem('currentOrganisation');
+  }
+};
+
+const setStoredOrganisations = (orgs: Organisation[]) => {
+  localStorage.setItem('organisations', JSON.stringify(orgs));
+};
+
 export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [organisation, setOrganisation] = useState<Organisation | null>(null);
-  const [organizations, setOrganizations] = useState<Organisation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasOrganisation, setHasOrganisation] = useState(false);
+  // Initialize with cached data from localStorage
+  const cachedOrg = getStoredOrganisation();
+  const cachedOrgs = getStoredOrganisations();
+
+  const [organisation, setOrganisation] = useState<Organisation | null>(cachedOrg);
+  const [organizations, setOrganizations] = useState<Organisation[]>(cachedOrgs);
+  const [isLoading, setIsLoading] = useState(!cachedOrg); // Only show loading if no cached data
+  const [hasOrganisation, setHasOrganisation] = useState(!!cachedOrg);
   const navigate = useNavigate();
+
+  // Add a safety timeout to prevent being stuck in loading state
+  useEffect(() => {
+    const loadingTimeout = setTimeout(() => {
+      if (isLoading) {
+        console.log("Loading timeout reached, setting loading to false");
+        setIsLoading(false);
+      }
+    }, 5000); // 5-second max loading time
+
+    return () => clearTimeout(loadingTimeout);
+  }, [isLoading]);
+
+  // Update localStorage when state changes
+  useEffect(() => {
+    setStoredOrganisation(organisation);
+  }, [organisation]);
+
+  useEffect(() => {
+    setStoredOrganisations(organizations);
+  }, [organizations]);
 
   // Fetch user's organizations on mount
   useEffect(() => {
@@ -70,49 +134,81 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         
         if (!sessionData.session) {
           console.log('No session found, setting loading to false');
-          setOrganisation(null);
-          setOrganizations([]);
+          updateOrganisationState(null);
+          updateOrganisationsState([]);
           setHasOrganisation(false);
           setIsLoading(false);
           return;
         }
 
-        console.log('Fetching organizations for user:', sessionData.session.user.id);
-        const { data: orgs, error } = await supabase
-          .from('organisation_memberships')
-          .select(`
-            organisation:organisations (
-              id,
-              name,
-              created_at
-            )
-          `)
-          .eq('member_id', sessionData.session.user.id) as { data: OrganisationResponse[] | null, error: any };
+        // Add a timeout in case the request hangs
+        const fetchPromise = new Promise(async (resolve, reject) => {
+          try {
+            console.log('Fetching organizations for user:', sessionData.session.user.id);
+            const { data: orgs, error } = await supabase
+              .from('organisation_memberships')
+              .select(`
+                organisation:organisations (
+                  id,
+                  name,
+                  created_at
+                )
+              `)
+              .eq('member_id', sessionData.session.user.id) as { data: OrganisationResponse[] | null, error: any };
 
-        if (error) {
-          console.error('Error fetching organizations:', error);
-          throw error;
-        }
+            if (error) {
+              console.error('Error fetching organizations:', error);
+              // Only reset state if we don't have any existing organization data
+              if (!organisation && organizations.length === 0) {
+                setHasOrganisation(false);
+              }
+              console.log('Error handled gracefully, keeping existing state if available');
+              resolve(null);
+              return;
+            }
 
-        console.log('Organizations fetched:', orgs);
-        if (orgs && orgs.length > 0) {
-          const formattedOrgs = orgs.map(org => ({
-            id: org.organisation.id,
-            name: org.organisation.name,
-            created_at: org.organisation.created_at
-          } as Organisation));
-          
-          setOrganizations(formattedOrgs);
-          setOrganisation(formattedOrgs[0]);
-          setHasOrganisation(true);
-        } else {
-          console.log('No organizations found for user');
-          setHasOrganisation(false);
+            console.log('Organizations fetched:', orgs);
+            if (orgs && orgs.length > 0) {
+              const formattedOrgs = orgs.map(org => ({
+                id: org.organisation.id,
+                name: org.organisation.name,
+                created_at: org.organisation.created_at
+              } as Organisation));
+              
+              updateOrganisationsState(formattedOrgs);
+              updateOrganisationState(formattedOrgs[0]);
+              setHasOrganisation(true);
+            } else {
+              console.log('No organizations found for user');
+              setHasOrganisation(false);
+            }
+            resolve(orgs);
+          } catch (error) {
+            reject(error);
+          }
+        });
+
+        // Race the fetch with a timeout
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Organization fetch timed out')), 4000);
+        });
+
+        try {
+          await Promise.race([fetchPromise, timeoutPromise]);
+        } catch (error) {
+          console.error('Organization fetch timed out or failed:', error);
+          // Keep existing data if we have it
+          if (cachedOrg) {
+            console.log('Using cached organization data due to timeout');
+          }
         }
       } catch (error) {
         console.error("Error fetching organisations:", error);
+        // Only reset state if we don't have any existing organization data
+        if (!organisation && organizations.length === 0) {
+          setHasOrganisation(false);
+        }
         toast.error("Failed to load organizations");
-        setHasOrganisation(false);
       } finally {
         console.log('Setting loading to false');
         setIsLoading(false);
@@ -125,8 +221,30 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     // Subscribe to auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       console.log('Auth state changed:', session ? 'authenticated' : 'not authenticated');
+      
+      // Force loading to false after a short delay regardless of what happens
+      setTimeout(() => {
+        if (isLoading) {
+          console.log('Auth state change: Forcing loading to false after delay');
+          setIsLoading(false);
+        }
+      }, 2000);
+      
       if (session) {
-        await fetchOrganisations();
+        // If we already have organization data, don't reset to loading state on focus changes
+        const shouldFetchAgain = !hasOrganisation || organizations.length === 0;
+        
+        if (shouldFetchAgain) {
+          try {
+            await fetchOrganisations();
+          } catch (error) {
+            console.error('Error fetching organizations on auth change:', error);
+            // Keep existing data on error
+            setIsLoading(false);
+          }
+        } else {
+          console.log('Auth state change detected, but organization data already exists - skipping fetch');
+        }
       } else {
         setOrganisation(null);
         setOrganizations([]);
@@ -393,6 +511,18 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Update the setOrganisation function to also update localStorage
+  const updateOrganisationState = (org: Organisation | null) => {
+    setOrganisation(org);
+    setStoredOrganisation(org);
+  };
+
+  // Update the setOrganizations function to also update localStorage
+  const updateOrganisationsState = (orgs: Organisation[]) => {
+    setOrganizations(orgs);
+    setStoredOrganisations(orgs);
   };
 
   return (

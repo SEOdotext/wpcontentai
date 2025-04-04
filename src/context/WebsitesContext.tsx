@@ -34,10 +34,56 @@ export const useWebsites = () => {
 };
 
 export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [websites, setWebsites] = useState<Website[]>([]);
-  const [currentWebsite, setCurrentWebsite] = useState<Website | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Try to restore data from localStorage initially
+  const savedWebsiteId = localStorage.getItem('currentWebsiteId');
+  const savedWebsiteName = localStorage.getItem('currentWebsiteName');
+  const storedWebsites = localStorage.getItem('websitesCache');
+  
+  // Create initial website object from localStorage if available
+  const initialWebsite = savedWebsiteId && savedWebsiteName ? {
+    id: savedWebsiteId,
+    name: savedWebsiteName,
+    // Include minimal fields needed to render UI initially
+    url: localStorage.getItem('currentWebsiteUrl') || '',
+    organisation_id: localStorage.getItem('currentOrgId') || '',
+  } as Website : null;
+  
+  // Parse stored websites if available
+  const initialWebsites = storedWebsites ? JSON.parse(storedWebsites) as Website[] : [];
+
+  const [websites, setWebsites] = useState<Website[]>(initialWebsites);
+  const [currentWebsite, setCurrentWebsite] = useState<Website | null>(initialWebsite);
+  const [isLoading, setIsLoading] = useState<boolean>(initialWebsite === null);
   const [error, setError] = useState<Error | null>(null);
+
+  // Add safety timeout to prevent getting stuck in loading state
+  useEffect(() => {
+    const safetyTimeout = setTimeout(() => {
+      if (isLoading) {
+        console.log('WebsitesContext: Safety timeout triggered, forcing loading to false');
+        setIsLoading(false);
+      }
+    }, 5000);
+    
+    return () => clearTimeout(safetyTimeout);
+  }, [isLoading]);
+
+  // Cache websites data in localStorage when it changes
+  useEffect(() => {
+    if (websites.length > 0) {
+      localStorage.setItem('websitesCache', JSON.stringify(websites));
+    }
+  }, [websites]);
+
+  // Cache current website data when it changes
+  useEffect(() => {
+    if (currentWebsite) {
+      localStorage.setItem('currentWebsiteId', currentWebsite.id);
+      localStorage.setItem('currentWebsiteName', currentWebsite.name);
+      localStorage.setItem('currentWebsiteUrl', currentWebsite.url || '');
+      localStorage.setItem('currentOrgId', currentWebsite.organisation_id);
+    }
+  }, [currentWebsite]);
 
   const fetchWebsites = async () => {
     try {

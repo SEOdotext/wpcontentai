@@ -77,7 +77,7 @@ export function AppSidebar() {
               isActive={location.pathname === '/' || location.pathname === '/dashboard'}
               asChild
             >
-              <Link to="/">
+              <Link to="/dashboard">
                 <Home className="h-4 w-4" />
                 <span>Dashboard</span>
               </Link>

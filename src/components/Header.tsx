@@ -16,7 +16,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useState, useEffect } from 'react';
 import { useOrganisation } from '@/context/OrganisationContext';
-import { AnimatedLogo } from '@/components/Logo';
+import { Logo } from '@/components/Logo';
 
 const Header: React.FC = () => {
   const location = useLocation();
@@ -62,7 +62,7 @@ const Header: React.FC = () => {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path === '/calendar') return 'Content Calendar';
-    if (path === '/') return 'Dashboard';
+    if (path === '/' || path === '/dashboard') return 'Dashboard';
     if (path === '/create') return 'Content Creation';
     if (path === '/sitemap') return 'Website Content';
     if (path === '/settings') return 'Publication Settings';

@@ -380,7 +380,7 @@ serve(async (req) => {
     }));
 
     // Filter out pages that already exist and limit to the website's limit
-    const pageLimit = website?.page_import_limit || 500; // Default to 500 if not set
+    const pageLimit = 500; // Fixed limit instead of using website?.page_import_limit
     const newPages = processedPages
       .filter(page => !existingUrls.has(page.url))
       .slice(0, pageLimit);
@@ -389,7 +389,7 @@ serve(async (req) => {
     
     let warning = null;
     if (processedPages.length > pageLimit) {
-      warning = `Total pages found (${processedPages.length}) exceeds the website's limit of ${pageLimit} pages. Only the first ${pageLimit} pages will be imported.`;
+      warning = `Total pages found (${processedPages.length}) exceeds the limit of ${pageLimit} pages. Only the first ${pageLimit} pages will be imported.`;
       console.log('Warning:', warning);
     }
 
