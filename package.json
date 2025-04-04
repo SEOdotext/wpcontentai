@@ -12,7 +12,7 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:functions:serve": "supabase functions serve",
-    "supabase:functions:deploy": "supabase functions deploy wordpress-connect && supabase functions deploy wordpress-posts && supabase functions deploy generate-content-v3"
+    "supabase:functions:deploy": "supabase functions deploy wordpress-connect && supabase functions deploy wordpress-posts && supabase functions deploy wordpress-categories && supabase functions deploy fetch-wordpress-categories && supabase functions deploy wordpress-proxy && supabase functions deploy generate-content-v2 && supabase functions deploy generate-content-v3 && supabase functions deploy generate-post-ideas && supabase functions deploy generate-category-ideas && supabase functions deploy manage-local-categories && supabase functions deploy reset-stalled-jobs && supabase functions deploy process-publish-queue && supabase functions deploy process-image-queue && supabase functions deploy image-trigger && supabase functions deploy generate-image && supabase functions deploy crawl-website-pages && supabase functions deploy scrape-content && supabase functions deploy suggest-key-content && supabase functions deploy check-scheduled-posts && supabase functions deploy get-sitemap-pages && supabase functions deploy push-categories"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
