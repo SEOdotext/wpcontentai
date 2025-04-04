@@ -57,7 +57,7 @@ async function generateContentDigest(title: string, content: string): Promise<st
     // Create prompt for OpenAI - specifying approximately 300 letters
     const prompt = `
 Create a concise and informative digest of the following webpage content.
-The digest must be EXACTLY 300 LETTERS (not words) in length.
+The digest must be around 300 letters (not words) in length.
 Focus on the key points, main topics covered, and core information.
 The digest should be useful for content planning and understanding the page's relevance.
 
@@ -76,7 +76,7 @@ ${truncatedText}
       messages: [
         { 
           role: 'system', 
-          content: 'You are a helpful assistant that creates concise content digests of EXACTLY 300 letters in length.'
+          content: 'You are a helpful assistant that creates concise content digests of 300 letters in length.'
         },
         { 
           role: 'user', 
