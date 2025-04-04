@@ -8,4 +8,13 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Tables>(supabaseUrl, supabaseAnonKey);
+// Create client with custom auth settings to prevent email confirmation errors
+export const supabase = createClient<Tables>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    // Configure to use our custom callback URL
+    flowType: 'pkce',
+  }
+});

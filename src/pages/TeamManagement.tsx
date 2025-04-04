@@ -190,10 +190,13 @@ const TeamManagement = () => {
         password: Math.random().toString(36).slice(-12), // Generate a random password
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
+          // Disable auto confirmation email to prevent built-in email sending
           data: {
             role: role,
             organisation_id: organisation.id
-          }
+          },
+          // Add this option to prevent Supabase from sending confirmation emails
+          emailConfirmationRedirectTo: `${window.location.origin}/auth/callback`,
         }
       });
 
