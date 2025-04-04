@@ -31,3 +31,12 @@ Page: Display
 
 https://contentgardener.ai/setup (Make sure that there are changes to urls for the steps for tracking)
 
+
+Database table for onboarding status
+website_id relation
+website_indexing
+keyword_suggestions
+post_ideas
+client_thumbs
+
+errors
