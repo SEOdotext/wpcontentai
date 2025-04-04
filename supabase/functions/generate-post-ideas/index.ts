@@ -8,10 +8,10 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Get allowed origins from environment variables
+// Get allowed origins from environment variables or use default values
 const ALLOWED_ORIGINS = {
-  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai', 'https://contentgardener.ai/'],
-  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080']
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai', 'https://www.contentgardener.ai'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080', 'http://localhost:3000', 'http://localhost:5173']
 };
 
 // Function to determine if origin is allowed
@@ -26,17 +26,24 @@ function isAllowedOrigin(origin: string | null): boolean {
     ? ALLOWED_ORIGINS.production 
     : ALLOWED_ORIGINS.staging;
     
-  return allowedOrigins.includes(origin);
+  // Log for debugging
+  console.log(`Checking origin: ${origin}, allowed: ${allowedOrigins.join(', ')}`);
+  
+  return allowedOrigins.some(allowed => origin.trim() === allowed.trim());
 }
 
-// Get the origin
-const origin = typeof Request !== 'undefined' ? new Request('').headers.get('origin') : null;
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS'
-};
+// Handle CORS headers generation
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('origin');
+  const allowedOrigin = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0];
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400' // 24 hours caching of preflight requests
+  };
+}
 
 interface GeneratePostIdeasRequest {
   website_id: string;
@@ -53,6 +60,7 @@ interface PostIdea {
 }
 
 interface GeneratePostIdeasResponse {
+  success: boolean;
   titles: string[];
   keywords: string[];
   keywordsByTitle: { [title: string]: string[] };
@@ -124,9 +132,16 @@ function generateFocusedKeywords(title: string, userKeywords: string[], subjectM
 console.log("Hello from Functions!")
 
 serve(async (req) => {
+  // Get CORS headers for this request
+  const corsHeaders = getCorsHeaders(req);
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    console.log('Handling OPTIONS preflight request');
+    return new Response('ok', { 
+      headers: corsHeaders,
+      status: 200
+    });
   }
 
   try {
@@ -447,30 +462,41 @@ Notice that the "categories" field contains an array of string UUIDs, not object
     console.log('Categories by title to be returned to frontend:', JSON.stringify(categoriesByTitle, null, 2));
     console.log('Post themes to be returned to frontend:', JSON.stringify(postThemes, null, 2));
     
+    const result: GeneratePostIdeasResponse = {
+      success: true,
+      titles: processedTitles,
+      keywords: defaultKeywords,
+      keywordsByTitle,
+      categoriesByTitle,
+      postThemes
+    };
+
+    // Return the response with CORS headers
     return new Response(
-      JSON.stringify({
-        success: true,
-        titles: processedTitles,
-        keywords: defaultKeywords,
-        keywordsByTitle,
-        categoriesByTitle,
-        postThemes
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
+      JSON.stringify(result),
+      { 
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 200 
       }
     );
 
   } catch (error) {
-    console.error('Error in generate-post-ideas:', error);
+    console.error('Error:', error.message);
+    
+    // Return error response with CORS headers
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      JSON.stringify({ 
+        error: error.message,
+        success: false 
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      { 
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
         status: 400
       }
     );
