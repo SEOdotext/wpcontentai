@@ -94,6 +94,7 @@ const OrganisationSetup = () => {
     if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
       formattedUrl = 'https://' + formattedUrl;
       console.log('Formatted URL:', formattedUrl);
+      setWebsiteUrl(formattedUrl);
     }
     
     try {
@@ -170,46 +171,56 @@ const OrganisationSetup = () => {
         <meta name="description" content="Get started with WP Content AI by setting up your website" />
       </Helmet>
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
+        <Card className="w-full max-w-md shadow-lg mx-auto">
+          <CardHeader className="text-center">
             <CardTitle>Complete Your Setup</CardTitle>
             <CardDescription>
               Enter your website URL to get started with ContentGardener.ai
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="website-url">Website URL</Label>
                 <Input
                   id="website-url"
-                  type="url"
+                  type="text"
                   value={websiteUrl}
                   onChange={(e) => {
                     console.log('Website URL changed:', e.target.value);
                     setWebsiteUrl(e.target.value);
                   }}
-                  placeholder="https://example.com"
+                  onBlur={(e) => {
+                    // Format the URL when the input loses focus
+                    let url = e.target.value.trim();
+                    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+                      url = 'https://' + url;
+                      setWebsiteUrl(url);
+                    }
+                  }}
+                  placeholder="example.com"
                   required
                 />
               </div>
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Setting up...
-                  </>
-                ) : (
-                  <>
-                    <Globe className="mr-2 h-4 w-4" />
-                    Complete Setup
-                  </>
-                )}
-              </Button>
+              <div className="flex justify-center">
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Setting up...
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="mr-2 h-4 w-4" />
+                      Complete Setup
+                    </>
+                  )}
+                </Button>
+              </div>
             </form>
           </CardContent>
         </Card>

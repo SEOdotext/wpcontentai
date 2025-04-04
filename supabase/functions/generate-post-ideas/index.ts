@@ -186,7 +186,7 @@ serve(async (req) => {
     // Get website content from sitemap
     const { data: sitemapContent, error: sitemapError } = await supabaseClient
       .from('website_content')
-      .select('title, content')
+      .select('title, content, digest')
       .eq('website_id', website_id)
       .eq('is_cornerstone', true)
       .order('updated_at', { ascending: false })
@@ -220,6 +220,14 @@ serve(async (req) => {
     const existingTitles = existingPosts?.map(post => post.subject_matter) || [];
     const existingContent = sitemapContent?.map(content => content.title) || [];
     
+    // Format cornerstone content with digests if available
+    const cornerstoneContent = sitemapContent?.map(content => {
+      if (content.digest) {
+        return `${content.title}: ${content.digest}`;
+      }
+      return content.title;
+    }) || [];
+    
     // Format categories for the prompt with IDs
     const categoriesList = categories?.map(cat => `${cat.id}: ${cat.name}`).join('\n') || '';
 
@@ -241,8 +249,8 @@ ${categories?.map(cat => `- ${cat.id}: ${cat.name}`).join('\n') || 'No categorie
 Avoid these existing topics:
 ${existingTitles.join('\n')}
 
-And these existing cornerstone content:
-${existingContent.join('\n')}
+Existing cornerstone content (use these as a reference for your suggestions):
+${cornerstoneContent.join('\n')}
 
 For each idea, provide:
 1. A compelling title that incorporates the keywords naturally
@@ -257,10 +265,11 @@ Important rules:
 4. Avoid generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig
 5. Categories MUST be selected from the provided list only - use category IDs exactly as shown
 6. Each post should have 1-3 relevant categories (not more)
-7. Do NOT use colons in any keywords
-8. Category IDs must be valid UUIDs from the provided list - do not modify or format them in any way
-9. IMPORTANT: When referring to categories, use ONLY the UUID strings, not objects with id/name properties
-10. BE CONCISE - keep descriptions short and simple (max 50 words)
+7. DO create post ideas that align with the themes in the cornerstone content but offer new perspectives
+8. DO NOT use colons in any keywords
+9. Category IDs must be valid UUIDs from the provided list - do not modify or format them in any way
+10. IMPORTANT: When referring to categories, use ONLY the UUID strings, not objects with id/name properties
+11. BE CONCISE - keep descriptions short and simple (max 50 words)
 
 Format your response as pure JSON with NO markdown formatting and this exact structure:
 {
@@ -276,6 +285,30 @@ Format your response as pure JSON with NO markdown formatting and this exact str
 
 Notice that the "categories" field contains an array of string UUIDs, not objects. Do not include category names in this array, only the UUIDs exactly as they appear in the available categories list above.`;
 
+    // Log the prompt being sent to OpenAI
+    console.log('Prompt being sent to OpenAI:', prompt);
+
+    // Create the OpenAI request payload
+    const openaiRequestBody = {
+      model: 'gpt-4-turbo-preview',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional content strategist who creates unique and engaging blog post ideas.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+      max_tokens: 2000
+    };
+
+    // Log the full OpenAI request payload
+    console.log('OpenAI request payload:', JSON.stringify(openaiRequestBody, null, 2));
+
     // Call OpenAI API
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -283,22 +316,7 @@ Notice that the "categories" field contains an array of string UUIDs, not object
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`
       },
-      body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a professional content strategist who creates unique and engaging blog post ideas.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.7,
-        max_tokens: 2000
-      })
+      body: JSON.stringify(openaiRequestBody)
     });
 
     if (!openaiResponse.ok) {

@@ -28,7 +28,111 @@ interface WebsiteContent {
   url: string;
   title: string;
   content: string;
+  digest?: string;
   last_fetched: string;
+}
+
+// New function to generate content digest using OpenAI
+async function generateContentDigest(title: string, content: string): Promise<string> {
+  try {
+    console.log(`Generating digest for: ${title}`);
+    
+    // If content is empty or too short, return empty digest
+    if (!content || content.length < 100) {
+      console.log('Content too short for digest generation');
+      return '';
+    }
+    
+    // Strip HTML tags to get clean text
+    const cleanText = content.replace(/<\/?[^>]+(>|$)/g, " ").replace(/\s+/g, " ").trim();
+    
+    // Truncate content if it's too long (OpenAI has token limits)
+    const maxLength = 8000;
+    const truncatedText = cleanText.length > maxLength 
+      ? cleanText.substring(0, maxLength) + "..." 
+      : cleanText;
+    
+    console.log(`Content length for digest: ${truncatedText.length} characters`);
+    
+    // Create prompt for OpenAI - specifying approximately 300 letters
+    const prompt = `
+Create a concise and informative digest of the following webpage content.
+The digest must be EXACTLY 300 LETTERS (not words) in length.
+Focus on the key points, main topics covered, and core information.
+The digest should be useful for content planning and understanding the page's relevance.
+
+TITLE: ${title}
+
+CONTENT:
+${truncatedText}
+    `.trim();
+    
+    // Log the call to OpenAI
+    console.log('Calling OpenAI API for digest generation');
+    
+    // Call OpenAI API
+    const openaiRequestBody = {
+      model: 'gpt-4o-mini',
+      messages: [
+        { 
+          role: 'system', 
+          content: 'You are a helpful assistant that creates concise content digests of EXACTLY 300 letters in length.'
+        },
+        { 
+          role: 'user', 
+          content: prompt 
+        }
+      ],
+      temperature: 0.5,
+      max_tokens: 300
+    };
+    
+    // Log request summary (avoiding logging the full content for brevity)
+    console.log('OpenAI request body:', {
+      ...openaiRequestBody,
+      messages: openaiRequestBody.messages.map(msg => ({
+        role: msg.role,
+        content_length: msg.content.length
+      }))
+    });
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`
+      },
+      body: JSON.stringify(openaiRequestBody)
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`OpenAI API error: ${response.status} ${errorText}`);
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // Extract the digest
+    let digest = data.choices[0].message.content.trim();
+    
+    // Ensure the digest is close to 300 letters
+    if (digest.length > 320) {
+      digest = digest.substring(0, 300);
+    } else if (digest.length < 280) {
+      console.log(`Digest shorter than expected: ${digest.length} letters`);
+    }
+    
+    console.log('Digest generated successfully:', {
+      length: digest.length,
+      preview: digest
+    });
+    
+    return digest;
+  } catch (error) {
+    console.error('Error generating digest:', error);
+    return ''; // Return empty string if digest generation fails
+  }
 }
 
 serve(async (req) => {
@@ -95,37 +199,69 @@ serve(async (req) => {
       const batchPromises = batch.map(async (page) => {
         try {
           // Fetch the page content
+          console.log(`Fetching content from ${page.url}`);
           const response = await fetch(page.url);
           if (!response.ok) throw new Error(`Failed to fetch ${page.url}`);
           
           const html = await response.text();
+          console.log(`Received ${html.length} characters of HTML from ${page.url}`);
           
-          // Extract main content
+          // Extract main content - this is synchronous
           const cleanContent = extractMainContent(html);
+          console.log(`Extracted content for ${page.url}: ${cleanContent.length} characters`);
           
-          // Update the page with the scraped content
-          const { error: updateError } = await supabaseClient
-            .from('website_content')
-            .update({
+          // Generate content digest using OpenAI - this waits for the content to be ready
+          if (cleanContent.length > 0) {
+            console.log(`Starting digest generation for ${page.url} with available content`);
+            let digest = '';
+            try {
+              // This will wait until the digest is generated before continuing
+              digest = await generateContentDigest(page.title, cleanContent);
+              if (digest) {
+                console.log(`Digest generated for ${page.url} (${digest.length} chars)`);
+              } else {
+                console.log(`No digest could be generated for ${page.url}`);
+              }
+            } catch (digestError) {
+              console.error(`Error generating digest for ${page.url}:`, digestError);
+              // Continue with empty digest
+            }
+            
+            // Update the page with the scraped content and digest
+            const updateData: any = {
               content: cleanContent,
               last_fetched: new Date().toISOString(),
               updated_at: new Date().toISOString()
-            })
-            .eq('id', page.id);
+            };
+            
+            // Only include digest if it was successfully generated
+            if (digest) {
+              updateData.digest = digest;
+            }
+            
+            const { error: updateError } = await supabaseClient
+              .from('website_content')
+              .update(updateData)
+              .eq('id', page.id);
 
-          if (updateError) {
-            console.error(`Error updating page ${page.url}:`, updateError);
+            if (updateError) {
+              console.error(`Error updating page ${page.url}:`, updateError);
+              return null;
+            }
+
+            processedCount++;
+            return {
+              id: page.id,
+              url: page.url,
+              title: page.title,
+              content: cleanContent,
+              digest: digest,
+              last_fetched: new Date().toISOString()
+            };
+          } else {
+            console.error(`No content extracted for ${page.url}, skipping digest generation`);
             return null;
           }
-
-          processedCount++;
-          return {
-            id: page.id,
-            url: page.url,
-            title: page.title,
-            content: cleanContent,
-            last_fetched: new Date().toISOString()
-          };
         } catch (error) {
           console.error(`Error processing page ${page.url}:`, error);
           return null;

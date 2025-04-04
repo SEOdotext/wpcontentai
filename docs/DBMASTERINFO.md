@@ -831,6 +831,16 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "website_content.digest",
+    "detail_1": "text",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "website_content.metadata",
     "detail_1": "jsonb",
     "detail_2": null,

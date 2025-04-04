@@ -415,15 +415,37 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Complete setup for new users
   const completeNewUserSetup = async (websiteUrl: string): Promise<boolean> => {
     try {
+      console.log('=== SETUP PROCESS STARTED ===');
+      console.log('Input website URL:', websiteUrl);
       setIsLoading(true);
       
       // Check if user is authenticated
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) {
+        console.error('No auth session found');
         toast.error("You must be logged in to complete setup");
         return false;
       }
 
+      const userId = sessionData.session.user.id;
+      console.log('User authenticated, ID:', userId);
+
+      // Check Supabase auth and role
+      try {
+        console.log('=== CHECKING DB ACCESS ===');
+        const { data: authData, error: authError } = await supabase.auth.getUser();
+        console.log('Current auth info:', authData, authError ? 'ERROR: ' + authError.message : 'No auth error');
+        
+        // Test write permission with a read-only query
+        const { error: testError } = await supabase
+          .from('organisations')
+          .select('count(*)', { count: 'exact', head: true });
+        
+        console.log('Test query result:', testError ? 'ERROR: ' + testError.message : 'Access OK');
+      } catch (permError) {
+        console.error('Permission check error:', permError);
+      }
+      
       // Generate organization name from website URL
       const orgName = websiteUrl
         .replace(/^https?:\/\/(www\.)?/, '')
@@ -432,51 +454,85 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
 
-      console.log('Creating organization with name:', orgName);
+      console.log('Organization name generated:', orgName);
       
-      // Create organization
-      const { data: orgData, error: orgError } = await supabase
+      // Format website URL properly
+      let formattedUrl = websiteUrl.trim();
+      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+        formattedUrl = 'https://' + formattedUrl;
+        console.log('URL formatted with https://', formattedUrl);
+      }
+      
+      console.log('=== STEP 1: Creating organization ===');
+      console.log('Organization insertion payload:', { name: orgName });
+      
+      // Step 1: Create organization
+      const orgResponse = await supabase
         .from('organisations')
         .insert([{ name: orgName }])
         .select()
         .single();
       
-      if (orgError) {
-        console.error('Error creating organization:', orgError);
-        throw orgError;
+      console.log('Raw organisation creation response:', orgResponse);
+      
+      if (orgResponse.error) {
+        console.error('Error creating organization:', orgResponse.error);
+        throw new Error(`Failed to create organization: ${orgResponse.error.message} (${orgResponse.error.code})`);
       }
       
-      console.log('Organization created:', orgData);
+      const orgData = orgResponse.data;
+      if (!orgData) {
+        console.error('No organization data returned');
+        throw new Error('No organization data returned after creation');
+      }
+      
+      console.log('Organization created successfully:', orgData);
+      const organisationId = orgData.id;
+      console.log('Organization ID:', organisationId);
 
-      // Add user as admin to the organization
-      const { error: membershipError } = await supabase
+      console.log('=== STEP 2: Creating organization membership ===');
+      console.log('Membership insertion payload:', {
+        member_id: userId,
+        organisation_id: organisationId,
+        role: 'admin'
+      });
+      
+      // Step 2: Add user as admin to the organization
+      const membershipResponse = await supabase
         .from('organisation_memberships')
         .insert({
-          member_id: sessionData.session.user.id,
-          organisation_id: orgData.id,
+          member_id: userId,
+          organisation_id: organisationId,
           role: 'admin'
         });
       
-      if (membershipError) {
-        console.error('Error creating organization membership:', membershipError);
-        throw membershipError;
+      console.log('Raw membership creation response:', membershipResponse);
+      
+      if (membershipResponse.error) {
+        console.error('Error creating organization membership:', membershipResponse.error);
+        throw new Error(`Failed to create membership: ${membershipResponse.error.message} (${membershipResponse.error.code})`);
       }
       
-      console.log('Organization membership created for user:', sessionData.session.user.id);
+      console.log('Organization membership created for user:', userId);
 
-      // Format website URL properly
-      let formattedUrl = websiteUrl.trim();
-      if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-        formattedUrl = 'https://' + formattedUrl;
-      }
-
-      // Create website with all required fields
-      const { data: websiteData, error: websiteError } = await supabase
+      console.log('=== STEP 3: Creating website ===');
+      console.log('Website insertion payload:', {
+        url: formattedUrl,
+        name: orgName,
+        organisation_id: organisationId,
+        language: 'en',
+        enable_ai_image_generation: false,
+        page_import_limit: 100,
+        key_content_limit: 20
+      });
+      
+      // Step 3: Create website with all required fields
+      const websiteResponse = await supabase
         .from('websites')
         .insert({
           url: formattedUrl,
           name: orgName,
-          organisation_id: orgData.id,
+          organisation_id: organisationId,
           language: 'en', // Default language
           enable_ai_image_generation: false, // Default setting
           page_import_limit: 100, // Default limit
@@ -485,12 +541,20 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .select()
         .single();
 
-      if (websiteError) {
-        console.error('Error creating website:', websiteError);
-        throw websiteError;
+      console.log('Raw website creation response:', websiteResponse);
+      
+      if (websiteResponse.error) {
+        console.error('Error creating website:', websiteResponse.error);
+        throw new Error(`Failed to create website: ${websiteResponse.error.message} (${websiteResponse.error.code})`);
       }
 
-      console.log('Website created:', websiteData);
+      const websiteData = websiteResponse.data;
+      if (!websiteData) {
+        console.error('No website data returned');
+        throw new Error('No website data returned after creation');
+      }
+
+      console.log('Website created successfully:', websiteData);
 
       // Set the current website ID in localStorage
       console.log('Setting currentWebsiteId in localStorage:', websiteData.id);
@@ -498,15 +562,46 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       localStorage.setItem('currentWebsiteName', websiteData.name);
 
       // Update state
-      setOrganisation(orgData);
-      setHasOrganisation(true);
-      setOrganizations(prev => [...prev, orgData]);
+      const updatedOrg = {
+        id: orgData.id,
+        name: orgData.name,
+        created_at: orgData.created_at
+      };
       
+      updateOrganisationState(updatedOrg);
+      updateOrganisationsState([updatedOrg]);
+      setHasOrganisation(true);
+      
+      console.log('Organization state updated successfully');
+      console.log('=== SETUP PROCESS COMPLETED SUCCESSFULLY ===');
       toast.success("Setup completed successfully");
+      
+      // Force a full page refresh to ensure all contexts are properly reloaded
+      setTimeout(() => {
+        console.log('Redirecting to homepage');
+        window.location.href = '/';
+      }, 1000);
+      
       return true;
     } catch (error) {
+      console.error("=== SETUP PROCESS FAILED ===");
       console.error("Error in completeNewUserSetup:", error);
-      toast.error("Failed to complete setup");
+      
+      // Check if it's a Supabase PostgrestError
+      if (error && typeof error === 'object' && 'code' in error) {
+        console.error(`Database error code: ${error.code}`);
+        
+        if (error.code === '42501') {
+          toast.error("Permission denied: You don't have access to create resources");
+        } else if (error.code === '23505') {
+          toast.error("A resource with that name already exists");
+        } else {
+          toast.error(`Database error: ${error.message || 'Unknown error'}`);
+        }
+      } else {
+        toast.error(error instanceof Error ? error.message : "Failed to complete setup");
+      }
+      
       return false;
     } finally {
       setIsLoading(false);

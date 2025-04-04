@@ -67,10 +67,20 @@ const Auth = () => {
     const errorDescription = query.get('error_description');
     
     if (error && errorDescription) {
-      setAuthError(decodeURIComponent(errorDescription));
-      toast.error('Authentication failed', {
-        description: decodeURIComponent(errorDescription),
-      });
+      const decodedError = decodeURIComponent(errorDescription);
+      setAuthError(decodedError);
+      
+      // Check specifically for "Email not confirmed" error
+      if (decodedError.includes('Email not confirmed')) {
+        toast.info('Please check your email', {
+          description: 'You need to confirm your email address before logging in. Check your inbox for a confirmation link.',
+          duration: 5000
+        });
+      } else {
+        toast.error('Authentication failed', {
+          description: decodedError,
+        });
+      }
     }
   }, []);
 
@@ -104,7 +114,16 @@ const Auth = () => {
       console.error('Authentication error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
       setAuthError(errorMessage);
-      toast.error(errorMessage);
+      
+      // Check specifically for "Email not confirmed" error
+      if (errorMessage.includes('Email not confirmed')) {
+        toast.info('Please check your email', {
+          description: 'You need to confirm your email address before logging in. Check your inbox for a confirmation link.',
+          duration: 5000
+        });
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }

@@ -99,24 +99,28 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.log("WebsitesContext: Authenticated user found", user.id);
 
       // First get the user's organisation_id and role from organisation_memberships
-      const { data: membership, error: membershipError } = await supabase
+      const { data: memberships, error: membershipError } = await supabase
         .from('organisation_memberships')
         .select('organisation_id, role')
-        .eq('member_id', user.id)
-        .single();
+        .eq('member_id', user.id);
 
       if (membershipError) {
-        console.error('WebsitesContext: Error fetching membership:', membershipError);
+        console.error('WebsitesContext: Error fetching memberships:', membershipError);
         throw membershipError;
       }
 
-      if (!membership) {
-        console.log('WebsitesContext: No organization membership found for user');
+      if (!memberships || memberships.length === 0) {
+        console.log('WebsitesContext: No organization memberships found for user');
         setWebsites([]);
+        setCurrentWebsite(null);
         return;
       }
 
-      console.log('WebsitesContext: User membership data:', membership);
+      console.log('WebsitesContext: User memberships data:', memberships);
+      
+      // Use the first membership by default (can be enhanced later to support multiple organizations)
+      const membership = memberships[0];
+      console.log('WebsitesContext: Using membership:', membership);
       console.log('WebsitesContext: User role:', membership.role);
       
       // Store the user's role in localStorage for access across the app
