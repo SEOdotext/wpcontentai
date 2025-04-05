@@ -308,4 +308,46 @@ export const checkPublishQueueStatus = async (postThemeId: string): Promise<any>
     console.error('Error in checkPublishQueueStatus:', error);
     throw error;
   }
+};
+
+/**
+ * Detects the primary language of a website
+ * For onboarding flow - detects language from front page
+ * 
+ * @param websiteId The ID of the website in the database
+ * @param url Optional direct URL to check (if websiteId is not provided)
+ * @returns The detected language as a two-letter ISO code (e.g., 'en', 'da')
+ */
+export const detectWebsiteLanguage = async (websiteId?: string, url?: string): Promise<string> => {
+  console.log('[aiEndpoints.detectWebsiteLanguage] Starting detection', websiteId ? `for website ID: ${websiteId}` : `for URL: ${url}`);
+  
+  try {
+    if (!websiteId && !url) {
+      throw new Error('Either websiteId or url must be provided');
+    }
+    
+    const { data, error } = await supabase.functions.invoke('detect-website-language', {
+      body: { 
+        website_id: websiteId, 
+        url 
+      }
+    });
+    
+    if (error) {
+      console.error('Error detecting website language:', error);
+      throw error;
+    }
+    
+    if (!data || !data.success) {
+      console.error('Language detection failed:', data?.error || 'Unknown error');
+      return '';
+    }
+    
+    console.log(`Language detected: ${data.language}`);
+    return data.language;
+  } catch (error) {
+    console.error('Error in detectWebsiteLanguage:', error);
+    // Don't show toasts in automated onboarding flow
+    return '';
+  }
 }; 
