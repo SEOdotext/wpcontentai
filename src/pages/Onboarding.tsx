@@ -20,14 +20,13 @@ import {
 import { Logo } from "@/components/Logo";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
-import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Helmet } from 'react-helmet-async';
 import { Users, UserPlus, Trash2, Loader2, Shield, Globe } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
+import { toast as sonnerToast } from 'sonner';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -168,41 +167,6 @@ const contentSteps: ContentStep[] = [
   }
 ];
 
-// Sample data for website analysis
-const siteAnalysis = {
-  writingStyle: "Conversational with expert insights",
-  targetAudience: "Industry professionals seeking in-depth knowledge",
-  toneOfVoice: "Authoritative yet approachable, with a touch of enthusiasm",
-  contentTypes: ["Educational in-depth guides", "Industry trend analyses", "Practical how-to content"],
-  language: "Professional with clear explanations of complex topics",
-  keyPhrases: ["proven solutions", "insider perspective", "actionable insights"]
-};
-
-// Sample data for keyword opportunities
-const keywordOpportunities = [
-  {
-    keyword: "10 Simple Ways to Improve Your Website's Visibility",
-    searchVolume: "5,200 searches/month",
-    currentRank: "not showing up yet",
-    difficulty: "Not too hard",
-    potential: "Very promising"
-  },
-  {
-    keyword: "The Complete Guide to Writing Engaging Website Content",
-    searchVolume: "3,800 searches/month",
-    currentRank: "showing up on page 3",
-    difficulty: "Easy",
-    potential: "Excellent chance"
-  },
-  {
-    keyword: "Essential Tools for Website Optimization in 2024",
-    searchVolume: "4,500 searches/month",
-    currentRank: "not showing up yet",
-    difficulty: "Not too hard",
-    potential: "Very promising"
-  }
-];
-
 // Animation logo for the progress steps
 const LogoAnimation = () => (
   <motion.svg 
@@ -304,41 +268,35 @@ const Onboarding = () => {
       setState(prev => ({ ...prev, websiteUrl: formattedUrl }));
     }
     
-    // Start onboarding process immediately
+    // Start onboarding immediately - no auth required
+    console.log("Starting onboarding process for website:", state.websiteUrl);
     startSetup1();
   }, []);
 
-  // Helper function to call Supabase Edge Functions directly
+  // Helper function to call Supabase Edge Functions directly without authentication
   const callEdgeFunction = async (functionName: string, body: any) => {
     try {
-      // Convert any snake_case keys to camelCase or dash-case for the API
-      const formattedBody = Object.entries(body).reduce((acc, [key, value]) => {
-        // Try with camelCase
-        const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
-        acc[camelKey] = value;
-        return acc;
-      }, {});
+      // Log the function name and parameters for debugging
+      console.log(`Calling edge function: ${functionName}`, body);
       
-      console.log(`Calling edge function: ${functionName} with formatted body:`, formattedBody);
+      // Create headers with specific handling for generate-content-v3
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      };
       
-      // Get the current session for authentication
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      
-      if (!accessToken) {
-        console.error("No access token available. User must be logged in to call Edge Functions.");
-        throw new Error("Authentication required");
+      // Special case for generate-content-v3: add a dummy auth header
+      // This is required because this function checks auth before parsing the request body
+      if (functionName === 'generate-content-v3') {
+        console.log('Adding dummy auth header for generate-content-v3');
+        headers['Authorization'] = 'Bearer onboarding-mode';
       }
       
-      // Use a direct fetch to the Supabase Edge Function
-      const resp = await fetch(`https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/${functionName}`, {
+      // Use a direct fetch to the Supabase Edge Function - no auth token required for onboarding
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${accessToken}` // Add the Authorization header
-        },
-        body: JSON.stringify(formattedBody)
+        headers,
+        body: JSON.stringify(body)
       });
       
       console.log(`Response status for ${functionName}:`, resp.status);
@@ -350,6 +308,7 @@ const Onboarding = () => {
       }
       
       const data = await resp.json();
+      console.log(`Response from ${functionName}:`, data);
       return data;
     } catch (err) {
       console.error(`Failed to call ${functionName}:`, err);
@@ -368,7 +327,7 @@ const Onboarding = () => {
       currentStepText: "Setting up your workspace..."
     }));
     
-    // Create website and organization IDs
+    // Create website and organization IDs with uuid
     const websiteId = localStorage.getItem('website_id') || uuidv4();
     const organizationId = localStorage.getItem('organization_id') || uuidv4();
     
@@ -399,7 +358,7 @@ const Onboarding = () => {
     };
     localStorage.setItem('organization_info', JSON.stringify(organizationInfo));
     
-    // Setup 1 steps
+    // Setup 1 steps - these will all run without authentication
     const setup1Steps = [
       // Step 1: Account Setup
       async () => {
@@ -415,68 +374,66 @@ const Onboarding = () => {
           // Try get-sitemap-pages function
           console.log("Attempting to call get-sitemap-pages with website_id:", websiteId);
           
-          // Try multiple parameter formats to diagnose issues
-          const payloads = [
-            { website_id: websiteId, website_url: state.websiteUrl },
-            { websiteId: websiteId, url: state.websiteUrl },
-            { websiteId, url: state.websiteUrl, customSitemapUrl: null }
-          ];
+          // Try with snake_case parameters
+          const payload = { 
+            website_id: websiteId, 
+            website_url: state.websiteUrl,
+            custom_sitemap_url: null 
+          };
           
           let result = null;
-          let lastError = null;
           
-          // Try each payload format
-          for (const payload of payloads) {
             try {
               console.log("Trying get-sitemap-pages with payload:", payload);
               result = await callEdgeFunction('get-sitemap-pages', payload);
-              if (result) {
-                console.log("Success with payload:", payload);
-                break;
-              }
             } catch (error) {
               console.error("Failed with payload:", payload, error);
-              lastError = error;
-            }
+            throw error; // Let the error propagate up
           }
           
           if (result?.pages && result.pages.length > 0) {
             const limitedPages = result.pages.slice(0, 200);
+            console.log(`Successfully loaded ${limitedPages.length} pages from sitemap`);
+            console.log("Sample sitemap page structure:", limitedPages[0]);
+            console.log("Page URLs sample:", limitedPages.slice(0, 5).map(p => p.url));
+            
+            // Store pages in localStorage for later use
             localStorage.setItem('website_content', JSON.stringify(limitedPages));
+            
+            // Make sure other functions can access this data
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
             return `We've just read your website — exciting! 😄 We can always do some more reading later.\n\n🧠 ${limitedPages.length} pages have been loaded from your sitemap.`;
           } else {
             // If no pages from sitemap, try crawling
             try {
-              // Try crawl-website-pages function with multiple formats
-              for (const payload of payloads) {
-                try {
+              // Try crawl-website-pages function with snake_case
                   console.log("Trying crawl-website-pages with payload:", payload);
                   const crawlResult = await callEdgeFunction('crawl-website-pages', payload);
+              
                   if (crawlResult?.pages && crawlResult.pages.length > 0) {
                     const limitedPages = crawlResult.pages.slice(0, 200);
+                console.log(`Successfully loaded ${limitedPages.length} pages by crawling website`);
+                
+                // Store pages in localStorage for later use
                     localStorage.setItem('website_content', JSON.stringify(limitedPages));
+                
+                // Make sure other functions can access this data
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
                     return `We've just read your website — exciting! 😄 We can always do some more reading later.\n\n🧠 ${limitedPages.length} pages have been loaded by scanning your website.`;
                   }
                 } catch (error) {
                   console.error("Failed crawl with payload:", payload, error);
-                }
+              throw error; // Let the error propagate up
               }
               
               // If we got here, all attempts failed
-              createMockPages();
-              return "We've just read your website — exciting! 😄 We can always do some more reading later.";
-            } catch (crawlError) {
-              console.error("Error crawling website:", crawlError);
-              // If both methods fail, use mock data
-              createMockPages();
-              return "We've just read your website — exciting! 😄 We can always do some more reading later.";
-            }
+            throw new Error("Could not find any pages on the website. Please check the URL and try again.");
           }
         } catch (error) {
           console.error("Error reading website:", error);
-          // Fallback to mock data if both methods fail
-          createMockPages();
-          return "We've just read your website — exciting! 😄 We can always do some more reading later.";
+          throw error; // Let the error propagate up
         }
       },
       
@@ -486,14 +443,24 @@ const Onboarding = () => {
         try {
           const result = await callEdgeFunction('detect-website-language', {
             website_id: websiteId,
-            url: state.websiteUrl
+            website_url: state.websiteUrl
           });
           
           if (result?.language) {
+            // Store language in multiple locations for cross-compatibility
             const websiteInfo = JSON.parse(localStorage.getItem('website_info') || '{}');
             websiteInfo.language = result.language;
             localStorage.setItem('website_info', JSON.stringify(websiteInfo));
+            
+            // Also store directly as website_language for consistent access
+            localStorage.setItem('website_language', result.language);
+            
             console.log(`Language detected: ${result.language}`);
+            
+            // Log extra information for Danish sites
+            if (result.language === 'da') {
+              console.log("Danish language detected - will generate Danish content");
+            }
           } else {
             // Set default language if detection fails
             setDefaultLanguage();
@@ -511,37 +478,124 @@ const Onboarding = () => {
       async () => {
         setState(prev => ({ ...prev, currentStepIndex: 3, currentStepText: "Learning your tone..." }));
         try {
-          const result = await callEdgeFunction('suggest-key-content', {
-            website_id: websiteId
-          });
+          // Get ALL sitemap pages stored in localStorage
+          const rawWebsiteContent = JSON.parse(localStorage.getItem('website_content') || '[]');
           
-          if (result?.pages && result.pages.length > 0) {
-            const selectedPages = result.pages.slice(0, 5);
+          console.log(`Found ${rawWebsiteContent.length} raw sitemap pages in localStorage`);
+          
+          if (rawWebsiteContent.length > 0) {
+            console.log("Raw sitemap page sample:", rawWebsiteContent[0]);
+            console.log("First 5 page URLs:", rawWebsiteContent.slice(0, 5).map(p => p.url));
+          }
+          
+          // Helper to extract title from URL
+          const extractTitleFromUrl = (url: string): string => {
+            try {
+              const urlObj = new URL(url);
+              const path = urlObj.pathname;
+              
+              // If it's the homepage
+              if (path === '/' || path === '') {
+                return 'Homepage';
+              }
+              
+              // Get the last path segment
+              const segments = path.split('/').filter(Boolean);
+              if (segments.length === 0) {
+                return 'Homepage';
+              }
+              
+              let lastSegment = segments[segments.length - 1];
+              
+              // Remove file extensions
+              lastSegment = lastSegment.replace(/\.(html|php|asp|aspx)$/, '');
+              
+              // Replace hyphens and underscores with spaces
+              lastSegment = lastSegment.replace(/[-_]/g, ' ');
+              
+              // Capitalize first letter of each word
+              lastSegment = lastSegment.split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                .join(' ');
+              
+              return lastSegment || 'Page';
+            } catch (error) {
+              console.error(`Error extracting title from URL ${url}`, error);
+              return 'Page';
+            }
+          };
+          
+          // Format ALL the sitemap pages to match the expected WebsiteContent structure
+          const formattedWebsiteContent = rawWebsiteContent.map((page: any, index: number) => ({
+            id: page.id || `page-${Date.now()}-${index}`,
+            title: page.title || extractTitleFromUrl(page.url),
+            url: page.url,
+            content_type: page.content_type || 'page',
+            is_cornerstone: false
+          }));
+          
+          console.log(`Formatted ALL ${formattedWebsiteContent.length} sitemap pages for suggest-key-content`);
+          
+          if (formattedWebsiteContent.length === 0) {
+            throw new Error("No pages found in website content. Please try a different website.");
+          }
+          
+          // Send ALL pages to suggest-key-content so it has full context
+          const payload = {
+            website_id: websiteId,
+            website_url: state.websiteUrl,
+            sitemap_pages: formattedWebsiteContent,
+            pages: formattedWebsiteContent,
+            is_onboarding: true
+          };
+          
+          console.log(`Sending ${formattedWebsiteContent.length} pages to suggest-key-content`);
+          
+          const result = await callEdgeFunction('suggest-key-content', payload);
+          
+          console.log("suggest-key-content result:", result);
+          
+          if (result?.suggestions && result.suggestions.length > 0) {
+            console.log(`Received ${result.suggestions.length} key content suggestions`);
+            
+            // Improve logging to show clearer information about the suggested pages
+            const samplePages = result.suggestions.slice(0, 5);
+            console.log("Suggestions data sample:", samplePages.map(p => ({
+              title: p.title,
+              path: p.url ? new URL(p.url).pathname : '/',
+              id: p.id
+            })));
+            
+            const selectedPages = result.suggestions.slice(0, 5);
             localStorage.setItem('key_content_pages', JSON.stringify(selectedPages));
             
+            // Extract just the path portion for display
             const pageUrls = selectedPages.map((page: any) => {
-              const url = page.url.replace(state.websiteUrl, '');
-              return url || '/';
+              try {
+                // Try to parse the URL and get just the pathname
+                const url = page.url ? new URL(page.url).pathname : '/';
+                const displayUrl = url === '/' ? '/ (Homepage)' : url;
+                return displayUrl;
+              } catch (e) {
+                // Fallback if URL parsing fails
+                return page.url?.replace(state.websiteUrl, '') || '/';
+              }
             }).join('\n');
             
             return `🗣️ Learning Tone-of-Voice\n\nWe're learning how you sound so we can write like you.\n🔍 Selected and prioritised these key pages to understand your tone and style:\n${pageUrls}\n(Don't worry, you can adjust this later.)`;
           } else {
-            // Use mock data if API fails
-            selectMockKeyPages();
-            const selectedPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
-            const pageUrls = selectedPages.map((page: any) => {
-              const url = page.url.replace(state.websiteUrl, '');
-              return url || '/';
-            }).join('\n');
-            
-            return `🗣️ Learning Tone-of-Voice\n\nWe're learning how you sound so we can write like you.\n🔍 Selected and prioritised these key pages to understand your tone and style:\n${pageUrls}\n(Don't worry, you can adjust this later.)`;
+            // Don't use mock data - show the actual error
+            console.error("No suggestions returned from suggest-key-content:", result);
+            throw new Error("Could not identify key content pages. Please try a different website.");
           }
         } catch (error) {
-          console.error("Error learning tone:", error);
-          // Use mock data if API fails
-          selectMockKeyPages();
+          console.error('Error learning tone:', error);
           
-          return "🗣️ Learning Tone-of-Voice\n\nWe're learning how you sound so we can write like you.";
+          // Don't mask errors with mock data - show the real issue
+          sonnerToast("Error generating ideas", {
+            description: error.message || "Failed to generate content ideas. Please try again."
+          });
+          throw error;
         }
       },
       
@@ -552,26 +606,114 @@ const Onboarding = () => {
           const keyPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
           let success = false;
           
+          // Improved logging to show more useful information about key pages
+          console.log(`Reading key content for ${keyPages.length} pages`);
+          
           if (keyPages.length > 0) {
+            // Log detailed key page information
+            console.log("Key pages detailed data:", keyPages.map(page => ({
+              id: page.id,
+              title: page.title || 'Untitled',
+              url: page.url || 'No URL',
+              reason: page.reason?.substring(0, 50) + '...' // Truncate long reasons
+            })));
+            
+            // Create an empty array to store the scraped content
+            const scrapedContent = [];
+            
             try {
-              // Try to scrape content for each key page
+              // Process each key page individually
               for (const page of keyPages) {
-                await callEdgeFunction('scrape-content', {
+                // Make sure we're using the full URL from the page data, not constructing it from ID
+                const pageUrl = page.url;
+                
+                if (!pageUrl) {
+                  console.error(`No valid URL found for page:`, page);
+                  continue;
+                }
+                
+                console.log(`Scraping content for page: ${page.title || 'Untitled'} (${pageUrl})`);
+                
+                // Call scrape-content to actually get the content
+                const scrapeResult = await callEdgeFunction('scrape-content', {
                   website_id: websiteId,
-                  url: page.url
+                  website_url: pageUrl
                 });
-              }
+                
+                // Log the full scrape result for debugging
+                console.log(`Full scrape result for ${pageUrl}:`, JSON.stringify(scrapeResult));
+                
+                // Log a summary of the scrape result rather than the full object
+                if (scrapeResult?.pages && scrapeResult.pages.length > 0) {
+                  console.log(`Scrape successful for ${pageUrl}: received ${scrapeResult.pages.length} pages with a total of approximately ${scrapeResult.pages.reduce((sum, p) => sum + (p.content?.length || 0), 0)} characters of content`);
+                  
+                  // Add the scraped content to our array with page association
+                  scrapeResult.pages.forEach(scrapedPage => {
+                    scrapedContent.push({
+                      ...scrapedPage,
+                      page_id: page.id,
+                      original_url: pageUrl,
+                      title: page.title || scrapedPage.title || 'Untitled Page'
+                    });
+                  });
+                  
               success = true;
+                } else {
+                  console.error(`Scrape failed for ${pageUrl}:`, scrapeResult);
+                  
+                  // Create a placeholder content entry even if scraping failed
+                  // This ensures we have at least some reference to the key page
+                  scrapedContent.push({
+                    id: `placeholder-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+                    page_id: page.id,
+                    original_url: pageUrl,
+                    title: page.title || 'Untitled Page',
+                    content: '',
+                    digest: `This is a key page from ${pageUrl} but content could not be scraped.`
+                  });
+                }
+              }
+              
+              // Store the scraped content array in localStorage
+              if (scrapedContent.length > 0) {
+                localStorage.setItem('scraped_content', JSON.stringify(scrapedContent));
+                console.log(`Stored ${scrapedContent.length} scraped content entries in localStorage with detailed info:`, 
+                  scrapedContent.map(c => ({
+                    page_id: c.page_id,
+                    title: c.title,
+                    content_length: c.content?.length || 0,
+                    digest_length: c.digest?.length || 0
+                  }))
+                );
+              } else {
+                console.error("No scraped content was retrieved from any key pages");
+              }
+              
             } catch (scrapeError) {
               console.error("Error scraping content:", scrapeError);
-              // Continue with mock data on error
+              throw scrapeError; // Let the error propagate to show real issues
             }
+          } else {
+            console.error("No key pages found to analyze - check suggest-key-content response");
+            throw new Error("No key pages found to analyze");
+          }
+          
+          // Even if some pages failed, consider it a success if we have some content
+          const scrapedContentAfter = JSON.parse(localStorage.getItem('scraped_content') || '[]');
+          if (scrapedContentAfter.length > 0) {
+            success = true;
+            console.log(`Successfully stored ${scrapedContentAfter.length} scraped content entries`);
+          }
+          
+          if (!success) {
+            throw new Error("Failed to scrape content from any key pages");
           }
           
           return "📚 Reading Key Content\n\nWe're digging deeper into your key content to fully understand your voice and topics.\n\nYour most important pages are now being read — this helps us learn how to write like you.";
         } catch (error) {
           console.error("Error reading content:", error);
-          return "📚 Reading Key Content\n\nWe're digging deeper into your key content to fully understand your voice and topics.";
+          // Don't mask errors with mock data - show the real issue
+          throw error;
         }
       },
       
@@ -579,29 +721,105 @@ const Onboarding = () => {
       async () => {
         setState(prev => ({ ...prev, currentStepIndex: 5, currentStepText: "Generating ideas..." }));
         try {
-          const result = await callEdgeFunction('generate-post-ideas', {
-            website_id: websiteId
+          // Get the detected language
+          const language = localStorage.getItem('website_language') || 'en';
+          
+          // Get key content pages to ensure we have actual content to work with
+          const keyContentPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
+          
+          // Get scraped content if available
+          const scrapedContent = JSON.parse(localStorage.getItem('scraped_content') || '[]');
+          
+          console.log("Step 6 - Available context:", {
+            language,
+            keyContentPages: keyContentPages.length,
+            scrapedContent: scrapedContent.length
           });
           
+          console.log("Key content pages detail:", keyContentPages.map(page => ({
+            id: page.id,
+            title: page.title,
+            url: page.url,
+            reason: page.reason?.substring(0, 50) + '...' // Truncate long reasons
+          })));
+          
+          if (scrapedContent.length > 0) {
+            console.log("Scraped content sample:", scrapedContent.slice(0, 2).map(content => ({
+              id: content.id,
+              page_id: content.page_id,
+              title: content.title,
+              content_length: content.content?.length || 0,
+              digest_length: content.digest?.length || 0
+            })));
+          } else {
+            console.warn("No scraped content available! This might affect content idea generation.");
+          }
+          
+          if (keyContentPages.length === 0) {
+            console.error("No key content pages found before generating ideas - this is a critical error");
+            throw new Error("Missing key content pages. Previous steps are incomplete.");
+          }
+          
+          // Send key information to generate-post-ideas
+          const payload = {
+            website_id: websiteId,
+            website_url: state.websiteUrl,
+            language,
+            key_content_pages: keyContentPages.map(page => page.id), // Just send the IDs
+            digestsOnly: true, // Flag to indicate we want to use digests only
+            scraped_content: scrapedContent.map(item => ({
+              id: item.id,
+              page_id: item.page_id,
+              title: item.title,
+              url: item.url || item.original_url,
+              digest: item.digest || '', // Only send the digest, not the full content
+              last_fetched: item.last_fetched
+            })), // Include just the digests, not the full HTML content
+            is_onboarding: true
+          };
+          
+          console.log("Calling generate-post-ideas with full payload:", JSON.stringify(payload, null, 2));
+          
+          const result = await callEdgeFunction('generate-post-ideas', payload);
+          
+          console.log("Generate post ideas result:", result);
+          
           if (result?.ideas && result.ideas.length > 0) {
+            // Store the ideas in localStorage
             localStorage.setItem('post_ideas', JSON.stringify(result.ideas));
             return "💡 Suggesting Relevant Content Ideas\n\nYour content garden is blooming! 🌱\n\nWe've generated 5 unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
+          } else if (result?.success && Array.isArray(result.titles)) {
+            // Handle older API response format
+            const formattedIdeas = result.titles.map((title, index) => ({
+              id: `idea-${index + 1}`,
+              title,
+              description: `Generated content idea #${index + 1} for your website.`,
+              tags: result.keywordsByTitle?.[title] || [],
+              hidden: false
+            }));
+            
+            localStorage.setItem('post_ideas', JSON.stringify(formattedIdeas));
+            return "💡 Suggesting Relevant Content Ideas\n\nYour content garden is blooming! 🌱\n\nWe've generated unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
         } else {
-            // Fallback with mock data if the API returns no ideas
-            createMockPostIdeas();
-            return "💡 Suggesting Relevant Content Ideas\n\nYour content garden is blooming! 🌱\n\nWe've generated 5 unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
+            console.warn('No ideas returned from generate-post-ideas function');
+            // Don't use mock data - show the actual error
+            throw new Error("No content ideas could be generated. API returned empty result.");
           }
         } catch (error) {
-          console.error("Error generating ideas:", error);
-          // Fallback with mock data if the API fails
-          createMockPostIdeas();
-          return "💡 Suggesting Relevant Content Ideas\n\nYour content garden is blooming! 🌱\n\nWe've generated 5 unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
+          console.error('Error generating ideas:', error);
+          
+          // Don't mask errors with mock data - show the real issue
+          sonnerToast("Error generating ideas", {
+            description: error.message || "Failed to generate content ideas. Please try again."
+          });
+          throw error; // Let the error propagate to stop the process
         }
       }
     ];
     
     // Run all setup1 steps in sequence
     const totalSteps = setup1Steps.length;
+    try {
     for (let i = 0; i < totalSteps; i++) {
       // Update progress
       setState(prev => ({
@@ -609,6 +827,7 @@ const Onboarding = () => {
         progress: (i / totalSteps) * 100
       }));
       
+        try {
       // Run current step
       const message = await setup1Steps[i]();
       
@@ -617,6 +836,68 @@ const Onboarding = () => {
         setState(prev => ({ ...prev, currentStepText: message }));
         await new Promise(r => setTimeout(r, 2000)); // Pause to show message
       }
+          
+          // After each step, verify that required data was saved to localStorage
+          if (i === 1) { // After Reading Website step
+            const websiteContent = JSON.parse(localStorage.getItem('website_content') || '[]');
+            if (websiteContent.length === 0) {
+              console.error("No website content saved after step 2 - critical error");
+              throw new Error("Failed to load any website pages. Please check the URL or try a different website.");
+            } else {
+              console.log(`Successfully saved ${websiteContent.length} pages to localStorage after step 2`);
+            }
+          } else if (i === 3) { // After Learning Tone-of-Voice
+            const keyContentPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
+            if (keyContentPages.length === 0) {
+              console.error("No key content pages saved after step 4 - critical error");
+              throw new Error("Failed to identify key pages. Please try again or try a different website.");
+            } else {
+              console.log(`Successfully identified ${keyContentPages.length} key pages after step 4`);
+            }
+          } else if (i === 5) { // After Suggesting Content Ideas
+            const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]');
+            if (postIdeas.length === 0) {
+              console.error("No content ideas saved after step 6 - critical error");
+              throw new Error("Failed to generate any content ideas. Please try again later.");
+            } else {
+              console.log(`Successfully generated ${postIdeas.length} content ideas after step 6`);
+            }
+          }
+        } catch (stepError) {
+          console.error(`Error in step ${i+1}:`, stepError);
+          // Show toast for visibility
+          sonnerToast("Error", {
+            description: `Error in step ${i+1}: ${stepError.message}. Please refresh and try again.`
+          });
+          setState(prev => ({ 
+            ...prev, 
+            currentStepText: `Error in step ${i+1}: ${stepError.message}. Please refresh and try again.` 
+          }));
+          return; // Stop execution on error
+        }
+      }
+      
+      // Before completing, verify all required data is present
+      const websiteContent = JSON.parse(localStorage.getItem('website_content') || '[]');
+      const keyContentPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
+      const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]');
+      
+      if (websiteContent.length === 0 || keyContentPages.length === 0 || postIdeas.length === 0) {
+        console.error("Missing critical data before completing onboarding", {
+          websiteContentCount: websiteContent.length,
+          keyContentCount: keyContentPages.length,
+          postIdeasCount: postIdeas.length
+        });
+        
+        sonnerToast("Error Completing Setup", {
+          description: "Missing required data to complete the setup. Please refresh and try again."
+        });
+        
+        setState(prev => ({ 
+          ...prev, 
+          currentStepText: `Error: Missing required data to complete setup. Please refresh and try again.` 
+        }));
+        return;
     }
     
     // Complete Setup 1
@@ -625,6 +906,16 @@ const Onboarding = () => {
       progress: 100,
       step: 2 // Move to Setup 2: Content Idea Selection
     }));
+    } catch (error) {
+      console.error("Error in setup process:", error);
+      sonnerToast("Setup Error", {
+        description: error.message || "An unexpected error occurred. Please refresh and try again."
+      });
+      setState(prev => ({ 
+        ...prev, 
+        currentStepText: `Onboarding error: ${error.message}. Please refresh and try again.` 
+      }));
+    }
   };
 
   // Set default language to English
@@ -632,26 +923,11 @@ const Onboarding = () => {
     const websiteInfo = JSON.parse(localStorage.getItem('website_info') || '{}');
     websiteInfo.language = 'en';
     localStorage.setItem('website_info', JSON.stringify(websiteInfo));
+    
+    // Also store directly as website_language for consistent access
+    localStorage.setItem('website_language', 'en');
+    
     console.log("Using default language: en");
-  };
-
-  // Create mock pages for development
-  const createMockPages = () => {
-    const mockPages = [
-      { url: state.websiteUrl, title: "Home Page" },
-      { url: `${state.websiteUrl}/about`, title: "About Us" },
-      { url: `${state.websiteUrl}/services`, title: "Our Services" },
-      { url: `${state.websiteUrl}/contact`, title: "Contact Us" },
-      { url: `${state.websiteUrl}/blog`, title: "Blog" },
-    ];
-    localStorage.setItem('website_content', JSON.stringify(mockPages));
-  };
-
-  // Select mock key pages for development
-  const selectMockKeyPages = () => {
-    const websiteContent = JSON.parse(localStorage.getItem('website_content') || '[]');
-    const selectedPages = websiteContent.slice(0, Math.min(5, websiteContent.length));
-    localStorage.setItem('key_content_pages', JSON.stringify(selectedPages));
   };
 
   // Handle thumbs up on content idea
@@ -668,8 +944,7 @@ const Onboarding = () => {
     // Force update
     setState(prev => ({ ...prev }));
     
-    toast({
-      title: "Idea saved!",
+    sonnerToast("Idea saved!", {
       description: "We'll use this to create content for you."
     });
   };
@@ -689,82 +964,87 @@ const Onboarding = () => {
     setState(prev => ({ ...prev }));
   };
 
-  // Generate new ideas if all are rated
+  // Handle generate new ideas
   const handleGenerateNewIdeas = () => {
-      toast({
-      title: "Generating new ideas",
-      description: "Finding fresh content suggestions for you..."
+    sonnerToast("Generating new ideas...", {
+      duration: 5000,
     });
-    
-    callEdgeFunction('generate-post-ideas', { 
-      website_id: localStorage.getItem('website_id') || '' 
-    })
+
+    try {
+      const website_id = localStorage.getItem('website_id');
+      const language = localStorage.getItem('website_language') || 'en';
+      
+      console.log(`Generating post ideas for website ID: ${website_id}`);
+      console.log(`Website language detected: ${language}`);
+      
+      // Get necessary data to generate post ideas
+      const requestParams = {
+        website_id,
+        website_url: state.websiteUrl,
+        language: language
+      };
+      
+      console.log(`Calling generate-post-ideas with params:`, requestParams);
+      
+      // Call the edge function to generate post ideas
+      callEdgeFunction('generate-post-ideas', requestParams)
       .then(result => {
-        if (result?.ideas && result.ideas.length > 0) {
+          console.log(`Generate post ideas result:`, result);
+          
+          // Handle the ideas from the result
+          if (result.ideas && Array.isArray(result.ideas)) {
+            // Store the ideas in localStorage
           localStorage.setItem('post_ideas', JSON.stringify(result.ideas));
+            
+            // Update state with the new ideas
+            setLikedIdeas(result.ideas.map((idea: any) => idea.id));
           setState(prev => ({ ...prev }));
-          toast({
-            title: "New ideas generated",
-            description: "We've created fresh content ideas for you."
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: "No ideas returned from API. Please try again."
+          } 
+          // Handle older API response format
+          else if (result.titles && Array.isArray(result.titles)) {
+            const mappedIdeas = result.titles.map((title, index) => {
+              const keywords = result.keywordsByTitle?.[title] || result.keywords || [];
+              
+              return {
+                id: `idea-${index + 1}`,
+                title,
+                description: `Generated blog post idea based on your website content.`,
+                tags: keywords,
+                hidden: false
+              };
+            });
+            
+            // Store the ideas in localStorage
+            localStorage.setItem('post_ideas', JSON.stringify(mappedIdeas));
+            
+            // Update state with the new ideas
+            setLikedIdeas(mappedIdeas.map((idea: any) => idea.id));
+            setState(prev => ({ ...prev }));
+          } 
+          else {
+            console.warn('No ideas returned from generate-post-ideas function');
+            // Don't use mock data - show the actual error
+            sonnerToast("Error generating ideas", {
+              description: "No content ideas could be generated. Please try again or contact support."
           });
         }
       })
       .catch(error => {
-        console.error("Error generating ideas:", error);
-        toast({
-          title: "Error",
-          description: "Failed to generate ideas. Please try again."
+          console.error('Error generating post ideas:', error);
+          
+          // Don't mask the error with mock data
+          sonnerToast("Error generating ideas", {
+            description: error.message || "Failed to generate content ideas. Please try again."
         });
       });
-  };
-
-  // Create mock post ideas for development and fallback
-  const createMockPostIdeas = () => {
-    const ideas = [
-      {
-        id: 'idea-1',
-        title: 'The Ultimate Guide to Creating Engaging Content',
-        description: 'Discover proven strategies to create content that resonates with your audience and drives engagement.',
-        tags: ['Content Strategy', 'Engagement'],
-        hidden: false
-      },
-      {
-        id: 'idea-2',
-        title: '10 Ways to Improve Your Website SEO Today',
-        description: 'Practical and actionable tips to boost your website\'s search engine rankings quickly.',
-        tags: ['SEO', 'Website Optimization'],
-        hidden: false
-      },
-      {
-        id: 'idea-3',
-        title: 'How to Build a Strong Brand Voice Online',
-        description: 'Learn the key elements that define a memorable brand voice and how to implement them consistently.',
-        tags: ['Branding', 'Marketing'],
-        hidden: false
-      },
-      {
-        id: 'idea-4',
-        title: 'Understanding Your Audience: Data-Driven Content Creation',
-        description: 'Leverage analytics and user data to create content that perfectly matches your audience\'s needs.',
-        tags: ['Analytics', 'Content Strategy'],
-        hidden: false
-      },
-      {
-        id: 'idea-5',
-        title: 'The Future of Content Marketing: Trends to Watch',
-        description: 'Stay ahead of the curve with insights into emerging content marketing trends and technologies.',
-        tags: ['Content Marketing', 'Trends'],
-        hidden: false
-      }
-    ];
-    
-    localStorage.setItem('post_ideas', JSON.stringify(ideas));
-    localStorage.setItem('mock_post_ideas', JSON.stringify(ideas));
+    } catch (error) {
+      console.error('Error in handleGenerateNewIdeas:', error);
+      
+      // Don't mask errors with mock data - show the real issue
+      sonnerToast("Error generating ideas", {
+        description: error.message || "An unexpected error occurred. Please try again."
+      });
+    }
   };
 
   // Check if any ideas are liked
@@ -773,8 +1053,7 @@ const Onboarding = () => {
   // Move to Setup 3: Content Generation
   const handleContinueToContentCreation = () => {
     if (!hasLikedIdeas()) {
-      toast({
-        title: "Select an idea",
+      sonnerToast("Error", {
         description: "Please like at least one content idea to continue"
       });
       return;
@@ -800,70 +1079,75 @@ const Onboarding = () => {
     const likedIdea = postIdeas.find((idea: any) => likedIdeas.includes(idea.id));
     
     if (!likedIdea) {
-      toast({
-        title: "Error",
+      sonnerToast("Error", {
         description: "No liked ideas found. Please select an idea first."
       });
       return;
     }
     
-    // For this demo, we'll still use the simulation since the generate-content-v3 endpoint
-    // might not be fully implemented in the current project state
-    const interval = setInterval(() => {
-      setState(prev => {
-        const newProgress = prev.progress + 1;
-        
-        if (newProgress >= 100) {
-          clearInterval(interval);
-          
-          // Show generated content
-          setTimeout(() => {
-            setState(prev => ({
-              ...prev,
-              contentGenerated: true,
-              generatedContentTitle: likedIdea.title,
-              generatedContentPreview: `This is a preview of the AI-generated content for "${likedIdea.title}".\n\nThis content has been tailored to match your website's tone and style, focusing on the key themes you've highlighted.\n\nThe full article includes actionable insights and engaging examples.`
-            }));
-          }, 500);
-          
-          return { ...prev, progress: 100 };
-        }
-        
+    console.log("Starting content generation with website URL:", state.websiteUrl);
+
+    try {
+      // Start progress animation
+      const progressInterval = setInterval(() => {
+        setState(prev => {
+          const newProgress = Math.min(prev.progress + 1, 95); // Cap at 95% until we get actual result
         return { ...prev, progress: newProgress };
       });
-    }, 50);
+      }, 100);
     
-    // In a real implementation, we would use something like:
-    /*
     callEdgeFunction('generate-content-v3', {
-      websiteId: localStorage.getItem('website_id') || '',
-      title: likedIdea.title,
-      description: likedIdea.description
+        website_id: localStorage.getItem('website_id') || '',
+        website_url: state.websiteUrl,
+        title: likedIdea.title,
+        description: likedIdea.description,
+        is_onboarding: true
     })
       .then(result => {
+          // Clear the progress interval
+          clearInterval(progressInterval);
+          
         if (result?.content) {
+            // Complete the progress bar
           setState(prev => ({
             ...prev,
+              progress: 100,
             contentGenerated: true,
             generatedContentTitle: likedIdea.title,
             generatedContentPreview: result.content
           }));
         } else {
-          // Handle failure
-          toast({
-            title: "Error",
+            // Handle error case
+            clearInterval(progressInterval);
+            setState(prev => ({ ...prev, progress: 0 }));
+            
+            sonnerToast("Error", {
             description: "Failed to generate content. Please try again."
           });
+            
+            console.error("No content returned from generate-content-v3 function");
         }
       })
       .catch(error => {
+          // Clear the progress interval
+          clearInterval(progressInterval);
+          setState(prev => ({ ...prev, progress: 0 }));
+          
+          sonnerToast("Error", {
+            description: error.message || "Failed to generate content. Please try again."
+          });
+          
         console.error("Error generating content:", error);
-        toast({
-          title: "Error",
-          description: "Failed to generate content. Please try again."
         });
+    } catch (error) {
+      setState(prev => ({ ...prev, progress: 0 }));
+      
+      sonnerToast("Error", {
+        description: error.message || "Failed to generate content. Please try again."
       });
-    */
+      
+      console.error("Error calling generate-content-v3:", error);
+    }
   };
   
   // Regenerate content
@@ -879,8 +1163,7 @@ const Onboarding = () => {
 
   // Publish content and complete
   const handlePublishContent = () => {
-    toast({
-      title: "Content published!",
+    sonnerToast("Content published!", {
       description: "Your content has been published successfully."
     });
     
@@ -889,8 +1172,7 @@ const Onboarding = () => {
 
   // Complete onboarding and go to dashboard
   const handleComplete = () => {
-    toast({
-      title: "Setup Complete!",
+    sonnerToast("Setup Complete!", {
       description: "You're ready to start creating content."
     });
     navigate('/dashboard');
