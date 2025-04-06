@@ -1,7 +1,7 @@
 project_id = "vehcghewfnjkwlwmmrix"
 [functions.generate-post-ideas]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/generate-post-ideas/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
@@ -9,6 +9,36 @@ entrypoint = "./functions/generate-post-ideas/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/generate-post-ideas/*.html" ]
+
+[functions.get-sitemap-pages]
+enabled = true
+verify_jwt = false
+import_map = "./functions/get-sitemap-pages/deno.json"
+entrypoint = "./functions/get-sitemap-pages/index.ts"
+
+[functions.crawl-website-pages]
+enabled = true
+verify_jwt = false
+import_map = "./functions/crawl-website-pages/deno.json"
+entrypoint = "./functions/crawl-website-pages/index.ts"
+
+[functions.suggest-key-content]
+enabled = true
+verify_jwt = false
+import_map = "./functions/suggest-key-content/deno.json"
+entrypoint = "./functions/suggest-key-content/index.ts"
+
+[functions.scrape-content]
+enabled = true
+verify_jwt = false
+import_map = "./functions/scrape-content/deno.json"
+entrypoint = "./functions/scrape-content/index.ts"
+
+[functions.detect-website-language]
+enabled = true
+verify_jwt = false
+import_map = "./functions/detect-website-language/deno.json"
+entrypoint = "./functions/detect-website-language/index.ts"
 
 [functions.generate-and-publish]
 enabled = true
