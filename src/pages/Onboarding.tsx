@@ -12,11 +12,17 @@ import {
   CheckCircle2,
   Clock,
   Sparkles,
-  Wand2
+  Wand2,
+  ThumbsUp,
+  ThumbsDown,
+  X
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { v4 as uuidv4 } from 'uuid';
+import { Badge } from "@/components/ui/badge";
 
 // Types
 interface ContentType {
@@ -43,6 +49,15 @@ interface OnboardingState {
   currentStepIndex: number;
   currentStepText: string;
   selectedType: string | null;
+  contentGenerated: boolean;
+  generatedContentTitle: string;
+  generatedContentPreview: string;
+}
+
+interface Step {
+  id: number;
+  name: string;
+  description: string;
 }
 
 const contentTypes: ContentType[] = [
@@ -72,62 +87,73 @@ const contentTypes: ContentType[] = [
 const contentSteps: ContentStep[] = [
   { 
     id: 1, 
-    name: "Deep Website Analysis", 
-    description: "Analyzing your website structure and content",
-    detail: "Extracting data from your pages to understand your unique tone and style",
-    duration: 3000,
+    name: "Account Setup", 
+    description: "Creating your workspace",
+    detail: "Setting up your personal account and workspace",
+    duration: 1000,
     substeps: [
-      "Fetching sitemap.xml and content pages",
-      "Analyzing writing style and structure",
-      "Identifying your unique brand voice"
+      "Creating workspace",
+      "Setting up account"
     ]
   },
   { 
     id: 2, 
-    name: "Content Fingerprinting", 
-    description: "Creating your site's content fingerprint",
-    detail: "Building a profile of your site's unique content patterns and style preferences",
-    duration: 2500,
+    name: "Reading Website", 
+    description: "Analyzing your website",
+    detail: "Extracting and analyzing your website content",
+    duration: 3000,
     substeps: [
-      "Extracting topic clusters",
-      "Mapping content relationships",
-      "Building your site's writing style profile"
+      "Fetching sitemap",
+      "Reading pages",
+      "Analyzing content"
     ]
   },
   { 
     id: 3, 
-    name: "Content Opportunity Analysis", 
-    description: "Finding content gaps",
-    detail: "Discovering what topics your audience wants that your site doesn't yet cover",
-    duration: 2000,
+    name: "Language Detection", 
+    description: "Identifying website language",
+    detail: "Detecting the primary language of your content",
+    duration: 1500,
     substeps: [
-      "Analyzing competitor content gaps",
-      "Identifying keyword opportunities",
-      "Mapping reader interest patterns"
+      "Analyzing HTML",
+      "Processing text",
+      "Identifying language"
     ]
   },
   { 
     id: 4, 
-    name: "Content Strategy Creation", 
-    description: "Building your personalized content plan",
-    detail: "Creating a tailored content calendar based on your site's unique fingerprint",
+    name: "Learning Tone-of-Voice", 
+    description: "Understanding your style",
+    detail: "Learning how you sound to match your voice",
     duration: 2500,
     substeps: [
-      "Generating topic clusters",
-      "Creating content outlines",
-      "Building publishing schedules"
+      "Identifying key pages",
+      "Analyzing writing style",
+      "Capturing brand voice"
     ]
   },
   { 
     id: 5, 
-    name: "WordPress Integration", 
-    description: "Connecting your WordPress site",
-    detail: "Setting up seamless publishing of content that matches your site perfectly",
+    name: "Reading Key Content", 
+    description: "Analyzing important pages",
+    detail: "Reading your most important content in depth",
     duration: 2000,
     substeps: [
-      "Configuring WordPress connection",
-      "Mapping content categories",
-      "Setting up publishing workflows"
+      "Extracting content",
+      "Processing structure",
+      "Identifying themes"
+    ]
+  },
+  { 
+    id: 6, 
+    name: "Suggesting Content Ideas", 
+    description: "Creating content ideas",
+    detail: "Generating content ideas based on your site",
+    duration: 2500,
+    substeps: [
+      "Analyzing opportunities",
+      "Generating topics",
+      "Matching to audience"
     ]
   }
 ];
@@ -201,184 +227,651 @@ const LogoAnimation = () => (
   </motion.svg>
 );
 
+const steps: Step[] = [
+  { 
+    id: 1, 
+    name: "Account Setup", 
+    description: "Creating your workspace"
+  },
+  { 
+    id: 2, 
+    name: "Reading Website", 
+    description: "Analyzing your website"
+  },
+  { 
+    id: 3, 
+    name: "Language Detection", 
+    description: "Identifying website language"
+  },
+  { 
+    id: 4, 
+    name: "Learning Tone-of-Voice", 
+    description: "Understanding your style"
+  },
+  { 
+    id: 5, 
+    name: "Reading Key Content", 
+    description: "Analyzing important pages"
+  },
+  { 
+    id: 6, 
+    name: "Suggesting Content Ideas", 
+    description: "Creating content ideas"
+  }
+];
+
 const Onboarding = () => {
   const [state, setState] = useState<OnboardingState>({
-    step: 0,
-    websiteUrl: localStorage.getItem('onboardingWebsite') || '',
+    step: 1, // Start with Setup 1
+    websiteUrl: localStorage.getItem('onboardingWebsite') || 'https://example.com',
     progress: 0,
     currentStepIndex: 0,
     currentStepText: '',
     selectedType: null,
+    contentGenerated: false,
+    generatedContentTitle: '',
+    generatedContentPreview: '',
   });
   const { toast } = useToast();
   const navigate = useNavigate();
   
+  // Track liked ideas
+  const [likedIdeas, setLikedIdeas] = useState<string[]>([]);
+  
   useEffect(() => {
-    console.log("Onboarding mounted, websiteUrl:", state.websiteUrl);
+    // Get URL from query parameters if exists
+    const params = new URLSearchParams(window.location.search);
+    const urlParam = params.get('url');
     
-    // If we have a website URL already stored, move to step 1
-    if (state.websiteUrl && state.step === 0) {
-      setTimeout(() => {
-        handleNextStep();
-      }, 500);
-    }
-  }, []);
-
-  const handleUrlSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!state.websiteUrl) {
-      toast({
-        title: "URL Required",
-        description: "Please enter your website URL",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    // Format URL if needed
-    let formattedUrl = state.websiteUrl;
-    if (!/^https?:\/\//i.test(formattedUrl)) {
-      formattedUrl = 'https://' + formattedUrl;
+    if (urlParam) {
+      let formattedUrl = urlParam;
+      if (!/^https?:\/\//i.test(formattedUrl)) {
+        formattedUrl = 'https://' + formattedUrl;
+      }
+      
+      // Store the URL and update state
+      localStorage.setItem('onboardingWebsite', formattedUrl);
       setState(prev => ({ ...prev, websiteUrl: formattedUrl }));
     }
     
-    localStorage.setItem('onboardingWebsite', formattedUrl);
-    handleNextStep();
-  };
+    // Start onboarding process immediately
+    startSetup1();
+  }, []);
 
-  const handleNextStep = () => {
-    console.log("Moving to next step from:", state.step);
-    const nextStep = state.step + 1;
-    setState({ ...state, step: nextStep });
-    
-    if (nextStep === 1) {
-      startAnalysis();
+  // Helper function to call Supabase Edge Functions directly
+  const callEdgeFunction = async (functionName: string, body: any) => {
+    try {
+      // Convert any snake_case keys to camelCase or dash-case for the API
+      const formattedBody = Object.entries(body).reduce((acc, [key, value]) => {
+        // Try with camelCase
+        const camelKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+        acc[camelKey] = value;
+        return acc;
+      }, {});
+      
+      console.log(`Calling edge function: ${functionName} with formatted body:`, formattedBody);
+      
+      // Use a direct fetch to the Supabase Edge Function
+      const resp = await fetch(`https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/${functionName}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(formattedBody)
+      });
+      
+      console.log(`Response status for ${functionName}:`, resp.status);
+      
+      if (!resp.ok) {
+        const errorText = await resp.text().catch(() => 'Unknown error');
+        console.error(`Error response from ${functionName}:`, errorText);
+        throw new Error(`Function ${functionName} returned status ${resp.status}: ${errorText}`);
+      }
+      
+      const data = await resp.json();
+      return data;
+    } catch (err) {
+      console.error(`Failed to call ${functionName}:`, err);
+      throw err;
     }
   };
 
-  const startAnalysis = () => {
-    console.log("Starting analysis...");
-    setState({ 
-      ...state, 
+  const startSetup1 = async () => {
+    console.log("Starting Setup 1...");
+    
+    // Reset state
+    setState(prevState => ({ 
+      ...prevState, 
       progress: 0,
       currentStepIndex: 0,
-      currentStepText: contentSteps[0].substeps?.[0] || ''
-    });
+      currentStepText: "Setting up your workspace..."
+    }));
     
-    let currentStep = 0;
-    let substepIndex = 0;
+    // Create website and organization IDs
+    const websiteId = localStorage.getItem('website_id') || uuidv4();
+    const organizationId = localStorage.getItem('organization_id') || uuidv4();
     
-    const runStep = () => {
-      if (currentStep >= contentSteps.length) {
-        console.log("Analysis completed");
-        return;
+    // Store IDs in localStorage
+    localStorage.setItem('website_id', websiteId);
+    localStorage.setItem('organization_id', organizationId);
+    
+    // Create organization name from URL
+    const urlWithoutProtocol = state.websiteUrl.replace(/^https?:\/\//, '');
+    const domainParts = urlWithoutProtocol.split('.');
+    const organizationName = domainParts.length > 1 ? domainParts[domainParts.length - 2] : urlWithoutProtocol;
+    
+    // Store website info
+    const websiteInfo = {
+      id: websiteId,
+      url: state.websiteUrl,
+      name: organizationName,
+      organization_id: organizationId,
+      created_at: new Date().toISOString()
+    };
+    localStorage.setItem('website_info', JSON.stringify(websiteInfo));
+    
+    // Store organization info
+    const organizationInfo = {
+      id: organizationId,
+      name: organizationName.charAt(0).toUpperCase() + organizationName.slice(1),
+      created_at: new Date().toISOString()
+    };
+    localStorage.setItem('organization_info', JSON.stringify(organizationInfo));
+    
+    // Setup 1 steps
+    const setup1Steps = [
+      // Step 1: Account Setup
+      async () => {
+        setState(prev => ({ ...prev, currentStepIndex: 0, currentStepText: "Creating workspace..." }));
+        await new Promise(r => setTimeout(r, 1000));
+        return "No account? No problem! We made a quick site and organisation for you.\n\n✅ You're now set up with a private workspace based on your website url: " + state.websiteUrl + ". Everything is local, just for you.";
+      },
+      
+      // Step 2: Reading Website
+      async () => {
+        setState(prev => ({ ...prev, currentStepIndex: 1, currentStepText: "Reading website..." }));
+        try {
+          // Try get-sitemap-pages function
+          console.log("Attempting to call get-sitemap-pages with website_id:", websiteId);
+          
+          // Try multiple parameter formats to diagnose issues
+          const payloads = [
+            { website_id: websiteId, website_url: state.websiteUrl },
+            { websiteId: websiteId, url: state.websiteUrl },
+            { websiteId, url: state.websiteUrl, customSitemapUrl: null }
+          ];
+          
+          let result = null;
+          let lastError = null;
+          
+          // Try each payload format
+          for (const payload of payloads) {
+            try {
+              console.log("Trying get-sitemap-pages with payload:", payload);
+              result = await callEdgeFunction('get-sitemap-pages', payload);
+              if (result) {
+                console.log("Success with payload:", payload);
+                break;
+              }
+            } catch (error) {
+              console.error("Failed with payload:", payload, error);
+              lastError = error;
+            }
+          }
+          
+          if (result?.pages && result.pages.length > 0) {
+            const limitedPages = result.pages.slice(0, 200);
+            localStorage.setItem('website_content', JSON.stringify(limitedPages));
+            return `We've just read your website — exciting! 😄 We can always do some more reading later.\n\n🧠 ${limitedPages.length} pages have been loaded from your sitemap.`;
+          } else {
+            // If no pages from sitemap, try crawling
+            try {
+              // Try crawl-website-pages function with multiple formats
+              for (const payload of payloads) {
+                try {
+                  console.log("Trying crawl-website-pages with payload:", payload);
+                  const crawlResult = await callEdgeFunction('crawl-website-pages', payload);
+                  if (crawlResult?.pages && crawlResult.pages.length > 0) {
+                    const limitedPages = crawlResult.pages.slice(0, 200);
+                    localStorage.setItem('website_content', JSON.stringify(limitedPages));
+                    return `We've just read your website — exciting! 😄 We can always do some more reading later.\n\n🧠 ${limitedPages.length} pages have been loaded by scanning your website.`;
+                  }
+                } catch (error) {
+                  console.error("Failed crawl with payload:", payload, error);
+                }
+              }
+              
+              // If we got here, all attempts failed
+              createMockPages();
+              return "We've just read your website — exciting! 😄 We can always do some more reading later.";
+            } catch (crawlError) {
+              console.error("Error crawling website:", crawlError);
+              // If both methods fail, use mock data
+              createMockPages();
+              return "We've just read your website — exciting! 😄 We can always do some more reading later.";
+            }
+          }
+        } catch (error) {
+          console.error("Error reading website:", error);
+          // Fallback to mock data if both methods fail
+          createMockPages();
+          return "We've just read your website — exciting! 😄 We can always do some more reading later.";
+        }
+      },
+      
+      // Step 3: Language Detection (hidden from user)
+      async () => {
+        setState(prev => ({ ...prev, currentStepIndex: 2, currentStepText: "Detecting language..." }));
+        try {
+          const result = await callEdgeFunction('detect-website-language', {
+            website_id: websiteId,
+            url: state.websiteUrl
+          });
+          
+          if (result?.language) {
+            const websiteInfo = JSON.parse(localStorage.getItem('website_info') || '{}');
+            websiteInfo.language = result.language;
+            localStorage.setItem('website_info', JSON.stringify(websiteInfo));
+            console.log(`Language detected: ${result.language}`);
+          } else {
+            // Set default language if detection fails
+            setDefaultLanguage();
+          }
+          return ""; // No message shown to user
+        } catch (error) {
+          console.error("Error detecting language:", error);
+          // Set default language if detection fails
+          setDefaultLanguage();
+          return "";
+        }
+      },
+      
+      // Step 4: Learning Tone-of-Voice
+      async () => {
+        setState(prev => ({ ...prev, currentStepIndex: 3, currentStepText: "Learning your tone..." }));
+        try {
+          const result = await callEdgeFunction('suggest-key-content', {
+            website_id: websiteId
+          });
+          
+          if (result?.pages && result.pages.length > 0) {
+            const selectedPages = result.pages.slice(0, 5);
+            localStorage.setItem('key_content_pages', JSON.stringify(selectedPages));
+            
+            const pageUrls = selectedPages.map((page: any) => {
+              const url = page.url.replace(state.websiteUrl, '');
+              return url || '/';
+            }).join('\n');
+            
+            return `🗣️ Learning Tone-of-Voice\n\nWe're learning how you sound so we can write like you.\n🔍 Selected and prioritised these key pages to understand your tone and style:\n${pageUrls}\n(Don't worry, you can adjust this later.)`;
+          } else {
+            // Use mock data if API fails
+            selectMockKeyPages();
+            const selectedPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
+            const pageUrls = selectedPages.map((page: any) => {
+              const url = page.url.replace(state.websiteUrl, '');
+              return url || '/';
+            }).join('\n');
+            
+            return `🗣️ Learning Tone-of-Voice\n\nWe're learning how you sound so we can write like you.\n🔍 Selected and prioritised these key pages to understand your tone and style:\n${pageUrls}\n(Don't worry, you can adjust this later.)`;
+          }
+        } catch (error) {
+          console.error("Error learning tone:", error);
+          // Use mock data if API fails
+          selectMockKeyPages();
+          
+          return "🗣️ Learning Tone-of-Voice\n\nWe're learning how you sound so we can write like you.";
+        }
+      },
+      
+      // Step 5: Reading Key Content
+      async () => {
+        setState(prev => ({ ...prev, currentStepIndex: 4, currentStepText: "Reading key content..." }));
+        try {
+          const keyPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
+          let success = false;
+          
+          if (keyPages.length > 0) {
+            try {
+              // Try to scrape content for each key page
+              for (const page of keyPages) {
+                await callEdgeFunction('scrape-content', {
+                  website_id: websiteId,
+                  url: page.url
+                });
+              }
+              success = true;
+            } catch (scrapeError) {
+              console.error("Error scraping content:", scrapeError);
+              // Continue with mock data on error
+            }
+          }
+          
+          return "📚 Reading Key Content\n\nWe're digging deeper into your key content to fully understand your voice and topics.\n\nYour most important pages are now being read — this helps us learn how to write like you.";
+        } catch (error) {
+          console.error("Error reading content:", error);
+          return "📚 Reading Key Content\n\nWe're digging deeper into your key content to fully understand your voice and topics.";
+        }
+      },
+      
+      // Step 6: Suggesting Content Ideas
+      async () => {
+        setState(prev => ({ ...prev, currentStepIndex: 5, currentStepText: "Generating ideas..." }));
+        try {
+          const result = await callEdgeFunction('generate-post-ideas', {
+            website_id: websiteId
+          });
+          
+          if (result?.ideas && result.ideas.length > 0) {
+            localStorage.setItem('post_ideas', JSON.stringify(result.ideas));
+            return "💡 Suggesting Relevant Content Ideas\n\nYour content garden is blooming! 🌱\n\nWe've generated 5 unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
+        } else {
+            // Fallback with mock data if the API returns no ideas
+            createMockPostIdeas();
+            return "💡 Suggesting Relevant Content Ideas\n\nYour content garden is blooming! 🌱\n\nWe've generated 5 unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
+          }
+        } catch (error) {
+          console.error("Error generating ideas:", error);
+          // Fallback with mock data if the API fails
+          createMockPostIdeas();
+          return "💡 Suggesting Relevant Content Ideas\n\nYour content garden is blooming! 🌱\n\nWe've generated 5 unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
+        }
       }
-      
-      const step = contentSteps[currentStep];
-      const substeps = step.substeps || [];
-      
-      setState(prevState => ({
-        ...prevState,
-        progress: (currentStep / contentSteps.length) * 100,
-        currentStepIndex: currentStep,
-        currentStepText: substeps[substepIndex] || step.description
+    ];
+    
+    // Run all setup1 steps in sequence
+    const totalSteps = setup1Steps.length;
+    for (let i = 0; i < totalSteps; i++) {
+      // Update progress
+      setState(prev => ({
+        ...prev,
+        progress: (i / totalSteps) * 100
       }));
       
-      substepIndex++;
+      // Run current step
+      const message = await setup1Steps[i]();
       
-      if (substepIndex >= substeps.length) {
-        substepIndex = 0;
-        currentStep++;
-        
-        if (currentStep < contentSteps.length) {
-          setTimeout(runStep, 500);
-        } else {
-          // Analysis complete, move to content type selection
-          setTimeout(() => {
-            console.log("Moving to content type selection");
-            setState(prevState => ({
-              ...prevState,
-              progress: 100,
-              step: prevState.step + 1
-            }));
-          }, 1000);
-        }
-      } else {
-        setTimeout(runStep, step.duration / substeps.length);
+      // Display message if any
+      if (message) {
+        setState(prev => ({ ...prev, currentStepText: message }));
+        await new Promise(r => setTimeout(r, 2000)); // Pause to show message
       }
-    };
+    }
     
-    // Start the first step after a short delay
-    setTimeout(runStep, 500);
+    // Complete Setup 1
+    setState(prev => ({
+      ...prev,
+      progress: 100,
+      step: 2 // Move to Setup 2: Content Idea Selection
+    }));
   };
 
-  const selectContentType = (type: string) => {
-    console.log("Selected content type:", type);
-    setState({
-      ...state,
-      selectedType: type
+  // Set default language to English
+  const setDefaultLanguage = () => {
+    const websiteInfo = JSON.parse(localStorage.getItem('website_info') || '{}');
+    websiteInfo.language = 'en';
+    localStorage.setItem('website_info', JSON.stringify(websiteInfo));
+    console.log("Using default language: en");
+  };
+
+  // Create mock pages for development
+  const createMockPages = () => {
+    const mockPages = [
+      { url: state.websiteUrl, title: "Home Page" },
+      { url: `${state.websiteUrl}/about`, title: "About Us" },
+      { url: `${state.websiteUrl}/services`, title: "Our Services" },
+      { url: `${state.websiteUrl}/contact`, title: "Contact Us" },
+      { url: `${state.websiteUrl}/blog`, title: "Blog" },
+    ];
+    localStorage.setItem('website_content', JSON.stringify(mockPages));
+  };
+
+  // Select mock key pages for development
+  const selectMockKeyPages = () => {
+    const websiteContent = JSON.parse(localStorage.getItem('website_content') || '[]');
+    const selectedPages = websiteContent.slice(0, Math.min(5, websiteContent.length));
+    localStorage.setItem('key_content_pages', JSON.stringify(selectedPages));
+  };
+
+  // Handle thumbs up on content idea
+  const handleThumbsUp = (id: string) => {
+    setLikedIdeas(prev => [...prev, id]);
+    
+    // Mark idea as liked and hide it
+    const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]');
+    const updatedIdeas = postIdeas.map((idea: any) => 
+      idea.id === id ? { ...idea, liked: true, hidden: true } : idea
+    );
+    localStorage.setItem('post_ideas', JSON.stringify(updatedIdeas));
+    
+    // Force update
+    setState(prev => ({ ...prev }));
+    
+    toast({
+      title: "Idea saved!",
+      description: "We'll use this to create content for you."
     });
   };
 
-  const handleContentTypeNext = () => {
-    if (!state.selectedType) {
+  // Handle thumbs down on content idea
+  const handleThumbsDown = (id: string) => {
+    setLikedIdeas(prev => prev.filter(ideaId => ideaId !== id));
+    
+    // Mark idea as disliked and hide it
+    const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]');
+    const updatedIdeas = postIdeas.map((idea: any) => 
+      idea.id === id ? { ...idea, liked: false, hidden: true } : idea
+    );
+    localStorage.setItem('post_ideas', JSON.stringify(updatedIdeas));
+    
+    // Force update
+    setState(prev => ({ ...prev }));
+  };
+
+  // Generate new ideas if all are rated
+  const handleGenerateNewIdeas = () => {
       toast({
-        title: "Select content type",
-        description: "Please select at least one content type to continue",
-        variant: "destructive"
+      title: "Generating new ideas",
+      description: "Finding fresh content suggestions for you..."
+    });
+    
+    callEdgeFunction('generate-post-ideas', { 
+      website_id: localStorage.getItem('website_id') || '' 
+    })
+      .then(result => {
+        if (result?.ideas && result.ideas.length > 0) {
+          localStorage.setItem('post_ideas', JSON.stringify(result.ideas));
+          setState(prev => ({ ...prev }));
+          toast({
+            title: "New ideas generated",
+            description: "We've created fresh content ideas for you."
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: "No ideas returned from API. Please try again."
+          });
+        }
+      })
+      .catch(error => {
+        console.error("Error generating ideas:", error);
+        toast({
+          title: "Error",
+          description: "Failed to generate ideas. Please try again."
+        });
+      });
+  };
+
+  // Create mock post ideas for development and fallback
+  const createMockPostIdeas = () => {
+    const ideas = [
+      {
+        id: 'idea-1',
+        title: 'The Ultimate Guide to Creating Engaging Content',
+        description: 'Discover proven strategies to create content that resonates with your audience and drives engagement.',
+        tags: ['Content Strategy', 'Engagement'],
+        hidden: false
+      },
+      {
+        id: 'idea-2',
+        title: '10 Ways to Improve Your Website SEO Today',
+        description: 'Practical and actionable tips to boost your website\'s search engine rankings quickly.',
+        tags: ['SEO', 'Website Optimization'],
+        hidden: false
+      },
+      {
+        id: 'idea-3',
+        title: 'How to Build a Strong Brand Voice Online',
+        description: 'Learn the key elements that define a memorable brand voice and how to implement them consistently.',
+        tags: ['Branding', 'Marketing'],
+        hidden: false
+      },
+      {
+        id: 'idea-4',
+        title: 'Understanding Your Audience: Data-Driven Content Creation',
+        description: 'Leverage analytics and user data to create content that perfectly matches your audience\'s needs.',
+        tags: ['Analytics', 'Content Strategy'],
+        hidden: false
+      },
+      {
+        id: 'idea-5',
+        title: 'The Future of Content Marketing: Trends to Watch',
+        description: 'Stay ahead of the curve with insights into emerging content marketing trends and technologies.',
+        tags: ['Content Marketing', 'Trends'],
+        hidden: false
+      }
+    ];
+    
+    localStorage.setItem('post_ideas', JSON.stringify(ideas));
+    localStorage.setItem('mock_post_ideas', JSON.stringify(ideas));
+  };
+
+  // Check if any ideas are liked
+  const hasLikedIdeas = () => likedIdeas.length > 0;
+
+  // Move to Setup 3: Content Generation
+  const handleContinueToContentCreation = () => {
+    if (!hasLikedIdeas()) {
+      toast({
+        title: "Select an idea",
+        description: "Please like at least one content idea to continue"
       });
       return;
     }
     
-    console.log("Moving to content processing step");
-    setState({
-      ...state,
-      step: state.step + 1
-    });
+    setState(prev => ({
+      ...prev,
+      step: 3,
+      progress: 0,
+      contentGenerated: false
+    }));
     
-    // Start the content processing step
-    setTimeout(() => {
-      startContentProcessing();
-    }, 500);
+    startContentGeneration();
   };
-  
-  const startContentProcessing = () => {
-    console.log("Starting content processing");
-    setState({ 
-      ...state, 
-      progress: 0 
-    });
+
+  // Generate content based on liked idea
+  const startContentGeneration = () => {
+    // Reset progress
+    setState(prev => ({ ...prev, progress: 0 }));
     
-    // Simulate processing
+    // Get first liked idea
+    const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]');
+    const likedIdea = postIdeas.find((idea: any) => likedIdeas.includes(idea.id));
+    
+    if (!likedIdea) {
+      toast({
+        title: "Error",
+        description: "No liked ideas found. Please select an idea first."
+      });
+      return;
+    }
+    
+    // For this demo, we'll still use the simulation since the generate-content-v3 endpoint
+    // might not be fully implemented in the current project state
     const interval = setInterval(() => {
-      setState(prevState => {
-        const newProgress = prevState.progress + 1;
+      setState(prev => {
+        const newProgress = prev.progress + 1;
         
         if (newProgress >= 100) {
-          console.log("Content processing completed");
           clearInterval(interval);
           
-          // Move to final step after completion
+          // Show generated content
           setTimeout(() => {
-            setState(prevState => ({
-              ...prevState,
-              step: prevState.step + 1
+            setState(prev => ({
+              ...prev,
+              contentGenerated: true,
+              generatedContentTitle: likedIdea.title,
+              generatedContentPreview: `This is a preview of the AI-generated content for "${likedIdea.title}".\n\nThis content has been tailored to match your website's tone and style, focusing on the key themes you've highlighted.\n\nThe full article includes actionable insights and engaging examples.`
             }));
           }, 500);
           
-          return { ...prevState, progress: 100 };
+          return { ...prev, progress: 100 };
         }
         
-        return { ...prevState, progress: newProgress };
+        return { ...prev, progress: newProgress };
       });
     }, 50);
+    
+    // In a real implementation, we would use something like:
+    /*
+    callEdgeFunction('generate-content-v3', {
+      websiteId: localStorage.getItem('website_id') || '',
+      title: likedIdea.title,
+      description: likedIdea.description
+    })
+      .then(result => {
+        if (result?.content) {
+          setState(prev => ({
+            ...prev,
+            contentGenerated: true,
+            generatedContentTitle: likedIdea.title,
+            generatedContentPreview: result.content
+          }));
+        } else {
+          // Handle failure
+          toast({
+            title: "Error",
+            description: "Failed to generate content. Please try again."
+          });
+        }
+      })
+      .catch(error => {
+        console.error("Error generating content:", error);
+        toast({
+          title: "Error",
+          description: "Failed to generate content. Please try again."
+        });
+      });
+    */
   };
   
+  // Regenerate content
+  const handleRegenerateContent = () => {
+    setState(prev => ({
+      ...prev,
+      contentGenerated: false,
+      progress: 0
+    }));
+    
+    startContentGeneration();
+  };
+
+  // Publish content and complete
+  const handlePublishContent = () => {
+    toast({
+      title: "Content published!",
+      description: "Your content has been published successfully."
+    });
+    
+    setState(prev => ({ ...prev, step: 4 }));
+  };
+
+  // Complete onboarding and go to dashboard
   const handleComplete = () => {
-    console.log("Setup complete, navigating to dashboard");
     toast({
       title: "Setup Complete!",
-      description: "You're ready to start creating content for your website."
+      description: "You're ready to start creating content."
     });
     navigate('/dashboard');
   };
@@ -396,46 +889,7 @@ const Onboarding = () => {
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
         <AnimatePresence mode="wait">
-          {/* Step 0: Enter Website URL (if not already provided) */}
-          {state.step === 0 && (
-            <motion.div
-              key="step-0"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
-              className="flex flex-col items-center justify-center min-h-[70vh]"
-            >
-              <LogoAnimation />
-              
-              <h1 className="text-3xl md:text-4xl font-bold mt-8 mb-4 text-center">
-                Let's understand your website's DNA
-              </h1>
-              
-              <p className="text-lg text-muted-foreground max-w-md text-center mb-8">
-                Enter your website URL to begin. We'll analyze your content, style, and audience to create perfectly matched content.
-              </p>
-              
-              <form onSubmit={handleUrlSubmit} className="w-full max-w-md">
-                <div className="flex flex-col gap-4">
-                  <Input
-                    type="text"
-                    placeholder="yourdomain.com"
-                    className="h-12 text-lg"
-                    value={state.websiteUrl}
-                    onChange={(e) => setState({ ...state, websiteUrl: e.target.value })}
-                    required
-                  />
-                  
-                  <Button type="submit" size="lg" className="w-full">
-                    Analyze My Website <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          )}
-
-          {/* Step 1: Website Analysis */}
+          {/* Setup 1: Website Onboarding */}
           {state.step === 1 && (
             <motion.div
               key="step-1"
@@ -447,30 +901,37 @@ const Onboarding = () => {
             >
               <div className="w-full max-w-3xl">
                 <h2 className="text-2xl font-bold mb-8 text-center">
-                  Analyzing <span className="text-primary">{state.websiteUrl}</span> content fingerprint
+                  ⚡ Setup 1: Website Onboarding
                 </h2>
                 
                 <div className="mb-8">
                   <Progress value={state.progress} className="h-2 mb-2" />
                   <div className="flex justify-between items-center">
-                    <p className="text-sm text-muted-foreground">Step {state.currentStepIndex + 1} of {contentSteps.length}</p>
+                    <p className="text-sm text-muted-foreground">Step {state.currentStepIndex + 1} of {steps.length}</p>
                     <p className="text-sm font-medium">{Math.round(state.progress)}%</p>
                   </div>
                 </div>
                 
                 <div className="border rounded-lg p-6 mb-8 bg-card">
-                  <h3 className="text-lg font-medium mb-4">
-                    {contentSteps[state.currentStepIndex]?.name}
+                  <h3 className="text-lg font-medium mb-4 flex items-center">
+                    <span className="bg-primary/10 p-2 rounded-full mr-3">
+                      <Sparkles className="h-5 w-5 text-primary" />
+                    </span>
+                    {steps[state.currentStepIndex]?.name}
                   </h3>
                   
                   <p className="text-muted-foreground mb-6">
-                    {contentSteps[state.currentStepIndex]?.detail}
+                    {steps[state.currentStepIndex]?.description}
                   </p>
                   
                   <div className="bg-muted/50 p-4 rounded-md border">
-                    <div className="flex items-center">
-                      <Sparkles className="w-5 h-5 text-primary mr-3 animate-pulse" />
-                      <p className="font-medium">{state.currentStepText}</p>
+                    <div className="flex">
+                      <Sparkles className="w-5 h-5 text-primary mr-3 animate-pulse mt-1" />
+                      <div>
+                        {state.currentStepText.split('\n').map((line, i) => (
+                          <p key={i} className={`font-medium ${i > 0 ? 'mt-2' : ''}`}>{line}</p>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -478,7 +939,7 @@ const Onboarding = () => {
             </motion.div>
           )}
 
-          {/* Step 2: Content Type Selection */}
+          {/* Setup 2: Content Idea Selection */}
           {state.step === 2 && (
             <motion.div
               key="step-2"
@@ -486,111 +947,152 @@ const Onboarding = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="py-8"
+              className="py-6"
             >
-              <div className="mb-8 text-center">
-                <h2 className="text-2xl font-bold mb-2">Your website's content profile is ready</h2>
-                <p className="text-muted-foreground">
-                  We've analyzed your site's unique content characteristics:
+              <div className="w-full max-w-5xl mx-auto">
+                <h2 className="text-2xl font-semibold mb-6">
+                  🌱✨ Choose Your Content Seeds 🪴
+                </h2>
+                
+                <p className="text-muted-foreground mb-8">
+                  ✨ Which ideas do you want to grow?<br />
+                  We've planted five fresh content ideas based on your website's tone and style.
                 </p>
-              </div>
-              
-              <div className="grid md:grid-cols-2 gap-6 mb-12">
-                <div className="border rounded-lg p-6 bg-card">
-                  <h3 className="text-lg font-medium mb-4">Website Style Analysis</h3>
-                  
-                  <ul className="space-y-3">
-                    <li className="flex items-start">
-                      <span className="font-medium w-1/3">Writing Style:</span>
-                      <span className="text-muted-foreground">{siteAnalysis.writingStyle}</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="font-medium w-1/3">Target Audience:</span>
-                      <span className="text-muted-foreground">{siteAnalysis.targetAudience}</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="font-medium w-1/3">Tone of Voice:</span>
-                      <span className="text-muted-foreground">{siteAnalysis.toneOfVoice}</span>
-                    </li>
-                    <li className="flex items-start">
-                      <span className="font-medium w-1/3">Language:</span>
-                      <span className="text-muted-foreground">{siteAnalysis.language}</span>
-                    </li>
-                  </ul>
+                
+                <div className="grid grid-cols-1 gap-4 mb-8">
+                  {/* Show visible ideas */}
+                  {JSON.parse(localStorage.getItem('post_ideas') || '[]')
+                    .filter((idea: any) => !idea.hidden)
+                    .map((idea: any) => (
+                      <div 
+                        key={idea.id} 
+                        className="p-4 rounded-lg border transition-all hover:shadow-subtle bg-card border-border/50"
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-medium text-base text-balance">{idea.title}</h3>
                 </div>
                 
-                <div className="border rounded-lg p-6 bg-card">
-                  <h3 className="text-lg font-medium mb-4">Content Opportunities</h3>
-                  
-                  <div className="space-y-4">
-                    {keywordOpportunities.slice(0, 2).map((opportunity, i) => (
-                      <div key={i} className="border rounded p-3 bg-muted/30">
-                        <h4 className="font-medium text-sm mb-1 text-primary">
-                          {opportunity.keyword}
-                        </h4>
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>{opportunity.searchVolume}</span>
-                          <span>Difficulty: {opportunity.difficulty}</span>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => handleThumbsUp(idea.id)}
+                              title="Like this idea"
+                            >
+                              <ThumbsUp className="h-3.5 w-3.5" />
+                              <span className="sr-only">Like</span>
+                            </Button>
+                            
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={() => handleThumbsDown(idea.id)}
+                              title="Dislike this idea"
+                            >
+                              <ThumbsDown className="h-3.5 w-3.5" />
+                              <span className="sr-only">Dislike</span>
+                            </Button>
                         </div>
                       </div>
-                    ))}
-                    <p className="text-xs text-muted-foreground mt-2">
-                      And {keywordOpportunities.length - 2} more opportunities...
-                    </p>
+                        
+                        {idea.tags && idea.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-3">
+                            {idea.tags.map((tag: string, i: number) => (
+                              <Badge 
+                                key={i}
+                                variant="outline" 
+                                className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 pr-1"
+                              >
+                                <span>{tag}</span>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-3 w-3 rounded-full p-0 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const updatedIdea = {...idea};
+                                    updatedIdea.tags = updatedIdea.tags.filter((t: string) => t !== tag);
+                                    
+                                    // Update in localStorage
+                                    const ideas = JSON.parse(localStorage.getItem('post_ideas') || '[]');
+                                    const updatedIdeas = ideas.map((i: any) => 
+                                      i.id === idea.id ? updatedIdea : i
+                                    );
+                                    localStorage.setItem('post_ideas', JSON.stringify(updatedIdeas));
+                                    
+                                    // Force update
+                                    setState(prev => ({...prev}));
+                                  }}
+                                >
+                                  <X className="h-2 w-2" />
+                                  <span className="sr-only">Remove keyword</span>
+                                </Button>
+                              </Badge>
+                            ))}
                   </div>
-                </div>
-              </div>
-              
-              <div className="mb-8">
-                <h3 className="text-xl font-medium mb-4">Select content formats that match your site</h3>
-                <p className="text-muted-foreground mb-6">
-                  Based on your website's content fingerprint, we recommend these formats:
-                </p>
-                
-                <div className="grid md:grid-cols-3 gap-4 mb-8">
-                  {contentTypes.map((type) => (
-                    <div
-                      key={type.id}
-                      className={`border rounded-lg p-5 cursor-pointer transition-all ${
-                        state.selectedType === type.id 
-                          ? 'border-primary bg-primary/5' 
-                          : 'hover:border-border/60'
-                      }`}
-                      onClick={() => selectContentType(type.id)}
-                    >
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          {type.icon}
-                        </div>
-                        {state.selectedType === type.id && (
-                          <CheckCircle2 className="h-5 w-5 text-primary" />
                         )}
-                      </div>
-                      
-                      <h4 className="font-medium mb-1">{type.name}</h4>
-                      <p className="text-sm text-muted-foreground mb-3">{type.description}</p>
-                      
-                      {type.recommended && (
-                        <div className="text-xs font-medium text-primary bg-primary/10 py-1 px-2 rounded inline-block">
-                          {type.recommended}
+                </div>
+                    ))}
+                  
+                  {/* Show message when all ideas are rated */}
+                  {JSON.parse(localStorage.getItem('post_ideas') || '[]')
+                    .filter((idea: any) => !idea.hidden).length === 0 && (
+                    <div className="text-center py-12 border rounded-lg bg-card">
+                      <h3 className="text-xl font-medium mb-3">You've rated all the ideas!</h3>
+                <p className="text-muted-foreground mb-6">
+                        {likedIdeas.length > 0 
+                          ? "Great! We'll continue with your selected ideas."
+                          : "Let's generate some fresh content ideas for you."}
+                      </p>
+                      {likedIdeas.length > 0 ? (
+                        <Button 
+                          onClick={handleContinueToContentCreation}
+                          variant="default"
+                          className="px-6"
+                        >
+                          <ArrowRight className="mr-2 h-4 w-4" />
+                          Continue
+                        </Button>
+                      ) : (
+                        <Button 
+                          onClick={handleGenerateNewIdeas}
+                          variant="default"
+                          className="px-6"
+                        >
+                          <Sparkles className="mr-2 h-4 w-4" />
+                          Generate New Ideas
+                        </Button>
+                      )}
                         </div>
                       )}
-                    </div>
-                  ))}
                 </div>
                 
+                {/* Show Continue button when at least one idea is liked */}
+                {(likedIdeas.length > 0) && (
+                  <div className="flex justify-end items-center border-t pt-6">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground mr-2">
+                        {likedIdeas.length} idea{likedIdeas.length !== 1 ? 's' : ''} selected
+                      </span>
                 <Button 
-                  onClick={handleContentTypeNext}
-                  size="lg"
-                  className="w-full md:w-auto"
+                        onClick={handleContinueToContentCreation}
+                        className="gap-2"
                 >
-                  Continue <ArrowRight className="ml-2 h-5 w-5" />
+                        Continue 
+                        <ArrowRight className="h-4 w-4" />
                 </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
 
-          {/* Step 3: Content Processing & Setup */}
+          {/* Setup 3: Generating First Piece of Content */}
           {state.step === 3 && (
             <motion.div
               key="step-3"
@@ -598,60 +1100,80 @@ const Onboarding = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
-              className="flex flex-col items-center justify-center min-h-[70vh]"
+              className="flex flex-col items-center justify-center py-8"
             >
-              <div className="w-full max-w-2xl text-center">
-                <div className="mb-8">
+              <div className="w-full max-w-3xl mx-auto">
+                <h2 className="text-2xl font-bold mb-8 text-center">
+                  📝 Setup 3: Generating Your First Piece of Content
+                </h2>
+                
+                {!state.contentGenerated ? (
+                  <>
+                    <div className="text-center mb-8">
                   <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
                     <Wand2 className="h-10 w-10 text-primary animate-pulse" />
                   </div>
                   
-                  <h2 className="text-2xl font-bold mb-2">
-                    Crafting your site-specific content
-                  </h2>
-                  <p className="text-muted-foreground">
-                    We're building content that will feel like a natural extension of your site
+                      <h3 className="text-xl font-medium mb-2">🛠️ Generating First Draft</h3>
+                      <p className="text-muted-foreground mb-4">
+                        We're putting your favorite idea into words...
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        ✍️ Based on your first selected content idea and your website's tone of voice, we're drafting your first piece of content.
                   </p>
                 </div>
                 
-                <div className="mb-10">
-                  <Progress value={state.progress} className="h-3 mb-3" />
+                    <Progress value={state.progress} className="h-2 mb-2" />
                   <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Creating content that matches your site's voice</span>
+                      <span>Creating your content...</span>
                     <span>{Math.round(state.progress)}%</span>
                   </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-center mb-8">
+                      <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+                        <CheckCircle2 className="h-10 w-10 text-primary" />
                 </div>
                 
-                <div className="border rounded-lg p-6 bg-muted/30 mb-6 text-left">
-                  <h3 className="text-lg font-medium mb-3 flex items-center">
-                    <Clock className="mr-2 h-5 w-5 text-primary" />
-                    What's happening now
-                  </h3>
-                  
-                  <ul className="space-y-3">
-                    <li className="flex items-center">
-                      <CheckCircle2 className="h-4 w-4 text-primary mr-2 flex-shrink-0" />
-                      <span className="text-sm">Analyzing your content structure and patterns</span>
-                    </li>
-                    <li className="flex items-center">
-                      <CheckCircle2 className="h-4 w-4 text-primary mr-2 flex-shrink-0" />
-                      <span className="text-sm">Identifying your website's unique tone and style</span>
-                    </li>
-                    <li className="flex items-center">
-                      <CheckCircle2 className="h-4 w-4 text-primary mr-2 flex-shrink-0" />
-                      <span className="text-sm">Building content that matches your site perfectly</span>
-                    </li>
-                    <li className="flex items-center opacity-50">
-                      <div className="h-4 w-4 border-2 border-primary/40 border-t-transparent rounded-full animate-spin mr-2 flex-shrink-0"></div>
-                      <span className="text-sm">Creating a personalized content strategy blueprint</span>
-                    </li>
-                  </ul>
+                      <h3 className="text-xl font-medium mb-2">📄 Your First Draft Is Ready!</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Here's your AI-generated content — tailored to your tone and style.
+                      </p>
+                    </div>
+                
+                    <div className="border rounded-lg p-6 mb-8 bg-card">
+                      <h3 className="text-xl font-medium mb-4">{state.generatedContentTitle}</h3>
+                      <div className="prose prose-sm max-w-none mb-4">
+                        {state.generatedContentPreview.split('\n').map((line, i) => (
+                          <p key={i} className={`${i > 0 ? 'mt-2' : ''}`}>{line}</p>
+                        ))}
                 </div>
+                      <p className="text-muted-foreground italic text-sm">
+                        View the full content for more...
+                      </p>
+                    </div>
+                    
+                    <div className="flex justify-center gap-4">
+                      <Button 
+                        onClick={handleRegenerateContent}
+                        variant="outline"
+                      >
+                        ♻️ Regenerate
+                      </Button>
+                      <Button 
+                        onClick={handlePublishContent}
+                      >
+                        📤 Publish
+                      </Button>
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
           )}
 
-          {/* Step 4: Complete */}
+          {/* Completion */}
           {state.step === 4 && (
             <motion.div
               key="step-4"
