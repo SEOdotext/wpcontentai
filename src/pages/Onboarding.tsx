@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,9 +20,19 @@ import {
 import { Logo } from "@/components/Logo";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Helmet } from 'react-helmet-async';
+import { Users, UserPlus, Trash2, Loader2, Shield, Globe } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
+import Header from '@/components/Header';
+import AppSidebar from '@/components/Sidebar';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { useOrganisation } from '@/context/OrganisationContext';
+import { useWebsites } from '@/context/WebsitesContext';
 
 // Types
 interface ContentType {
@@ -311,12 +321,22 @@ const Onboarding = () => {
       
       console.log(`Calling edge function: ${functionName} with formatted body:`, formattedBody);
       
+      // Get the current session for authentication
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      
+      if (!accessToken) {
+        console.error("No access token available. User must be logged in to call Edge Functions.");
+        throw new Error("Authentication required");
+      }
+      
       // Use a direct fetch to the Supabase Edge Function
       const resp = await fetch(`https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/${functionName}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${accessToken}` // Add the Authorization header
         },
         body: JSON.stringify(formattedBody)
       });
