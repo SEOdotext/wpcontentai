@@ -8,10 +8,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Get allowed origins from environment variables or use default values
+// Get allowed origins from environment variables
 const ALLOWED_ORIGINS = {
-  production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai', 'https://www.contentgardener.ai'],
-  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080', 'http://localhost:3000', 'http://localhost:5173']
+  production: Deno.env.get('ALLOWED_ORIGINS_PROD') ? 
+    Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai', 'https://contentgardener.ai/'] : 
+    ['https://contentgardener.ai', 'https://contentgardener.ai/'],
+  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING') ? 
+    Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080'] : 
+    ['https://staging.contentgardener.ai', 'http://localhost:8080']
 };
 
 // Function to determine if origin is allowed
@@ -35,7 +39,7 @@ function isAllowedOrigin(origin: string | null): boolean {
 // Handle CORS headers generation
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get('origin');
-  const allowedOrigin = isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0];
+  const allowedOrigin = isAllowedOrigin(origin) ? origin || ALLOWED_ORIGINS.production[0] : ALLOWED_ORIGINS.production[0];
   
   return {
     'Access-Control-Allow-Origin': allowedOrigin,
@@ -47,9 +51,12 @@ function getCorsHeaders(req: Request) {
 
 interface GeneratePostIdeasRequest {
   website_id: string;
+  website_url?: string;
   keywords?: string[];
   writing_style?: string;
   subject_matters?: string[];
+  language?: string;
+  scraped_content?: { title: string; digest: string }[];
 }
 
 interface PostIdea {
@@ -146,10 +153,19 @@ serve(async (req) => {
 
   try {
     // Get the request body
-    const { website_id, keywords = [], writing_style, subject_matters = [] } = await req.json() as GeneratePostIdeasRequest;
+    const requestBody = await req.json();
+    const { website_id, website_url, keywords = [], writing_style, subject_matters = [], language = 'en', scraped_content } = requestBody as GeneratePostIdeasRequest;
+    
+    console.log('------------ GENERATE POST IDEAS REQUEST ------------');
+    console.log('Request parameters:', JSON.stringify(requestBody, null, 2));
+    console.log(`Website ID: ${website_id}`);
+    console.log(`Website URL: ${website_url}`);
+    console.log(`Language: ${language}`);
+    console.log(`Keywords: ${keywords.join(', ')}`);
+    console.log('----------------------------------------------------');
 
-    if (!website_id) {
-      throw new Error('website_id is required');
+    if (!website_id && !website_url) {
+      throw new Error('Either website_id or website_url is required');
     }
 
     // Initialize Supabase client
@@ -158,55 +174,143 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get publication settings for the website
-    const { data: pubSettings, error: pubSettingsError } = await supabaseClient
-      .from('publication_settings')
-      .select('writing_style, subject_matters, image_prompt')
-      .eq('website_id', website_id)
-      .single();
+    // Flag to indicate if we're in onboarding flow
+    const isOnboarding = !!website_url;
+    console.log(`Operating in onboarding mode: ${isOnboarding}`);
 
-    if (pubSettingsError) {
-      console.error('Error fetching publication settings:', pubSettingsError);
-      throw new Error('Failed to fetch publication settings');
+    // In onboarding mode with missing website_id, generate temporary ones
+    const effectiveWebsiteId = website_id || `temp-${Date.now()}`;
+    
+    // Get publication settings for the website
+    let pubSettings = null;
+    try {
+      // Skip DB lookup completely in onboarding mode - use default settings
+      if (isOnboarding) {
+        console.log('Using default publication settings for onboarding');
+        pubSettings = {
+          writing_style: writing_style || 'professional',
+          subject_matters: subject_matters.length ? subject_matters : ['general'],
+          image_prompt: 'Create a professional blog image'
+        };
+      } else {
+        const { data, error } = await supabaseClient
+          .from('publication_settings')
+          .select('writing_style, subject_matters, image_prompt')
+          .eq('website_id', effectiveWebsiteId)
+          .single();
+
+        if (error) {
+          console.error('Error fetching publication settings:', error);
+          throw new Error('Failed to fetch publication settings');
+        } else {
+          pubSettings = data;
+        }
+      }
+    } catch (error) {
+      console.error('Publication settings error:', error);
+      if (isOnboarding) {
+        console.log('Using default publication settings after error');
+        pubSettings = {
+          writing_style: writing_style || 'professional',
+          subject_matters: subject_matters.length ? subject_matters : ['general'],
+          image_prompt: 'Create a professional blog image'
+        };
+      } else {
+        throw error;
+      }
     }
 
     // Get existing post themes
-    const { data: existingPosts, error: postsError } = await supabaseClient
-      .from('post_themes')
-      .select('subject_matter, keywords')
-      .eq('website_id', website_id)
-      .order('created_at', { ascending: false })
-      .limit(10);
+    let existingPosts = [];
+    try {
+      const { data, error } = await supabaseClient
+        .from('post_themes')
+        .select('subject_matter, keywords')
+        .eq('website_id', effectiveWebsiteId)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-    if (postsError) {
-      console.error('Error fetching existing posts:', postsError);
-      throw new Error('Failed to fetch existing posts');
+      if (error) {
+        console.error('Error fetching existing posts:', error);
+        if (!isOnboarding) {
+          throw new Error('Failed to fetch existing posts');
+        }
+      } else {
+        existingPosts = data || [];
+      }
+    } catch (error) {
+      console.error('Existing posts error:', error);
+      if (!isOnboarding) {
+        throw error;
+      }
     }
 
     // Get website content from sitemap
-    const { data: sitemapContent, error: sitemapError } = await supabaseClient
-      .from('website_content')
-      .select('title, content, digest')
-      .eq('website_id', website_id)
-      .eq('is_cornerstone', true)
-      .order('updated_at', { ascending: false })
-      .limit(5);
+    let sitemapContent = [];
+    try {
+      // Handle direct scraped content from onboarding
+      if (isOnboarding && scraped_content && Array.isArray(scraped_content)) {
+        console.log(`Using ${scraped_content.length} scraped content items from onboarding`);
+        
+        // Extract digests from scraped content
+        sitemapContent = scraped_content.map(item => ({
+          title: item.title || 'Untitled',
+          content: '', // Skip sending the full content
+          digest: item.digest || ''
+        }));
+        
+        console.log('Using digests from scraped content:', sitemapContent.map(item => ({
+          title: item.title,
+          digest_length: item.digest?.length || 0
+        })));
+      } else {
+        // For non-onboarding, fetch from database
+        const { data, error } = await supabaseClient
+          .from('website_content')
+          .select('title, content, digest')
+          .eq('website_id', effectiveWebsiteId)
+          .eq('is_cornerstone', true)
+          .order('updated_at', { ascending: false })
+          .limit(5);
 
-    if (sitemapError) {
-      console.error('Error fetching sitemap content:', sitemapError);
-      throw new Error('Failed to fetch sitemap content');
+        if (error) {
+          console.error('Error fetching sitemap content:', error);
+          if (!isOnboarding) {
+            throw new Error('Failed to fetch sitemap content');
+          }
+        } else {
+          sitemapContent = data || [];
+        }
+      }
+    } catch (error) {
+      console.error('Sitemap content error:', error);
+      if (!isOnboarding) {
+        throw error;
+      }
     }
 
     // Get available categories for the website
-    const { data: categories, error: categoriesError } = await supabaseClient
-      .from('wordpress_categories')
-      .select('id, name, description')
-      .eq('website_id', website_id)
-      .order('name');
+    let categories = [];
+    try {
+      const { data, error } = await supabaseClient
+        .from('wordpress_categories')
+        .select('id, name, description')
+        .eq('website_id', effectiveWebsiteId)
+        .order('name');
 
-    if (categoriesError) {
-      console.error('Error fetching categories:', categoriesError);
-      throw new Error('Failed to fetch categories');
+      if (error) {
+        console.error('Error fetching categories:', error);
+        if (!isOnboarding) {
+          throw new Error('Failed to fetch categories');
+        }
+      } else {
+        categories = data || [];
+      }
+    } catch (error) {
+      console.error('Categories error:', error);
+      if (!isOnboarding) {
+        throw error;
+      }
     }
 
     // Combine all keywords
@@ -231,6 +335,12 @@ serve(async (req) => {
     // Format categories for the prompt with IDs
     const categoriesList = categories?.map(cat => `${cat.id}: ${cat.name}`).join('\n') || '';
 
+    // Adjust prompt based on language
+    console.log(`Creating prompt for language: ${language}`);
+    
+    // Determine if we're generating Danish content
+    const isDanish = language === 'da';
+    
     const prompt = `Generate 5 unique blog post ideas for a website, with each post focusing on the following primary keywords:
 ${keywords.join(', ')}
 
@@ -243,6 +353,7 @@ Additional context:
 Current year: 2025
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
 Subject matters: ${subject_matters.join(', ') || pubSettings?.subject_matters?.join(', ') || 'general'}
+Language: ${isDanish ? 'Danish (da)' : 'English (en)'}
 
 Available categories (use category IDs):
 ${categories?.map(cat => `- ${cat.id}: ${cat.name}`).join('\n') || 'No categories available'}
@@ -260,10 +371,10 @@ For each idea, provide:
 4. Up to 3 most relevant category IDs from the available list above
 
 Important rules:
-1. For Danish titles: Only capitalize the first word and proper nouns
-2. For English titles: Capitalize main words following standard English title case
+1. ${isDanish ? 'IMPORTANT: Generate all content in Danish language' : 'Generate all content in English language'}
+2. ${isDanish ? 'For Danish titles: Only capitalize the first word and proper nouns' : 'For English titles: Capitalize main words following standard English title case'}
 3. Keywords should be category-oriented and domain-specific
-4. Avoid generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig
+4. Avoid generic single words like: ${isDanish ? 'virksomhed, løsning, sammenligning, bedste, tips, pålidelig' : 'business, solution, comparison, best, tips, reliable'}
 5. Categories MUST be selected from the provided list only - use category IDs exactly as shown
 6. Each post should have 1-3 relevant categories (not more)
 7. DO create post ideas that align with the themes in the cornerstone content but offer new perspectives
@@ -295,7 +406,9 @@ Notice that the "categories" field contains an array of string UUIDs, not object
       messages: [
         {
           role: 'system',
-          content: 'You are a professional content strategist who creates unique and engaging blog post ideas.'
+          content: isDanish 
+            ? 'Du er en professionel indholdsrådgiver, der opretter unikke og engagerende blogindlægsideer på dansk.'
+            : 'You are a professional content strategist who creates unique and engaging blog post ideas.'
         },
         {
           role: 'user',
@@ -389,7 +502,7 @@ Notice that the "categories" field contains an array of string UUIDs, not object
     }
     
     ideas.ideas.forEach((idea: PostIdea) => {
-      const isDanish = isDanishContent(idea.title);
+      // Format the title based on language
       const processedTitle = isDanish ? formatDanishTitle(idea.title) : idea.title;
       processedTitles.push(processedTitle);
       
@@ -424,7 +537,7 @@ Notice that the "categories" field contains an array of string UUIDs, not object
       const { data: postTheme, error: postThemeError } = await supabaseClient
         .from('post_themes')
         .insert({
-          website_id,
+          website_id: effectiveWebsiteId,
           subject_matter: idea.title,
           keywords: idea.keywords as string[], // Ensure it's treated as an array
           status: 'pending'
@@ -490,6 +603,74 @@ Notice that the "categories" field contains an array of string UUIDs, not object
       postThemes
     };
 
+    // In onboarding mode, just skip the database lookups and use mock data
+    if (isOnboarding) {
+      console.log("Onboarding mode detected - returning actual generated ideas");
+      
+      // Check if we have the website_url to work with
+      if (!website_url) {
+        throw new Error("No website URL provided for onboarding");
+      }
+      
+      // Continue with the actual AI-generated ideas from earlier in the function
+      console.log('------------ GENERATE POST IDEAS RESPONSE ------------');
+      console.log(`Returning generated ideas for onboarding mode:`, JSON.stringify({ 
+        success: true, 
+        titles: processedTitles,
+        keywords: defaultKeywords,
+        keywordsByTitle,
+        categoriesByTitle,
+        postThemes
+      }, null, 2));
+      console.log('-----------------------------------------------------');
+      
+      // Format the response in a way the frontend expects
+      const formattedIdeas = processedTitles.map((title, index) => {
+        const id = `idea-${Date.now()}-${index+1}`;
+        const titleKeywords = keywordsByTitle[title] || defaultKeywords;
+        
+        // Safely extract domain for the description
+        let domain = "your website";
+        try {
+          if (website_url) {
+            const urlWithoutProtocol = website_url.replace(/^https?:\/\//, '');
+            const firstSegment = urlWithoutProtocol.split('/')[0] || '';
+            domain = firstSegment || "your website";
+          }
+        } catch (err) {
+          console.log('Error extracting domain from URL:', err);
+          domain = "your website";
+        }
+        
+        return {
+          id,
+          title,
+          keywords: titleKeywords,
+          description: `Content idea for ${domain}.`,
+          categories: categoriesByTitle[title] || []
+        };
+      });
+      
+      // Return the response with CORS headers
+      return new Response(
+        JSON.stringify({
+          success: true,
+          ideas: formattedIdeas
+        }),
+        { 
+          headers: {
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          },
+          status: 200 
+        }
+      );
+    }
+
+    console.log('------------ GENERATE POST IDEAS RESPONSE ------------');
+    console.log('Returning ideas response:', JSON.stringify(result, null, 2));
+    console.log('-----------------------------------------------------');
+    
     // Return the response with CORS headers
     return new Response(
       JSON.stringify(result),
@@ -504,6 +685,9 @@ Notice that the "categories" field contains an array of string UUIDs, not object
 
   } catch (error) {
     console.error('Error:', error.message);
+    console.log('------------ GENERATE POST IDEAS ERROR ------------');
+    console.log('Error details:', error.message);
+    console.log('-------------------------------------------------');
     
     // Return error response with CORS headers
     return new Response(

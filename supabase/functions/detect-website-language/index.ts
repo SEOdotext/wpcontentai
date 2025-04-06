@@ -180,7 +180,7 @@ serve(async (req) => {
   
   // Set CORS headers based on origin
   const corsHeaders = {
-    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
+    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin! : ALLOWED_ORIGINS.production[0],
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '86400'
@@ -193,11 +193,16 @@ serve(async (req) => {
 
   try {
     // Parse request body
-    const { website_id, url } = await req.json();
+    const { website_id, url, website_url } = await req.json();
+    
+    console.log(`Received request with website_id: ${website_id}, url: ${url || website_url}`);
+
+    // Use either url or website_url (frontend sends website_url but our code expects url)
+    const providedUrl = url || website_url;
 
     // Validate input
-    if (!website_id && !url) {
-      throw new Error('Either website_id or url is required');
+    if (!website_id && !providedUrl) {
+      throw new Error('Either website_id or website_url is required');
     }
 
     // Create Supabase client
@@ -207,25 +212,40 @@ serve(async (req) => {
     );
 
     // Initialize variables
-    let websiteUrl = url;
+    let websiteUrl = providedUrl;
     let websiteHomepage = '';
     let title = '';
     
-    // If website_id is provided, get the website URL from the database
-    if (website_id && !url) {
-      const { data: websiteData, error: websiteError } = await supabaseClient
-        .from('websites')
-        .select('url, name')
-        .eq('id', website_id)
-        .single();
+    // IMPORTANT: For onboarding, prioritize the URL parameter when provided
+    // Only attempt database lookup if URL is not provided
+    if (!providedUrl && website_id) {
+      console.log(`No URL provided, looking up website URL for ID: ${website_id}`);
+      try {
+        const { data: websiteData, error: websiteError } = await supabaseClient
+          .from('websites')
+          .select('url, name')
+          .eq('id', website_id)
+          .single();
 
-      if (websiteError) {
-        throw new Error(`Failed to get website data: ${websiteError.message}`);
+        if (websiteError) {
+          console.error(`Database lookup error: ${websiteError.message}`);
+          throw new Error(`Failed to get website data: ${websiteError.message}`);
+        }
+
+        if (websiteData) {
+          websiteUrl = websiteData.url;
+          title = websiteData.name || '';
+          console.log(`Retrieved website URL from database: ${websiteUrl}`);
+        } else {
+          throw new Error('No website found with the provided ID');
+        }
+      } catch (error: any) {
+        console.error(`Error fetching website data: ${error.message}`);
+        // During onboarding, throw a clear error to indicate we need a URL
+        throw new Error(`Website not found in database. Please provide a URL for onboarding.`);
       }
-
-      websiteUrl = websiteData.url;
-      title = websiteData.name || '';
-      console.log(`Retrieved website URL from database: ${websiteUrl}`);
+    } else {
+      console.log(`Using provided URL directly: ${providedUrl}`);
     }
 
     // Ensure URL has protocol

@@ -36,24 +36,36 @@ function isAllowedOrigin(origin: string | null): boolean {
   return allowedOrigins.includes(origin);
 }
 
-// Function to fetch a URL with error handling
-async function fetchWithTimeout(url: string, timeout = 5000): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
+// Function to fetch a URL with retries and timeouts
+async function fetchWithTimeout(url: string, timeout = 10000, retries = 2): Promise<Response> {
+  let lastError: Error | null = null;
   
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ContentGardener/1.0; +https://contentgardener.ai)'
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ContentGardener/1.0; +https://contentgardener.ai)'
+        }
+      });
+      clearTimeout(id);
+      return response;
+    } catch (error) {
+      clearTimeout(id);
+      lastError = error;
+      
+      // If not the last attempt, wait before retrying
+      if (attempt < retries) {
+        console.log(`Attempt ${attempt + 1} failed for ${url}, retrying...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw error;
+    }
   }
+  
+  throw lastError || new Error(`Failed to fetch ${url} after ${retries} retries`);
 }
 
 // Function to find and fetch a sitemap
@@ -205,11 +217,6 @@ serve(async (req) => {
       );
     }
     
-    // Create a Supabase client
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
     // Get the request body
     const body = await req.json();
     const { website_id, website_url, custom_sitemap_url } = body;
@@ -221,14 +228,28 @@ serve(async (req) => {
       );
     }
     
+    // Create a Supabase client
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
     let url;
     
-    // Special case for testing with a sample website
-    if (website_id === 'sample' && website_url) {
+    // Use three ways to determine the website URL:
+    // 1. If website_url is directly provided from frontend
+    // 2. Special case for testing with a sample website
+    // 3. Get the website URL from the database using website_id
+    
+    if (website_url) {
+      // Option 1: Use the URL provided directly from the frontend
+      console.log(`Using provided website_url: ${website_url}`);
       url = website_url;
+    } else if (website_id === 'sample' && body.website_url) {
+      // Option 2: Special case for testing with a sample website
+      url = body.website_url;
       console.log(`Using provided sample URL: ${url}`);
     } else {
-      // Get the website URL from the database
+      // Option 3: Get the website URL from the database
       const { data: website, error: websiteError } = await supabase
         .from('websites')
         .select('url')
@@ -243,6 +264,11 @@ serve(async (req) => {
       }
       
       url = website.url;
+    }
+    
+    // Make sure URL has a protocol
+    if (!url.startsWith('http')) {
+      url = 'https://' + url;
     }
     
     let sitemap: { url: string, content: string } | null = null;
@@ -270,20 +296,22 @@ serve(async (req) => {
       }
     }
     
-    // If no sitemap found with custom URL, try auto-detection
+    // If no sitemap found with custom URL, try auto-detection with the resolved URL
     if (!sitemap) {
       sitemap = await findAndFetchSitemap(url);
     }
     
-    if (!sitemap) {
-      // Get the website URL from the database
+    // If still no sitemap, try one more time with the database URL if different from what we've already tried
+    if (!sitemap && !website_url) {
+      // Get the website URL from the database to double-check
       const { data: website } = await supabase
         .from('websites')
         .select('url')
         .eq('id', website_id)
         .single();
           
-      if (website?.url) {
+      if (website?.url && website.url !== url) {
+        console.log(`Trying again with database URL: ${website.url}`);
         sitemap = await findAndFetchSitemap(website.url);
       }
     }
@@ -352,22 +380,26 @@ serve(async (req) => {
       }
     }
     
-    // Get existing pages from the database first
-    const { data: existingPages, error: existingPagesError } = await supabase
-      .from('website_content')
-      .select('url')
-      .eq('website_id', website_id);
-
-    if (existingPagesError) {
-      console.error('Error fetching existing pages:', existingPagesError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to check existing pages' }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Only query the database if we're using a real website_id (not from frontend-only mode)
+    let existingUrls = new Set<string>();
+    if (website_id !== 'sample' && !website_url) {
+      // Get existing pages from the database first
+      const { data: existingPages, error: existingPagesError } = await supabase
+        .from('website_content')
+        .select('url')
+        .eq('website_id', website_id);
+  
+      if (existingPagesError) {
+        console.error('Error fetching existing pages:', existingPagesError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to check existing pages' }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+  
+      // Create a Set of existing URLs for faster lookup
+      existingUrls = new Set(existingPages?.map(page => page.url) || []);
     }
-
-    // Create a Set of existing URLs for faster lookup
-    const existingUrls = new Set(existingPages?.map(page => page.url) || []);
     
     // Process the pages
     const processedPages = pages.map(page => ({

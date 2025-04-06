@@ -30,24 +30,36 @@ function isAllowedOrigin(origin: string | null): boolean {
   return allowedOrigins.includes(origin);
 }
 
-// Function to fetch a URL with error handling
-async function fetchWithTimeout(url: string, timeout = 5000): Promise<Response> {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
+// Function to fetch a URL with error handling and retries
+async function fetchWithTimeout(url: string, timeout = 10000, retries = 2): Promise<Response> {
+  let lastError: Error | null = null;
   
-  try {
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; ContentGardener/1.0; +https://contentgardener.ai)'
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+    
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ContentGardener/1.0; +https://contentgardener.ai)'
+        }
+      });
+      clearTimeout(id);
+      return response;
+    } catch (error) {
+      clearTimeout(id);
+      lastError = error;
+      
+      // If not the last attempt, wait before retrying
+      if (attempt < retries) {
+        console.log(`Attempt ${attempt + 1} failed for ${url}, retrying...`);
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
-    });
-    clearTimeout(id);
-    return response;
-  } catch (error) {
-    clearTimeout(id);
-    throw error;
+    }
   }
+  
+  throw lastError || new Error(`Failed to fetch ${url} after ${retries} retries`);
 }
 
 // Function to extract links from HTML content
@@ -215,7 +227,7 @@ serve(async (req) => {
     
     // Get the request body
     const body = await req.json();
-    const { website_id, max_pages } = body;
+    const { website_id, website_url, max_pages } = body;
     
     if (!website_id) {
       return new Response(
@@ -226,11 +238,21 @@ serve(async (req) => {
     
     let url;
     
-    // Special case for testing with a sample website
-    if (website_id === 'sample' && body.website_url) {
+    // Use three ways to determine the website URL:
+    // 1. If website_url is directly provided from frontend
+    // 2. Special case for testing with a sample website
+    // 3. Get the website URL from the database using website_id
+    
+    if (website_url) {
+      // Option 1: Use the URL provided directly from the frontend
+      console.log(`Using provided website_url: ${website_url}`);
+      url = website_url;
+    } else if (website_id === 'sample' && body.website_url) {
+      // Option 2: Special case for testing with a sample website
       url = body.website_url;
       console.log(`Using provided sample URL: ${url}`);
     } else {
+      // Option 3: Get the website URL from the database
       // Create a Supabase client
       const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
       const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";

@@ -42,7 +42,7 @@ serve(async (req) => {
   
   // Set CORS headers based on origin
   const corsHeaders = {
-    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
+    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin || ALLOWED_ORIGINS.production[0] : ALLOWED_ORIGINS.production[0],
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '86400'
@@ -67,11 +67,17 @@ serve(async (req) => {
     }
 
     // Get the request body
-    const { website_id } = await req.json();
+    const requestBody = await req.json();
+    const { website_id, website_url } = requestBody;
+    
+    console.log('------------ SUGGEST KEY CONTENT REQUEST ------------');
+    console.log('Request parameters:', JSON.stringify(requestBody, null, 2));
     console.log('Processing request for website_id:', website_id);
+    console.log('Website URL provided:', website_url);
+    console.log('----------------------------------------------------');
 
-    if (!website_id) {
-      throw new Error('Website ID is required');
+    if (!website_id && !website_url) {
+      throw new Error('Either website_id or website_url is required');
     }
 
     // Create Supabase client
@@ -85,25 +91,103 @@ serve(async (req) => {
       supabaseKey ?? ''
     );
 
-    // Fetch website content
-    console.log('Fetching website content...');
-    const { data: content, error: contentError } = await supabaseClient
-      .from('website_content')
-      .select('id, title, url, content_type, is_cornerstone')
-      .eq('website_id', website_id)
-      .order('created_at', { ascending: true });
+    // Flag to indicate onboarding mode
+    const isOnboarding = !!website_url;
+    console.log('Operating in onboarding mode:', isOnboarding);
 
-    if (contentError) {
-      console.error('Error fetching content:', contentError);
-      throw contentError;
+    // Fetch website content
+    console.log(`Fetching website content for website_id: ${website_id}, in onboarding mode: ${isOnboarding}`);
+    
+    let content: WebsiteContent[] = [];
+    let contentError = null;
+    
+    if (isOnboarding) {
+      // In onboarding mode, check if the request contains sitemap pages or try to fetch them
+      console.log('Onboarding mode: Looking for sitemap pages in request or getting them');
+      
+      // Check if the request has sitemap_pages or pages data
+      if (requestBody.sitemap_pages) {
+        content = requestBody.sitemap_pages;
+        console.log(`Using ${content.length} sitemap pages provided in request`);
+      } else if (requestBody.pages) {
+        content = requestBody.pages;
+        console.log(`Using ${content.length} pages provided in request`);
+      } else {
+        // If no sitemap pages in request, fetch from sitemap directly
+        try {
+          console.log(`No pages provided in request, getting sitemap for ${website_url}`);
+          const sitemapResponse = await fetch(`${supabaseUrl}/functions/v1/get-sitemap-pages`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseKey}`
+            },
+            body: JSON.stringify({
+              website_id: website_id,
+              website_url: website_url
+            })
+          });
+          
+          if (!sitemapResponse.ok) {
+            throw new Error(`Failed to fetch sitemap: ${sitemapResponse.statusText}`);
+          }
+          
+          const sitemapData = await sitemapResponse.json();
+          if (sitemapData.pages && sitemapData.pages.length > 0) {
+            content = sitemapData.pages.map((page: any) => ({
+              id: page.id || `page-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              title: page.title || page.url,
+              url: page.url,
+              content_type: 'page',
+              is_cornerstone: false
+            }));
+            console.log(`Retrieved ${content.length} pages from sitemap`);
+          } else {
+            throw new Error('No pages found in sitemap');
+          }
+        } catch (error: any) {
+          console.error('Failed to get sitemap:', error);
+          contentError = {
+            message: error.message || 'Unknown error retrieving sitemap'
+          };
+        }
+      }
+    } else {
+      // Regular mode - get content from database
+      const result = await supabaseClient
+        .from('website_content')
+        .select('id, title, url, content_type, is_cornerstone')
+        .eq('website_id', website_id)
+        .order('created_at', { ascending: true });
+      
+      content = result.data || [];
+      contentError = result.error;
+    }
+    
+    console.log('Content fetch result details:');
+    console.log('- Found pages:', content ? content.length : 0);
+    console.log('- Error:', contentError ? contentError.message : 'None');
+    
+    if (content && content.length > 0) {
+      // Log some sample URLs to help debug
+      console.log('Sample page URLs from content:');
+      for (let i = 0; i < Math.min(content.length, 5); i++) {
+        const page = content[i];
+        console.log(`- Page ${i+1}: ${page.url} (${page.title || 'No title'})`);
+      }
     }
 
-    if (!content || content.length < 10) {
-      console.log('Not enough content:', content?.length || 0, 'pages');
+    // Handle content fetch errors
+    if (contentError && !isOnboarding) {
+      console.error('Error fetching content:', contentError);
+      throw new Error(`Failed to fetch content: ${contentError.message}`);
+    } else if (contentError && isOnboarding) {
+      console.error('Error fetching content in onboarding mode:', contentError);
+      // In onboarding, if we can't get the pages, return a specific error
       return new Response(
         JSON.stringify({
-          error: 'Not enough content',
-          message: 'Please import at least 10 pages before requesting key content suggestions.'
+          error: 'Failed to fetch sitemap',
+          message: 'Could not retrieve pages from the website sitemap.'
         }),
         { 
           status: 400, 
@@ -112,16 +196,50 @@ serve(async (req) => {
       );
     }
 
-    // Filter out pages that are already marked as cornerstone
-    const nonCornerstoneContent = content.filter(page => !page.is_cornerstone);
-    console.log('Found', nonCornerstoneContent.length, 'non-cornerstone pages');
+    // ONBOARDING MODE: During onboarding, we should still suggest pages even if less than 10 pages
+    if (!content || (content.length < 10 && !isOnboarding)) {
+      console.log('Not enough content:', content?.length || 0, 'pages');
+      console.log('Is onboarding mode:', isOnboarding);
+      
+      if (isOnboarding && content && content.length > 0) {
+        console.log('Proceeding with onboarding mode despite having fewer than 10 pages');
+        // Continue with whatever pages we have for onboarding
+      } else {
+        // Don't use mock data - return a clear error
+        return new Response(
+          JSON.stringify({
+            error: 'Not enough content',
+            message: 'Please import at least 10 pages before requesting key content suggestions.'
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+    }
 
-    if (nonCornerstoneContent.length === 0) {
-      console.log('No available content to suggest');
+    // In onboarding mode, don't filter out cornerstone pages - we want to use whatever is available
+    let pagesToAnalyze = [];
+    
+    if (isOnboarding) {
+      // For onboarding, use all available pages
+      pagesToAnalyze = content || [];
+      console.log(`Onboarding mode: Using all ${pagesToAnalyze.length} available pages without filtering cornerstone status`);
+    } else {
+      // For normal mode, filter out pages that are already marked as cornerstone
+      pagesToAnalyze = content.filter(page => !page.is_cornerstone);
+      console.log('Found', pagesToAnalyze.length, 'non-cornerstone pages');
+    }
+
+    if (pagesToAnalyze.length === 0) {
+      console.log('No available content to suggest - all pages are already cornerstone or no pages available');
+      
+      // No content available - return an error instead of fake pages
       return new Response(
         JSON.stringify({
           error: 'No available content',
-          message: 'All pages are already marked as key content.'
+          message: 'No pages were found in the sitemap for analysis.'
         }),
         { 
           status: 400, 
@@ -129,14 +247,22 @@ serve(async (req) => {
         }
       );
     }
+    
+    // Calculate how many pages to suggest
+    const totalPages = pagesToAnalyze.length;
+    // For onboarding, suggest up to 5 pages max; for normal, use 20% up to 10
+    const suggestedCount = isOnboarding 
+      ? Math.min(5, totalPages)
+      : Math.min(Math.ceil(totalPages * 0.2), 10);
+      
+    console.log(`Will suggest ${suggestedCount} pages out of ${totalPages} total`);
 
-    // Calculate how many pages to suggest (20% of total, up to 10)
-    const totalPages = nonCornerstoneContent.length;
-    const suggestedCount = Math.min(Math.ceil(totalPages * 0.2), 10);
-    console.log('Will suggest', suggestedCount, 'pages');
+    // Always use AI to suggest pages, even in onboarding mode
+    console.log('Using AI to select the most important pages');
 
+    // For non-onboarding mode, use AI to suggest pages
     // Prepare the content for AI analysis
-    const contentForAnalysis = nonCornerstoneContent
+    const contentForAnalysis = pagesToAnalyze
       .map(page => `ID: ${page.id}\nTitle: ${page.title}\nURL: ${page.url}\nType: ${page.content_type}`)
       .join('\n\n');
 
@@ -183,12 +309,6 @@ Instructions:
    - Include a clear explanation of business value
    - NOT be in the excluded categories above
    - Focus on business impact and value
-
-6. Before returning, verify each suggestion:
-   - Check that the page ID exists in the available content
-   - Confirm the page title doesn't contain any excluded terms
-   - Ensure the reason focuses on business value
-   - Make sure the page represents a core business offering
 
 Return ONLY the JSON object, no other text.`;
 
@@ -247,9 +367,6 @@ Return ONLY the JSON object, no other text.`;
         throw new Error('Failed to parse AI response');
       }
 
-      // Log the available pages for matching
-      console.log('Available pages for matching:', nonCornerstoneContent.map(p => ({ id: p.id, title: p.title })));
-
       // Define exclusion patterns
       const exclusionPatterns = [
         /privacy|policy|gdpr|terms|privatlivspolitik|politik/i,
@@ -266,7 +383,7 @@ Return ONLY the JSON object, no other text.`;
       const validSuggestions = suggestions.suggestions
         .filter((suggestion: any) => {
           console.log('Checking suggestion:', suggestion);
-          const page = nonCornerstoneContent.find(p => p.id === suggestion.id);
+          const page = pagesToAnalyze.find(p => p.id === suggestion.id);
           console.log('Found matching page:', page);
           
           if (!page || page.is_cornerstone) {
@@ -281,36 +398,55 @@ Return ONLY the JSON object, no other text.`;
             return false;
           }
 
+          // Include the URL and title from the page in the suggestion
+          suggestion.url = page.url;
+          suggestion.title = page.title || 'Untitled Page';
+
           return true;
         })
         .slice(0, suggestedCount);
-
-      console.log('Found', validSuggestions.length, 'valid suggestions');
-      console.log('Valid suggestions:', validSuggestions);
+        
+      // Ensure we don't have duplicate URLs in the suggestions
+      const uniqueURLs = new Set<string>();
+      const uniqueSuggestions = validSuggestions.filter((suggestion: any) => {
+        if (!suggestion.url) return false;
+        
+        // If we've already seen this URL, filter it out
+        if (uniqueURLs.has(suggestion.url)) {
+          console.log(`Filtering out duplicate URL: ${suggestion.url}`);
+          return false;
+        }
+        
+        // Otherwise, add it to our set and keep it
+        uniqueURLs.add(suggestion.url);
+        return true;
+      });
+      
+      console.log('Found', uniqueSuggestions.length, 'unique suggestions after removing duplicates');
+      console.log('Unique suggestions:', uniqueSuggestions);
 
       return new Response(
         JSON.stringify({
-          suggestions: validSuggestions,
+          suggestions: uniqueSuggestions,
           total_pages: totalPages,
-          suggested_count: validSuggestions.length,
-          debug: {
-            raw_response: aiResponse,
-            parsed_suggestions: suggestions,
-            available_pages: nonCornerstoneContent.map(p => ({ id: p.id, title: p.title }))
-          }
+          suggested_count: uniqueSuggestions.length
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    } catch (openaiError) {
-      console.error('OpenAI API error:', openaiError);
-      throw new Error(`OpenAI API error: ${openaiError.message}`);
+    } catch (error: any) {
+      console.error('OpenAI API error:', error);
+      throw new Error(`OpenAI API error: ${error.message}`);
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in suggest-key-content function:', error);
+    console.log('------------ SUGGEST KEY CONTENT ERROR ------------');
+    console.log('Error details:', error.message || 'Unknown error');
+    console.log('---------------------------------------------------');
+    
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: error.message || 'Unknown error',
         message: 'Failed to generate key content suggestions'
       }),
       { 

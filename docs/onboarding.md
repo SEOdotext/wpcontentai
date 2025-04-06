@@ -1,5 +1,16 @@
 OK. Let's edit the flow a bit for the user signup
 
+Get the url
+1. get-sitemap-pages: Lists 200 pages
+(Alternatively: crawl-website-pages)
+2. suggest-key-content: suggest 4-5 pages
+3. Language
+4. scrape-content: Reads the 4-5 pages 
+5. generate-post-ideas: Shows the post suggested based on digests, list of pages etc. (Wait for 1,2,3,4)
+
+Make sure to add the console logs to all functions
+USE NO MOCK DATA!!!
+
 Every part of the onboarding flow get's handled in localhost until auth, at auth where we create a user, we transfer the data (all data from the onboarding)
 Ignore the onboarding table, we handle things in the frontend.
 
@@ -85,6 +96,10 @@ Page: Display
 
 https://contentgardener.ai/setup (Make sure that there are changes to urls for the steps for tracking)
 
+DO not fall back on mock data
+
+
+Handle everything in localStorage
 
 
 
@@ -98,3 +113,7 @@ post_ideas
 client_thumbs
 
 errors
+
+
+The point in the onboarding is that a new potential user can try the software and the data is stored in the localstorage. 
+We will transfer the data to the system in the end, therefore we store the data in a similar structure, but in the localStorage. @DBMASTERINFO.md 

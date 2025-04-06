@@ -154,11 +154,19 @@ serve(async (req) => {
 
   try {
     // Parse request body
-    const { website_id } = await req.json();
+    const { website_id, website_url } = await req.json();
 
-    if (!website_id) {
-      throw new Error('website_id is required');
+    // Check if we have required parameters
+    if (!website_id && !website_url) {
+      throw new Error('Either website_id or website_url is required');
     }
+    
+    // Log the request params
+    console.log(`Scrape content request - website_id: ${website_id}, website_url: ${website_url}`);
+    
+    // Flag to indicate if we're in onboarding mode (direct URL provided)
+    const isOnboarding = !!website_url;
+    console.log(`Operating in onboarding mode: ${isOnboarding}`);
 
     // Create Supabase client
     const supabaseClient = createClient(
@@ -166,34 +174,52 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get all key content pages for the website
-    const { data: pages, error: fetchError } = await supabaseClient
-      .from('website_content')
-      .select('*')
-      .eq('website_id', website_id)
-      .eq('is_cornerstone', true);
+    let pagesToProcess = [];
+    
+    // If in onboarding mode with direct URL, use that URL
+    if (isOnboarding) {
+      console.log(`Using direct URL in onboarding mode: ${website_url}`);
+      pagesToProcess = [{
+        id: `temp-${Date.now()}`,
+        url: website_url,
+        title: 'Onboarding Page',
+        website_id: website_id || `temp-${Date.now()}`
+      }];
+    } else {
+      // Otherwise, get key content pages from the database
+      console.log(`Looking up cornerstone pages for website ID: ${website_id}`);
+      const { data: pages, error: fetchError } = await supabaseClient
+        .from('website_content')
+        .select('*')
+        .eq('website_id', website_id)
+        .eq('is_cornerstone', true);
 
-    if (fetchError) {
-      throw fetchError;
-    }
+      if (fetchError) {
+        throw fetchError;
+      }
 
-    if (!pages?.length) {
-      return new Response(
-        JSON.stringify({ 
-          message: 'No key content pages found to analyze',
-          pages: [] 
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (!pages?.length) {
+        return new Response(
+          JSON.stringify({ 
+            message: 'No key content pages found to analyze',
+            pages: [] 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      pagesToProcess = pages;
     }
+    
+    console.log(`Found ${pagesToProcess.length} pages to process`);
 
     // Process pages in batches to avoid overwhelming the server
     const batchSize = 5;
-    const results: WebsiteContent[] = [];
+    const results = [];
     let processedCount = 0;
 
-    for (let i = 0; i < pages.length; i += batchSize) {
-      const batch = pages.slice(i, i + batchSize);
+    for (let i = 0; i < pagesToProcess.length; i += batchSize) {
+      const batch = pagesToProcess.slice(i, i + batchSize);
       
       // Process each page in the batch concurrently
       const batchPromises = batch.map(async (page) => {
@@ -227,26 +253,29 @@ serve(async (req) => {
               // Continue with empty digest
             }
             
-            // Update the page with the scraped content and digest
-            const updateData: any = {
-              content: cleanContent,
-              last_fetched: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            };
-            
-            // Only include digest if it was successfully generated
-            if (digest) {
-              updateData.digest = digest;
-            }
-            
-            const { error: updateError } = await supabaseClient
-              .from('website_content')
-              .update(updateData)
-              .eq('id', page.id);
+            // For onboarding mode, don't try to update the database since it doesn't exist yet
+            if (!isOnboarding) {
+              // Update the page with the scraped content and digest
+              const updateData = {
+                content: cleanContent,
+                last_fetched: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              };
+              
+              // Only include digest if it was successfully generated
+              if (digest) {
+                updateData.digest = digest;
+              }
+              
+              const { error: updateError } = await supabaseClient
+                .from('website_content')
+                .update(updateData)
+                .eq('id', page.id);
 
-            if (updateError) {
-              console.error(`Error updating page ${page.url}:`, updateError);
-              return null;
+              if (updateError) {
+                console.error(`Error updating page ${page.url}:`, updateError);
+                // Continue even if update fails
+              }
             }
 
             processedCount++;
@@ -269,20 +298,20 @@ serve(async (req) => {
       });
 
       const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults.filter((r): r is WebsiteContent => r !== null));
+      results.push(...batchResults.filter(r => r !== null));
     }
 
     return new Response(
       JSON.stringify({
-        message: `Successfully analyzed ${processedCount} of ${pages.length} pages`,
+        message: `Successfully analyzed ${processedCount} of ${pagesToProcess.length} pages`,
         pages: results,
-        total: pages.length,
+        total: pagesToProcess.length,
         processed: processedCount
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Error:', error);
     return new Response(
       JSON.stringify({
