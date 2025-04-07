@@ -84,3 +84,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/wordpress-posts/deno.json"
 entrypoint = "./functions/wordpress-posts/index.ts"
+
+[functions.stripe-portal]
+enabled = true
+verify_jwt = true
+import_map = "./functions/stripe-portal/deno.json"
+entrypoint = "./functions/stripe-portal/index.ts"

@@ -1,0 +1,4 @@
+Price ID,Product ID,Product Name,Product Statement Descriptor,Product Tax Code,Description,Created (UTC),Amount,Currency,Interval,Interval Count,Usage Type,Aggregate Usage,Billing Scheme,Trial Period Days,Tax Behavior
+price_1RBER1RGhl9iFwDN5KukNokD,prod_S5PFTq19dG3nSx,Enterprise / Agency,,txcd_10000000,,2025-04-07 12:05,"149,00",usd,month,1,licensed,,per_unit,,unspecified
+price_1RBEPdRGhl9iFwDNsMnaYvh5,prod_S5PEF7RXLQUl0v,Professional,,txcd_10000000,,2025-04-07 12:04,"49,00",eur,month,1,licensed,,per_unit,,unspecified
+price_1RBEJwRGhl9iFwDNmsBsnVX5,prod_S5P8x8CTJcQRDY,Seed,,txcd_10000000,,2025-04-07 11:58,"15,00",eur,month,1,licensed,,per_unit,,unspecified

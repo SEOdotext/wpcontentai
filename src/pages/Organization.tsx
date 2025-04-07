@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrganisation } from '@/context/OrganisationContext';
 import { Helmet } from 'react-helmet-async';
-import { Building2, Users, Globe, Pencil, Loader2 } from 'lucide-react';
+import { Building2, Users, Globe, Pencil, Loader2, CreditCard } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { supabase } from '@/integrations/supabase/client';
 
 const Organization = () => {
   const { organisation, updateOrganisation } = useOrganisation();
@@ -18,6 +19,7 @@ const Organization = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(organisation?.name || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingPortal, setIsLoadingPortal] = useState(false);
 
   const handleUpdateName = async () => {
     if (!organisation?.id || !newName.trim() || newName === organisation.name) {
@@ -39,6 +41,32 @@ const Organization = () => {
       setNewName(organisation.name);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleBillingPortal = async () => {
+    setIsLoadingPortal(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const { data, error } = await supabase.functions.invoke('stripe-portal', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+      
+      if (error) throw error;
+      if (!data?.url) throw new Error('No portal URL returned');
+      
+      window.location.href = data.url;
+    } catch (error) {
+      console.error('Error accessing billing portal:', error);
+      toast.error('Failed to access billing portal');
+    } finally {
+      setIsLoadingPortal(false);
     }
   };
 
@@ -127,6 +155,55 @@ const Organization = () => {
                         {organisation?.created_at ? new Date(organisation.created_at).toLocaleDateString() : 'N/A'}
                       </p>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Subscription Management */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="h-5 w-5" />
+                      <CardTitle>Subscription & Billing</CardTitle>
+                    </div>
+                    <CardDescription>
+                      Manage your subscription and billing details
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium">Current Plan</label>
+                      <p className="text-2xl font-semibold mt-1.5 capitalize">
+                        {(organisation as any)?.current_plan || 'No active plan'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Available Credits</label>
+                      <p className="text-2xl font-semibold mt-1.5">
+                        {(organisation as any)?.credits || 0} credits
+                      </p>
+                    </div>
+                    {(organisation as any)?.next_payment_date && (
+                      <div>
+                        <label className="text-sm font-medium">Next Payment</label>
+                        <p className="text-muted-foreground mt-1.5">
+                          {new Date((organisation as any).next_payment_date).toLocaleDateString()}
+                        </p>
+                      </div>
+                    )}
+                    <Button 
+                      className="w-full mt-4"
+                      onClick={handleBillingPortal}
+                      disabled={isLoadingPortal}
+                    >
+                      {isLoadingPortal ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        'Manage Subscription'
+                      )}
+                    </Button>
                   </CardContent>
                 </Card>
 
