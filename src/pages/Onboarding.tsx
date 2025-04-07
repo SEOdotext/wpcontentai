@@ -326,8 +326,8 @@ const Onboarding = () => {
       
       // Create headers with specific handling for generate-content-v3
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
       };
       
       // Special case for generate-content-v3: add a dummy auth header

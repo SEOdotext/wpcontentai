@@ -154,13 +154,13 @@ serve(async (req) => {
   try {
     // Get the request body
     const requestBody = await req.json();
-    const { website_id, website_url, keywords = [], writing_style, subject_matters = [], language = 'en', scraped_content } = requestBody as GeneratePostIdeasRequest;
+    const { website_id, website_url, keywords = [], writing_style, subject_matters = [], language: requestLanguage = 'en', scraped_content } = requestBody as GeneratePostIdeasRequest;
     
     console.log('------------ GENERATE POST IDEAS REQUEST ------------');
     console.log('Request parameters:', JSON.stringify(requestBody, null, 2));
     console.log(`Website ID: ${website_id}`);
     console.log(`Website URL: ${website_url}`);
-    console.log(`Language: ${language}`);
+    console.log(`Requested Language: ${requestLanguage}`);
     console.log(`Keywords: ${keywords.join(', ')}`);
     console.log('----------------------------------------------------');
 
@@ -180,6 +180,27 @@ serve(async (req) => {
 
     // In onboarding mode with missing website_id, generate temporary ones
     const effectiveWebsiteId = website_id || `temp-${Date.now()}`;
+    
+    // Get website language from database if not in onboarding mode
+    let language = requestLanguage;
+    if (!isOnboarding && website_id) {
+      try {
+        const { data: websiteData, error: websiteError } = await supabaseClient
+          .from('websites')
+          .select('language')
+          .eq('id', website_id)
+          .single();
+
+        if (websiteError) {
+          console.error('Error fetching website language:', websiteError);
+        } else if (websiteData?.language) {
+          language = websiteData.language;
+          console.log(`Using website language from database: ${language}`);
+        }
+      } catch (error) {
+        console.error('Error fetching website data:', error);
+      }
+    }
     
     // Get publication settings for the website
     let pubSettings = null;

@@ -306,7 +306,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           website_id: currentWebsite.id,
           keywords: inputValue.split(',').map(k => k.trim()).filter(Boolean),
           writing_style: writingStyle,
-          subject_matters: subjectMatters
+          subject_matters: subjectMatters,
+          language: currentWebsite.language || 'en'
         })
       });
 
