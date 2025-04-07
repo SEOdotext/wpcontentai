@@ -9,9 +9,13 @@ if (!stripeSecretKey) {
 }
 
 const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: '2023-10-16',
-  httpClient: Stripe.createFetchHttpClient(),
+  apiVersion: '2023-10-16'
 })
+
+interface RequestBody {
+  type: 'payment' | 'subscription';
+  plan?: 'hobby' | 'pro' | 'agency';
+}
 
 serve(async (req) => {
   console.log('=== STRIPE PORTAL SESSION REQUEST ===')
@@ -111,31 +115,112 @@ serve(async (req) => {
     }
 
     // Create Stripe billing portal session
-    console.log('Creating billing portal session for customer:', stripeCustomerId)
-    const session = await stripe.billingPortal.sessions.create({
-      customer: stripeCustomerId,
-      return_url: `${Deno.env.get('FRONTEND_URL')}/organization`
-    })
+    console.log('Creating session for customer:', stripeCustomerId)
+    
+    const body: RequestBody = await req.json();
+    const { type, plan } = body;
+    console.log('Session type:', type, 'Plan:', plan);
 
-    console.log('Billing portal session created:', {
-      session_id: session.id,
-      url: session.url
-    })
+    if (type === 'subscription') {
+      // Create Checkout session for subscription management
+      const session = await stripe.checkout.sessions.create({
+        customer: stripeCustomerId,
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: plan === 'hobby' ? 'price_1RBEJwRGhl9iFwDNmsBsnVX5' : // Hobby plan - €15/month
+                  plan === 'pro' ? 'price_1RBEPdRGhl9iFwDNsMnaYvh5' : // Pro plan - €49/month
+                  'price_1RBMVnRGhl9iFwDNYi4upwcm', // Agency/Enterprise plan - €149/month
+            quantity: 1,
+            adjustable_quantity: {
+              enabled: false
+            }
+          }
+        ],
+        allow_promotion_codes: true,
+        billing_address_collection: 'required',
+        subscription_data: {
+          metadata: {
+            plan_type: plan || 'agency',
+            websites_included: plan === 'hobby' ? '1' :
+                             plan === 'pro' ? '1' :
+                             'unlimited',
+            articles_per_month: plan === 'hobby' ? '5' :
+                              plan === 'pro' ? '20' :
+                              '100'
+          }
+        },
+        success_url: 'https://contentgardener.ai/organization?success=true',
+        cancel_url: 'https://contentgardener.ai/organization?canceled=true'
+      });
 
+      console.log('Checkout session created:', {
+        session_id: session.id,
+        url: session.url,
+        type: type,
+        plan: plan || 'agency'
+      });
+
+      return new Response(
+        JSON.stringify({ url: session.url }),
+        { 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+          } 
+        }
+      );
+    } else if (type === 'payment') {
+      // Create portal session only for payment method management
+      const portalSession = await stripe.billingPortal.sessions.create({
+        customer: stripeCustomerId,
+        return_url: 'https://contentgardener.ai/organization',
+        locale: 'da',
+        flow_data: {
+          type: 'payment_method_update'
+        }
+      });
+
+      console.log('Portal session created:', {
+        session_id: portalSession.id,
+        url: portalSession.url,
+        type: type
+      });
+
+      return new Response(
+        JSON.stringify({ url: portalSession.url }),
+        { 
+          headers: { 
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+          } 
+        }
+      );
+    }
+
+    // Return error for invalid type
     return new Response(
-      JSON.stringify({ url: session.url }),
+      JSON.stringify({ error: 'Invalid session type. Must be "subscription" or "payment".' }),
       { 
+        status: 400,
         headers: { 
           'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
         } 
       }
-    )
-  } catch (error) {
-    console.error('Error in stripe-portal function:', error)
+    );
+  } catch (error: unknown) {
+    console.error('Error in stripe-portal function:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message,
+        error: error instanceof Error ? error.message : 'Unknown error',
         details: error instanceof Error ? error.stack : undefined
       }),
       { 
@@ -145,6 +230,6 @@ serve(async (req) => {
           'Access-Control-Allow-Origin': '*'
         }
       }
-    )
+    );
   }
-}) 
+}); 
