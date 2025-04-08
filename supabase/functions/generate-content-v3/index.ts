@@ -277,6 +277,42 @@ serve(async (req) => {
 
     console.log('Available links for content:', availableLinks);
 
+    // Prepare formatting instructions based on mode
+    let formattingInstructions = '';
+    if (isOnboarding) {
+      formattingInstructions = `HTML FORMATTING REQUIREMENTS:
+- Wrap each paragraph in <p> tags
+- Use <h2> for main section headers
+- Use <h3> for subsection headers if needed
+- Use <ul> and <li> for unordered lists
+- Use <ol> and <li> for ordered lists
+- Use <blockquote> for quotes
+- DO NOT use backticks or code block markers
+- DO NOT include extra newlines between elements
+- Ensure all HTML tags are properly closed
+- Format lists properly with each <li> on its own line`;
+    } else if (wordpressTemplate) {
+      formattingInstructions = `WORDPRESS TEMPLATE FORMAT:
+Use this exact HTML structure for your content:
+${wordpressTemplate}
+
+Replace the content between the entry-content tags with your generated content.
+Ensure your content matches the styling and structure of the template.`;
+    } else {
+      // Default formatting for non-onboarding without template
+      formattingInstructions = `HTML FORMATTING REQUIREMENTS:
+- Wrap each paragraph in <p> tags
+- Use <h2> for main section headers
+- Use <h3> for subsection headers if needed
+- Use <ul> and <li> for unordered lists
+- Use <ol> and <li> for ordered lists
+- Use <blockquote> for quotes
+- DO NOT use backticks or code block markers
+- DO NOT include extra newlines between elements
+- Ensure all HTML tags are properly closed
+- Format lists properly with each <li> on its own line`;
+    }
+
     const prompt = `Write a high-quality WordPress blog post with the title:
 "${postTheme.subject_matter}"
 
@@ -300,17 +336,7 @@ Content Requirements:
 5. End with a conclusion that includes one of the exact links provided above
 6. Be approximately 800-1200 words
 
-HTML FORMATTING REQUIREMENTS:
-- Wrap each paragraph in <p> tags
-- Use <h2> for main section headers
-- Use <h3> for subsection headers if needed
-- Use <ul> and <li> for unordered lists
-- Use <ol> and <li> for ordered lists
-- Use <blockquote> for quotes
-- DO NOT use backticks or code block markers
-- DO NOT include extra newlines between elements
-- Ensure all HTML tags are properly closed
-- Format lists properly with each <li> on its own line
+${formattingInstructions}
 
 STRICT REQUIREMENTS:
 - COPY AND PASTE the exact link HTML elements from above. DO NOT create new ones.
@@ -333,7 +359,7 @@ STRICT REQUIREMENTS:
       messages: [
         { 
           role: 'system', 
-          content: 'You are a professional blog writer who specializes in creating well-structured HTML content for WordPress. You must use the exact links provided in the prompt by copying and pasting them. Never modify URLs or create placeholder links. Format your content with proper HTML tags and ensure all tags are properly closed. Do not include markdown code blocks or extra formatting.' 
+          content: 'You are a professional blog writer who specializes in creating well-structured HTML content for WordPress. You must use the exact links provided in the prompt by copying and pasting them. Never modify URLs or create placeholder links. Format your content exactly as specified in the formatting instructions.' 
         },
         { role: 'user', content: prompt }
       ],
@@ -361,6 +387,14 @@ STRICT REQUIREMENTS:
       if (content.includes('```')) {
         console.error('Generated content contains markdown code blocks');
         throw new Error('Generated content contains markdown code blocks');
+      }
+
+      // If we have a WordPress template, validate that the content follows it
+      if (!isOnboarding && wordpressTemplate) {
+        if (!content.includes('entry-content')) {
+          console.error('Generated content does not follow WordPress template structure');
+          throw new Error('Generated content must follow the WordPress template structure');
+        }
       }
       
       return true;
