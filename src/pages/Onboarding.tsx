@@ -204,32 +204,32 @@ const LogoAnimation = () => (
 const steps: Step[] = [
   { 
     id: 1, 
-    name: "Account Setup", 
+    name: "Account setup", 
     description: "Creating your workspace"
   },
   { 
     id: 2, 
-    name: "Reading Website", 
+    name: "Reading website", 
     description: "Analyzing your website"
   },
   { 
     id: 3, 
-    name: "Language Detection", 
+    name: "Language detection", 
     description: "Identifying website language"
   },
   { 
     id: 4, 
-    name: "Learning Tone-of-Voice", 
+    name: "Learning tone-of-voice", 
     description: "Understanding your style"
   },
   { 
     id: 5, 
-    name: "Reading Key Content", 
+    name: "Reading key content", 
     description: "Analyzing important pages"
   },
   { 
     id: 6, 
-    name: "Suggesting Content Ideas", 
+    name: "Suggesting content ideas", 
     description: "Creating content ideas"
   }
 ];
