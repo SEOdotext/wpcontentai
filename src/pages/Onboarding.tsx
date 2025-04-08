@@ -86,7 +86,7 @@ const contentTypes: ContentType[] = [
   },
   {
     id: 'landing',
-    name: 'Landing Pages',
+    name: 'Landing pages',
     description: 'Convert visitors with compelling value propositions.',
     icon: <Layout className="w-5 h-5 text-primary" />,
     recommended: "Best for Conversions 💎"
@@ -96,7 +96,7 @@ const contentTypes: ContentType[] = [
 const contentSteps: ContentStep[] = [
   { 
     id: 1, 
-    name: "Account Setup", 
+    name: "Account setup", 
     description: "Creating your workspace",
     detail: "Setting up your personal account and workspace",
     duration: 1000,
@@ -107,7 +107,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 2, 
-    name: "Reading Website", 
+    name: "Reading website", 
     description: "Analyzing your website",
     detail: "Extracting and analyzing your website content",
     duration: 3000,
@@ -119,7 +119,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 3, 
-    name: "Language Detection", 
+    name: "Language detection", 
     description: "Identifying website language",
     detail: "Detecting the primary language of your content",
     duration: 1500,
@@ -131,7 +131,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 4, 
-    name: "Learning Tone-of-Voice", 
+    name: "Learning tone of voice", 
     description: "Understanding your style",
     detail: "Learning how you sound to match your voice",
     duration: 2500,
@@ -143,7 +143,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 5, 
-    name: "Reading Key Content", 
+    name: "Reading key content", 
     description: "Analyzing important pages",
     detail: "Reading your most important content in depth",
     duration: 2000,
@@ -155,7 +155,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 6, 
-    name: "Suggesting Content Ideas", 
+    name: "Suggesting content ideas", 
     description: "Creating content ideas",
     detail: "Generating content ideas based on your site",
     duration: 2500,
@@ -257,6 +257,9 @@ const Onboarding = () => {
   
   // Store step texts for completed steps
   const [stepTexts, setStepTexts] = useState<Record<number, string>>({});
+  
+  // Add a ref to track if setup has started
+  const setupStarted = React.useRef(false);
 
   // Toggle expanded state for a step
   const toggleStepExpanded = (stepId: number) => {
@@ -266,8 +269,8 @@ const Onboarding = () => {
     }));
   };
 
+  // Handle URL parameters
   useEffect(() => {
-    // Get URL from query parameters if exists
     const params = new URLSearchParams(window.location.search);
     const urlParam = params.get('url');
     
@@ -281,13 +284,17 @@ const Onboarding = () => {
       localStorage.setItem('onboardingWebsite', formattedUrl);
       setState(prev => ({ ...prev, websiteUrl: formattedUrl }));
     }
-    
-    // Only start setup if we're on step 1 or no step is set
-    if (state.step === 1) {
+  }, []); // Only run once on mount
+
+  // Handle initial setup
+  useEffect(() => {
+    // Only start setup if we're on step 1 and haven't started yet
+    if (state.step === 1 && !setupStarted.current) {
       console.log("Starting onboarding process for website:", state.websiteUrl);
+      setupStarted.current = true;
       startSetup1();
     }
-  }, [state.step]); // Add state.step as dependency
+  }, [state.step]); // Only depend on state.step
 
   // Helper function to call Supabase Edge Functions directly without authentication
   const callEdgeFunction = async (functionName: string, body: any) => {
@@ -295,65 +302,16 @@ const Onboarding = () => {
       // Log the function name and parameters for debugging
       console.log(`Calling edge function: ${functionName}`, body);
       
-      // SPECIAL CASE: Generate content directly for onboarding without using the Edge Function
-      // This completely bypasses Supabase Edge Functions authentication issues
-      if (functionName === 'generate-content-v3' && body.is_onboarding) {
-        console.log('USING DIRECT CONTENT GENERATION FOR ONBOARDING - bypassing Edge Function');
-        
-        // Skip the Edge Function entirely and generate content directly
-        try {
-          // Simulate network latency for UX
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Create simple content for onboarding
-          const title = body.title;
-          const previewContent = `
-            <p>Dette er et eksempel på indhold genereret under onboarding. Når du opretter en konto, vil du få adgang til fuldt genereret indhold baseret på dine præferencer.</p>
-            
-            <h2>Introduktion</h2>
-            <p>Dette indlæg vil dække emnet "${title}" og give dig indsigt i, hvordan du kan forbedre din virksomheds digitale tilstedeværelse.</p>
-            
-            <h2>Hovedpunkter</h2>
-            <ul>
-              <li>Strategi for digital markedsføring</li>
-              <li>Optimering af brugeroplevelse</li>
-              <li>Datadrevet beslutningstagning</li>
-            </ul>
-            
-            <p>Ved at implementere disse strategier kan du se betydelige forbedringer i din online performance og kundeengagement.</p>
-            
-            <h2>Konklusion</h2>
-            <p>Det er afgørende at have en solid digital strategi i den moderne forretningsverden. Ved at fokusere på de områder, vi har diskuteret, kan du positionere din virksomhed til succes.</p>
-          `;
-          
-          console.log('Generated preview content for onboarding');
-          
-          // Return mock response that matches the expected format
-          return {
-            success: true,
-            content: previewContent,
-            title: title
-          };
-        } catch (directError) {
-          console.error('Error in direct content generation:', directError);
-          throw new Error('Failed to generate preview content');
-        }
-      }
-      
       // Create headers with specific handling for generate-content-v3
       const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       };
       
-      // Special case for generate-content-v3: add a dummy auth header
-      // This is required because this function checks auth before parsing the request body
-      if (functionName === 'generate-content-v3') {
-        console.log('Adding dummy auth header for generate-content-v3');
-        headers['Authorization'] = 'Bearer onboarding-mode';
-      }
+      // Add anon key for all function calls during onboarding
+      headers['Authorization'] = `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`;
       
-      // Use a direct fetch to the Supabase Edge Function - no auth token required for onboarding
+      // Use a direct fetch to the Supabase Edge Function
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`, {
         method: 'POST',
         headers,
@@ -1163,17 +1121,36 @@ const Onboarding = () => {
       const progressInterval = setInterval(() => {
         setState(prev => {
           const newProgress = Math.min(prev.progress + 1, 95); // Cap at 95% until we get actual result
-        return { ...prev, progress: newProgress };
-      });
+          return { ...prev, progress: newProgress };
+        });
       }, 100);
-    
-    callEdgeFunction('generate-content-v3', {
+
+      // Get the scraped content and key pages from localStorage
+      const scrapedContent = JSON.parse(localStorage.getItem('scraped_content') || '[]');
+      const keyContentPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
+
+      console.log('Content generation context:', {
+        scrapedContentCount: scrapedContent.length,
+        keyPagesCount: keyContentPages.length
+      });
+
+      // Format the cornerstone content for link generation
+      const cornerstoneContent = keyContentPages.map(page => ({
+        title: page.title,
+        url: page.url,
+        is_cornerstone: true
+      }));
+
+      callEdgeFunction('generate-content-v3', {
         website_id: localStorage.getItem('website_id') || '',
         website_url: state.websiteUrl,
-      title: likedIdea.title,
+        title: likedIdea.title,
         description: likedIdea.description,
-        is_onboarding: true
-    })
+        is_onboarding: true,
+        cornerstone_content: cornerstoneContent,
+        scraped_content: scrapedContent,
+        language: localStorage.getItem('website_language') || 'en'
+      })
       .then(result => {
           // Clear the progress interval
           clearInterval(progressInterval);
@@ -1269,12 +1246,16 @@ const Onboarding = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
               className="flex flex-col items-center justify-center py-8"
             >
               <div className="w-full max-w-3xl">
                 <h2 className="text-2xl font-bold mb-8 text-center">
-                  ⚡ Setup 1: Website Onboarding
+                  ⚡ Setup 1: Website onboarding
                 </h2>
                 
                 <div className="mb-8">
@@ -1378,12 +1359,16 @@ const Onboarding = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
               className="py-6"
             >
               <div className="w-full max-w-3xl mx-auto">
                 <h2 className="text-2xl font-semibold mb-6">
-                  🌱✨ Choose Your Content Seeds 🪴
+                  🌱✨ Choose your content seeds 🪴
                 </h2>
                 
                 <p className="text-muted-foreground mb-8">
@@ -1531,12 +1516,16 @@ const Onboarding = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
               className="flex flex-col items-center justify-center py-8"
             >
               <div className="w-full max-w-3xl mx-auto">
                 <h2 className="text-2xl font-bold mb-8 text-center">
-                  📝 Setup 3: Generating Your First Piece of Content
+                  📝 Setup 3: Generating your first piece of content
                 </h2>
                 
                 {!state.contentGenerated ? (
@@ -1546,7 +1535,7 @@ const Onboarding = () => {
                     <Wand2 className="h-10 w-10 text-primary animate-pulse" />
                   </div>
                   
-                      <h3 className="text-xl font-medium mb-2">🛠️ Generating First Draft</h3>
+                      <h3 className="text-xl font-medium mb-2">🛠️ Generating first draft</h3>
                       <p className="text-muted-foreground mb-4">
                         We're putting your favorite idea into words...
                       </p>
@@ -1568,7 +1557,7 @@ const Onboarding = () => {
                         <CheckCircle2 className="h-10 w-10 text-primary" />
                 </div>
                 
-                      <h3 className="text-xl font-medium mb-2">📄 Your First Draft Is Ready!</h3>
+                      <h3 className="text-xl font-medium mb-2">📄 Your first draft is ready!</h3>
                       <p className="text-muted-foreground mb-4">
                         Here's your AI-generated content — tailored to your tone and style.
                       </p>
@@ -1581,9 +1570,7 @@ const Onboarding = () => {
                           <p key={i} className={`${i > 0 ? 'mt-2' : ''}`}>{line}</p>
                         ))}
                 </div>
-                      <p className="text-muted-foreground italic text-sm">
-                        View the full content for more...
-                      </p>
+                    
                     </div>
                     
                     <div className="flex justify-center gap-4">
@@ -1612,7 +1599,11 @@ const Onboarding = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
               className="flex flex-col items-center justify-center min-h-[70vh] text-center"
             >
               <motion.div
