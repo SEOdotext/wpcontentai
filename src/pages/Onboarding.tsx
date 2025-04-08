@@ -236,7 +236,7 @@ const steps: Step[] = [
 
 const Onboarding = () => {
   const [state, setState] = useState<OnboardingState>({
-    step: 1, // Start with Setup 1
+    step: 1,
     websiteUrl: localStorage.getItem('onboardingWebsite') || 'https://example.com',
     progress: 0,
     currentStepIndex: 0,
@@ -252,6 +252,20 @@ const Onboarding = () => {
   // Track liked ideas
   const [likedIdeas, setLikedIdeas] = useState<string[]>([]);
   
+  // Track expanded states for each step
+  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
+  
+  // Store step texts for completed steps
+  const [stepTexts, setStepTexts] = useState<Record<number, string>>({});
+
+  // Toggle expanded state for a step
+  const toggleStepExpanded = (stepId: number) => {
+    setExpandedSteps(prev => ({
+      ...prev,
+      [stepId]: !prev[stepId]
+    }));
+  };
+
   useEffect(() => {
     // Get URL from query parameters if exists
     const params = new URLSearchParams(window.location.search);
@@ -268,10 +282,12 @@ const Onboarding = () => {
       setState(prev => ({ ...prev, websiteUrl: formattedUrl }));
     }
     
-    // Start onboarding immediately - no auth required
-    console.log("Starting onboarding process for website:", state.websiteUrl);
-    startSetup1();
-  }, []);
+    // Only start setup if we're on step 1 or no step is set
+    if (state.step === 1) {
+      console.log("Starting onboarding process for website:", state.websiteUrl);
+      startSetup1();
+    }
+  }, [state.step]); // Add state.step as dependency
 
   // Helper function to call Supabase Edge Functions directly without authentication
   const callEdgeFunction = async (functionName: string, body: any) => {
@@ -371,6 +387,9 @@ const Onboarding = () => {
       currentStepIndex: 0,
       currentStepText: "Setting up your workspace..."
     }));
+    
+    // Reset step texts
+    setStepTexts({});
     
     // Create website and organization IDs with uuid
     const websiteId = localStorage.getItem('website_id') || uuidv4();
@@ -879,6 +898,13 @@ const Onboarding = () => {
       // Display message if any
       if (message) {
         setState(prev => ({ ...prev, currentStepText: message }));
+        
+        // Store the message for this step
+        setStepTexts(prev => ({
+          ...prev,
+          [steps[i].id]: message
+        }));
+        
         await new Promise(r => setTimeout(r, 2000)); // Pause to show message
       }
           
@@ -1267,18 +1293,77 @@ const Onboarding = () => {
                     {steps[state.currentStepIndex]?.name}
                   </h3>
                   
-                  <p className="text-muted-foreground mb-6">
-                    {steps[state.currentStepIndex]?.description}
-                  </p>
-                  
-                  <div className="bg-muted/50 p-4 rounded-md border">
-                    <div className="flex">
-                      <Sparkles className="w-5 h-5 text-primary mr-3 animate-pulse mt-1" />
-                      <div>
-                        {state.currentStepText.split('\n').map((line, i) => (
-                          <p key={i} className={`font-medium ${i > 0 ? 'mt-2' : ''}`}>{line}</p>
-                        ))}
-                      </div>
+                  <div className="bg-muted/50 p-4 rounded-md border max-h-[300px] overflow-y-auto">
+                    <div className="space-y-2">
+                      {steps.slice(0, state.currentStepIndex + 1).reverse().map((step, index) => {
+                        const isCurrentStep = index === 0;
+                        const isExpanded = isCurrentStep || expandedSteps[step.id];
+                        const stepText = isCurrentStep ? state.currentStepText : stepTexts[step.id] || '';
+                        
+                        return (
+                          <motion.div
+                            key={step.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: index * 0.1 }}
+                            className={`flex items-start gap-3 p-2 rounded-lg ${
+                              isCurrentStep 
+                                ? 'bg-primary/5 border border-primary/20' 
+                                : 'bg-background/50'
+                            }`}
+                          >
+                            <div className="mt-1">
+                              {!isCurrentStep ? (
+                                <CheckCircle2 className="w-5 h-5 text-primary" />
+                              ) : (
+                                <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div 
+                                className="flex items-center justify-between cursor-pointer"
+                                onClick={() => !isCurrentStep && toggleStepExpanded(step.id)}
+                              >
+                                <div>
+                                  <p className="font-medium">{step.name}</p>
+                                </div>
+                                {!isCurrentStep && (
+                                  <ChevronRight 
+                                    className={`w-4 h-4 text-muted-foreground transition-transform ${
+                                      isExpanded ? 'rotate-90' : ''
+                                    }`}
+                                  />
+                                )}
+                              </div>
+                              {isCurrentStep && state.currentStepText && (
+                                <motion.div
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  transition={{ duration: 0.3 }}
+                                  className="mt-2 text-sm"
+                                >
+                                  {state.currentStepText.split('\n').map((line, i) => (
+                                    <p key={i} className={`${i > 0 ? 'mt-1' : ''}`}>{line}</p>
+                                  ))}
+                                </motion.div>
+                              )}
+                              {!isCurrentStep && isExpanded && stepText && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="mt-2 text-sm"
+                                >
+                                  {stepText.split('\n').map((line, i) => (
+                                    <p key={i} className={`${i > 0 ? 'mt-1' : ''}`}>{line}</p>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1296,7 +1381,7 @@ const Onboarding = () => {
               transition={{ duration: 0.3 }}
               className="py-6"
             >
-              <div className="w-full max-w-5xl mx-auto">
+              <div className="w-full max-w-3xl mx-auto">
                 <h2 className="text-2xl font-semibold mb-6">
                   🌱✨ Choose Your Content Seeds 🪴
                 </h2>
@@ -1324,7 +1409,7 @@ const Onboarding = () => {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7"
+                              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
                               onClick={() => handleThumbsUp(idea.id)}
                               title="Like this idea"
                             >
@@ -1335,7 +1420,7 @@ const Onboarding = () => {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7"
+                              className="h-7 w-7 text-gray-400 hover:text-gray-500 hover:bg-gray-50"
                               onClick={() => handleThumbsDown(idea.id)}
                               title="Dislike this idea"
                             >

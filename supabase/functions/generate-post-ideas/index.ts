@@ -75,6 +75,22 @@ interface GeneratePostIdeasResponse {
   postThemes: { [title: string]: { id: string } };
 }
 
+interface SitemapContent {
+  title: string;
+  digest?: string;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+interface ExistingPost {
+  subject_matter: string;
+  keywords?: string[];
+}
+
 // Helper function to detect if content is likely in Danish
 function isDanishContent(text: string): boolean {
   const danishIndicators = [
@@ -242,7 +258,7 @@ serve(async (req) => {
     }
 
     // Get existing post themes
-    let existingPosts = [];
+    let existingPosts: ExistingPost[] = [];
     try {
       const { data, error } = await supabaseClient
         .from('post_themes')
@@ -267,7 +283,7 @@ serve(async (req) => {
     }
 
     // Get website content from sitemap
-    let sitemapContent = [];
+    let sitemapContent: SitemapContent[] = [];
     try {
       // Handle direct scraped content from onboarding
       if (isOnboarding && scraped_content && Array.isArray(scraped_content)) {
@@ -310,8 +326,8 @@ serve(async (req) => {
       }
     }
 
-    // Get available categories for the website
-    let categories = [];
+    // Get categories
+    let categories: Category[] = [];
     try {
       const { data, error } = await supabaseClient
         .from('wordpress_categories')
@@ -362,7 +378,32 @@ serve(async (req) => {
     // Determine if we're generating Danish content
     const isDanish = language === 'da';
     
-    const prompt = `Generate 5 unique blog post ideas for a website, with each post focusing on the following primary keywords:
+    let promptText = isOnboarding 
+      ? `Generate 5 unique blog post ideas for a website based on its existing content.
+
+Additional context:
+Current year: 2025
+Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
+Subject matters: ${subject_matters.join(', ') || pubSettings?.subject_matters?.join(', ') || 'general'}
+Language: ${isDanish ? 'Danish (da)' : 'English (en)'}
+
+Existing cornerstone content (use these as a reference for your suggestions):
+${cornerstoneContent.join('\n')}
+
+For each idea, provide:
+1. A compelling title that aligns with the website's content and tone
+2. 3-5 relevant keywords based on the website's content (avoid using colons in keywords)
+3. A brief description (max 50 words - be very concise)
+
+Important rules:
+1. ${isDanish ? 'IMPORTANT: Generate all content in Danish language' : 'Generate all content in English language'}
+2. ${isDanish ? 'For Danish titles: Only capitalize the first word and proper nouns' : 'For English titles: Capitalize main words following standard English title case'}
+3. Keywords should be category-oriented and domain-specific
+4. Avoid generic single words like: ${isDanish ? 'virksomhed, løsning, sammenligning, bedste, tips, pålidelig' : 'business, solution, comparison, best, tips, reliable'}
+5. DO create post ideas that align with the themes in the cornerstone content but offer new perspectives
+6. DO NOT use colons in any keywords
+7. BE CONCISE - keep descriptions short and simple (max 50 words)`
+      : `Generate 5 unique blog post ideas for a website, with each post focusing on the following primary keywords:
 ${keywords.join(', ')}
 
 Each post should:
@@ -402,10 +443,20 @@ Important rules:
 8. DO NOT use colons in any keywords
 9. Category IDs must be valid UUIDs from the provided list - do not modify or format them in any way
 10. IMPORTANT: When referring to categories, use ONLY the UUID strings, not objects with id/name properties
-11. BE CONCISE - keep descriptions short and simple (max 50 words)
+11. BE CONCISE - keep descriptions short and simple (max 50 words)`;
 
-Format your response as pure JSON with NO markdown formatting and this exact structure:
-{
+    // Format your response as pure JSON with NO markdown formatting and this exact structure:
+    const responseFormat = isOnboarding 
+      ? `{
+  "ideas": [
+    {
+      "title": "[TITLE]",
+      "keywords": ["[KEYWORD1]", "[KEYWORD2]", "[KEYWORD3]"],
+      "description": "[DESCRIPTION]"
+    }
+  ]
+}`
+      : `{
   "ideas": [
     {
       "title": "[TITLE]",
@@ -414,12 +465,15 @@ Format your response as pure JSON with NO markdown formatting and this exact str
       "categories": ["[UUID1]", "[UUID2]"]
     }
   ]
-}
+}`;
 
-Notice that the "categories" field contains an array of string UUIDs, not objects. Do not include category names in this array, only the UUIDs exactly as they appear in the available categories list above.`;
+    promptText += `\n\nFormat your response as pure JSON with NO markdown formatting and this exact structure:\n${responseFormat}\n\n`;
+    if (!isOnboarding) {
+      promptText += `Notice that the "categories" field contains an array of string UUIDs, not objects. Do not include category names in this array, only the UUIDs exactly as they appear in the available categories list above.`;
+    }
 
     // Log the prompt being sent to OpenAI
-    console.log('Prompt being sent to OpenAI:', prompt);
+    console.log('Prompt being sent to OpenAI:', promptText);
 
     // Create the OpenAI request payload
     const openaiRequestBody = {
@@ -433,7 +487,7 @@ Notice that the "categories" field contains an array of string UUIDs, not object
         },
         {
           role: 'user',
-          content: prompt
+          content: promptText
         }
       ],
       response_format: { type: "json_object" },
