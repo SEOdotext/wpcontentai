@@ -17,7 +17,16 @@ import {
   ThumbsDown,
   X,
   Code,
-  Eye
+  Eye,
+  Key,
+  Link,
+  HelpCircle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useToast } from "@/components/ui/use-toast";
@@ -35,6 +44,8 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { useOrganisation } from '@/context/OrganisationContext';
 import { useWebsites } from '@/context/WebsitesContext';
 import { Toggle } from "@/components/ui/toggle";
+import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Types
 interface ContentType {
@@ -65,6 +76,11 @@ interface OnboardingState {
   generatedContentTitle: string;
   generatedContentPreview: string;
   showRawContent: boolean;
+  showWpAuthDialog: boolean;
+  wpUsername: string;
+  wpPassword: string;
+  isAuthenticating: boolean;
+  wpConnectionError: string | null;
 }
 
 interface Step {
@@ -249,7 +265,12 @@ const Onboarding = () => {
     contentGenerated: false,
     generatedContentTitle: '',
     generatedContentPreview: '',
-    showRawContent: false
+    showRawContent: false,
+    showWpAuthDialog: false,
+    wpUsername: '',
+    wpPassword: '',
+    isAuthenticating: false,
+    wpConnectionError: null
   });
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -1229,11 +1250,81 @@ const Onboarding = () => {
 
   // Publish content and complete
   const handlePublishContent = () => {
-    sonnerToast("Content published!", {
-      description: "Your content has been published successfully."
+    setState(prev => ({ ...prev, step: 4 })); // Now goes to WordPress integration step
+  };
+
+  // Add WordPress connection handlers
+  const handleSkipWordPress = () => {
+    sonnerToast("Content saved as draft", {
+      description: "You can connect WordPress later from the settings."
     });
-    
-    setState(prev => ({ ...prev, step: 4 }));
+    setState(prev => ({ ...prev, step: 5 })); // Go to completion
+  };
+
+  const handleStartWordPressAuth = () => {
+    setState(prev => ({ ...prev, showWpAuthDialog: true }));
+  };
+
+  const handleCompleteWordPressAuth = async () => {
+    if (!state.wpUsername || !state.wpPassword) {
+      setState(prev => ({ 
+        ...prev, 
+        wpConnectionError: 'Please enter both username and application password' 
+      }));
+      return;
+    }
+
+    setState(prev => ({ 
+      ...prev, 
+      isAuthenticating: true,
+      wpConnectionError: null 
+    }));
+
+    try {
+      // Store credentials in sessionStorage
+      const wpCredentials = {
+        website_url: state.websiteUrl,
+        username: state.wpUsername,
+        password: state.wpPassword,
+        created_at: new Date().toISOString()
+      };
+      sessionStorage.setItem('wp_credentials', JSON.stringify(wpCredentials));
+
+      // Test the connection using the Edge Function
+      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/wordpress-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          wpUrl: state.websiteUrl,
+          username: state.wpUsername,
+          password: state.wpPassword
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        sonnerToast.success("WordPress connected successfully!");
+        setState(prev => ({ 
+          ...prev, 
+          showWpAuthDialog: false,
+          isAuthenticating: false 
+        }));
+        // Move to completion step
+        setState(prev => ({ ...prev, step: 5 }));
+      } else {
+        throw new Error(data.error || 'Failed to connect to WordPress');
+      }
+    } catch (error) {
+      console.error('WordPress connection error:', error);
+      setState(prev => ({ 
+        ...prev, 
+        isAuthenticating: false,
+        wpConnectionError: error.message || 'Failed to connect to WordPress' 
+      }));
+    }
   };
 
   // Complete onboarding and go to dashboard
@@ -1633,10 +1724,179 @@ const Onboarding = () => {
             </motion.div>
           )}
 
-          {/* Completion */}
+          {/* Setup 4: WordPress Integration */}
           {state.step === 4 && (
             <motion.div
               key="step-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
+              className="flex flex-col items-center justify-center py-8"
+            >
+              <div className="w-full max-w-3xl mx-auto">
+                <h2 className="text-2xl font-bold mb-4">
+                  🔌 Connect to WordPress
+                </h2>
+                
+                <p className="text-muted-foreground mb-8">
+                  Connect your WordPress website to automatically publish content. We'll guide you through the process.
+                </p>
+
+                <div className="space-y-6">
+                  <div className="rounded-lg border bg-card p-4">
+                    <h4 className="font-medium mb-2">Before you start:</h4>
+                    <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
+                      <li>Make sure you're logged into your WordPress admin</li>
+                      <li>You'll create a secure connection key that only ContentGardener.ai can use</li>
+                      <li>This is more secure than using your admin password</li>
+                    </ul>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label>Create a Secure Connection</Label>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start"
+                        onClick={() => {
+                          if (!state.websiteUrl) {
+                            sonnerToast("Error", {
+                              description: 'Website URL is not configured'
+                            });
+                            return;
+                          }
+                          // Remove protocol if present and add https
+                          const cleanUrl = state.websiteUrl.replace(/^https?:\/\//, '');
+                          // Check if URL ends with /wp-admin or similar
+                          const baseUrl = cleanUrl.replace(/\/(wp-admin|wp-login|wp-content).*$/, '');
+                          window.open(`https://${baseUrl}/wp-admin/profile.php#application-passwords-section`, '_blank');
+                        }}
+                      >
+                        <Key className="h-4 w-4 mr-2" />
+                        Generate Connection Key
+                      </Button>
+                      <p className="text-sm text-muted-foreground">
+                        We'll open your WordPress profile where you can create a secure connection key
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="default"
+                        className="w-full"
+                        onClick={handleStartWordPressAuth}
+                      >
+                        <Link className="h-4 w-4 mr-2" />
+                        Connect & Test
+                      </Button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="outline" size="icon">
+                              <HelpCircle className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-80">
+                            <p>Connect to your WordPress site and test the connection immediately.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+
+                    <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+                      <p className="text-sm font-medium">What is a Connection Key?</p>
+                      <p className="text-sm text-muted-foreground">
+                        A connection key (or application password) is a secure way to let ContentGardener.ai connect to your WordPress site. 
+                        Unlike your admin password, it has limited access and can be revoked at any time.
+                      </p>
+                    </div>
+
+                    <div className="flex justify-end gap-4 mt-8">
+                      <Button
+                        variant="outline"
+                        onClick={handleSkipWordPress}
+                      >
+                        Skip for now
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* WordPress Authentication Dialog */}
+              <Dialog open={state.showWpAuthDialog} onOpenChange={(open) => setState(prev => ({ ...prev, showWpAuthDialog: open }))}>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Connect to WordPress</DialogTitle>
+                    <DialogDescription>
+                      Enter your WordPress credentials to connect your site
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="wpUsername">WordPress Username</Label>
+                      <Input
+                        id="wpUsername"
+                        value={state.wpUsername}
+                        onChange={(e) => setState(prev => ({ ...prev, wpUsername: e.target.value }))}
+                        placeholder="Enter your WordPress username"
+                      />
+                    </div>
+                    
+                    <div className="grid gap-2">
+                      <Label htmlFor="wpPassword">Application Password</Label>
+                      <Input
+                        id="wpPassword"
+                        type="text"
+                        value={state.wpPassword}
+                        onChange={(e) => setState(prev => ({ ...prev, wpPassword: e.target.value }))}
+                        placeholder="xxxx xxxx xxxx xxxx"
+                      />
+                    </div>
+
+                    {state.wpConnectionError && (
+                      <div className="text-sm text-red-500 bg-red-50 p-2 rounded">
+                        {state.wpConnectionError}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setState(prev => ({ ...prev, showWpAuthDialog: false }))}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleCompleteWordPressAuth}
+                      disabled={state.isAuthenticating}
+                    >
+                      {state.isAuthenticating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Connecting...
+                        </>
+                      ) : (
+                        'Connect'
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </motion.div>
+          )}
+
+          {/* Completion - Now step 5 */}
+          {state.step === 5 && (
+            <motion.div
+              key="step-5"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
@@ -1657,11 +1917,13 @@ const Onboarding = () => {
               </motion.div>
               
               <h2 className="text-3xl font-bold mb-3">
-                You're all set!
+                Setup Complete!
               </h2>
               
               <p className="text-lg text-muted-foreground max-w-md mb-8">
-                Your website's content DNA is mapped and we're ready to create perfectly matched content for your audience.
+                {state.step === 5 ? 
+                  "Your content is ready and WordPress is connected. Let's start creating!" :
+                  "Your content is saved and ready. You can connect WordPress anytime from settings."}
               </p>
               
               <Button onClick={handleComplete} size="lg" className="px-8">

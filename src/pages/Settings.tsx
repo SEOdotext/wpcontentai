@@ -2029,7 +2029,7 @@ const Settings = () => {
                           <h4 className="font-medium mb-2">Before you start:</h4>
                           <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
                             <li>Make sure you're logged into your WordPress admin</li>
-                            <li>You'll create a secure connection key that only WP Content AI can use</li>
+                            <li>You'll create a secure connection key that only ContentGardener.ai can use</li>
                             <li>This is more secure than using your admin password</li>
                           </ul>
                         </div>
@@ -2089,7 +2089,7 @@ const Settings = () => {
                           <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
                             <p className="text-sm font-medium">What is a Connection Key?</p>
                             <p className="text-sm text-muted-foreground">
-                              A connection key (or application password) is a secure way to let WP Content AI connect to your WordPress site. 
+                              A connection key (or application password) is a secure way to let ContentGardener.ai connect to your WordPress site. 
                               Unlike your admin password, it has limited access and can be revoked at any time.
                             </p>
                           </div>

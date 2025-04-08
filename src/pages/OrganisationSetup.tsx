@@ -167,8 +167,8 @@ const OrganisationSetup = () => {
   return (
     <>
       <Helmet>
-        <title>Setup Your Website | WP Content AI</title>
-        <meta name="description" content="Get started with WP Content AI by setting up your website" />
+        <title>Setup Your Website | ContentGardener.ai</title>
+        <meta name="description" content="Get started with ContentGardener.ai by setting up your website" />
       </Helmet>
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md shadow-lg mx-auto">

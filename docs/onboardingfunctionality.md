@@ -31,6 +31,12 @@ Page: Display
 
 https://contentgardener.ai/setup (Make sure that there are changes to urls for the steps for tracking)
 
+---
+
+Wordpress integration
+
+
+---
 
 Database table for onboarding status
 website_id relation
