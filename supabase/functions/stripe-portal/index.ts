@@ -122,22 +122,44 @@ serve(async (req) => {
     console.log('Session type:', type, 'Plan:', plan);
 
     if (type === 'subscription') {
-      // Create Checkout session for subscription management
+      // Create base line items array with the subscription plan
+      const lineItems = [
+        {
+          price: plan === 'hobby' ? 'price_1RBEJwRGhl9iFwDNmsBsnVX5' : // Hobby plan - €15/month
+                plan === 'pro' ? 'price_1RBEPdRGhl9iFwDNsMnaYvh5' : // Pro plan - €49/month
+                'price_1RBMVnRGhl9iFwDNYi4upwcm', // Agency/Enterprise plan - €149/month
+          quantity: 1,
+          adjustable_quantity: {
+            enabled: false
+          }
+        }
+      ];
+
+      // Add article package options based on plan
+      if (plan === 'pro') {
+        lineItems.push({
+          price: 'price_1RBVpYRGhl9iFwDNYmIXpeix', // 10 Article Package - €20
+          quantity: 1,
+          adjustable_quantity: {
+            enabled: true
+          }
+        });
+      } else if (plan === 'agency') {
+        lineItems.push({
+          price: 'price_1RBVd3RGhl9iFwDNCuJUImV7', // 50 Article Package - €100
+          quantity: 1,
+          adjustable_quantity: {
+            enabled: true
+          }
+        });
+      }
+
+      // Create Checkout session
       const session = await stripe.checkout.sessions.create({
         customer: stripeCustomerId,
         mode: 'subscription',
         payment_method_types: ['card'],
-        line_items: [
-          {
-            price: plan === 'hobby' ? 'price_1RBEJwRGhl9iFwDNmsBsnVX5' : // Hobby plan - €15/month
-                  plan === 'pro' ? 'price_1RBEPdRGhl9iFwDNsMnaYvh5' : // Pro plan - €49/month
-                  'price_1RBMVnRGhl9iFwDNYi4upwcm', // Agency/Enterprise plan - €149/month
-            quantity: 1,
-            adjustable_quantity: {
-              enabled: false
-            }
-          }
-        ],
+        line_items: lineItems,
         allow_promotion_codes: true,
         billing_address_collection: 'required',
         subscription_data: {
@@ -147,8 +169,8 @@ serve(async (req) => {
                              plan === 'pro' ? '1' :
                              'unlimited',
             articles_per_month: plan === 'hobby' ? '5' :
-                              plan === 'pro' ? '20' :
-                              '100'
+                              plan === 'pro' ? '15' :
+                              '50'
           }
         },
         success_url: 'https://contentgardener.ai/organization?success=true',
@@ -159,7 +181,8 @@ serve(async (req) => {
         session_id: session.id,
         url: session.url,
         type: type,
-        plan: plan || 'agency'
+        plan: plan || 'agency',
+        line_items: lineItems
       });
 
       return new Response(

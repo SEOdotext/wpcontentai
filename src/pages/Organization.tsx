@@ -212,11 +212,19 @@ const Organization = () => {
                         <div className="space-y-2">
                           <p className="flex items-center gap-2">
                             <span className="text-primary">✓</span>
+                            <span>5 Articles per Month</span>
+                          </p>
+                          <p className="flex items-center gap-2">
+                            <span className="text-primary">✓</span>
                             <span>1 Website</span>
                           </p>
                           <p className="flex items-center gap-2">
                             <span className="text-primary">✓</span>
-                            <span>5 Articles per Month</span>
+                            <span>100 Pages Max Indexing</span>
+                          </p>
+                          <p className="flex items-center gap-2">
+                            <span className="text-primary">✓</span>
+                            <span>Standard AI Models</span>
                           </p>
                         </div>
                         <Button
@@ -251,11 +259,23 @@ const Organization = () => {
                         <div className="space-y-2">
                           <p className="flex items-center gap-2">
                             <span className="text-primary">✓</span>
+                            <span>15 Articles per Month</span>
+                          </p>
+                          <p className="flex items-center gap-2">
+                            <span className="text-primary">✓</span>
                             <span>1 Website (+€20 per extra)</span>
                           </p>
                           <p className="flex items-center gap-2">
                             <span className="text-primary">✓</span>
-                            <span>20 Articles per Month</span>
+                            <span>500 Pages Max Indexing</span>
+                          </p>
+                          <p className="flex items-center gap-2">
+                            <span className="text-primary">✓</span>
+                            <span>Advanced AI Models</span>
+                          </p>
+                          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>→</span>
+                            <span>Buy Extra Articles: 10 for €20</span>
                           </p>
                         </div>
                         <Button
@@ -290,11 +310,23 @@ const Organization = () => {
                         <div className="space-y-2">
                           <p className="flex items-center gap-2">
                             <span className="text-primary">✓</span>
+                            <span>50 Articles per Month</span>
+                          </p>
+                          <p className="flex items-center gap-2">
+                            <span className="text-primary">✓</span>
                             <span>Unlimited Websites</span>
                           </p>
                           <p className="flex items-center gap-2">
                             <span className="text-primary">✓</span>
-                            <span>100 Articles per Month</span>
+                            <span>Unlimited Pages Indexing</span>
+                          </p>
+                          <p className="flex items-center gap-2">
+                            <span className="text-primary">✓</span>
+                            <span>Advanced AI Models</span>
+                          </p>
+                          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>→</span>
+                            <span>Buy Extra Articles: 50 for €100</span>
                           </p>
                         </div>
                         <Button

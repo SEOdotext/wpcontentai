@@ -19,3 +19,11 @@ Manage Payment Methods button - This will also use the portal endpoint (since bo
 
 Use the Customer Portal for the account and subscription management
 Use the stripe checkout for selecting a plan.
+
+---
+
+Every month we "reset" the plans so that the user has the amount of credits in their package.
+
+---
+
+Users buying 
