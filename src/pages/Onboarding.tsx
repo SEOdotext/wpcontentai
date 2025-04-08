@@ -21,13 +21,21 @@ import {
   Key,
   Link,
   HelpCircle,
+  Loader2,
+  Users,
+  UserPlus,
+  Trash2,
+  Shield,
+  Globe
+} from "lucide-react";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
-} from "lucide-react";
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Logo } from "@/components/Logo";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -35,7 +43,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Helmet } from 'react-helmet-async';
-import { Users, UserPlus, Trash2, Loader2, Shield, Globe } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { toast as sonnerToast } from 'sonner';
 import Header from '@/components/Header';
@@ -1778,10 +1785,10 @@ const Onboarding = () => {
                         }}
                       >
                         <Key className="h-4 w-4 mr-2" />
-                        Generate Connection Key
+                        Generate Connection Key in WordPress
                       </Button>
-                      <p className="text-sm text-muted-foreground">
-                        We'll open your WordPress profile where you can create a secure connection key
+                      <p className="text-xs text-muted-foreground">
+                        This will open your WordPress admin in a new tab where you can generate a secure connection key.
                       </p>
                     </div>
 
@@ -1839,6 +1846,34 @@ const Onboarding = () => {
                   </DialogHeader>
                   
                   <div className="grid gap-4 py-4">
+                    {/* Add Generate Key Button at the top */}
+                    <div className="rounded-lg border bg-muted/50 p-3 space-y-3">
+                      <p className="text-sm font-medium">Need a connection key?</p>
+                      <Button 
+                        variant="outline" 
+                        className="w-full justify-start"
+                        onClick={() => {
+                          if (!state.websiteUrl) {
+                            sonnerToast("Error", {
+                              description: 'Website URL is not configured'
+                            });
+                            return;
+                          }
+                          // Remove protocol if present and add https
+                          const cleanUrl = state.websiteUrl.replace(/^https?:\/\//, '');
+                          // Check if URL ends with /wp-admin or similar
+                          const baseUrl = cleanUrl.replace(/\/(wp-admin|wp-login|wp-content).*$/, '');
+                          window.open(`https://${baseUrl}/wp-admin/profile.php#application-passwords-section`, '_blank');
+                        }}
+                      >
+                        <Key className="h-4 w-4 mr-2" />
+                        Generate Connection Key in WordPress
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        This will open your WordPress admin in a new tab where you can generate a secure connection key.
+                      </p>
+                    </div>
+
                     <div className="grid gap-2">
                       <Label htmlFor="wpUsername">WordPress Username</Label>
                       <Input
@@ -1854,14 +1889,18 @@ const Onboarding = () => {
                       <Input
                         id="wpPassword"
                         type="text"
+                        className="font-mono"
                         value={state.wpPassword}
                         onChange={(e) => setState(prev => ({ ...prev, wpPassword: e.target.value }))}
                         placeholder="xxxx xxxx xxxx xxxx"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Paste the connection key exactly as shown in WordPress, including spaces
+                      </p>
                     </div>
 
                     {state.wpConnectionError && (
-                      <div className="text-sm text-red-500 bg-red-50 p-2 rounded">
+                      <div className="text-sm text-red-500 bg-red-50 p-3 rounded border border-red-200">
                         {state.wpConnectionError}
                       </div>
                     )}

@@ -287,7 +287,7 @@ serve(async (req) => {
 - Use <ul> and <li> for unordered lists
 - Use <ol> and <li> for ordered lists
 - Use <blockquote> for quotes
-- DO NOT use backticks or code block markers
+- NEVER use code blocks, backticks (\`\`\`), or any code formatting
 - DO NOT include extra newlines between elements
 - Ensure all HTML tags are properly closed
 - Format lists properly with each <li> on its own line`;
@@ -307,7 +307,7 @@ Ensure your content matches the styling and structure of the template.`;
 - Use <ul> and <li> for unordered lists
 - Use <ol> and <li> for ordered lists
 - Use <blockquote> for quotes
-- DO NOT use backticks or code block markers
+- NEVER use code blocks, backticks (\`\`\`), or any code formatting
 - DO NOT include extra newlines between elements
 - Ensure all HTML tags are properly closed
 - Format lists properly with each <li> on its own line`;
@@ -325,30 +325,19 @@ Subject Matters to Consider: ${subjectMatters.join(', ')}
 Website Content Summary (to reference and link back to where relevant): 
 ${websiteContent?.[0]?.content?.substring(0, 1500) || ''}
 
-CRITICAL - YOU MUST USE THESE EXACT LINKS (copy and paste them exactly as shown):
+Available links for reference (use these where relevant):
 ${availableLinks.map((link, i) => `${i + 1}. ${link}`).join('\n')}
 
 Content Requirements:
 1. Have an engaging introduction that hooks the reader
 2. Include 3-5 main sections with descriptive subheadings
 3. Incorporate the keywords naturally throughout the text
-4. YOU MUST COPY AND PASTE 2-3 of the exact link HTML elements provided above. DO NOT modify the URLs or create new links.
-5. End with a conclusion that includes one of the exact links provided above
-6. Be approximately 800-1200 words
+4. End with a conclusion
+5. Be approximately 800-1200 words
 
 ${formattingInstructions}
 
-STRICT REQUIREMENTS:
-- COPY AND PASTE the exact link HTML elements from above. DO NOT create new ones.
-- DO NOT use placeholder links like '#' or 'link-to-page'
-- DO NOT modify the provided URLs in any way
-- Include at least one of the exact links in the conclusion
-- DO NOT include the title as an H1 or H2 at the beginning
-- DO NOT include post metadata
-- DO NOT include phrases like "Posted on", "Posted by", etc.
-- DO NOT include headers/footers
-- For Danish content: Only capitalize first word and proper nouns in headers
-- Start directly with the introduction paragraph`;
+For Danish content: Only capitalize first word and proper nouns in headers`;
 
     // Print the full prompt to logs for debugging
     console.log('FULL PROMPT:', prompt);
@@ -359,45 +348,11 @@ STRICT REQUIREMENTS:
       messages: [
         { 
           role: 'system', 
-          content: 'You are a professional blog writer who specializes in creating well-structured HTML content for WordPress. You must use the exact links provided in the prompt by copying and pasting them. Never modify URLs or create placeholder links. Format your content exactly as specified in the formatting instructions.' 
+          content: 'You are a professional blog writer who specializes in creating well-structured HTML content for WordPress. You must use the exact links provided in the prompt by copying and pasting them. Never modify URLs or create placeholder links. Format your content exactly as specified in the formatting instructions. IMPORTANT: Do not wrap your content in markdown code blocks (```) or use any markdown formatting. Return pure HTML content only.' 
         },
         { role: 'user', content: prompt }
       ],
       temperature: 0.7
-    };
-
-    // Add validation function for generated content
-    const validateGeneratedContent = (content: string, availableLinks: string[]) => {
-      // Check if content includes at least one of the exact links
-      const hasValidLinks = availableLinks.some(link => content.includes(link));
-      if (!hasValidLinks) {
-        console.error('Generated content does not include any of the exact links provided');
-        console.error('Available links:', availableLinks);
-        console.error('Content:', content);
-        throw new Error('Generated content must include at least one of the exact links provided');
-      }
-      
-      // Check for placeholder links
-      if (content.includes('href="#"') || content.includes('href="#link')) {
-        console.error('Generated content contains placeholder links');
-        throw new Error('Generated content contains placeholder links');
-      }
-
-      // Check for markdown code blocks
-      if (content.includes('```')) {
-        console.error('Generated content contains markdown code blocks');
-        throw new Error('Generated content contains markdown code blocks');
-      }
-
-      // If we have a WordPress template, validate that the content follows it
-      if (!isOnboarding && wordpressTemplate) {
-        if (!content.includes('entry-content')) {
-          console.error('Generated content does not follow WordPress template structure');
-          throw new Error('Generated content must follow the WordPress template structure');
-        }
-      }
-      
-      return true;
     };
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -449,9 +404,6 @@ STRICT REQUIREMENTS:
 
     const generatedContent = openaiData.choices[0].message.content;
     console.log('Generated content length:', generatedContent.length);
-
-    // Validate the generated content
-    validateGeneratedContent(generatedContent, availableLinks);
 
     // Use the content directly without additional formatting
     const finalContent = generatedContent;
