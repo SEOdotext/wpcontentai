@@ -177,7 +177,7 @@ const Auth = () => {
       
       // Use current origin for localhost testing
       const currentOrigin = window.location.origin;
-      const redirectUrl = `${currentOrigin}/`;
+      const redirectUrl = `${currentOrigin}/dashboard`;
       
       console.log('Auth: Attempting Google sign-in');
       console.log(`Auth: Current origin: ${currentOrigin}`);
