@@ -1331,6 +1331,16 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "website_access.access_status",
+    "detail_1": "text",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "wordpress_settings.wp_username",
     "detail_1": "text",
     "detail_2": null,
@@ -1831,6 +1841,26 @@
   },
   {
     "section": "pg_policies",
+    "identifier": "public.website_access",
+    "detail_1": "Users can confirm their own access",
+    "detail_2": "{authenticated}",
+    "detail_3": "UPDATE",
+    "detail_4": "((user_id = auth.uid()) AND (access_status = 'pending'::text))",
+    "detail_5": "((user_id = auth.uid()) AND (access_status = 'pending'::text))",
+    "detail_6": "PERMISSIVE"
+  },
+  {
+    "section": "pg_policies",
+    "identifier": "public.website_access",
+    "detail_1": "Admins can manage access status",
+    "detail_2": "{authenticated}",
+    "detail_3": "UPDATE",
+    "detail_4": "(EXISTS ( SELECT 1\n   FROM (organisation_memberships om\n     JOIN websites w ON ((w.organisation_id = om.organisation_id)))\n  WHERE ((om.member_id = auth.uid()) AND (om.role = 'admin'::text) AND (w.id = website_access.website_id))))",
+    "detail_5": null,
+    "detail_6": "PERMISSIVE"
+  },
+  {
+    "section": "pg_policies",
     "identifier": "public.image_generation_queue",
     "detail_1": "Enable read access for authenticated users",
     "detail_2": "{authenticated}",
@@ -2084,6 +2114,26 @@
     "identifier": "auth.email",
     "detail_1": "FUNCTION",
     "detail_2": "text",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "routines",
+    "identifier": "public.resend_website_access_confirmation",
+    "detail_1": "FUNCTION",
+    "detail_2": "USER-DEFINED",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "routines",
+    "identifier": "public.update_website_access_updated_at",
+    "detail_1": "FUNCTION",
+    "detail_2": "trigger",
     "detail_3": null,
     "detail_4": null,
     "detail_5": null,
