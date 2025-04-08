@@ -15,7 +15,9 @@ import {
   Wand2,
   ThumbsUp,
   ThumbsDown,
-  X
+  X,
+  Code,
+  Eye
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useToast } from "@/components/ui/use-toast";
@@ -32,6 +34,7 @@ import AppSidebar from '@/components/Sidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useOrganisation } from '@/context/OrganisationContext';
 import { useWebsites } from '@/context/WebsitesContext';
+import { Toggle } from "@/components/ui/toggle";
 
 // Types
 interface ContentType {
@@ -61,6 +64,7 @@ interface OnboardingState {
   contentGenerated: boolean;
   generatedContentTitle: string;
   generatedContentPreview: string;
+  showRawContent: boolean;
 }
 
 interface Step {
@@ -245,6 +249,7 @@ const Onboarding = () => {
     contentGenerated: false,
     generatedContentTitle: '',
     generatedContentPreview: '',
+    showRawContent: false
   });
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -1135,12 +1140,25 @@ const Onboarding = () => {
       });
 
       // Format the cornerstone content for link generation
+      // This matches the database format expected by generate-content-v3
       const cornerstoneContent = keyContentPages.map(page => ({
-        title: page.title,
-        url: page.url,
-        is_cornerstone: true
+        title: page.title || '',
+        url: page.url || '',
+        is_cornerstone: true,
+        content: page.content || '',
+        digest: page.digest || ''
       }));
 
+      // Format the scraped content to match database format
+      const formattedScrapedContent = scrapedContent.map(item => ({
+        title: item.title || '',
+        url: item.url || item.original_url || '',
+        content: item.content || '',
+        digest: item.digest || '',
+        is_cornerstone: false
+      }));
+
+      // Call generate-content-v3 with properly formatted data
       callEdgeFunction('generate-content-v3', {
         website_id: localStorage.getItem('website_id') || '',
         website_url: state.websiteUrl,
@@ -1148,45 +1166,45 @@ const Onboarding = () => {
         description: likedIdea.description,
         is_onboarding: true,
         cornerstone_content: cornerstoneContent,
-        scraped_content: scrapedContent,
+        scraped_content: formattedScrapedContent,
         language: localStorage.getItem('website_language') || 'en'
       })
       .then(result => {
-          // Clear the progress interval
-          clearInterval(progressInterval);
-          
+        // Clear the progress interval
+        clearInterval(progressInterval);
+        
         if (result?.content) {
-            // Complete the progress bar
+          // Complete the progress bar
           setState(prev => ({
             ...prev,
-              progress: 100,
+            progress: 100,
             contentGenerated: true,
             generatedContentTitle: likedIdea.title,
             generatedContentPreview: result.content
           }));
         } else {
-            // Handle error case
-            clearInterval(progressInterval);
-            setState(prev => ({ ...prev, progress: 0 }));
-            
-            sonnerToast("Error", {
-            description: "Failed to generate content. Please try again."
-          });
-            
-            console.error("No content returned from generate-content-v3 function");
-        }
-      })
-      .catch(error => {
-          // Clear the progress interval
+          // Handle error case
           clearInterval(progressInterval);
           setState(prev => ({ ...prev, progress: 0 }));
           
           sonnerToast("Error", {
-            description: error.message || "Failed to generate content. Please try again."
+            description: "Failed to generate content. Please try again."
           });
           
-        console.error("Error generating content:", error);
+          console.error("No content returned from generate-content-v3 function");
+        }
+      })
+      .catch(error => {
+        // Clear the progress interval
+        clearInterval(progressInterval);
+        setState(prev => ({ ...prev, progress: 0 }));
+        
+        sonnerToast("Error", {
+          description: error.message || "Failed to generate content. Please try again."
         });
+        
+        console.error("Error generating content:", error);
+      });
     } catch (error) {
       setState(prev => ({ ...prev, progress: 0 }));
       
@@ -1564,13 +1582,36 @@ const Onboarding = () => {
                     </div>
                 
                     <div className="border rounded-lg p-6 mb-8 bg-card">
-                      <h3 className="text-xl font-medium mb-4">{state.generatedContentTitle}</h3>
-                      <div className="prose prose-sm max-w-none mb-4">
-                        {state.generatedContentPreview.split('\n').map((line, i) => (
-                          <p key={i} className={`${i > 0 ? 'mt-2' : ''}`}>{line}</p>
-                        ))}
-                </div>
-                    
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-medium">{state.generatedContentTitle}</h3>
+                        <div className="flex items-center gap-2">
+                          <Toggle
+                            aria-label="Toggle raw content"
+                            pressed={state.showRawContent}
+                            onPressedChange={(pressed) => setState(prev => ({ ...prev, showRawContent: pressed }))}
+                          >
+                            <Code className={`h-4 w-4 ${state.showRawContent ? 'text-primary' : 'text-muted-foreground'}`} />
+                          </Toggle>
+                          <Toggle
+                            aria-label="Toggle rendered content"
+                            pressed={!state.showRawContent}
+                            onPressedChange={(pressed) => setState(prev => ({ ...prev, showRawContent: !pressed }))}
+                          >
+                            <Eye className={`h-4 w-4 ${!state.showRawContent ? 'text-primary' : 'text-muted-foreground'}`} />
+                          </Toggle>
+                        </div>
+                      </div>
+                      
+                      {state.showRawContent ? (
+                        <div className="font-mono text-sm bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap">
+                          {state.generatedContentPreview}
+                        </div>
+                      ) : (
+                        <div 
+                          className="prose prose-sm max-w-none dark:prose-invert"
+                          dangerouslySetInnerHTML={{ __html: state.generatedContentPreview }}
+                        />
+                      )}
                     </div>
                     
                     <div className="flex justify-center gap-4">

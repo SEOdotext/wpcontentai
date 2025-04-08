@@ -82,8 +82,15 @@ Delete website option
 
 Make the logo clickable to the /dashboard if logged in and to the front page if not logged in. 
 
+---
 
 Implement coupons
 PhilFriend: 30 %
 PhilEarlyBird: 50 %
+
+---
+
+When the article is created with v3, we need to ensure that the data is matching how it's expected in the v3 function. The v3 function works when the data is grabbed from the db, but the function does not work with the localstorage from the onboarding. 
+We need to ensure that the format of the data in the data sent to the v3 model and we need to check the v3 is using the data correctly when from localstorage. 
+The data format of the links and cornerstone should be similar to the content in the database. @DBMASTERINFO.md @Onboarding.tsx @index.ts 
 
