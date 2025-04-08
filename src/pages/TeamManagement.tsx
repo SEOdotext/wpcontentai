@@ -569,15 +569,6 @@ const TeamManagement = () => {
                         </div>
                       ) : (
                         <>
-                          {/* Show a message if the website_access table doesn't exist */}
-                          {websiteAccess.length === 0 && teamMembers.some(m => m.role === 'member') && (
-                            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                              <p className="text-yellow-800 font-medium">Database Setup Required</p>
-                              <p className="text-sm text-yellow-700 mt-1">
-                                The website access table needs to be created. Please run the SQL script from the fix_website_access_dashboard.sql file in the Supabase SQL Editor.
-                              </p>
-                            </div>
-                          )}
                           <Table>
                             <TableHeader>
                               <TableRow>
