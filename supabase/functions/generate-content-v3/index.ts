@@ -140,13 +140,14 @@ serve(async (req) => {
       // Get language from request or use default
       contentLanguage = body.language || 'en';
       
-      // No cornerstone content in onboarding mode
-      cornerstoneContent = [];
+      // Use the provided cornerstone content for internal links
+      cornerstoneContent = body.cornerstone_content || [];
       
       console.log('Using onboarding data:', {
         title: body.title,
         website_url: body.website_url,
-        language: contentLanguage
+        language: contentLanguage,
+        cornerstoneContentCount: cornerstoneContent.length
       });
     } else {
       // Regular flow - validate postThemeId
