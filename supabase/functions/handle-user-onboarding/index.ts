@@ -1,39 +1,52 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
+import { corsHeaders, handleCors } from '../_shared/cors.ts'
 
 interface OnboardingData {
   userId: string
   websiteInfo: {
     name: string
     url: string
+    language?: string
   }
   organizationInfo: {
     name: string
   }
   publicationSettings: {
     posting_frequency: number
-    posting_days: Array<{ day: string, count: number }>
+    posting_days: Array<{ day: string; count: number }>
     writing_style: string
-    subject_matters: string[]
+    subject_matters: any[]
+    wordpress_template?: string
+    image_prompt?: string
+    negative_prompt?: string
   }
-  contentData?: {
+  contentData: {
     postIdeas: Array<{
       title: string
+      subject_matter: string
+      post_content: string | null
       tags: string[]
       liked: boolean
+      status: string
     }>
     generatedContent?: {
       title: string
-      content: string
+      post_content: string | null
       status: string
+      subject_matter: string
+      tags: string[]
     }
-    websiteContent?: Array<{
-      url: string
+    websiteContent: Array<{
       title: string
+      url: string
       content: string
-      content_type?: string
-      digest?: string
+      content_type: string
+      metadata?: {
+        digest?: string | null
+        is_cornerstone?: boolean
+      }
+      last_fetched?: string
     }>
   }
 }
@@ -74,11 +87,42 @@ function validateOnboardingData(data: any): { isValid: boolean; error?: string }
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+  const corsResponse = handleCors(req)
+  if (corsResponse) return corsResponse
 
   try {
+    // Get auth token from request
+    const apikey = req.headers.get('apikey')
+    if (!apikey) {
+      console.error('No API key provided in headers')
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Missing authorization header',
+          code: 401
+        }),
+        { 
+          status: 401, 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          } 
+        }
+      )
+    }
+
+    // Create Supabase client with service role key
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', // Use service role key for admin access
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    )
+
     // Get the request body
     const requestData = await req.json()
     console.log('Received request data:', JSON.stringify(requestData, null, 2))
@@ -103,329 +147,343 @@ serve(async (req) => {
       )
     }
 
-    const { userId, websiteInfo, organizationInfo, publicationSettings, contentData }: OnboardingData = requestData
+    const { userId, websiteInfo, organizationInfo, publicationSettings, contentData } = requestData
 
-    // Create Supabase client with service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+    // Skip user verification since they just signed up
+    console.log('Proceeding with onboarding for user:', userId)
 
-    if (!supabaseUrl || !supabaseKey) {
+    // Create organization
+    const { data: orgData, error: orgError } = await supabaseClient
+      .from('organisations')
+      .insert({
+        name: organizationInfo.name,
+        created_at: timestamp
+      })
+      .select()
+      .single()
+
+    if (orgError) {
+      console.error('Organization creation error:', orgError)
       return new Response(
-        JSON.stringify({
-          success: false,
-          message: 'Missing Supabase configuration'
+        JSON.stringify({ 
+          success: false, 
+          message: 'Failed to create organization',
+          error: orgError.message 
         }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500
+        { 
+          status: 500, 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          } 
         }
       )
     }
 
-    console.log('Supabase URL configured:', !!supabaseUrl)
-    console.log('Supabase key configured:', !!supabaseKey)
+    console.log('Created organization:', { id: orgData.id, name: organizationInfo.name });
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseKey)
+    // Create organization membership
+    console.log('Creating organization membership with data:', { 
+      organisation_id: orgData.id,
+      member_id: userId,
+      role: 'owner',
+      timestamp: timestamp
+    });
 
-    // Verify the user exists and is authenticated
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId)
-    if (userError || !userData.user) {
-      console.error('Error verifying user:', userError)
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: 'Invalid or unauthorized user'
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 401
-        }
-      )
-    }
-
-    // Check if user already has an organization
-    const { data: existingMemberships } = await supabaseAdmin
+    const { data: membershipData, error: membershipError } = await supabaseClient
       .from('organisation_memberships')
-      .select('organisation_id')
-      .eq('member_id', userId)
+      .insert({
+        organisation_id: orgData.id,
+        member_id: userId,
+        role: 'owner',
+        created_at: timestamp,
+        updated_at: timestamp
+      })
+      .select('id, organisation_id, member_id, role')
+      .single();
 
-    if (existingMemberships && existingMemberships.length > 0) {
-      console.error('User already has organization memberships:', existingMemberships)
+    if (membershipError) {
+      console.error('Membership creation error:', membershipError)
       return new Response(
-        JSON.stringify({
-          success: false,
-          message: 'User already belongs to an organization'
+        JSON.stringify({ 
+          success: false, 
+          message: 'Failed to create organization membership',
+          error: membershipError.message,
+          details: { userId, orgId: orgData.id }
         }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 400
+        { 
+          status: 500, 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          } 
         }
       )
     }
 
-    try {
-      // 1. Create organization first
-      const { data: orgData, error: orgError } = await supabaseAdmin
-        .from('organisations')
-        .insert([{
-          id: crypto.randomUUID(),
-          name: organizationInfo.name,
-          created_at: timestamp  // Only these fields exist in the schema
-        }])
-        .select()
-        .single();
+    // Verify membership was created
+    if (!membershipData?.id) {
+      console.error('Membership creation failed - no data returned');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Failed to verify organization membership creation',
+          details: { userId, orgId: orgData.id }
+        }),
+        { 
+          status: 500, 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          } 
+        }
+      )
+    }
 
-      if (orgError) {
-        console.error('Error creating organization:', orgError);
-        throw new Error(`Error creating organization: ${orgError.message}`);
+    console.log('Successfully created organization membership:', membershipData);
+
+    // Create website with proper organization link
+    const { data: websiteData, error: websiteError } = await supabaseClient
+      .from('websites')
+      .insert({
+        name: websiteInfo.name,
+        url: websiteInfo.url,
+        organisation_id: orgData.id,
+        language: websiteInfo.language || 'en',
+        created_at: timestamp,
+        updated_at: timestamp
+      })
+      .select('id, name, url, organisation_id, language')
+      .single()
+
+    if (websiteError) {
+      console.error('Website creation error:', JSON.stringify(websiteError))
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Failed to create website',
+          error: websiteError.message,
+          details: { orgId: orgData.id, websiteInfo }
+        }),
+        { 
+          status: 500, 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          } 
+        }
+      )
+    }
+
+    // Create website access record
+    const { error: accessError } = await supabaseClient
+      .from('website_access')
+      .insert({
+        website_id: websiteData.id,
+        user_id: userId,
+        access_status: 'active',
+        created_at: timestamp
+      });
+
+    if (accessError) {
+      console.error('Website access creation error:', accessError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          message: 'Failed to create website access',
+          error: accessError.message,
+          details: { websiteId: websiteData.id, userId }
+        }),
+        { 
+          status: 500, 
+          headers: { 
+            'Content-Type': 'application/json',
+            ...corsHeaders 
+          } 
+        }
+      )
+    }
+
+    console.log('Created website with organization link:', { 
+      websiteId: websiteData.id, 
+      orgId: orgData.id,
+      url: websiteData.url
+    });
+
+    // Insert website content
+    if (contentData.websiteContent && contentData.websiteContent.length > 0) {
+      const websiteContent = contentData.websiteContent.map(content => ({
+        website_id: websiteData.id,
+        url: content.url,
+        title: content.title,
+        content: content.content || '',
+        content_type: content.content_type || 'page',
+        metadata: {
+          digest: content.metadata?.digest || null,
+          is_cornerstone: content.metadata?.is_cornerstone || false
+        },
+        last_fetched: content.last_fetched || timestamp,
+        created_at: timestamp,
+        updated_at: timestamp
+      }))
+
+      const { error: websiteContentError } = await supabaseClient
+        .from('website_content')
+        .insert(websiteContent)
+
+      if (websiteContentError) {
+        console.error('Website content insertion error:', JSON.stringify(websiteContentError))
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: 'Failed to store website content',
+            error: websiteContentError.message
+          }),
+          { 
+            status: 500, 
+            headers: { 
+              'Content-Type': 'application/json',
+              ...corsHeaders 
+            } 
+          }
+        )
       }
+    }
 
-      // 2. Create organization membership for the user
-      const { error: membershipError } = await supabaseAdmin
-        .from('organisation_memberships')
-        .insert([{
-          id: crypto.randomUUID(),
-          member_id: userId,
-          organisation_id: orgData.id,
-          role: 'owner',
-          created_at: timestamp
-        }]);
-
-      if (membershipError) {
-        console.error('Error creating organization membership:', membershipError);
-        throw new Error(`Error creating organization membership: ${membershipError.message}`);
-      }
-
-      // 3. Create website with organization association
-      const { data: websiteData, error: websiteError } = await supabaseAdmin
-        .from('websites')
-        .insert([{
-          id: crypto.randomUUID(),
-          name: websiteInfo.name,
-          url: websiteInfo.url,
-          organisation_id: orgData.id,
+    // Insert post themes (from post ideas)
+    if (contentData.postIdeas && contentData.postIdeas.length > 0) {
+      console.log('Processing post ideas:', JSON.stringify(contentData.postIdeas, null, 2));
+      const postThemes = contentData.postIdeas.map(idea => {
+        // Create base object with required fields and fallbacks
+        const baseTheme = {
+          website_id: websiteData.id,
+          subject_matter: idea.title || 'Untitled Post', // Add fallback
+          status: idea.liked ? 'approved' : 'pending',
           created_at: timestamp,
           updated_at: timestamp
-        }])
-        .select()
-        .single();
+        };
 
-      if (websiteError) {
-        console.error('Error creating website:', websiteError);
-        throw new Error(`Error creating website: ${websiteError.message}`);
+        // Only add optional fields if they have values
+        const optionalFields: Record<string, any> = {};
+        if (idea.tags) optionalFields.keywords = idea.tags;
+        if (idea.post_content) optionalFields.post_content = idea.post_content;
+        if (idea.scheduled_date) optionalFields.scheduled_date = idea.scheduled_date;
+        if (idea.wp_post_id) optionalFields.wp_post_id = idea.wp_post_id;
+        if (idea.wp_post_url) optionalFields.wp_post_url = idea.wp_post_url;
+        if (idea.wp_sent_date) optionalFields.wp_sent_date = idea.wp_sent_date;
+        if (idea.image) optionalFields.image = idea.image;
+
+        const finalTheme = {
+          ...baseTheme,
+          ...optionalFields
+        };
+        console.log('Created post theme:', JSON.stringify(finalTheme, null, 2));
+        return finalTheme;
+      });
+
+      const { error: postThemesError } = await supabaseClient
+        .from('post_themes')
+        .insert(postThemes)
+
+      if (postThemesError) {
+        console.error('Post themes insertion error:', postThemesError)
+        return new Response(
+          JSON.stringify({ success: false, message: 'Failed to store post themes' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        )
       }
+    }
 
-      // 4. Create website access for the user
-      const { error: accessError } = await supabaseAdmin
-        .from('website_access')
-        .insert([{
-          id: crypto.randomUUID(),
-          user_id: userId,
-          website_id: websiteData.id,
-          access_status: 'owner',
-          created_at: timestamp
-        }]);
+    // Insert generated content if exists
+    if (contentData.generatedContent) {
+      console.log('Processing generated content:', JSON.stringify(contentData.generatedContent, null, 2));
+      const generatedTheme = {
+        website_id: websiteData.id,
+        subject_matter: contentData.generatedContent.title || contentData.generatedContent.subject_matter || 'Untitled Generated Post',
+        keywords: contentData.generatedContent.tags || [],
+        status: 'textgenerated',
+        post_content: contentData.generatedContent.post_content || '',
+        scheduled_date: null,
+        created_at: timestamp,
+        updated_at: timestamp,
+        wp_post_id: null,
+        wp_post_url: null,
+        wp_sent_date: null,
+        image: null
+      };
+      console.log('Created generated theme:', JSON.stringify(generatedTheme, null, 2));
 
-      if (accessError) {
-        console.error('Error creating website access:', accessError);
-        throw new Error(`Error creating website access: ${accessError.message}`);
+      const { error: generatedContentError } = await supabaseClient
+        .from('post_themes')
+        .insert(generatedTheme)
+
+      if (generatedContentError) {
+        console.error('Generated content insertion error:', generatedContentError)
+        return new Response(
+          JSON.stringify({ success: false, message: 'Failed to store generated content' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        )
       }
+    }
 
-      // Now proceed with the rest of the data transfers using the created IDs
-      // Website content
-      if (contentData?.websiteContent) {
-        console.log('Storing website content from sitemap...');
-        
-        try {
-          const websiteLanguage = websiteData.language || 'en';
-          
-          const sortedContent = [...contentData.websiteContent].sort((a, b) => {
-            if (a.digest && !b.digest) return -1;
-            if (!a.digest && b.digest) return 1;
-            return 0;
-          });
+    // Insert publication settings
+    const { error: settingsError } = await supabaseClient
+      .from('publication_settings')
+      .insert({
+        website_id: websiteData.id,
+        organisation_id: orgData.id,
+        posting_frequency: publicationSettings.posting_frequency,
+        posting_days: publicationSettings.posting_days,
+        writing_style: publicationSettings.writing_style,
+        subject_matters: publicationSettings.subject_matters,
+        wordpress_template: publicationSettings.wordpress_template || null,
+        image_prompt: publicationSettings.image_prompt || null,
+        negative_prompt: publicationSettings.negative_prompt || null,
+        created_at: timestamp,
+        updated_at: timestamp
+      })
 
-          const formattedContent = sortedContent.map((page, index) => ({
-            id: crypto.randomUUID(),
-            website_id: websiteData.id,
-            url: page.url,
-            title: page.title || '',
-            content: page.content || '',  // Required field
-            content_type: page.content_type || 'page',  // Required field
-            is_cornerstone: index < 5,  // Boolean field for first 5 pages
-            digest: page.digest || null,
-            metadata: {},  // JSONB field, initialize as empty object
-            created_at: timestamp,
-            updated_at: timestamp,
-            last_fetched: timestamp,
-            language: websiteLanguage  // Required field
-          }));
-
-          console.log(`Processing ${formattedContent.length} pages, including ${formattedContent.filter(p => p.is_cornerstone).length} cornerstone pages`);
-
-          // Insert website content in batches to handle large sitemaps
-          const batchSize = 50;
-          for (let i = 0; i < formattedContent.length; i += batchSize) {
-            const batch = formattedContent.slice(i, i + batchSize);
-            const { error: contentError } = await supabaseAdmin
-              .from('website_content')
-              .insert(batch);
-
-            if (contentError) {
-              console.error(`Error storing website content batch ${i/batchSize + 1}:`, contentError);
-              throw new Error(`Error storing website content: ${contentError.message}`);
-            }
-            console.log(`Successfully stored batch ${i/batchSize + 1} of website content`);
-          }
-
-          console.log(`Successfully stored all ${formattedContent.length} website pages`);
-        } catch (error) {
-          console.error('Error in website content processing:', error);
-          return new Response(
-            JSON.stringify({
-              success: false,
-              message: `Error storing website content: ${error.message}`
-            }),
-            {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              status: 500
-            }
-          );
-        }
-      }
-
-      // Post ideas
-      if (contentData?.postIdeas) {
-        console.log('Storing post ideas...');
-
-        try {
-          const formattedIdeas = contentData.postIdeas.map(idea => ({
-            id: crypto.randomUUID(),
-            website_id: websiteData.id,
-            subject_matter: idea.title || '',  // Required field
-            keywords: Array.isArray(idea.tags) ? idea.tags : [],
-            status: idea.liked ? 'approved' : 'pending',  // Required field
-            post_content: null,  // Correct column name
-            scheduled_date: null,
-            created_at: timestamp,  // Required field
-            updated_at: timestamp,  // Required field
-            wp_post_id: null,
-            wp_post_url: null,
-            wp_sent_date: null,
-            image: null
-          }));
-
-          // Insert post ideas
-          const { error: ideasError } = await supabaseAdmin
-            .from('post_themes')
-            .insert(formattedIdeas);
-
-          if (ideasError) {
-            console.error('Error storing post ideas:', ideasError);
-            throw new Error(`Error storing post ideas: ${ideasError.message}`);
-          }
-
-          console.log(`Successfully stored ${formattedIdeas.length} post ideas`);
-        } catch (error) {
-          console.error('Error in post ideas processing:', error);
-          throw error;
-        }
-      }
-
-      // Generated content
-      if (contentData?.generatedContent) {
-        try {
-          const formattedPost = {
-            id: crypto.randomUUID(),
-            website_id: websiteData.id,
-            subject_matter: contentData.generatedContent.title || '',  // Required field
-            keywords: [],  // Required field
-            status: 'textgenerated',  // Required field
-            post_content: contentData.generatedContent.content || '',  // Correct column name
-            scheduled_date: null,
-            created_at: timestamp,  // Required field
-            updated_at: timestamp,  // Required field
-            wp_post_id: null,
-            wp_post_url: null,
-            wp_sent_date: null,
-            image: null
-          };
-
-          const { error: contentError } = await supabaseAdmin
-            .from('post_themes')
-            .insert([formattedPost]);
-
-          if (contentError) {
-            console.error('Error inserting generated content:', contentError);
-            throw new Error(`Error inserting generated content: ${contentError.message}`);
-          }
-        } catch (error) {
-          console.error('Error in generated content processing:', error);
-          throw error;
-        }
-      }
-
-      // Publication settings
-      if (publicationSettings) {
-        const { error: settingsError } = await supabaseAdmin
-          .from('publication_settings')
-          .insert([{
-            id: crypto.randomUUID(),
-            website_id: websiteData.id,
-            organisation_id: orgData.id,
-            posting_frequency: publicationSettings.posting_frequency,
-            posting_days: publicationSettings.posting_days,
-            writing_style: publicationSettings.writing_style || 'Professional and informative',
-            created_at: timestamp,
-            updated_at: timestamp
-          }]);
-
-        if (settingsError) {
-          console.error('Error storing publication settings:', settingsError);
-          throw new Error(`Error storing publication settings: ${settingsError.message}`);
-        }
-      }
-
-      // Return success with the created IDs
+    if (settingsError) {
+      console.error('Publication settings insertion error:', settingsError)
       return new Response(
-        JSON.stringify({
-          success: true,
-          message: 'Onboarding completed successfully',
-          data: {
-            organisation_id: orgData.id,
-            website_id: websiteData.id
-          }
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200
-        }
-      );
-
-    } catch (error) {
-      console.error('Error in onboarding process:', error)
-      return new Response(
-        JSON.stringify({
-          success: false,
-          message: error.message
-        }),
-        {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 500
-        }
+        JSON.stringify({ success: false, message: 'Failed to store publication settings' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
       )
     }
 
-  } catch (error) {
-    console.error('Error in onboarding process:', error)
+    // Return success response with IDs
     return new Response(
       JSON.stringify({
-        success: false,
-        message: error.message
+        success: true,
+        message: 'Onboarding completed successfully',
+        data: {
+          organisation_id: orgData.id,
+          website_id: websiteData.id
+        }
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
+      { 
+        status: 200, 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders 
+        } 
+      }
+    )
+
+  } catch (error) {
+    console.error('Unexpected error:', error)
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        message: 'An unexpected error occurred',
+        error: error.message 
+      }),
+      { 
+        status: 500, 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...corsHeaders 
+        } 
       }
     )
   }

@@ -103,6 +103,15 @@ interface Step {
   description: string;
 }
 
+interface OnboardingResponse {
+  success: boolean;
+  message: string;
+  data?: {
+    organisation_id: string;
+    website_id: string;
+  };
+}
+
 const contentTypes: ContentType[] = [
   {
     id: 'blog',
@@ -1673,7 +1682,7 @@ const Onboarding = () => {
           data: {
             website_url: state.websiteUrl,
             organization_name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
-            email_confirm: true  // This is the correct flag for auto-confirming email
+            email_confirm: true
           }
         }
       });
@@ -1683,34 +1692,79 @@ const Onboarding = () => {
         throw signupError;
       }
 
-      if (data.user) {
-        console.log('User created successfully:', data.user.id);
-        
-        // Transfer data to database
-        const response = await transferDataToDatabase(data.user.id);
-        const result = JSON.parse(response);
-        
-        // Close modal
-        setState(prev => ({ ...prev, showSignupModal: false }));
+      if (!data.user) {
+        throw new Error('Failed to create user');
+      }
 
-        // Store organization and website IDs from edge function response
-        if (result?.success && result?.data) {
-          localStorage.setItem('current_organisation_id', result.data.organisation_id);
-          localStorage.setItem('current_website_id', result.data.website_id);
-          
-          // Store auth state
-          localStorage.setItem('supabase.auth.token', data.session?.access_token || '');
-          localStorage.setItem('supabase.auth.refresh_token', data.session?.refresh_token || '');
-          localStorage.setItem('last_auth_state', 'authenticated');
+      console.log('User created successfully:', data.user.id);
 
-          // Wait for auth state to sync
-          await new Promise(resolve => setTimeout(resolve, 1000));
-
-          // Navigate to dashboard
-          navigate('/dashboard', { replace: true });
-        } else {
-          throw new Error('Failed to complete setup');
+      // Prepare the request data
+      const requestData = {
+        userId: data.user.id,
+        websiteInfo: {
+          name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
+          url: state.websiteUrl,
+          language: localStorage.getItem('website_language') || 'en'
+        },
+        organizationInfo: {
+          name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0]
+        },
+        publicationSettings: JSON.parse(localStorage.getItem('publication_settings') || '{}'),
+        contentData: {
+          postIdeas: JSON.parse(localStorage.getItem('post_ideas') || '[]'),
+          generatedContent: JSON.parse(localStorage.getItem('generated_content') || '{}'),
+          websiteContent: JSON.parse(localStorage.getItem('website_content') || '[]')
         }
+      };
+
+      console.log('Sending request to edge function with data:', requestData);
+
+      // Send data to edge function
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+          },
+          body: JSON.stringify(requestData)
+        }
+      );
+
+      console.log('Edge function response status:', response.status);
+      console.log('Edge function response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Edge function error response:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { message: errorText || 'Unknown error' };
+        }
+        
+        throw new Error(errorData.message || `Failed to complete setup (${response.status})`);
+      }
+
+      const result = await response.json();
+      console.log('Edge function success response:', result);
+
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to complete setup');
+      }
+
+      // Store IDs and close modal
+      if (result.data) {
+        localStorage.setItem('current_organisation_id', result.data.organisation_id);
+        localStorage.setItem('current_website_id', result.data.website_id);
+        setState(prev => ({ ...prev, showSignupModal: false }));
+        navigate('/dashboard', { replace: true });
+      } else {
+        throw new Error('Failed to complete setup - missing data');
       }
     } catch (error) {
       console.error('Signup error:', error);
@@ -1769,137 +1823,6 @@ const Onboarding = () => {
     
     // Show signup modal
     setState(prev => ({ ...prev, showSignupModal: true }));
-  };
-
-  // Transfer data to database after successful auth
-  const transferDataToDatabase = async (userId: string) => {
-    try {
-      // Get website URL and generate organization name
-      const websiteUrl = localStorage.getItem('onboardingWebsite') || '';
-      const urlWithoutProtocol = websiteUrl.replace(/^https?:\/\/(www\.)?/, '');
-      const organizationName = urlWithoutProtocol
-        .split('.')[0]
-        .split(/[-_]/)
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-
-      // Get publication settings
-      const publicationSettings = JSON.parse(localStorage.getItem('publication_settings') || '{}');
-
-      // Get post ideas and generated content with today's date
-      const today = new Date().toISOString();
-      const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]')
-        .filter((idea: any) => idea.liked)
-        .map((idea: any) => ({
-          title: idea.title || '',
-          description: idea.description || '',
-          tags: Array.isArray(idea.tags) ? idea.tags : [],
-          liked: true,
-          created_at: today,
-          scheduled_for: today,
-          status: 'approved' // Liked post themes are approved
-        }));
-
-      console.log('Filtered and formatted post ideas:', postIdeas);
-
-      const generatedContent = state.contentGenerated ? {
-        title: state.generatedContentTitle || '',
-        content: state.generatedContentPreview || '',
-        created_at: today,
-        scheduled_for: today,
-        status: 'generatedtext' // Generated content has status generatedtext
-      } : undefined;
-
-      if (generatedContent) {
-        console.log('Generated content:', generatedContent);
-      }
-
-      // Log the data we're about to send
-      console.log('Sending onboarding data:', {
-        userId,
-        websiteInfo: {
-          name: organizationName,
-          url: websiteUrl
-        },
-        organizationInfo: {
-          name: organizationName
-        },
-        publicationSettings,
-        contentData: {
-          postIdeas,
-          generatedContent
-        }
-      });
-
-      // Call the Edge Function to handle onboarding
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-        },
-        body: JSON.stringify({
-          userId,
-          websiteInfo: {
-            name: organizationName,
-            url: websiteUrl
-          },
-          organizationInfo: {
-            name: organizationName
-          },
-          publicationSettings,
-          contentData: {
-            postIdeas,
-            generatedContent
-          }
-        })
-      });
-
-      // Log the response status
-      console.log('Edge function response status:', response.status);
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('Edge function error:', error);
-        throw new Error(error.message || 'Failed to complete onboarding');
-      }
-
-      const data = await response.json();
-      console.log('Edge function response:', data);
-
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to complete onboarding');
-      }
-
-      // Store the returned IDs
-      const websiteInfo = {
-        id: data.data.website_id,
-        name: organizationName,
-        url: websiteUrl
-      };
-      localStorage.setItem('website_info', JSON.stringify(websiteInfo));
-
-      const organizationInfo = {
-        id: data.data.organisation_id,
-        name: organizationName
-      };
-      localStorage.setItem('organization_info', JSON.stringify(organizationInfo));
-
-      // Clear onboarding data from localStorage
-      localStorage.removeItem('post_ideas');
-      localStorage.removeItem('publication_settings');
-      localStorage.removeItem('onboardingWebsite');
-      localStorage.removeItem('key_content_pages');
-      localStorage.removeItem('scraped_content');
-      localStorage.removeItem('website_content');
-
-      sonnerToast.success('Setup completed successfully!');
-      navigate('/dashboard');
-    } catch (error) {
-      console.error('Error transferring data:', error);
-      sonnerToast.error(error.message || 'Failed to complete setup');
-      throw error;
-    }
   };
 
   return (
