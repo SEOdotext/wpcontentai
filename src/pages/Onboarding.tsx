@@ -1404,7 +1404,15 @@ const Onboarding = () => {
     // Save publication settings
     const publicationSettings = {
       posting_frequency: state.postingFrequency,
-      posting_days: state.postingDays,
+      posting_days: state.postingDays.reduce((acc, day) => {
+        // Count occurrences of each day
+        const count = state.postingDays.filter(d => d === day).length;
+        // Only add each day once with its total count
+        if (!acc.some(d => d.day === day)) {
+          acc.push({ day, count });
+        }
+        return acc;
+      }, []),
       website_id: localStorage.getItem('website_id'),
       organisation_id: localStorage.getItem('organisation_id'),
       writing_style: 'Professional and informative',
@@ -1513,7 +1521,15 @@ const Onboarding = () => {
     // Save publication settings
     const publicationSettings = {
       posting_frequency: state.postingFrequency,
-      posting_days: state.postingDays,
+      posting_days: state.postingDays.reduce((acc, day) => {
+        // Count occurrences of each day
+        const count = state.postingDays.filter(d => d === day).length;
+        // Only add each day once with its total count
+        if (!acc.some(d => d.day === day)) {
+          acc.push({ day, count });
+        }
+        return acc;
+      }, []),
       website_id: localStorage.getItem('website_id'),
       organisation_id: localStorage.getItem('organisation_id'),
       writing_style: 'Professional and informative',

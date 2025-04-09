@@ -31,16 +31,6 @@
   },
   {
     "section": "columns_and_checks",
-    "identifier": "publication_settings.posting_days",
-    "detail_1": "jsonb",
-    "detail_2": "((posting_days <@ '[\"monday\", \"tuesday\", \"wednesday\", \"thursday",
-    "detail_3": null,
-    "detail_4": null,
-    "detail_5": null,
-    "detail_6": null
-  },
-  {
-    "section": "columns_and_checks",
     "identifier": "publish_queue.status",
     "detail_1": "text",
     "detail_2": "((status = ANY (ARRAY['pending'::text, 'processing'::text, 'com",
@@ -843,6 +833,16 @@
     "section": "columns_and_checks",
     "identifier": "post_themes.scheduled_date",
     "detail_1": "timestamp with time zone",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "publication_settings.posting_days",
+    "detail_1": "jsonb",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -2204,6 +2204,16 @@
     "identifier": "extensions.uuid_ns_x500",
     "detail_1": "FUNCTION",
     "detail_2": "uuid",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "routines",
+    "identifier": "public.validate_posting_days",
+    "detail_1": "FUNCTION",
+    "detail_2": "trigger",
     "detail_3": null,
     "detail_4": null,
     "detail_5": null,
@@ -4917,16 +4927,6 @@
     "detail_3": "websites",
     "detail_4": "id",
     "detail_5": null,
-    "detail_6": null
-  },
-  {
-    "section": "constraints",
-    "identifier": null,
-    "detail_1": "CHECK",
-    "detail_2": "check_valid_posting_days",
-    "detail_3": "publication_settings",
-    "detail_4": "posting_days",
-    "detail_5": "((posting_days <@ '[\"monday\", \"tuesday\", \"wednesday\", \"thursday\", \"friday\", \"saturday\", \"sunday\"]'::jsonb))",
     "detail_6": null
   },
   {
