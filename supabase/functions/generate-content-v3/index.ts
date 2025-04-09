@@ -281,6 +281,7 @@ serve(async (req) => {
     let formattingInstructions = '';
     if (isOnboarding) {
       formattingInstructions = `HTML FORMATTING REQUIREMENTS:
+- DO NOT include the headline/title in the HTML content - it will be added separately
 - Wrap each paragraph in <p> tags
 - Use <h2> for main section headers
 - Use <h3> for subsection headers if needed
@@ -297,10 +298,12 @@ Use this exact HTML structure for your content:
 ${wordpressTemplate}
 
 Replace the content between the entry-content tags with your generated content.
-Ensure your content matches the styling and structure of the template.`;
+Ensure your content matches the styling and structure of the template.
+DO NOT include the headline/title in the content - it will be added separately.`;
     } else {
       // Default formatting for non-onboarding without template
       formattingInstructions = `HTML FORMATTING REQUIREMENTS:
+- DO NOT include the headline/title in the HTML content - it will be added separately
 - Wrap each paragraph in <p> tags
 - Use <h2> for main section headers
 - Use <h3> for subsection headers if needed

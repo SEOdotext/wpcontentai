@@ -31,6 +31,16 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "publication_settings.posting_days",
+    "detail_1": "jsonb",
+    "detail_2": "((posting_days <@ '[\"monday\", \"tuesday\", \"wednesday\", \"thursday",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "publish_queue.status",
     "detail_1": "text",
     "detail_2": "((status = ANY (ARRAY['pending'::text, 'processing'::text, 'com",
@@ -921,6 +931,16 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "publication_settings.posting_frequency",
+    "detail_1": "smallint",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "website_content.content_type",
     "detail_1": "text",
     "detail_2": null,
@@ -1231,8 +1251,8 @@
   },
   {
     "section": "columns_and_checks",
-    "identifier": "websites.updated_at",
-    "detail_1": "timestamp with time zone",
+    "identifier": "wordpress_settings.is_connected",
+    "detail_1": "boolean",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -1241,8 +1261,8 @@
   },
   {
     "section": "columns_and_checks",
-    "identifier": "wordpress_settings.is_connected",
-    "detail_1": "boolean",
+    "identifier": "websites.updated_at",
+    "detail_1": "timestamp with time zone",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -4897,6 +4917,16 @@
     "detail_3": "websites",
     "detail_4": "id",
     "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "constraints",
+    "identifier": null,
+    "detail_1": "CHECK",
+    "detail_2": "check_valid_posting_days",
+    "detail_3": "publication_settings",
+    "detail_4": "posting_days",
+    "detail_5": "((posting_days <@ '[\"monday\", \"tuesday\", \"wednesday\", \"thursday\", \"friday\", \"saturday\", \"sunday\"]'::jsonb))",
     "detail_6": null
   },
   {

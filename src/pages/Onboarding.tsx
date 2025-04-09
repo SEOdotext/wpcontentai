@@ -88,6 +88,9 @@ interface OnboardingState {
   wpPassword: string;
   isAuthenticating: boolean;
   wpConnectionError: string | null;
+  postingFrequency: number;
+  postingDays: string[];
+  scheduledDates: string[];
 }
 
 interface Step {
@@ -277,7 +280,10 @@ const Onboarding = () => {
     wpUsername: '',
     wpPassword: '',
     isAuthenticating: false,
-    wpConnectionError: null
+    wpConnectionError: null,
+    postingFrequency: 3, // Default to 3 posts per week
+    postingDays: ['monday', 'wednesday', 'friday'], // Default posting days
+    scheduledDates: [] // Will be populated when scheduling
   });
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -294,6 +300,23 @@ const Onboarding = () => {
   // Add a ref to track if setup has started
   const setupStarted = React.useRef(false);
 
+  // Helper function to update URL parameters
+  const updateUrlParams = (params: Record<string, string>) => {
+    const searchParams = new URLSearchParams(window.location.search);
+    
+    // Update each parameter
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) {
+        searchParams.set(key, value);
+      } else {
+        searchParams.delete(key);
+      }
+    });
+    
+    // Update URL without reloading the page
+    window.history.replaceState({}, '', `${window.location.pathname}?${searchParams.toString()}`);
+  };
+
   // Toggle expanded state for a step
   const toggleStepExpanded = (stepId: number) => {
     setExpandedSteps(prev => ({
@@ -306,7 +329,9 @@ const Onboarding = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlParam = params.get('url');
+    const stepParam = params.get('step');
     
+    // Handle website URL parameter
     if (urlParam) {
       let formattedUrl = urlParam;
       if (!/^https?:\/\//i.test(formattedUrl)) {
@@ -316,6 +341,47 @@ const Onboarding = () => {
       // Store the URL and update state
       localStorage.setItem('onboardingWebsite', formattedUrl);
       setState(prev => ({ ...prev, websiteUrl: formattedUrl }));
+    }
+    
+    // Handle step parameter
+    if (stepParam) {
+      // Map step parameter to step number
+      const stepMap: Record<string, number> = {
+        'ideas': 2,
+        'post-draft': 3,
+        'scheduling': 4,
+        'auth': 5,
+        'integration': 6 // Completion
+      };
+      
+      const stepNumber = stepMap[stepParam];
+      
+      if (stepNumber) {
+        console.log(`Navigating to step ${stepNumber} based on URL parameter`);
+        
+        // Only allow navigation to steps that are implemented
+        if (stepNumber <= 4) { // Updated to include scheduling step
+          setState(prev => ({ ...prev, step: stepNumber }));
+          
+          // If we're skipping to a later step, we need to ensure previous steps are completed
+          if (stepNumber > 1) {
+            // Mark setup as started to prevent automatic start
+            setupStarted.current = true;
+            
+            // Set progress to 100% for previous steps
+            setState(prev => ({ 
+              ...prev, 
+              progress: 100,
+              currentStepIndex: steps.length - 1
+            }));
+          }
+        } else {
+          // For steps that are coming soon, show a toast message
+          sonnerToast("Coming Soon", {
+            description: "This feature is coming soon! Starting from the beginning.",
+          });
+        }
+      }
     }
   }, []); // Only run once on mount
 
@@ -968,6 +1034,9 @@ const Onboarding = () => {
       progress: 100,
       step: 2 // Move to Setup 2: Content Idea Selection
     }));
+    
+    // Update URL to reflect current step
+    updateUrlParams({ step: 'ideas' });
     } catch (error) {
       console.error("Error in setup process:", error);
       sonnerToast("Setup Error", {
@@ -1128,6 +1197,9 @@ const Onboarding = () => {
       contentGenerated: false
     }));
     
+    // Update URL to reflect current step
+    updateUrlParams({ step: 'post-draft' });
+    
     startContentGeneration();
   };
 
@@ -1255,9 +1327,100 @@ const Onboarding = () => {
     startContentGeneration();
   };
 
+  // Move to scheduling step
+  const handleContinueToScheduling = () => {
+    setState(prev => ({
+      ...prev,
+      step: 4,
+      progress: 0
+    }));
+    
+    // Update URL to reflect current step
+    updateUrlParams({ step: 'scheduling' });
+  };
+
+  // Handle frequency change
+  const handleFrequencyChange = (frequency: number) => {
+    setState(prev => ({
+      ...prev,
+      postingFrequency: frequency,
+      // Update default posting days based on frequency
+      postingDays: getDefaultPostingDays(frequency)
+    }));
+  };
+
+  // Get default posting days based on frequency
+  const getDefaultPostingDays = (frequency: number): string[] => {
+    switch (frequency) {
+      case 1:
+        return ['monday'];
+      case 2:
+        return ['monday', 'thursday'];
+      case 3:
+        return ['monday', 'wednesday', 'friday'];
+      case 4:
+        return ['monday', 'tuesday', 'thursday', 'friday'];
+      case 5:
+        return ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+      case 6:
+        return ['monday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+      case 7:
+        return ['monday', 'monday', 'tuesday', 'wednesday', 'thursday', 'thursday', 'friday'];
+      case 8:
+        return ['monday', 'monday', 'tuesday', 'tuesday', 'wednesday', 'thursday', 'thursday', 'friday'];
+      case 9:
+        return ['monday', 'monday', 'tuesday', 'tuesday', 'wednesday', 'wednesday', 'thursday', 'thursday', 'friday'];
+      case 10:
+        return ['monday', 'monday', 'tuesday', 'tuesday', 'wednesday', 'wednesday', 'thursday', 'thursday', 'friday', 'friday'];
+      default:
+        return ['monday', 'wednesday', 'friday'];
+    }
+  };
+
+  // Handle posting day toggle
+  const handleDayToggle = (day: string) => {
+    setState(prev => {
+      const newDays = prev.postingDays.includes(day)
+        ? prev.postingDays.filter(d => d !== day)
+        : [...prev.postingDays, day];
+      
+      // Ensure we don't exceed the posting frequency
+      if (newDays.length > prev.postingFrequency) {
+        sonnerToast("Warning", {
+          description: `You can only select ${prev.postingFrequency} days for your current frequency.`
+        });
+        return prev;
+      }
+      
+      return {
+        ...prev,
+        postingDays: newDays
+      };
+    });
+  };
+
+  // Handle continue to WordPress auth
+  const handleContinueToWordPress = () => {
+    // Save publication settings
+    const publicationSettings = {
+      posting_frequency: state.postingFrequency,
+      posting_days: state.postingDays,
+      website_id: localStorage.getItem('website_id'),
+      organisation_id: localStorage.getItem('organisation_id'),
+      writing_style: 'Professional and informative',
+      subject_matters: []
+    };
+    
+    localStorage.setItem('publication_settings', JSON.stringify(publicationSettings));
+    
+    setState(prev => ({ ...prev, step: 5 })); // Move to WordPress auth
+    updateUrlParams({ step: 'auth' });
+  };
+
   // Publish content and complete
   const handlePublishContent = () => {
-    setState(prev => ({ ...prev, step: 4 })); // Now goes to WordPress integration step
+    setState(prev => ({ ...prev, step: 4 })); // Now goes to scheduling step
+    updateUrlParams({ step: 'scheduling' });
   };
 
   // Add WordPress connection handlers
@@ -1266,6 +1429,9 @@ const Onboarding = () => {
       description: "You can connect WordPress later from the settings."
     });
     setState(prev => ({ ...prev, step: 5 })); // Go to completion
+    
+    // Update URL to reflect current step
+    updateUrlParams({ step: 'integration' });
   };
 
   const handleStartWordPressAuth = () => {
@@ -1342,6 +1508,24 @@ const Onboarding = () => {
     navigate('/dashboard');
   };
 
+  // Handle continue to auth
+  const handleContinueToAuth = () => {
+    // Save publication settings
+    const publicationSettings = {
+      posting_frequency: state.postingFrequency,
+      posting_days: state.postingDays,
+      website_id: localStorage.getItem('website_id'),
+      organisation_id: localStorage.getItem('organisation_id'),
+      writing_style: 'Professional and informative',
+      subject_matters: []
+    };
+    
+    localStorage.setItem('publication_settings', JSON.stringify(publicationSettings));
+    
+    setState(prev => ({ ...prev, step: 5 })); // Move to auth
+    updateUrlParams({ step: 'auth' });
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
@@ -1371,7 +1555,7 @@ const Onboarding = () => {
             >
               <div className="w-full max-w-3xl">
                 <h2 className="text-2xl font-bold mb-8 text-center">
-                  ⚡ Setup 1: Website onboarding
+                  ⚡ Website onboarding
                 </h2>
                 
                 <div className="mb-8">
@@ -1641,7 +1825,7 @@ const Onboarding = () => {
             >
               <div className="w-full max-w-3xl mx-auto">
                 <h2 className="text-2xl font-bold mb-8 text-center">
-                  📝 Setup 3: Generating your first piece of content
+                  📝 Generating your first piece of content
                 </h2>
                 
                 {!state.contentGenerated ? (
@@ -1712,17 +1896,17 @@ const Onboarding = () => {
                       )}
                     </div>
                     
-                    <div className="flex justify-center gap-4">
-                      <Button 
-                        onClick={handleRegenerateContent}
+                    <div className="flex justify-end gap-4">
+                      <Button
                         variant="outline"
+                        onClick={handleRegenerateContent}
                       >
                         ♻️ Regenerate
                       </Button>
                       <Button 
                         onClick={handlePublishContent}
                       >
-                        📤 Publish
+                        Continue to Schedule <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </div>
                   </>
@@ -1746,189 +1930,173 @@ const Onboarding = () => {
               className="flex flex-col items-center justify-center py-8"
             >
               <div className="w-full max-w-3xl mx-auto">
-                <h2 className="text-2xl font-bold mb-4">
-                  🔌 Connect to WordPress
+                <h2 className="text-2xl font-bold mb-4 text-center">
+                  📅 Schedule Your Content
                 </h2>
                 
-                <p className="text-muted-foreground mb-8">
-                  Connect your WordPress website to automatically publish content. We'll guide you through the process.
+                <p className="text-muted-foreground text-center mb-8">
+                  Let's set up your content publishing schedule
                 </p>
 
-                <div className="space-y-6">
-                  <div className="rounded-lg border bg-card p-4">
-                    <h4 className="font-medium mb-2">Before you start:</h4>
-                    <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
-                      <li>Make sure you're logged into your WordPress admin</li>
-                      <li>You'll create a secure connection key that only ContentGardener.ai can use</li>
-                      <li>This is more secure than using your admin password</li>
-                    </ul>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Create a Secure Connection</Label>
-                      <Button 
-                        variant="outline" 
-                        className="w-full justify-start"
-                        onClick={() => {
-                          if (!state.websiteUrl) {
-                            sonnerToast("Error", {
-                              description: 'Website URL is not configured'
-                            });
-                            return;
-                          }
-                          // Remove protocol if present and add https
-                          const cleanUrl = state.websiteUrl.replace(/^https?:\/\//, '');
-                          // Check if URL ends with /wp-admin or similar
-                          const baseUrl = cleanUrl.replace(/\/(wp-admin|wp-login|wp-content).*$/, '');
-                          window.open(`https://${baseUrl}/wp-admin/profile.php#application-passwords-section`, '_blank');
-                        }}
-                      >
-                        <Key className="h-4 w-4 mr-2" />
-                        Generate Connection Key in WordPress
-                      </Button>
-                      <p className="text-xs text-muted-foreground">
-                        This will open your WordPress admin in a new tab where you can generate a secure connection key.
-                      </p>
+                <Card className="mb-8">
+                  <CardHeader>
+                    <CardTitle>Publishing Frequency</CardTitle>
+                    <CardDescription>How often would you like fresh content for your audience?</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">1x per week</span>
+                        <span className="text-sm font-medium">10x per week</span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          step="1"
+                          value={state.postingFrequency}
+                          onChange={(e) => handleFrequencyChange(parseInt(e.target.value))}
+                          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-center">
+                          <div className="text-2xl font-semibold">{state.postingFrequency}x</div>
+                          <div className="text-sm text-muted-foreground">per week</div>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {state.postingFrequency === 1 ? 'Perfect for maintaining a steady presence' :
+                           state.postingFrequency <= 3 ? 'Ideal for growing your audience consistently' :
+                           state.postingFrequency <= 5 ? 'Great for high engagement and SEO impact' :
+                           'Maximum impact and authority building'}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground text-center">
+                        {state.postingFrequency <= 1 ? 'Hobby Plan for €15/month - Starting with a free trial' :
+                         state.postingFrequency <= 3 ? 'Pro Plan - Starting at €49/month - Starting with a free trial' :
+                         state.postingFrequency <= 5 ? 'Pro Plan (€49/month) + Article Package (10 articles for €20) - Starting with a free trial' :
+                         state.postingFrequency <= 7 ? 'Pro Plan (€49/month) + Article Packages (20 articles for €40) - Starting with a free trial' :
+                         'Pro Plan (€49/month) + Article Packages (30 articles for €60) - Starting with a free trial'}
+                      </div>
                     </div>
+                  </CardContent>
+                </Card>
 
-                    <div className="flex gap-2">
-                      <Button
-                        variant="default"
-                        className="w-full"
-                        onClick={handleStartWordPressAuth}
-                      >
-                        <Link className="h-4 w-4 mr-2" />
-                        Connect & Test
-                      </Button>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="outline" size="icon">
-                              <HelpCircle className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent className="max-w-80">
-                            <p>Connect to your WordPress site and test the connection immediately.</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                <Card className="mb-8">
+                  <CardHeader>
+                    <CardTitle>Publishing Days</CardTitle>
+                    <CardDescription>
+                      When would you like to publish your content?
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-5 gap-2">
+                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
+                          <div key={day} className="flex flex-col items-center gap-2">
+                            <Toggle
+                              pressed={state.postingDays.includes(day)}
+                              onPressedChange={() => handleDayToggle(day)}
+                              className="capitalize w-full"
+                            >
+                              {day}
+                            </Toggle>
+                            {state.postingDays.includes(day) && (
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => {
+                                    const currentCount = state.postingDays.filter(d => d === day).length;
+                                    if (currentCount > 0) {
+                                      setState(prev => ({
+                                        ...prev,
+                                        postingDays: prev.postingDays.filter((d, i) => 
+                                          !(d === day && i === prev.postingDays.lastIndexOf(day))
+                                        )
+                                      }));
+                                    }
+                                  }}
+                                >
+                                  -
+                                </Button>
+                                <span className="text-sm min-w-[1.5rem] text-center">
+                                  {state.postingDays.filter(d => d === day).length}
+                                </span>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => {
+                                    const currentCount = state.postingDays.filter(d => d === day).length;
+                                    const totalPosts = state.postingDays.length;
+                                    if (totalPosts < state.postingFrequency) {
+                                      setState(prev => ({
+                                        ...prev,
+                                        postingDays: [...prev.postingDays, day]
+                                      }));
+                                    }
+                                  }}
+                                >
+                                  +
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {state.postingDays.length > 0 && (
+                        <div className="text-sm text-muted-foreground mt-4">
+                          <p className="font-medium">Your publishing schedule:</p>
+                          <div className="mt-2 space-y-2">
+                            {Array.from(new Set(state.postingDays)).map((day) => {
+                              const postsOnDay = state.postingDays.filter(d => d === day).length;
+                              return (
+                                <div key={day} className="flex items-center gap-2">
+                                  <span className="capitalize font-medium min-w-[100px]">{day}:</span>
+                                  <div className="flex gap-1">
+                                    {Array.from({ length: postsOnDay }).map((_, i) => (
+                                      <div
+                                        key={i}
+                                        className="w-2 h-2 rounded-full bg-primary"
+                                      />
+                                    ))}
+                                  </div>
+                                  <span className="ml-2">{postsOnDay} post{postsOnDay !== 1 ? 's' : ''}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-3 text-xs">
+                            Total: {state.postingDays.length} post{state.postingDays.length !== 1 ? 's' : ''} per week
+                          </p>
+                        </div>
+                      )}
                     </div>
+                  </CardContent>
+                </Card>
 
-                    <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-                      <p className="text-sm font-medium">What is a Connection Key?</p>
-                      <p className="text-sm text-muted-foreground">
-                        A connection key (or application password) is a secure way to let ContentGardener.ai connect to your WordPress site. 
-                        Unlike your admin password, it has limited access and can be revoked at any time.
-                      </p>
-                    </div>
-
-                    <div className="flex justify-end gap-4 mt-8">
-                      <Button
-                        variant="outline"
-                        onClick={handleSkipWordPress}
-                      >
-                        Skip for now
-                      </Button>
-                    </div>
-                  </div>
+                <div className="flex justify-end gap-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setState(prev => ({ ...prev, step: 3 }));
+                      updateUrlParams({ step: 'post-draft' });
+                    }}
+                  >
+                    Back
+                  </Button>
+                  <Button 
+                    onClick={handleContinueToAuth}
+                    disabled={state.postingDays.length !== state.postingFrequency}
+                  >
+                    Continue to Setup <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
                 </div>
               </div>
-
-              {/* WordPress Authentication Dialog */}
-              <Dialog open={state.showWpAuthDialog} onOpenChange={(open) => setState(prev => ({ ...prev, showWpAuthDialog: open }))}>
-                <DialogContent className="sm:max-w-[425px]">
-                  <DialogHeader>
-                    <DialogTitle>Connect to WordPress</DialogTitle>
-                    <DialogDescription>
-                      Enter your WordPress credentials to connect your site
-                    </DialogDescription>
-                  </DialogHeader>
-                  
-                  <div className="grid gap-4 py-4">
-                    {/* Add Generate Key Button at the top */}
-                    <div className="rounded-lg border bg-muted/50 p-3 space-y-3">
-                      <p className="text-sm font-medium">Need a connection key?</p>
-                      <Button 
-                        variant="outline" 
-                        className="w-full justify-start"
-                        onClick={() => {
-                          if (!state.websiteUrl) {
-                            sonnerToast("Error", {
-                              description: 'Website URL is not configured'
-                            });
-                            return;
-                          }
-                          // Remove protocol if present and add https
-                          const cleanUrl = state.websiteUrl.replace(/^https?:\/\//, '');
-                          // Check if URL ends with /wp-admin or similar
-                          const baseUrl = cleanUrl.replace(/\/(wp-admin|wp-login|wp-content).*$/, '');
-                          window.open(`https://${baseUrl}/wp-admin/profile.php#application-passwords-section`, '_blank');
-                        }}
-                      >
-                        <Key className="h-4 w-4 mr-2" />
-                        Generate Connection Key in WordPress
-                      </Button>
-                      <p className="text-xs text-muted-foreground">
-                        This will open your WordPress admin in a new tab where you can generate a secure connection key.
-                      </p>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label htmlFor="wpUsername">WordPress Username</Label>
-                      <Input
-                        id="wpUsername"
-                        value={state.wpUsername}
-                        onChange={(e) => setState(prev => ({ ...prev, wpUsername: e.target.value }))}
-                        placeholder="Enter your WordPress username"
-                      />
-                    </div>
-                    
-                    <div className="grid gap-2">
-                      <Label htmlFor="wpPassword">Application Password</Label>
-                      <Input
-                        id="wpPassword"
-                        type="text"
-                        className="font-mono"
-                        value={state.wpPassword}
-                        onChange={(e) => setState(prev => ({ ...prev, wpPassword: e.target.value }))}
-                        placeholder="xxxx xxxx xxxx xxxx"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Paste the connection key exactly as shown in WordPress, including spaces
-                      </p>
-                    </div>
-
-                    {state.wpConnectionError && (
-                      <div className="text-sm text-red-500 bg-red-50 p-3 rounded border border-red-200">
-                        {state.wpConnectionError}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <DialogFooter>
-                    <Button
-                      variant="outline"
-                      onClick={() => setState(prev => ({ ...prev, showWpAuthDialog: false }))}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleCompleteWordPressAuth}
-                      disabled={state.isAuthenticating}
-                    >
-                      {state.isAuthenticating ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Connecting...
-                        </>
-                      ) : (
-                        'Connect'
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
             </motion.div>
           )}
 
@@ -1936,6 +2104,45 @@ const Onboarding = () => {
           {state.step === 5 && (
             <motion.div
               key="step-5"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
+              className="flex flex-col items-center justify-center py-8"
+            >
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center mb-6"
+              >
+                <CheckCircle2 className="h-12 w-12 text-primary" />
+              </motion.div>
+              
+              <h2 className="text-3xl font-bold mb-3">
+                Setup Complete!
+              </h2>
+              
+              <p className="text-lg text-muted-foreground max-w-md mb-8">
+                {state.step === 5 ? 
+                  "Your content is ready and WordPress is connected. Let's start creating!" :
+                  "Your content is saved and ready. You can connect WordPress anytime from settings."}
+              </p>
+              
+              <Button onClick={handleComplete} size="lg" className="px-8">
+                Go to Dashboard <ChevronRight className="ml-2 h-5 w-5" />
+              </Button>
+            </motion.div>
+          )}
+
+          {/* Completion - Now step 6 */}
+          {state.step === 6 && (
+            <motion.div
+              key="step-6"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
@@ -1960,7 +2167,7 @@ const Onboarding = () => {
               </h2>
               
               <p className="text-lg text-muted-foreground max-w-md mb-8">
-                {state.step === 5 ? 
+                {state.step === 6 ? 
                   "Your content is ready and WordPress is connected. Let's start creating!" :
                   "Your content is saved and ready. You can connect WordPress anytime from settings."}
               </p>

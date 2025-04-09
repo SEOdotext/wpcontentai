@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#000000"/>
+  
+  <!-- Logo -->
+  <g transform="translate(460,195) scale(2)">
+    <path
+      d="M8 20C8 13.3726 13.3726 8 20 8C26.6274 8 32 13.3726 32 20C32 26.6274 26.6274 32 20 32C16.6863 32 14 29.3137 14 26C14 22.6863 16.6863 20 20 20"
+      stroke="url(#gradient1)"
+      stroke-width="3"
+      stroke-linecap="round"
+    />
+    <defs>
+      <linearGradient id="gradient1" x1="8" y1="8" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#22C55E" />
+        <stop offset="0.5" stop-color="#16A34A" />
+        <stop offset="1" stop-color="#15803D" />
+      </linearGradient>
+    </defs>
+  </g>
+  
+  <!-- Text -->
+  <text x="600" y="400" text-anchor="middle" font-family="Arial" font-size="48" fill="white">
+    <tspan x="600" dy="0">Content</tspan>
+    <tspan fill="url(#textGradient)">Gardener</tspan>
+    <tspan>.ai</tspan>
+  </text>
+  
+  <!-- Text gradient -->
+  <defs>
+    <linearGradient id="textGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22C55E" />
+      <stop offset="50%" stop-color="#16A34A" />
+      <stop offset="100%" stop-color="#15803D" />
+    </linearGradient>
+  </defs>
+</svg> 

@@ -14,6 +14,7 @@ import { Helmet } from 'react-helmet-async';
 const OrganisationSetup = () => {
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const { completeNewUserSetup, hasOrganisation, isLoading } = useOrganisation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
@@ -76,13 +77,29 @@ const OrganisationSetup = () => {
       .join(' ');
   };
 
+  const isValidDomain = (domain: string) => {
+    // Remove http:// or https:// if present for validation
+    const cleanDomain = domain.replace(/^https?:\/\//i, '');
+    
+    // Basic domain validation regex
+    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
+    return domainRegex.test(cleanDomain);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Form submitted with URL:', websiteUrl);
+    setError('');
     
     if (!websiteUrl.trim()) {
       console.log('Empty website URL submitted');
-      toast.error('Please enter a website URL');
+      setError('Please enter a website URL');
+      return;
+    }
+
+    if (!isValidDomain(websiteUrl)) {
+      console.log('Invalid domain format');
+      setError('Please enter a valid website domain (e.g., example.com)');
       return;
     }
     
@@ -189,6 +206,7 @@ const OrganisationSetup = () => {
                   onChange={(e) => {
                     console.log('Website URL changed:', e.target.value);
                     setWebsiteUrl(e.target.value);
+                    setError('');
                   }}
                   onBlur={(e) => {
                     // Format the URL when the input loses focus
@@ -199,14 +217,18 @@ const OrganisationSetup = () => {
                     }
                   }}
                   placeholder="example.com"
+                  className={error ? 'border-red-500' : ''}
                   required
                 />
+                {error && (
+                  <p className="text-sm text-red-500">{error}</p>
+                )}
               </div>
               <div className="flex justify-center">
                 <Button 
                   type="submit" 
                   className="w-full" 
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!error}
                 >
                   {isSubmitting ? (
                     <>
