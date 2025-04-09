@@ -26,7 +26,8 @@ import {
   UserPlus,
   Trash2,
   Shield,
-  Globe
+  Globe,
+  Mail
 } from "lucide-react";
 import {
   Dialog,
@@ -95,21 +96,13 @@ interface OnboardingState {
   postingDays: string[];
   scheduledDates: string[];
   showSignupModal: boolean;
+  verificationEmail?: string;
 }
 
 interface Step {
   id: number;
   name: string;
   description: string;
-}
-
-interface OnboardingResponse {
-  success: boolean;
-  message: string;
-  data?: {
-    organisation_id: string;
-    website_id: string;
-  };
 }
 
 const contentTypes: ContentType[] = [
@@ -1673,7 +1666,7 @@ const Onboarding = () => {
     try {
       console.log('Starting signup process...');
       
-      // Sign up with immediate access and auto-confirm
+      // Sign up with email verification
       const { data: signUpData, error: signupError } = await supabase.auth.signUp({
         email,
         password,
@@ -1682,8 +1675,7 @@ const Onboarding = () => {
             website_url: state.websiteUrl,
             organization_name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
           },
-          emailRedirectTo: `${window.location.origin}/dashboard`,
-          emailConfirm: false
+          emailRedirectTo: `${window.location.origin}/dashboard`
         }
       });
       
@@ -1697,23 +1689,6 @@ const Onboarding = () => {
       }
 
       console.log('User created successfully:', signUpData.user.id);
-
-      // Immediately sign in the user to establish session
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (signInError) {
-        console.error('Sign in error:', signInError);
-        throw signInError;
-      }
-
-      if (!signInData.session) {
-        throw new Error('Failed to establish session');
-      }
-
-      console.log('User authenticated successfully');
 
       // Prepare the request data
       const requestData = {
@@ -1736,35 +1711,24 @@ const Onboarding = () => {
 
       console.log('Sending request to edge function with data:', requestData);
 
-      // Send data to edge function with session token
+      // Send data to edge function
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${signInData.session.access_token}`,
+            'Authorization': `Bearer ${signUpData.session?.access_token}`,
             'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
           },
           body: JSON.stringify(requestData)
         }
       );
 
-      console.log('Edge function response status:', response.status);
-      console.log('Edge function response headers:', Object.fromEntries(response.headers.entries()));
-
       if (!response.ok) {
         const errorText = await response.text();
         console.error('Edge function error response:', errorText);
-        
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          errorData = { message: errorText || 'Unknown error' };
-        }
-        
-        throw new Error(errorData.message || `Failed to complete setup (${response.status})`);
+        throw new Error(`Failed to complete setup (${response.status}): ${errorText}`);
       }
 
       const result = await response.json();
@@ -1779,6 +1743,17 @@ const Onboarding = () => {
         localStorage.setItem('current_organisation_id', result.data.organisation_id);
         localStorage.setItem('current_website_id', result.data.website_id);
         setState(prev => ({ ...prev, showSignupModal: false }));
+        
+        // Show email verification toast but continue to dashboard
+        sonnerToast.info(
+          "Please verify your email",
+          {
+            description: "We've sent you a verification link. Please check your email to verify your account.",
+            duration: 10000
+          }
+        );
+        
+        // Navigate to dashboard
         navigate('/dashboard', { replace: true });
       } else {
         throw new Error('Failed to complete setup - missing data');
@@ -1840,6 +1815,137 @@ const Onboarding = () => {
     
     // Show signup modal
     setState(prev => ({ ...prev, showSignupModal: true }));
+  };
+
+  // Transfer data to database after successful auth
+  const transferDataToDatabase = async (userId: string) => {
+    try {
+      // Get website URL and generate organization name
+      const websiteUrl = localStorage.getItem('onboardingWebsite') || '';
+      const urlWithoutProtocol = websiteUrl.replace(/^https?:\/\/(www\.)?/, '');
+      const organizationName = urlWithoutProtocol
+        .split('.')[0]
+        .split(/[-_]/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
+      // Get publication settings
+      const publicationSettings = JSON.parse(localStorage.getItem('publication_settings') || '{}');
+
+      // Get post ideas and generated content with today's date
+      const today = new Date().toISOString();
+      const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]')
+        .filter((idea: any) => idea.liked)
+        .map((idea: any) => ({
+          title: idea.title || '',
+          description: idea.description || '',
+          tags: Array.isArray(idea.tags) ? idea.tags : [],
+          liked: true,
+          created_at: today,
+          scheduled_for: today,
+          status: 'approved' // Liked post themes are approved
+        }));
+
+      console.log('Filtered and formatted post ideas:', postIdeas);
+
+      const generatedContent = state.contentGenerated ? {
+        title: state.generatedContentTitle || '',
+        content: state.generatedContentPreview || '',
+        created_at: today,
+        scheduled_for: today,
+        status: 'generatedtext' // Generated content has status generatedtext
+      } : undefined;
+
+      if (generatedContent) {
+        console.log('Generated content:', generatedContent);
+      }
+
+      // Log the data we're about to send
+      console.log('Sending onboarding data:', {
+        userId,
+        websiteInfo: {
+          name: organizationName,
+          url: websiteUrl
+        },
+        organizationInfo: {
+          name: organizationName
+        },
+        publicationSettings,
+        contentData: {
+          postIdeas,
+          generatedContent
+        }
+      });
+
+      // Call the Edge Function to handle onboarding
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          userId,
+          websiteInfo: {
+            name: organizationName,
+            url: websiteUrl
+          },
+          organizationInfo: {
+            name: organizationName
+          },
+          publicationSettings,
+          contentData: {
+            postIdeas,
+            generatedContent
+          }
+        })
+      });
+
+      // Log the response status
+      console.log('Edge function response status:', response.status);
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Failed to complete onboarding');
+      }
+
+      const data = await response.json();
+      console.log('Edge function response:', data);
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to complete onboarding');
+      }
+
+      // Store the returned IDs
+      const websiteInfo = {
+        id: data.data.website_id,
+        name: organizationName,
+        url: websiteUrl
+      };
+      localStorage.setItem('website_info', JSON.stringify(websiteInfo));
+
+      const organizationInfo = {
+        id: data.data.organisation_id,
+        name: organizationName
+      };
+      localStorage.setItem('organization_info', JSON.stringify(organizationInfo));
+
+      // Clear onboarding data from localStorage
+      localStorage.removeItem('post_ideas');
+      localStorage.removeItem('publication_settings');
+      localStorage.removeItem('onboardingWebsite');
+      localStorage.removeItem('key_content_pages');
+      localStorage.removeItem('scraped_content');
+      localStorage.removeItem('website_content');
+
+      sonnerToast.success('Setup completed successfully!');
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error transferring data:', error);
+      sonnerToast.error(error.message || 'Failed to complete setup');
+      throw error;
+    }
   };
 
   return (
@@ -2501,6 +2607,52 @@ const Onboarding = () => {
             onSignup={handleSignup}
             onGoogleSignup={handleGoogleSignup}
           />
+
+          {/* Add new Email Verification step */}
+          {state.step === 'email-verification' && (
+            <motion.div
+              key="email-verification"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
+              className="flex flex-col items-center justify-center py-8 text-center"
+            >
+              <div className="w-full max-w-md">
+                <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+                  <Mail className="h-10 w-10 text-primary" />
+                </div>
+                
+                <h2 className="text-2xl font-bold mb-4">
+                  Check your email
+                </h2>
+                
+                <p className="text-muted-foreground mb-6">
+                  We've sent a verification link to:<br />
+                  <span className="font-medium text-foreground">{state.verificationEmail}</span>
+                </p>
+                
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Click the link in your email to verify your account and access your dashboard.
+                  </p>
+                  
+                  <div className="bg-muted/50 rounded-lg p-4 text-sm">
+                    <p className="font-medium mb-2">Can't find the email?</p>
+                    <ul className="space-y-2 text-muted-foreground">
+                      <li>• Check your spam folder</li>
+                      <li>• Make sure the email address is correct</li>
+                      <li>• Allow a few minutes for the email to arrive</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
     </div>
