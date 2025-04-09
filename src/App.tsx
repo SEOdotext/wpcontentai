@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip"; 
 import { OrganisationProvider, useOrganisation } from '@/context/OrganisationContext';
@@ -41,74 +41,116 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+  const [isOnboarding, setIsOnboarding] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     console.log('AuthWrapper: Checking auth state...');
-    
-    // Force timeout to prevent indefinite loading
-    let forcedTimeoutId = setTimeout(() => {
-      console.log('AuthWrapper: Forced timeout reached, proceeding with cached auth state');
-      // Check localStorage for a session token as fallback
-      const hasLocalToken = localStorage.getItem('supabase.auth.token') !== null;
-      if (!initialCheckComplete) {
-        setInitialCheckComplete(true);
-        if (hasLocalToken) {
-          setIsAuthenticated(true);
-        }
-      }
-      setIsLoading(false);
-    }, 5000); // 5-second safety net
-    
-    // Normal loading timeout for UI smoothness
-    let timeoutId = setTimeout(() => {
-      console.log('AuthWrapper: Minimum loading time elapsed, validating contexts');
-      setIsLoading(false);
-    }, 800);
+    let isMounted = true;
     
     const checkAuth = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        const isLoggedIn = !!data.session;
+        // First check if we're in onboarding flow
+        const onboardingData = localStorage.getItem('website_info');
+        const pendingSignup = localStorage.getItem('pending_signup');
+        const isOnboardingPath = location.pathname === '/onboarding';
         
-        // If we have a session, save a flag in localStorage as a fallback
-        if (isLoggedIn) {
-          localStorage.setItem('last_auth_state', 'authenticated');
-        } else {
-          localStorage.removeItem('last_auth_state');
+        if (isOnboardingPath || onboardingData || pendingSignup) {
+          console.log('AuthWrapper: In onboarding flow');
+          if (isMounted) {
+            setIsOnboarding(true);
+            setIsAuthenticated(true);
+            setIsLoading(false);
+            setInitialCheckComplete(true);
+          }
+          return;
         }
+
+        // Then check for active session
+        const { data: { session } } = await supabase.auth.getSession();
         
-        console.log('AuthWrapper: Auth check complete, user is', isLoggedIn ? 'authenticated' : 'not authenticated');
-        setIsAuthenticated(isLoggedIn);
-        setInitialCheckComplete(true);
+        if (session) {
+          console.log('AuthWrapper: Found active session');
+          if (isMounted) {
+            localStorage.setItem('supabase.auth.token', session.access_token);
+            localStorage.setItem('supabase.auth.refresh_token', session.refresh_token || '');
+            localStorage.setItem('last_auth_state', 'authenticated');
+            setIsAuthenticated(true);
+          }
+        } else {
+          console.log('AuthWrapper: No active session');
+          if (isMounted && !isOnboardingPath) {
+            localStorage.removeItem('supabase.auth.token');
+            localStorage.removeItem('supabase.auth.refresh_token');
+            localStorage.removeItem('last_auth_state');
+            setIsAuthenticated(false);
+          }
+        }
+
+        if (isMounted) {
+          setInitialCheckComplete(true);
+          setIsLoading(false);
+        }
       } catch (error) {
         console.error('AuthWrapper: Error checking auth:', error);
-        // Try to recover from error using localStorage
-        const lastAuthState = localStorage.getItem('last_auth_state');
-        setIsAuthenticated(lastAuthState === 'authenticated');
-        setInitialCheckComplete(true);
+        if (isMounted) {
+          setIsAuthenticated(false);
+          setInitialCheckComplete(true);
+          setIsLoading(false);
+        }
       }
     };
 
-    checkAuth();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('AuthWrapper: Auth state changed, user is', session ? 'authenticated' : 'not authenticated');
-      setIsAuthenticated(!!session);
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('AuthWrapper: Auth state changed:', event);
       
-      // Update fallback flag
-      if (session) {
+      if (event === 'SIGNED_IN' && session) {
+        console.log('AuthWrapper: User signed in');
+        const pendingSignup = localStorage.getItem('pending_signup');
+        
+        if (pendingSignup) {
+          console.log('AuthWrapper: Found pending signup');
+          try {
+            const { userId } = JSON.parse(pendingSignup);
+            // Don't call transferDataToDatabase here - it should be handled in Onboarding component
+            localStorage.setItem('auth_complete', 'true');
+            if (isMounted) {
+              setIsAuthenticated(true);
+            }
+          } catch (error) {
+            console.error('AuthWrapper: Error handling pending signup:', error);
+          }
+        } else {
+          if (isMounted) {
+            setIsAuthenticated(true);
+          }
+        }
+        
+        localStorage.setItem('supabase.auth.token', session.access_token);
+        localStorage.setItem('supabase.auth.refresh_token', session.refresh_token || '');
         localStorage.setItem('last_auth_state', 'authenticated');
-      } else {
-        localStorage.removeItem('last_auth_state');
+      } else if (event === 'SIGNED_OUT') {
+        console.log('AuthWrapper: User signed out');
+        if (isMounted && !isOnboarding) {
+          setIsAuthenticated(false);
+          localStorage.removeItem('supabase.auth.token');
+          localStorage.removeItem('supabase.auth.refresh_token');
+          localStorage.removeItem('last_auth_state');
+          localStorage.removeItem('auth_complete');
+        }
       }
     });
 
+    // Start auth check
+    checkAuth();
+
+    // Cleanup
     return () => {
-      clearTimeout(timeoutId);
-      clearTimeout(forcedTimeoutId);
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [location.pathname]);
 
   if (isLoading && !initialCheckComplete) {
     return (
@@ -121,9 +163,20 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
+  // Always allow access to auth and onboarding paths
+  if (location.pathname === '/auth' || location.pathname === '/onboarding') {
+    return <>{children}</>;
+  }
+
+  // Allow access during onboarding
+  if (isOnboarding) {
+    return <>{children}</>;
+  }
+
+  // Redirect to auth if not authenticated
   if (!isAuthenticated) {
-    console.log('AuthWrapper: Not authenticated, redirecting to landing page');
-    return <Navigate to="/" replace />;
+    console.log('AuthWrapper: Not authenticated, redirecting to auth page');
+    return <Navigate to="/auth" replace />;
   }
 
   console.log('AuthWrapper: User authenticated, showing protected content');
@@ -136,10 +189,13 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
   const { currentWebsite, isLoading: websitesLoading } = useWebsites();
   const [forceShowContent, setForceShowContent] = useState(false);
   const [redirectToSetup, setRedirectToSetup] = useState(false);
+  const location = useLocation();
   
-  // Check localStorage to see if we've previously had an organization
+  // Check localStorage to see if we're in onboarding or have cached data
   const hasCachedOrg = !!localStorage.getItem('currentOrganisation');
   const hasCachedWebsite = !!localStorage.getItem('currentWebsiteId');
+  const isOnboarding = !!localStorage.getItem('website_info') || !!localStorage.getItem('pending_signup');
+  const isOnboardingPath = location.pathname === '/onboarding';
   
   // Safety timeout - if org loading takes too long, force-show content
   useEffect(() => {
@@ -155,8 +211,8 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
   
   // After a delay, if we're sure the user has no org, redirect to setup
   useEffect(() => {
-    // Only start this check if we're past loading and requiring an org
-    if (!orgLoading && !websitesLoading && requireOrg) {
+    // Only start this check if we're past loading, requiring an org, and not in onboarding
+    if (!orgLoading && !websitesLoading && requireOrg && !isOnboarding && !isOnboardingPath) {
       const setupCheckTimer = setTimeout(() => {
         // If we definitely have no org data or website data after loading is complete
         if (!hasOrganisation && !currentWebsite && !hasCachedOrg && !hasCachedWebsite) {
@@ -167,10 +223,11 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
       
       return () => clearTimeout(setupCheckTimer);
     }
-  }, [orgLoading, websitesLoading, hasOrganisation, currentWebsite, hasCachedOrg, hasCachedWebsite, requireOrg]);
+  }, [orgLoading, websitesLoading, hasOrganisation, currentWebsite, hasCachedOrg, hasCachedWebsite, requireOrg, isOnboarding, isOnboardingPath]);
   
-  // Skip organization check if not required
-  if (!requireOrg) {
+  // Skip checks if not required or during onboarding
+  if (!requireOrg || isOnboarding || isOnboardingPath) {
+    console.log('Skipping organization check:', { requireOrg, isOnboarding, isOnboardingPath });
     return <>{children}</>;
   }
 
@@ -180,8 +237,7 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
   }
 
   // Only show loading for a brief period, and only on first load
-  // Show content if we have either cache data or forceShowContent is true
-  if (orgLoading && !currentWebsite && !hasCachedOrg && !hasCachedWebsite && !forceShowContent) {
+  if (orgLoading && !currentWebsite && !hasCachedOrg && !hasCachedWebsite && !forceShowContent && !isOnboarding) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -192,7 +248,7 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
     );
   }
 
-  // Show content immediately in all other cases - we'll handle redirect later if needed
+  // Show content immediately in all other cases
   return <>{children}</>;
 };
 
@@ -200,6 +256,7 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
 const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -230,12 +287,12 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  if (isAuthenticated) {
-    console.log('AuthRedirector: User is authenticated, redirecting to dashboard');
+  if (isAuthenticated && location.pathname === '/') {
+    console.log('AuthRedirector: User is authenticated and on landing page, redirecting to dashboard');
     return <Navigate to="/dashboard" replace />;
   }
 
-  console.log('AuthRedirector: User is not authenticated, showing landing page');
+  console.log('AuthRedirector: Showing content for', isAuthenticated ? 'authenticated' : 'unauthenticated', 'user');
   return <>{children}</>;
 };
 

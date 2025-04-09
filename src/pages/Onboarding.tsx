@@ -53,6 +53,9 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { Toggle } from "@/components/ui/toggle";
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { supabase } from '@/integrations/supabase/client';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FcGoogle } from 'react-icons/fc';
 
 // Types
 interface ContentType {
@@ -91,6 +94,7 @@ interface OnboardingState {
   postingFrequency: number;
   postingDays: string[];
   scheduledDates: string[];
+  showSignupModal: boolean;
 }
 
 interface Step {
@@ -264,7 +268,136 @@ const steps: Step[] = [
   }
 ];
 
+// Add SignupModal component
+const SignupModal = ({ 
+  isOpen, 
+  onClose, 
+  onSignup,
+  onGoogleSignup 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onSignup: (email: string, password: string) => Promise<void>;
+  onGoogleSignup: () => Promise<void>;
+}) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      await onSignup(email, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create account');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    try {
+      setGoogleLoading(true);
+      setError(null);
+      await onGoogleSignup();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign up with Google');
+      setGoogleLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={() => !isLoading && !googleLoading && onClose()}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Create your account</DialogTitle>
+          <DialogDescription>
+            Save your schedule and start publishing content with AI.
+          </DialogDescription>
+        </DialogHeader>
+        
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <Button 
+          type="button" 
+          variant="outline" 
+          className="w-full flex items-center justify-center gap-2" 
+          onClick={handleGoogleSignup}
+          disabled={googleLoading || isLoading}
+        >
+          {googleLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <FcGoogle className="h-5 w-5" />
+          )}
+          <span>Sign up with Google</span>
+        </Button>
+        
+        <div className="relative py-2">
+          <div className="absolute inset-0 flex items-center">
+            <Separator className="w-full" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-card px-2 text-xs text-muted-foreground">
+              OR
+            </span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Create a password"
+              required
+            />
+          </div>
+          <Button 
+            type="submit" 
+            className="w-full"
+            disabled={isLoading || googleLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating account...
+              </>
+            ) : (
+              'Create Account with Email'
+            )}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const Onboarding = () => {
+  const navigate = useNavigate();
   const [state, setState] = useState<OnboardingState>({
     step: 1,
     websiteUrl: localStorage.getItem('onboardingWebsite') || 'https://example.com',
@@ -283,10 +416,10 @@ const Onboarding = () => {
     wpConnectionError: null,
     postingFrequency: 3, // Default to 3 posts per week
     postingDays: ['monday', 'wednesday', 'friday'], // Default posting days
-    scheduledDates: [] // Will be populated when scheduling
+    scheduledDates: [], // Will be populated when scheduling
+    showSignupModal: false,
   });
   const { toast } = useToast();
-  const navigate = useNavigate();
   
   // Track liked ideas
   const [likedIdeas, setLikedIdeas] = useState<string[]>([]);
@@ -1282,6 +1415,16 @@ const Onboarding = () => {
             generatedContentTitle: likedIdea.title,
             generatedContentPreview: result.content
           }));
+
+          // Store generated content in localStorage
+          const generatedContent = {
+            title: likedIdea.title,
+            content: result.content,
+            status: 'textgenerated',
+            created_at: new Date().toISOString(),
+            website_id: localStorage.getItem('website_id')
+          };
+          localStorage.setItem('generated_content', JSON.stringify(generatedContent));
         } else {
           // Handle error case
           clearInterval(progressInterval);
@@ -1516,20 +1659,106 @@ const Onboarding = () => {
     navigate('/dashboard');
   };
 
-  // Handle continue to auth
+  // Handle signup
+  const handleSignup = async (email: string, password: string) => {
+    try {
+      console.log('Starting signup process...');
+      
+      // Sign up with immediate access
+      const { data, error: signupError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: {
+            website_url: state.websiteUrl,
+            organization_name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
+            email_confirm: true  // This is the correct flag for auto-confirming email
+          }
+        }
+      });
+      
+      if (signupError) {
+        console.error('Signup error:', signupError);
+        throw signupError;
+      }
+
+      if (data.user) {
+        console.log('User created successfully:', data.user.id);
+        
+        // Transfer data to database
+        const response = await transferDataToDatabase(data.user.id);
+        const result = JSON.parse(response);
+        
+        // Close modal
+        setState(prev => ({ ...prev, showSignupModal: false }));
+
+        // Store organization and website IDs from edge function response
+        if (result?.success && result?.data) {
+          localStorage.setItem('current_organisation_id', result.data.organisation_id);
+          localStorage.setItem('current_website_id', result.data.website_id);
+          
+          // Store auth state
+          localStorage.setItem('supabase.auth.token', data.session?.access_token || '');
+          localStorage.setItem('supabase.auth.refresh_token', data.session?.refresh_token || '');
+          localStorage.setItem('last_auth_state', 'authenticated');
+
+          // Wait for auth state to sync
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Navigate to dashboard
+          navigate('/dashboard', { replace: true });
+        } else {
+          throw new Error('Failed to complete setup');
+        }
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
+      sonnerToast.error("Signup Error", {
+        description: errorMessage,
+        duration: 5000
+      });
+      throw error;
+    }
+  };
+
+  // Handle Google signup
+  const handleGoogleSignup = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`
+        }
+      });
+      
+      if (error) throw error;
+      
+      // The OAuth flow will handle the redirect
+    } catch (error) {
+      console.error('Google signup error:', error);
+      throw error;
+    }
+  };
+
+  // Update handleContinueToAuth to show signup modal
   const handleContinueToAuth = () => {
-    // Save publication settings
+    // Format posting days to match database structure
+    const formattedPostingDays = state.postingDays.reduce<Array<{ day: string; count: number }>>((acc, day) => {
+      const existingDay = acc.find(d => d.day === day);
+      if (existingDay) {
+        existingDay.count += 1;
+      } else {
+        acc.push({ day, count: 1 });
+      }
+      return acc;
+    }, []);
+
+    // Save publication settings to localStorage
     const publicationSettings = {
       posting_frequency: state.postingFrequency,
-      posting_days: state.postingDays.reduce((acc, day) => {
-        // Count occurrences of each day
-        const count = state.postingDays.filter(d => d === day).length;
-        // Only add each day once with its total count
-        if (!acc.some(d => d.day === day)) {
-          acc.push({ day, count });
-        }
-        return acc;
-      }, []),
+      posting_days: formattedPostingDays,
       website_id: localStorage.getItem('website_id'),
       organisation_id: localStorage.getItem('organisation_id'),
       writing_style: 'Professional and informative',
@@ -1538,8 +1767,139 @@ const Onboarding = () => {
     
     localStorage.setItem('publication_settings', JSON.stringify(publicationSettings));
     
-    setState(prev => ({ ...prev, step: 5 })); // Move to auth
-    updateUrlParams({ step: 'auth' });
+    // Show signup modal
+    setState(prev => ({ ...prev, showSignupModal: true }));
+  };
+
+  // Transfer data to database after successful auth
+  const transferDataToDatabase = async (userId: string) => {
+    try {
+      // Get website URL and generate organization name
+      const websiteUrl = localStorage.getItem('onboardingWebsite') || '';
+      const urlWithoutProtocol = websiteUrl.replace(/^https?:\/\/(www\.)?/, '');
+      const organizationName = urlWithoutProtocol
+        .split('.')[0]
+        .split(/[-_]/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+
+      // Get publication settings
+      const publicationSettings = JSON.parse(localStorage.getItem('publication_settings') || '{}');
+
+      // Get post ideas and generated content with today's date
+      const today = new Date().toISOString();
+      const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]')
+        .filter((idea: any) => idea.liked)
+        .map((idea: any) => ({
+          title: idea.title || '',
+          description: idea.description || '',
+          tags: Array.isArray(idea.tags) ? idea.tags : [],
+          liked: true,
+          created_at: today,
+          scheduled_for: today,
+          status: 'approved' // Liked post themes are approved
+        }));
+
+      console.log('Filtered and formatted post ideas:', postIdeas);
+
+      const generatedContent = state.contentGenerated ? {
+        title: state.generatedContentTitle || '',
+        content: state.generatedContentPreview || '',
+        created_at: today,
+        scheduled_for: today,
+        status: 'generatedtext' // Generated content has status generatedtext
+      } : undefined;
+
+      if (generatedContent) {
+        console.log('Generated content:', generatedContent);
+      }
+
+      // Log the data we're about to send
+      console.log('Sending onboarding data:', {
+        userId,
+        websiteInfo: {
+          name: organizationName,
+          url: websiteUrl
+        },
+        organizationInfo: {
+          name: organizationName
+        },
+        publicationSettings,
+        contentData: {
+          postIdeas,
+          generatedContent
+        }
+      });
+
+      // Call the Edge Function to handle onboarding
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          userId,
+          websiteInfo: {
+            name: organizationName,
+            url: websiteUrl
+          },
+          organizationInfo: {
+            name: organizationName
+          },
+          publicationSettings,
+          contentData: {
+            postIdeas,
+            generatedContent
+          }
+        })
+      });
+
+      // Log the response status
+      console.log('Edge function response status:', response.status);
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Failed to complete onboarding');
+      }
+
+      const data = await response.json();
+      console.log('Edge function response:', data);
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to complete onboarding');
+      }
+
+      // Store the returned IDs
+      const websiteInfo = {
+        id: data.data.website_id,
+        name: organizationName,
+        url: websiteUrl
+      };
+      localStorage.setItem('website_info', JSON.stringify(websiteInfo));
+
+      const organizationInfo = {
+        id: data.data.organisation_id,
+        name: organizationName
+      };
+      localStorage.setItem('organization_info', JSON.stringify(organizationInfo));
+
+      // Clear onboarding data from localStorage
+      localStorage.removeItem('post_ideas');
+      localStorage.removeItem('publication_settings');
+      localStorage.removeItem('onboardingWebsite');
+      localStorage.removeItem('key_content_pages');
+      localStorage.removeItem('scraped_content');
+      localStorage.removeItem('website_content');
+
+      sonnerToast.success('Setup completed successfully!');
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error transferring data:', error);
+      sonnerToast.error(error.message || 'Failed to complete setup');
+      throw error;
+    }
   };
 
   return (
@@ -1913,7 +2273,7 @@ const Onboarding = () => {
                     </div>
                     
                     <div className="flex justify-end gap-4">
-                      <Button
+                      <Button 
                         variant="outline"
                         onClick={handleRegenerateContent}
                       >
@@ -1960,11 +2320,11 @@ const Onboarding = () => {
                     <CardDescription>How often would you like fresh content for your audience?</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-6">
+                <div className="space-y-6">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">1x per week</span>
                         <span className="text-sm font-medium">10x per week</span>
-                      </div>
+                  </div>
                       <div className="relative">
                         <input
                           type="range"
@@ -2007,7 +2367,7 @@ const Onboarding = () => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
+                  <div className="space-y-4">
                       <div className="grid grid-cols-5 gap-2">
                         {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
                           <div key={day} className="flex flex-col items-center gap-2">
@@ -2020,11 +2380,11 @@ const Onboarding = () => {
                             </Toggle>
                             {state.postingDays.includes(day) && (
                               <div className="flex items-center gap-1">
-                                <Button
-                                  variant="outline"
+                      <Button 
+                        variant="outline" 
                                   size="sm"
                                   className="h-6 w-6 p-0"
-                                  onClick={() => {
+                        onClick={() => {
                                     const currentCount = state.postingDays.filter(d => d === day).length;
                                     if (currentCount > 0) {
                                       setState(prev => ({
@@ -2037,15 +2397,15 @@ const Onboarding = () => {
                                   }}
                                 >
                                   -
-                                </Button>
+                      </Button>
                                 <span className="text-sm min-w-[1.5rem] text-center">
                                   {state.postingDays.filter(d => d === day).length}
                                 </span>
-                                <Button
-                                  variant="outline"
+                      <Button
+                        variant="outline"
                                   size="sm"
                                   className="h-6 w-6 p-0"
-                                  onClick={() => {
+                        onClick={() => {
                                     const currentCount = state.postingDays.filter(d => d === day).length;
                                     const totalPosts = state.postingDays.length;
                                     if (totalPosts < state.postingFrequency) {
@@ -2057,13 +2417,13 @@ const Onboarding = () => {
                                   }}
                                 >
                                   +
-                                </Button>
-                              </div>
+                      </Button>
+                    </div>
                             )}
                           </div>
                         ))}
-                      </div>
-                      
+                    </div>
+                    
                       {state.postingDays.length > 0 && (
                         <div className="text-sm text-muted-foreground mt-4">
                           <p className="font-medium">Your publishing schedule:</p>
@@ -2080,7 +2440,7 @@ const Onboarding = () => {
                                         className="w-2 h-2 rounded-full bg-primary"
                                       />
                                     ))}
-                                  </div>
+                    </div>
                                   <span className="ml-2">{postsOnDay} post{postsOnDay !== 1 ? 's' : ''}</span>
                                 </div>
                               );
@@ -2089,28 +2449,28 @@ const Onboarding = () => {
                           <p className="mt-3 text-xs">
                             Total: {state.postingDays.length} post{state.postingDays.length !== 1 ? 's' : ''} per week
                           </p>
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
+                  </div>
                   </CardContent>
                 </Card>
-
+                  
                 <div className="flex justify-end gap-4">
-                  <Button
-                    variant="outline"
+                    <Button
+                      variant="outline"
                     onClick={() => {
                       setState(prev => ({ ...prev, step: 3 }));
                       updateUrlParams({ step: 'post-draft' });
                     }}
-                  >
+                    >
                     Back
-                  </Button>
-                  <Button 
+                    </Button>
+                    <Button
                     onClick={handleContinueToAuth}
                     disabled={state.postingDays.length !== state.postingFrequency}
                   >
                     Continue to Setup <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
+                    </Button>
                 </div>
               </div>
             </motion.div>
@@ -2193,6 +2553,14 @@ const Onboarding = () => {
               </Button>
             </motion.div>
           )}
+          
+          {/* Add SignupModal */}
+          <SignupModal
+            isOpen={state.showSignupModal}
+            onClose={() => setState(prev => ({ ...prev, showSignupModal: false }))}
+            onSignup={handleSignup}
+            onGoogleSignup={handleGoogleSignup}
+          />
         </AnimatePresence>
       </main>
     </div>

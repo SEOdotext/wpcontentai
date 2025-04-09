@@ -1,3 +1,18 @@
+http://localhost:8080/auth
+
+
+https://vehcghewfnjkwlwmmrix.supabase.co/auth/v1/verify?token=42c6c7dad6c8ad6be54413c2c2ced46ee42172d5964c693072e35f04&type=signup&redirect_to=https://contentgardener.ai
+
+Should redirect to dashboard
+
+---
+
+On onboarding the creating post takes around 15 seconds turn around
+the loader gets to 95 in 7. Make the loading approx. 15.
+
+
+---
+
 Make sure not to use article casing for all headers in the onboarding. Use a normal case for the headers etc. - Only "newsletter casing" when really relevant
 
 ---
@@ -84,9 +99,6 @@ Make the logo clickable to the /dashboard if logged in and to the front page if 
 
 ---
 
-Implement coupons
-PhilFriend: 30 %
-PhilEarlyBird: 50 %
 
 ---
 
@@ -94,3 +106,7 @@ When the article is created with v3, we need to ensure that the data is matching
 We need to ensure that the format of the data in the data sent to the v3 model and we need to check the v3 is using the data correctly when from localstorage. 
 The data format of the links and cornerstone should be similar to the content in the database. @DBMASTERINFO.md @Onboarding.tsx @index.ts 
 
+---
+
+hook.js:608 You're attempting to animate multiple children within AnimatePresence, but its mode is set to "wait". This will lead to odd visual behaviour. Error Component Stack
+    at Onboarding (Onboarding.tsx:400:29)
