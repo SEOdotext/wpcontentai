@@ -77,7 +77,7 @@ interface ContentStep {
 }
 
 interface OnboardingState {
-  step: number;
+  step: number | 'email-verification';
   websiteUrl: string;
   progress: number;
   currentStepIndex: number;
@@ -467,6 +467,22 @@ const Onboarding = () => {
     const params = new URLSearchParams(window.location.search);
     const urlParam = params.get('url');
     const stepParam = params.get('step');
+    const transferParam = params.get('transfer');
+    const onboardingParam = params.get('onboarding');
+    
+    // Handle data transfer after email verification
+    if (transferParam === 'true' && onboardingParam === 'complete') {
+      const userId = localStorage.getItem('pending_user_id');
+      if (userId) {
+        console.log('Auto-transferring data after email verification for user:', userId);
+        transferDataToDatabase(userId).catch(error => {
+          console.error('Error auto-transferring data:', error);
+          sonnerToast.error("Error completing setup", {
+            description: error.message || "Failed to complete setup. Please try again."
+          });
+        });
+      }
+    }
     
     // Handle website URL parameter
     if (urlParam) {
@@ -1657,10 +1673,28 @@ const Onboarding = () => {
 
   // Complete onboarding and go to dashboard
   const handleComplete = () => {
-    sonnerToast("Setup Complete!", {
-      description: "You're ready to start creating content."
-    });
-    navigate('/dashboard');
+    const userId = localStorage.getItem('pending_user_id');
+    if (userId) {
+      console.log('Transferring data for user:', userId);
+      transferDataToDatabase(userId)
+        .then(() => {
+          sonnerToast("Setup Complete!", {
+            description: "You're ready to start creating content."
+          });
+          navigate('/dashboard');
+        })
+        .catch(error => {
+          console.error('Error transferring data:', error);
+          sonnerToast.error("Error completing setup", {
+            description: error.message || "Failed to complete setup. Please try again."
+          });
+        });
+    } else {
+      console.error('No user ID found for data transfer');
+      sonnerToast.error("Setup Error", {
+        description: "User ID not found. Please try signing up again."
+      });
+    }
   };
 
   // Handle signup
@@ -1668,7 +1702,11 @@ const Onboarding = () => {
     try {
       console.log('Starting signup process...');
       
-      // Sign up with email verification
+      // Use hardcoded URL for production
+      const redirectUrl = 'https://contentgardener.ai/dashboard?onboarding=complete&transfer=true';
+      console.log('Using redirect URL:', redirectUrl);
+      
+      // Sign up with email verification and proper redirect
       const { data: signUpData, error: signupError } = await supabase.auth.signUp({
         email,
         password,
@@ -1677,7 +1715,7 @@ const Onboarding = () => {
             website_url: state.websiteUrl,
             organization_name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
           },
-          emailRedirectTo: `${window.location.origin}/dashboard`
+          emailRedirectTo: redirectUrl
         }
       });
       
@@ -1692,84 +1730,33 @@ const Onboarding = () => {
 
       console.log('User created successfully:', signUpData.user.id);
 
-      // Close signup modal and show email verification view
-      setState(prev => ({ 
-        ...prev, 
-        showSignupModal: false,
-        showEmailVerification: true,
-        verificationEmail: email
-      }));
-
       // Store signup data
       localStorage.setItem('pending_user_id', signUpData.user.id);
       localStorage.setItem('signup_email', email);
 
-      // Get fresh session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('Error getting session:', sessionError);
-        throw sessionError;
-      }
-      
-      if (session) {
-        console.log('Session established after signup');
-        
-        // Store session data
-        localStorage.setItem('supabase.auth.token', session.access_token);
-        localStorage.setItem('supabase.auth.refresh_token', session.refresh_token || '');
-        localStorage.setItem('last_auth_state', 'authenticated');
-        
-        // Wait for auth state to sync
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Refresh auth state
-        await supabase.auth.refreshSession();
-        
-        // Get organization and website data
-        const { data: orgData } = await supabase
-          .from('organisation_memberships')
-          .select('organisation_id')
-          .eq('member_id', signUpData.user.id)
-          .single();
-          
-        if (orgData) {
-          localStorage.setItem('current_organisation_id', orgData.organisation_id);
-          
-          // Get website data
-          const { data: websiteData } = await supabase
-            .from('websites')
-            .select('id')
-            .eq('organisation_id', orgData.organisation_id)
-            .single();
-            
-          if (websiteData) {
-            localStorage.setItem('current_website_id', websiteData.id);
-          }
+      // Close signup modal and show email verification view
+      setState(prev => ({ 
+        ...prev, 
+        showSignupModal: false,
+        step: 'email-verification',
+        verificationEmail: email
+      }));
+
+      sonnerToast.info(
+        "Please verify your email",
+        {
+          description: "We've sent you a verification link. Please check your email and click the link to continue.",
+          duration: 10000
         }
-        
-        // Wait for contexts to sync
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Navigate to dashboard
-        navigate('/dashboard', { replace: true });
-      } else {
-        // Show email verification toast and keep user on current page
-        sonnerToast.info(
-          "Please verify your email",
-          {
-            description: "We've sent you a verification link. Please check your email and click the link to continue.",
-            duration: 10000
-          }
-        );
-        
-        // Store signup data for later
-        localStorage.setItem('pending_signup', JSON.stringify({
-          userId: signUpData.user.id,
-          email,
-          timestamp: new Date().toISOString()
-        }));
-      }
+      );
+
+      // Store signup data for later
+      localStorage.setItem('pending_signup', JSON.stringify({
+        userId: signUpData.user.id,
+        email,
+        timestamp: new Date().toISOString()
+      }));
+
     } catch (error) {
       console.error('Signup error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
@@ -1832,17 +1819,29 @@ const Onboarding = () => {
   // Transfer data to database after successful auth
   const transferDataToDatabase = async (userId: string) => {
     try {
+      console.log('Starting data transfer to database for user:', userId);
+
       // Get website URL and generate organization name
-      const websiteUrl = localStorage.getItem('onboardingWebsite') || '';
+      const websiteUrl = localStorage.getItem('onboardingWebsite');
+      if (!websiteUrl) {
+        throw new Error('Website URL not found in localStorage');
+      }
+      console.log('Retrieved website URL:', websiteUrl);
+
       const urlWithoutProtocol = websiteUrl.replace(/^https?:\/\/(www\.)?/, '');
       const organizationName = urlWithoutProtocol
         .split('.')[0]
         .split(/[-_]/)
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
+      console.log('Generated organization name:', organizationName);
 
-      // Get publication settings
+      // Get publication settings with validation
       const publicationSettings = JSON.parse(localStorage.getItem('publication_settings') || '{}');
+      if (!publicationSettings.posting_frequency || !publicationSettings.posting_days) {
+        console.warn('Missing required publication settings');
+      }
+      console.log('Publication settings:', publicationSettings);
 
       // Get post ideas and generated content with today's date
       const today = new Date().toISOString();
@@ -1851,14 +1850,9 @@ const Onboarding = () => {
         .map((idea: any) => ({
           title: idea.title || '',
           description: idea.description || '',
-          tags: Array.isArray(idea.tags) ? idea.tags : [],
-          liked: true,
-          created_at: today,
-          scheduled_for: today,
-          status: 'approved' // Liked post themes are approved
+          created_at: today
         }));
-
-      console.log('Filtered and formatted post ideas:', postIdeas);
+      console.log(`Found ${postIdeas.length} liked post ideas`);
 
       const generatedContent = state.contentGenerated ? {
         title: state.generatedContentTitle || '',
@@ -1872,45 +1866,44 @@ const Onboarding = () => {
         console.log('Generated content:', generatedContent);
       }
 
-      // Log the data we're about to send
-      console.log('Sending onboarding data:', {
+      // Format data according to OnboardingData interface
+      const data = {
         userId,
         websiteInfo: {
-          name: organizationName,
-          url: websiteUrl
-        },
-        organizationInfo: {
+          url: websiteUrl,
           name: organizationName
         },
-        publicationSettings,
+        organizationInfo: {
+          name: organizationName,
+          website_id: null // Will be set by the backend
+        },
+        publicationSettings: {
+          ...publicationSettings,
+          posting_frequency: publicationSettings.posting_frequency || 'weekly',
+          posting_days: publicationSettings.posting_days || ['Monday'],
+          writing_style: publicationSettings.writing_style || 'professional'
+        },
         contentData: {
           postIdeas,
-          generatedContent
+          generatedContent: state.contentGenerated ? {
+            content: state.generatedContent,
+            created_at: today
+          } : null,
+          websiteContent: state.websiteContent || []
         }
-      });
+      };
 
-      // Call the Edge Function to handle onboarding
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`, {
+      console.log('Formatted data for API request:', data);
+
+      // Make request to Edge Function
+      const response = await fetch(`${supabaseUrl}/functions/v1/handle-user-onboarding`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`
         },
-        body: JSON.stringify({
-          userId,
-          websiteInfo: {
-            name: organizationName,
-            url: websiteUrl
-          },
-          organizationInfo: {
-            name: organizationName
-          },
-          publicationSettings,
-          contentData: {
-            postIdeas,
-            generatedContent
-          }
-        })
+        body: JSON.stringify(data)
       });
 
       // Log the response status
@@ -1922,23 +1915,23 @@ const Onboarding = () => {
         throw new Error(error.message || 'Failed to complete onboarding');
       }
 
-      const data = await response.json();
-      console.log('Edge function response:', data);
+      const responseData = await response.json();
+      console.log('Edge function response:', responseData);
 
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to complete onboarding');
+      if (!responseData.success) {
+        throw new Error(responseData.message || 'Failed to complete onboarding');
       }
 
       // Store the returned IDs
       const websiteInfo = {
-        id: data.data.website_id,
+        id: responseData.data.website_id,
         name: organizationName,
         url: websiteUrl
       };
       localStorage.setItem('website_info', JSON.stringify(websiteInfo));
 
       const organizationInfo = {
-        id: data.data.organisation_id,
+        id: responseData.data.organisation_id,
         name: organizationName
       };
       localStorage.setItem('organization_info', JSON.stringify(organizationInfo));
@@ -2660,6 +2653,16 @@ const Onboarding = () => {
                       <li>• Make sure the email address is correct</li>
                       <li>• Allow a few minutes for the email to arrive</li>
                     </ul>
+                  </div>
+
+                  <div className="pt-4">
+                    <Button 
+                      onClick={() => navigate('/auth')} 
+                      variant="default" 
+                      className="w-full"
+                    >
+                      Continue to Login
+                    </Button>
                   </div>
                 </div>
               </div>
