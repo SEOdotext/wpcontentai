@@ -1673,17 +1673,17 @@ const Onboarding = () => {
     try {
       console.log('Starting signup process...');
       
-      // Sign up with immediate access
-      const { data, error: signupError } = await supabase.auth.signUp({
+      // Sign up with immediate access and auto-confirm
+      const { data: signUpData, error: signupError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
           data: {
             website_url: state.websiteUrl,
             organization_name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
-            email_confirm: true
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+          emailConfirm: false
         }
       });
       
@@ -1692,15 +1692,32 @@ const Onboarding = () => {
         throw signupError;
       }
 
-      if (!data.user) {
+      if (!signUpData.user) {
         throw new Error('Failed to create user');
       }
 
-      console.log('User created successfully:', data.user.id);
+      console.log('User created successfully:', signUpData.user.id);
+
+      // Immediately sign in the user to establish session
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (signInError) {
+        console.error('Sign in error:', signInError);
+        throw signInError;
+      }
+
+      if (!signInData.session) {
+        throw new Error('Failed to establish session');
+      }
+
+      console.log('User authenticated successfully');
 
       // Prepare the request data
       const requestData = {
-        userId: data.user.id,
+        userId: signUpData.user.id,
         websiteInfo: {
           name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
           url: state.websiteUrl,
@@ -1719,14 +1736,14 @@ const Onboarding = () => {
 
       console.log('Sending request to edge function with data:', requestData);
 
-      // Send data to edge function
+      // Send data to edge function with session token
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${signInData.session.access_token}`,
             'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
           },
           body: JSON.stringify(requestData)
