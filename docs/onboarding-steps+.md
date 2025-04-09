@@ -13,3 +13,7 @@ http://localhost:8080/onboarding?step=scheduling
 
 
 ## [Step 3] ➜ Choose a Schedule (2x/week, Custom)
+
+
+
+Are we sure that there is no way to create a session for the user where the user is seeing real data for the organisation, website and all the data while logged in and not having confirmed the email yet?

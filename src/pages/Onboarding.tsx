@@ -97,6 +97,7 @@ interface OnboardingState {
   scheduledDates: string[];
   showSignupModal: boolean;
   verificationEmail?: string;
+  showEmailVerification: boolean;
 }
 
 interface Step {
@@ -420,6 +421,7 @@ const Onboarding = () => {
     postingDays: ['monday', 'wednesday', 'friday'], // Default posting days
     scheduledDates: [], // Will be populated when scheduling
     showSignupModal: false,
+    showEmailVerification: false,
   });
   const { toast } = useToast();
   
@@ -1690,73 +1692,83 @@ const Onboarding = () => {
 
       console.log('User created successfully:', signUpData.user.id);
 
-      // Prepare the request data
-      const requestData = {
-        userId: signUpData.user.id,
-        websiteInfo: {
-          name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
-          url: state.websiteUrl,
-          language: localStorage.getItem('website_language') || 'en'
-        },
-        organizationInfo: {
-          name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0]
-        },
-        publicationSettings: JSON.parse(localStorage.getItem('publication_settings') || '{}'),
-        contentData: {
-          postIdeas: JSON.parse(localStorage.getItem('post_ideas') || '[]'),
-          generatedContent: JSON.parse(localStorage.getItem('generated_content') || '{}'),
-          websiteContent: JSON.parse(localStorage.getItem('website_content') || '[]')
-        }
-      };
+      // Close signup modal and show email verification view
+      setState(prev => ({ 
+        ...prev, 
+        showSignupModal: false,
+        showEmailVerification: true,
+        verificationEmail: email
+      }));
 
-      console.log('Sending request to edge function with data:', requestData);
+      // Store signup data
+      localStorage.setItem('pending_user_id', signUpData.user.id);
+      localStorage.setItem('signup_email', email);
 
-      // Send data to edge function
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${signUpData.session?.access_token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
-          },
-          body: JSON.stringify(requestData)
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Edge function error response:', errorText);
-        throw new Error(`Failed to complete setup (${response.status}): ${errorText}`);
+      // Get fresh session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Error getting session:', sessionError);
+        throw sessionError;
       }
-
-      const result = await response.json();
-      console.log('Edge function success response:', result);
-
-      if (!result.success) {
-        throw new Error(result.message || 'Failed to complete setup');
-      }
-
-      // Store IDs and close modal
-      if (result.data) {
-        localStorage.setItem('current_organisation_id', result.data.organisation_id);
-        localStorage.setItem('current_website_id', result.data.website_id);
-        setState(prev => ({ ...prev, showSignupModal: false }));
+      
+      if (session) {
+        console.log('Session established after signup');
         
-        // Show email verification toast but continue to dashboard
-        sonnerToast.info(
-          "Please verify your email",
-          {
-            description: "We've sent you a verification link. Please check your email to verify your account.",
-            duration: 10000
+        // Store session data
+        localStorage.setItem('supabase.auth.token', session.access_token);
+        localStorage.setItem('supabase.auth.refresh_token', session.refresh_token || '');
+        localStorage.setItem('last_auth_state', 'authenticated');
+        
+        // Wait for auth state to sync
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Refresh auth state
+        await supabase.auth.refreshSession();
+        
+        // Get organization and website data
+        const { data: orgData } = await supabase
+          .from('organisation_memberships')
+          .select('organisation_id')
+          .eq('member_id', signUpData.user.id)
+          .single();
+          
+        if (orgData) {
+          localStorage.setItem('current_organisation_id', orgData.organisation_id);
+          
+          // Get website data
+          const { data: websiteData } = await supabase
+            .from('websites')
+            .select('id')
+            .eq('organisation_id', orgData.organisation_id)
+            .single();
+            
+          if (websiteData) {
+            localStorage.setItem('current_website_id', websiteData.id);
           }
-        );
+        }
+        
+        // Wait for contexts to sync
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Navigate to dashboard
         navigate('/dashboard', { replace: true });
       } else {
-        throw new Error('Failed to complete setup - missing data');
+        // Show email verification toast and keep user on current page
+        sonnerToast.info(
+          "Please verify your email",
+          {
+            description: "We've sent you a verification link. Please check your email and click the link to continue.",
+            duration: 10000
+          }
+        );
+        
+        // Store signup data for later
+        localStorage.setItem('pending_signup', JSON.stringify({
+          userId: signUpData.user.id,
+          email,
+          timestamp: new Date().toISOString()
+        }));
       }
     } catch (error) {
       console.error('Signup error:', error);
