@@ -29,8 +29,8 @@ export const transferDataToDatabase = async (userId: string) => {
         id: websiteInfo.id
       },
       organizationInfo: {
-        name: organizationInfo.name,
         id: organizationInfo.id,
+        name: organizationInfo.name || websiteInfo.name || 'Default Organization',
         created_at: organizationInfo.created_at || new Date().toISOString()
       },
       publicationSettings: {

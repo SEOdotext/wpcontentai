@@ -200,19 +200,21 @@ serve(async (req) => {
     const { data: orgData, error: orgError } = await supabaseClient
       .from('organisations')
       .insert({
+        id: organizationInfo.id || undefined, // Use provided ID if it exists
         name: organizationInfo.name,
-        created_at: timestamp
+        created_at: organizationInfo.created_at || timestamp
       })
       .select()
       .single()
 
     if (orgError) {
-      console.error('Organization creation error:', orgError)
+      console.error('Organization creation error:', orgError);
       return new Response(
         JSON.stringify({ 
           success: false, 
           message: 'Failed to create organization',
-          error: orgError.message 
+          error: orgError.message,
+          details: { organizationInfo }
         }),
         { 
           status: 500, 
@@ -221,10 +223,14 @@ serve(async (req) => {
             ...corsHeaders 
           } 
         }
-      )
+      );
     }
 
-    console.log('Created organization:', { id: orgData.id, name: organizationInfo.name });
+    console.log('Created organization:', { 
+      id: orgData.id, 
+      name: organizationInfo.name,
+      provided_id: organizationInfo.id 
+    });
 
     // Create organization membership
     console.log('Creating organization membership with data:', { 
@@ -427,26 +433,7 @@ serve(async (req) => {
       const postingDates = getNextPostingDates(publicationSettings.posting_days, totalPosts);
       let dateIndex = 0;
 
-      // Process regular post ideas
-      if (contentData.postIdeas?.length > 0) {
-        const ideaThemes = contentData.postIdeas.map(idea => ({
-          website_id: websiteData.id,
-          subject_matter: idea.title || 'Untitled Post',
-          status: idea.liked ? 'approved' : 'pending',
-          scheduled_date: idea.liked ? postingDates[dateIndex++] : null,
-          keywords: idea.tags || [],
-          post_content: idea.post_content || '',
-          created_at: timestamp,
-          updated_at: timestamp,
-          wp_post_id: null,
-          wp_post_url: null,
-          wp_sent_date: null,
-          image: null
-        }));
-        postThemes.push(...ideaThemes);
-      }
-
-      // Process generated content as a post theme
+      // Process generated content first
       if (contentData.generatedContent) {
         const generatedTheme = {
           website_id: websiteData.id,
@@ -463,6 +450,25 @@ serve(async (req) => {
           image: null
         };
         postThemes.push(generatedTheme);
+      }
+
+      // Process regular post ideas after generated content
+      if (contentData.postIdeas?.length > 0) {
+        const ideaThemes = contentData.postIdeas.map(idea => ({
+          website_id: websiteData.id,
+          subject_matter: idea.title || 'Untitled Post',
+          status: idea.liked ? 'approved' : 'pending',
+          scheduled_date: idea.liked ? postingDates[dateIndex++] : null,
+          keywords: idea.tags || [],
+          post_content: idea.post_content || '',
+          created_at: timestamp,
+          updated_at: timestamp,
+          wp_post_id: null,
+          wp_post_url: null,
+          wp_sent_date: null,
+          image: null
+        }));
+        postThemes.push(...ideaThemes);
       }
 
       console.log('Inserting post themes with scheduled dates:', JSON.stringify(postThemes.map(theme => ({
