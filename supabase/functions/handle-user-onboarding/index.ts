@@ -326,68 +326,30 @@ serve(async (req) => {
         content_type: content.content_type || 'page',
         metadata: {
           digest: content.metadata?.digest || null,
-          is_cornerstone: false // Default to false, will update below if key content
+          is_cornerstone: content.metadata?.is_cornerstone || false,
+          is_key_page: content.metadata?.is_cornerstone || false,
+          reason: contentData.keyContentPages?.find(k => 
+            k.url?.replace(/\/$/, '').toLowerCase() === content.url?.replace(/\/$/, '').toLowerCase() || 
+            k.id === content.id
+          )?.reason
         },
-        is_cornerstone: false, // Default to false, will update below if key content
+        is_cornerstone: content.metadata?.is_cornerstone || false,
         last_fetched: content.last_fetched || timestamp,
         created_at: timestamp,
         updated_at: timestamp
       }));
 
-      // Get key content pages and ensure they're marked as cornerstone
-      if (contentData.keyContentPages && Array.isArray(contentData.keyContentPages)) {
-        console.log('Processing key content pages:', JSON.stringify(contentData.keyContentPages, null, 2));
-        
-        websiteContent.forEach(content => {
-          // Check if this content matches any key content page
-          const isKeyContent = contentData.keyContentPages.some(keyPage => {
-            // Match by URL (normalized) or ID
-            const contentUrl = content.url?.replace(/\/$/, '').toLowerCase(); // Remove trailing slash and normalize case
-            const keyUrl = keyPage.url?.replace(/\/$/, '').toLowerCase(); // Remove trailing slash and normalize case
-            const isMatch = contentUrl === keyUrl || content.id === keyPage.id;
-            if (isMatch) {
-              console.log('Found key content match:', {
-                contentUrl,
-                keyUrl,
-                contentId: content.id,
-                keyId: keyPage.id,
-                title: keyPage.title,
-                reason: keyPage.reason
-              });
-            }
-            return isMatch;
-          });
-
-          if (isKeyContent) {
-            console.log('Marking as cornerstone:', {
-              url: content.url,
-              title: content.title
-            });
-            content.is_cornerstone = true;
-            content.metadata = {
-              ...content.metadata,
-              is_cornerstone: true,
-              is_key_page: true,
-              reason: contentData.keyContentPages.find(k => 
-                k.url?.replace(/\/$/, '').toLowerCase() === content.url?.replace(/\/$/, '').toLowerCase() || 
-                k.id === content.id
-              )?.reason
-            };
-          }
-        });
-
-        // Log summary of cornerstone content
-        const cornerstonePages = websiteContent.filter(c => c.is_cornerstone);
-        console.log('Cornerstone content summary:', {
-          total: websiteContent.length,
-          cornerstone: cornerstonePages.length,
-          pages: cornerstonePages.map(c => ({
-            url: c.url,
-            title: c.title,
-            reason: c.metadata?.reason
-          }))
-        });
-      }
+      // Log summary of cornerstone content
+      const cornerstonePages = websiteContent.filter(c => c.is_cornerstone);
+      console.log('Cornerstone content summary:', {
+        total: websiteContent.length,
+        cornerstone: cornerstonePages.length,
+        pages: cornerstonePages.map(c => ({
+          url: c.url,
+          title: c.title,
+          reason: c.metadata?.reason
+        }))
+      });
 
       console.log('Inserting website content:', {
         total: websiteContent.length,

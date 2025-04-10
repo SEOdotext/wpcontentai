@@ -57,6 +57,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { supabase } from '@/integrations/supabase/client';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FcGoogle } from 'react-icons/fc';
+import { transferDataToDatabase } from '@/api/onboardingImport';
 
 // Types
 interface ContentType {
