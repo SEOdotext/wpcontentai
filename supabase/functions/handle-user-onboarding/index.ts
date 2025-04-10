@@ -252,7 +252,7 @@ serve(async (req) => {
       console.log('Creating organization membership with data:', { 
         organisation_id: orgData.id,
         member_id: userId,
-        role: 'owner',
+        role: 'admin',
         timestamp: timestamp
       });
 
@@ -261,7 +261,7 @@ serve(async (req) => {
         .insert({
           organisation_id: orgData.id,
           member_id: userId,
-          role: 'owner',
+          role: 'admin',
           created_at: timestamp,
           updated_at: timestamp
         })
