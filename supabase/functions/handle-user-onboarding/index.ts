@@ -379,79 +379,61 @@ serve(async (req) => {
       }
     }
 
-    // Insert post themes (from post ideas)
-    if (contentData.postIdeas && contentData.postIdeas.length > 0) {
-      console.log('Processing post ideas:', JSON.stringify(contentData.postIdeas, null, 2));
-      const postThemes = contentData.postIdeas.map(idea => {
-        // Create base object with required fields and fallbacks
-        const baseTheme = {
+    // Insert post themes (from post ideas and generated content)
+    if (contentData.postIdeas?.length > 0 || contentData.generatedContent) {
+      console.log('Processing post ideas and generated content');
+      const postThemes = [];
+
+      // Process regular post ideas
+      if (contentData.postIdeas?.length > 0) {
+        const ideaThemes = contentData.postIdeas.map(idea => ({
           website_id: websiteData.id,
-          subject_matter: idea.title || 'Untitled Post', // Add fallback
+          subject_matter: idea.title || 'Untitled Post',
           status: idea.liked ? 'approved' : 'pending',
+          scheduled_date: idea.liked ? timestamp : null,
+          keywords: idea.tags || [],
+          post_content: idea.post_content || '',
           created_at: timestamp,
-          updated_at: timestamp
-        };
+          updated_at: timestamp,
+          wp_post_id: null,
+          wp_post_url: null,
+          wp_sent_date: null,
+          image: null
+        }));
+        postThemes.push(...ideaThemes);
+      }
 
-        // Only add optional fields if they have values
-        const optionalFields: Record<string, any> = {};
-        if (idea.tags) optionalFields.keywords = idea.tags;
-        if (idea.post_content) optionalFields.post_content = idea.post_content;
-        if (idea.scheduled_date) optionalFields.scheduled_date = idea.scheduled_date;
-        if (idea.wp_post_id) optionalFields.wp_post_id = idea.wp_post_id;
-        if (idea.wp_post_url) optionalFields.wp_post_url = idea.wp_post_url;
-        if (idea.wp_sent_date) optionalFields.wp_sent_date = idea.wp_sent_date;
-        if (idea.image) optionalFields.image = idea.image;
-
-        const finalTheme = {
-          ...baseTheme,
-          ...optionalFields
+      // Process generated content as a post theme
+      if (contentData.generatedContent) {
+        const generatedTheme = {
+          website_id: websiteData.id,
+          subject_matter: contentData.generatedContent.title || contentData.generatedContent.subject_matter || 'Untitled Generated Post',
+          status: 'textgenerated',
+          scheduled_date: timestamp,
+          keywords: contentData.generatedContent.tags || [],
+          post_content: contentData.generatedContent.post_content || '',
+          created_at: timestamp,
+          updated_at: timestamp,
+          wp_post_id: null,
+          wp_post_url: null,
+          wp_sent_date: null,
+          image: null
         };
-        console.log('Created post theme:', JSON.stringify(finalTheme, null, 2));
-        return finalTheme;
-      });
+        postThemes.push(generatedTheme);
+      }
+
+      console.log('Inserting post themes:', JSON.stringify(postThemes, null, 2));
 
       const { error: postThemesError } = await supabaseClient
         .from('post_themes')
-        .insert(postThemes)
+        .insert(postThemes);
 
       if (postThemesError) {
-        console.error('Post themes insertion error:', postThemesError)
+        console.error('Post themes insertion error:', postThemesError);
         return new Response(
           JSON.stringify({ success: false, message: 'Failed to store post themes' }),
-          { status: 500, headers: { 'Content-Type': 'application/json' } }
-        )
-      }
-    }
-
-    // Insert generated content if exists
-    if (contentData.generatedContent) {
-      console.log('Processing generated content:', JSON.stringify(contentData.generatedContent, null, 2));
-      const generatedTheme = {
-        website_id: websiteData.id,
-        subject_matter: contentData.generatedContent.title || contentData.generatedContent.subject_matter || 'Untitled Generated Post',
-        keywords: contentData.generatedContent.tags || [],
-        status: 'textgenerated',
-        post_content: contentData.generatedContent.post_content || '',
-        scheduled_date: null,
-        created_at: timestamp,
-        updated_at: timestamp,
-        wp_post_id: null,
-        wp_post_url: null,
-        wp_sent_date: null,
-        image: null
-      };
-      console.log('Created generated theme:', JSON.stringify(generatedTheme, null, 2));
-
-      const { error: generatedContentError } = await supabaseClient
-        .from('post_themes')
-        .insert(generatedTheme)
-
-      if (generatedContentError) {
-        console.error('Generated content insertion error:', generatedContentError)
-        return new Response(
-          JSON.stringify({ success: false, message: 'Failed to store generated content' }),
-          { status: 500, headers: { 'Content-Type': 'application/json' } }
-        )
+          { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
       }
     }
 

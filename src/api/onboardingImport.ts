@@ -40,16 +40,22 @@ export const transferDataToDatabase = async (userId: string) => {
         writing_style: publicationSettings.writing_style || 'professional'
       },
       contentData: {
-        postIdeas: postIdeas.filter(idea => idea.liked).map(idea => ({
-          title: idea.title,
-          description: idea.description || '',
-          created_at: new Date().toISOString()
-        })),
+        postIdeas: postIdeas
+          .filter(idea => idea.liked && (!generatedContent || idea.title !== generatedContent.title))
+          .map(idea => ({
+            title: idea.title,
+            subject_matter: idea.title,
+            post_content: '',
+            tags: [],
+            liked: true,
+            status: 'approved'
+          })),
         generatedContent: generatedContent ? {
           title: generatedContent.title,
-          content: generatedContent.content,
+          subject_matter: generatedContent.title,
+          post_content: generatedContent.content,
           status: 'textgenerated',
-          created_at: generatedContent.created_at || new Date().toISOString()
+          tags: []
         } : null,
         websiteContent: websiteContent.map(content => ({
           url: content.url,
@@ -139,15 +145,20 @@ export const transferDataToDatabase = async (userId: string) => {
       throw new Error(result.message || 'Transfer failed');
     }
 
-    // Clear onboarding data from localStorage
-    localStorage.removeItem('post_ideas');
-    localStorage.removeItem('publication_settings');
-    localStorage.removeItem('onboardingWebsite');
-    localStorage.removeItem('key_content_pages');
-    localStorage.removeItem('scraped_content');
-    localStorage.removeItem('website_content');
-    localStorage.removeItem('pending_signup');
-    localStorage.removeItem('pending_user_id');
+    // Only clear localStorage in production
+    if (!window.location.href.includes('localhost')) {
+      // Clear onboarding data from localStorage
+      localStorage.removeItem('post_ideas');
+      localStorage.removeItem('publication_settings');
+      localStorage.removeItem('onboardingWebsite');
+      localStorage.removeItem('key_content_pages');
+      localStorage.removeItem('scraped_content');
+      localStorage.removeItem('website_content');
+      localStorage.removeItem('pending_signup');
+      localStorage.removeItem('pending_user_id');
+    } else {
+      console.log('Development mode: Skipping localStorage cleanup');
+    }
 
     toast.success('Data transfer completed successfully');
     return result;

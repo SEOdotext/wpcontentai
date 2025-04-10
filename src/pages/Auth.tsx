@@ -60,17 +60,8 @@ const Auth = () => {
 
   useEffect(() => {
     if (isAuthenticated) {
-      console.log('Auth: User authenticated, checking redirect conditions');
-      const pendingSignup = localStorage.getItem('pending_signup');
-      const onboardingData = localStorage.getItem('website_info');
-      
-      if (pendingSignup || onboardingData) {
-        console.log('Auth: Redirecting to onboarding');
-        navigate('/onboarding');
-      } else {
-        console.log('Auth: Redirecting to dashboard');
-        navigate('/dashboard');
-      }
+      console.log('Auth: User authenticated, redirecting to dashboard');
+      navigate('/dashboard');
     }
   }, [isAuthenticated, navigate]);
 
@@ -105,17 +96,8 @@ const Auth = () => {
         // Wait for auth state to be updated
         await checkAuth();
         
-        // Check if we need to redirect
-        const pendingSignup = localStorage.getItem('pending_signup');
-        const onboardingData = localStorage.getItem('website_info');
-        
-        if (pendingSignup || onboardingData) {
-          console.log('Auth: Redirecting to onboarding after login');
-          navigate('/onboarding');
-        } else {
-          console.log('Auth: Redirecting to dashboard after login');
-          navigate('/dashboard');
-        }
+        console.log('Auth: Redirecting to dashboard');
+        navigate('/dashboard');
         
         toast.success('Successfully logged in');
       }
@@ -206,15 +188,8 @@ const Auth = () => {
       // Wait for auth state to be updated
       await checkAuth();
       
-      // Check if we need to redirect
-      const pendingSignup = localStorage.getItem('pending_signup');
-      const onboardingData = localStorage.getItem('website_info');
-      
-      if (pendingSignup || onboardingData) {
-        navigate('/onboarding');
-      } else {
-        navigate('/dashboard');
-      }
+      console.log('Auth: Redirecting to dashboard');
+      navigate('/dashboard');
       
       // No need to navigate as the OAuth flow will redirect automatically
     } catch (error) {
