@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip"; 
 import { OrganisationProvider, useOrganisation } from '@/context/OrganisationContext';
@@ -42,13 +42,22 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading, isOnboarding } = useAuth();
   const location = useLocation();
 
+  console.log('AuthWrapper: Rendering with state:', { 
+    isAuthenticated, 
+    isLoading, 
+    isOnboarding,
+    path: location.pathname 
+  });
+
   // Always allow access to auth and onboarding paths
   if (location.pathname === '/auth' || location.pathname === '/onboarding') {
+    console.log('AuthWrapper: Allowing access to public path:', location.pathname);
     return <>{children}</>;
   }
 
   // Show loading state only during initial check
   if (isLoading) {
+    console.log('AuthWrapper: Showing loading state during initial auth check');
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -61,12 +70,13 @@ const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
 
   // Allow access during onboarding
   if (isOnboarding) {
+    console.log('AuthWrapper: User is in onboarding, allowing access');
     return <>{children}</>;
   }
 
   // Redirect to auth if not authenticated
   if (!isAuthenticated) {
-    console.log('AuthWrapper: Not authenticated, redirecting to auth page');
+    console.log('AuthWrapper: User not authenticated, redirecting to auth page');
     return <Navigate to="/auth" replace />;
   }
 
@@ -145,10 +155,35 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
 
 // Auth redirector - redirects logged-in users to dashboard
 const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isOnboarding } = useAuth();
+  const { hasOrganisation } = useOrganisation();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Check for onboarding completion parameters
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      const params = new URLSearchParams(location.search);
+      const onboardingComplete = params.get('onboarding') === 'complete';
+      const transferData = params.get('transfer') === 'true';
+      
+      if (onboardingComplete && transferData) {
+        console.log('AuthRedirector: Detected onboarding completion parameters, redirecting to dashboard');
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [isAuthenticated, isLoading, location.search, navigate]);
+
+  console.log('AuthRedirector: Rendering with state:', {
+    isAuthenticated,
+    isLoading,
+    isOnboarding,
+    hasOrganisation,
+    path: location.pathname
+  });
 
   if (isLoading) {
+    console.log('AuthRedirector: Showing loading state');
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
@@ -159,8 +194,8 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  if (isAuthenticated && location.pathname === '/') {
-    console.log('AuthRedirector: User is authenticated and on landing page, redirecting to dashboard');
+  if (isAuthenticated && !isOnboarding && hasOrganisation && location.pathname === '/') {
+    console.log('AuthRedirector: Authenticated user with organization on landing page, redirecting to dashboard');
     return <Navigate to="/dashboard" replace />;
   }
 
