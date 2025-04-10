@@ -2616,6 +2616,121 @@ const Settings = () => {
               </>
             )}
           </div>
+
+          {/* Add Retrigger Data Transfer Button - only show on localhost */}
+          {window.location.href.includes('localhost:8080') && (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Data Transfer (Development Only)</CardTitle>
+                <CardDescription>
+                  Manually retrigger data transfer from local storage to database
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Get current user session
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const userId = session?.user?.id;
+                      
+                      if (!userId) {
+                        toast.error('Please log in to transfer data');
+                        return;
+                      }
+
+                      // Get required data from localStorage
+                      const websiteInfo = JSON.parse(localStorage.getItem('website_info') || '{}');
+                      const organizationInfo = JSON.parse(localStorage.getItem('organization_info') || '{}');
+                      const publicationSettings = JSON.parse(localStorage.getItem('publication_settings') || '{}');
+                      const websiteContent = JSON.parse(localStorage.getItem('website_content') || '[]');
+                      const keyContentPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
+                      const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]');
+                      const generatedContent = JSON.parse(localStorage.getItem('generated_content') || 'null');
+
+                      // Format data according to edge function requirements
+                      const data = {
+                        userId,
+                        websiteInfo: {
+                          url: currentWebsite?.url || websiteInfo.url,
+                          name: currentWebsite?.name || websiteInfo.name || 'Default Website',
+                          organization_id: organizationInfo.id || null,
+                          created_at: websiteInfo.created_at || new Date().toISOString(),
+                          id: currentWebsite?.id || websiteInfo.id
+                        },
+                        organizationInfo: {
+                          name: organizationInfo.name,
+                          id: organizationInfo.id,
+                          created_at: organizationInfo.created_at || new Date().toISOString()
+                        },
+                        publicationSettings: {
+                          ...publicationSettings,
+                          posting_frequency: publicationSettings.posting_frequency || 3,
+                          posting_days: publicationSettings.posting_days || [{ day: 'monday', count: 1 }],
+                          writing_style: publicationSettings.writing_style || 'professional'
+                        },
+                        contentData: {
+                          postIdeas: postIdeas.filter(idea => idea.liked).map(idea => ({
+                            title: idea.title,
+                            description: idea.description || '',
+                            created_at: new Date().toISOString()
+                          })),
+                          generatedContent: generatedContent ? {
+                            title: generatedContent.title,
+                            content: generatedContent.content,
+                            status: 'textgenerated',
+                            created_at: generatedContent.created_at || new Date().toISOString()
+                          } : null,
+                          websiteContent,
+                          keyContentPages: keyContentPages.map(page => ({
+                            ...page,
+                            created_at: page.created_at || new Date().toISOString()
+                          }))
+                        }
+                      };
+
+                      // Get current session for authentication
+                      const { data: sessionData } = await supabase.auth.getSession();
+                      if (!sessionData?.session?.access_token) {
+                        toast.error('No active session found');
+                        return;
+                      }
+
+                      toast.info('Initiating data transfer...');
+
+                      // Call the edge function
+                      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/handle-user-onboarding', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${sessionData.session.access_token}`,
+                          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+                        },
+                        body: JSON.stringify(data)
+                      });
+
+                      const result = await response.json();
+
+                      if (result.success) {
+                        toast.success('Data transfer completed successfully');
+                        // Optionally refresh the page after successful transfer
+                        window.location.reload();
+                      } else {
+                        throw new Error(result.message || 'Transfer failed');
+                      }
+                    } catch (error) {
+                      console.error('Data transfer error:', error);
+                      toast.error(`Data transfer failed: ${error.message}`);
+                    }
+                  }}
+                  variant="outline"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retrigger Data Transfer
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </main>
       </div>
 

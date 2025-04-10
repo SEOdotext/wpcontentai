@@ -139,7 +139,7 @@ interface DbWebsiteContent {
   title: string;
   content: string;  // Required
   content_type: string;  // Required
-  is_cornerstone: boolean;  // True for first 4-5 key pages
+  is_cornerstone: boolean;  // True for  key pages
   digest: string | null;
   metadata: jsonb | null;
   created_at: timestamp;  // Required
@@ -156,7 +156,7 @@ interface DbWebsiteContent {
   "title": "Homepage",
   "content": "<html>...",
   "content_type": "page",
-  "is_cornerstone": true,  // This is one of the first 4-5 key pages
+  "is_cornerstone": true,  // For all key pages
   "digest": "Main landing page...",
   "metadata": null,
   "created_at": "2024-01-20T12:00:00Z",
@@ -221,7 +221,7 @@ interface DbPublicationSettings {
 ## Transfer Process
 1. Website Content:
    - Load pages from both 'website_content' and 'key_content_pages' in localStorage
-   - First 4-5 pages from 'key_content_pages' are marked as cornerstone (is_cornerstone = true)
+   - The pages from 'key_content_pages' are marked as cornerstone (is_cornerstone = true)
    - All other pages are marked as regular content (is_cornerstone = false)
    - For each page:
      - Generate UUID for id
@@ -244,7 +244,7 @@ interface DbPublicationSettings {
    - Ensure all required fields are present: id, posting_frequency, writing_style, subject_matters, created_at, updated_at
    - Generate UUIDs for new records
 
-Note: All transfers should happen after successful authentication and before redirecting to dashboard. The process preserves the hierarchical importance of key content pages by marking the first 4-5 as cornerstone content. 
+Note: All transfers should happen after successful authentication and before redirecting to dashboard. The process preserves the hierarchical importance of key content pages by marking the the key as cornerstone content. 
 
 
 
