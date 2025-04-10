@@ -5,65 +5,104 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Loader2, Globe } from 'lucide-react';
 import { useOrganisation } from '@/context/OrganisationContext';
-import { Toaster } from "@/components/ui/sonner";
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Helmet } from 'react-helmet-async';
 
 const OrganisationSetup = () => {
+  const navigate = useNavigate();
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const { completeNewUserSetup, hasOrganisation, isLoading } = useOrganisation();
+  const { completeNewUserSetup, hasOrganisation, isLoading: orgLoading } = useOrganisation();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isProcessingOnboarding, setIsProcessingOnboarding] = useState(false);
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
 
-  // Log initial state
-  console.log('OrganisationSetup mounted:', {
-    isAuthenticated,
-    hasOrganisation,
-    isLoading,
-    isSubmitting
-  });
-
+  // Combined check for auth and onboarding data
   useEffect(() => {
-    const checkAuth = async () => {
-      console.log('Starting auth check...');
+    let mounted = true;
+    let authCheckTimeout: NodeJS.Timeout;
+    
+    const initialize = async () => {
       try {
-        const { data } = await supabase.auth.getSession();
-        console.log('Auth session data:', data);
-        const authenticated = !!data.session;
-        console.log('Setting isAuthenticated to:', authenticated);
-        setIsAuthenticated(authenticated);
+        // Start auth check timeout
+        authCheckTimeout = setTimeout(() => {
+          if (mounted && !isAuthenticated) {
+            console.log('Auth check timeout reached, redirecting to auth');
+            navigate('/auth', { replace: true });
+          }
+        }, 10000); // 10 second timeout for auth check
+
+        // Check auth first
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        
+        if (session) {
+          setIsAuthenticated(true);
+          
+          // Check for onboarding data
+          const websiteInfo = localStorage.getItem('website_info');
+          const onboardingData = localStorage.getItem('onboardingWebsite');
+          
+          if (websiteInfo || onboardingData) {
+            setIsProcessingOnboarding(true);
+            try {
+              const savedData = websiteInfo ? JSON.parse(websiteInfo) : { url: onboardingData };
+              const url = savedData.url || '';
+              
+              if (url) {
+                setWebsiteUrl(url);
+                // Wait a bit for organization context to initialize
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                await handleSetup(url);
+              }
+            } catch (error) {
+              console.error('Error processing onboarding data:', error);
+              toast.error('Error processing saved data');
+            } finally {
+              if (mounted) setIsProcessingOnboarding(false);
+            }
+          }
+        } else {
+          setIsAuthenticated(false);
+          navigate('/auth', { replace: true });
+        }
       } catch (error) {
-        console.error('Auth check error:', error);
-        setIsAuthenticated(false);
+        console.error('Initialization error:', error);
+        if (mounted) {
+          setIsAuthenticated(false);
+          toast.error('Error initializing setup');
+        }
+      } finally {
+        if (mounted) {
+          setInitialCheckComplete(true);
+          clearTimeout(authCheckTimeout);
+        }
       }
     };
-    
-    checkAuth();
 
-    // Subscribe to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('Auth state changed in OrganisationSetup:', session ? 'authenticated' : 'not authenticated');
+    initialize();
+
+    // Auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      
+      console.log('Auth state changed:', event);
       setIsAuthenticated(!!session);
+      
+      if (!session) {
+        navigate('/auth', { replace: true });
+      }
     });
 
     return () => {
-      console.log('OrganisationSetup cleanup');
+      mounted = false;
+      clearTimeout(authCheckTimeout);
       subscription.unsubscribe();
     };
-  }, []);
-
-  // Log state changes
-  useEffect(() => {
-    console.log('State updated:', {
-      isAuthenticated,
-      hasOrganisation,
-      isLoading,
-      isSubmitting
-    });
-  }, [isAuthenticated, hasOrganisation, isLoading, isSubmitting]);
+  }, [navigate]);
 
   const generateOrgName = (url: string): string => {
     // Remove protocol and www
@@ -86,101 +125,74 @@ const OrganisationSetup = () => {
     return domainRegex.test(cleanDomain);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Form submitted with URL:', websiteUrl);
-    setError('');
-    
-    if (!websiteUrl.trim()) {
-      console.log('Empty website URL submitted');
-      setError('Please enter a website URL');
-      return;
-    }
-
-    if (!isValidDomain(websiteUrl)) {
-      console.log('Invalid domain format');
-      setError('Please enter a valid website domain (e.g., example.com)');
-      return;
-    }
-    
-    console.log('Starting setup process...');
+  const handleSetup = async (url: string) => {
+    console.log('Starting setup process with URL:', url);
     setIsSubmitting(true);
-    
-    // Format URL if needed
-    let formattedUrl = websiteUrl.trim();
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-      formattedUrl = 'https://' + formattedUrl;
-      console.log('Formatted URL:', formattedUrl);
-      setWebsiteUrl(formattedUrl);
-    }
     
     try {
       toast.loading('Creating your organization and website...');
-      console.log('Calling completeNewUserSetup...');
-      const success = await completeNewUserSetup(formattedUrl);
-      console.log('Setup result:', success);
+      const success = await completeNewUserSetup(url);
       
       if (success) {
-        console.log('Setup successful, redirecting to home...');
         toast.success('Setup completed! Redirecting to dashboard...');
         
-        // Generate expected website name (should match what's created in the backend)
-        const websiteName = websiteUrl
-          .replace(/^https?:\/\/(www\.)?/, '')
-          .split('.')[0]
-          .split(/[-_]/)
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
+        // Clear onboarding data
+        localStorage.removeItem('website_info');
+        localStorage.removeItem('onboardingWebsite');
         
-        console.log('Expected website name:', websiteName);
-        console.log('Website ID in localStorage:', localStorage.getItem('currentWebsiteId'));
-        
-        // Add delay to ensure all contexts update
+        // Redirect with a delay to ensure state updates
         setTimeout(() => {
-          console.log('Refreshing page to activate new organization and website');
-          window.location.href = '/'; // Full page refresh to ensure all contexts are updated
+          window.location.href = '/';
         }, 1500);
       } else {
-        console.error('Setup failed');
-        toast.error('Setup failed. Please try again or contact support.');
         throw new Error('Failed to complete setup');
       }
     } catch (error) {
       console.error('Error during setup:', error);
       toast.error('Failed to complete setup: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
-      console.log('Setup process completed');
       setIsSubmitting(false);
     }
   };
 
-  // Show loading state only when we're checking auth or loading organization data
-  if (isLoading || isAuthenticated === null) {
-    console.log('Showing loading state:', { isLoading, isAuthenticated });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!websiteUrl.trim()) {
+      setError('Please enter a website URL');
+      return;
+    }
+
+    // Format URL if needed
+    let formattedUrl = websiteUrl.trim();
+    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
+      formattedUrl = 'https://' + formattedUrl;
+      setWebsiteUrl(formattedUrl);
+    }
+    
+    await handleSetup(formattedUrl);
+  };
+
+  // Update the loading condition to account for organization loading
+  if (!initialCheckComplete || (orgLoading && !isProcessingOnboarding)) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="flex flex-col items-center space-y-4">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground">Setting up your workspace...</p>
+          <p className="text-sm text-muted-foreground">This may take a few moments</p>
         </div>
       </div>
     );
   }
-  
-  // If not authenticated, redirect to auth page
-  if (!isAuthenticated) {
-    console.log('User not authenticated, redirecting to auth...');
-    return <Navigate to="/auth" replace />;
-  }
-  
-  // If user already has an organisation, redirect to home
-  if (hasOrganisation) {
-    console.log('User has organization, redirecting to home...');
+
+  // If user already has an organisation and we're not processing onboarding data, redirect to home
+  if (hasOrganisation && !isProcessingOnboarding) {
     return <Navigate to="/" replace />;
   }
 
-  console.log('Showing setup form');
-  // Only show the setup form if user is authenticated and has no organization
+  // Show the setup form
   return (
     <>
       <Helmet>
@@ -198,55 +210,40 @@ const OrganisationSetup = () => {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="website-url">Website URL</Label>
-                <Input
-                  id="website-url"
-                  type="text"
-                  value={websiteUrl}
-                  onChange={(e) => {
-                    console.log('Website URL changed:', e.target.value);
-                    setWebsiteUrl(e.target.value);
-                    setError('');
-                  }}
-                  onBlur={(e) => {
-                    // Format the URL when the input loses focus
-                    let url = e.target.value.trim();
-                    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-                      url = 'https://' + url;
-                      setWebsiteUrl(url);
-                    }
-                  }}
-                  placeholder="example.com"
-                  className={error ? 'border-red-500' : ''}
-                  required
-                />
+                <Label htmlFor="website">Website URL</Label>
+                <div className="relative">
+                  <Globe className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="website"
+                    type="text"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    className="pl-9"
+                    placeholder="example.com"
+                    disabled={isSubmitting}
+                  />
+                </div>
                 {error && (
-                  <p className="text-sm text-red-500">{error}</p>
+                  <p className="text-sm text-destructive">{error}</p>
                 )}
               </div>
-              <div className="flex justify-center">
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={isSubmitting || !!error}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Setting up...
-                    </>
-                  ) : (
-                    <>
-                      <Globe className="mr-2 h-4 w-4" />
-                      Complete Setup
-                    </>
-                  )}
-                </Button>
-              </div>
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Setting up...
+                  </>
+                ) : (
+                  'Complete Setup'
+                )}
+              </Button>
             </form>
           </CardContent>
         </Card>
-        <Toaster />
       </div>
     </>
   );
