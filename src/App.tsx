@@ -8,6 +8,7 @@ import { SettingsProvider } from '@/context/SettingsContext';
 import { PostThemesProvider } from '@/context/PostThemesContext';
 import { WebsiteContentProvider } from '@/context/WebsiteContentContext';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import Auth from '@/pages/Auth';
 import Index from '@/pages/Index';
 import OrganisationSetup from '@/pages/OrganisationSetup';
@@ -38,134 +39,24 @@ const queryClient = new QueryClient({
 
 // Auth wrapper component
 const AuthWrapper = ({ children }: { children: React.ReactNode }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
-  const [isOnboarding, setIsOnboarding] = useState(false);
+  const { isAuthenticated, isLoading, isOnboarding } = useAuth();
   const location = useLocation();
-
-  useEffect(() => {
-    console.log('AuthWrapper: Checking auth state...');
-    let isMounted = true;
-    
-    const checkAuth = async () => {
-      try {
-        // First check if we're in onboarding flow
-        const onboardingData = localStorage.getItem('website_info');
-        const pendingSignup = localStorage.getItem('pending_signup');
-        const isOnboardingPath = location.pathname === '/onboarding';
-        
-        if (isOnboardingPath || onboardingData || pendingSignup) {
-          console.log('AuthWrapper: In onboarding flow');
-          if (isMounted) {
-            setIsOnboarding(true);
-            setIsAuthenticated(true);
-            setIsLoading(false);
-            setInitialCheckComplete(true);
-          }
-          return;
-        }
-
-        // Then check for active session
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session) {
-          console.log('AuthWrapper: Found active session');
-          if (isMounted) {
-            localStorage.setItem('supabase.auth.token', session.access_token);
-            localStorage.setItem('supabase.auth.refresh_token', session.refresh_token || '');
-            localStorage.setItem('last_auth_state', 'authenticated');
-            setIsAuthenticated(true);
-          }
-        } else {
-          console.log('AuthWrapper: No active session');
-          if (isMounted && !isOnboardingPath) {
-            localStorage.removeItem('supabase.auth.token');
-            localStorage.removeItem('supabase.auth.refresh_token');
-            localStorage.removeItem('last_auth_state');
-            setIsAuthenticated(false);
-          }
-        }
-
-        if (isMounted) {
-          setInitialCheckComplete(true);
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error('AuthWrapper: Error checking auth:', error);
-        if (isMounted) {
-          setIsAuthenticated(false);
-          setInitialCheckComplete(true);
-          setIsLoading(false);
-        }
-      }
-    };
-
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('AuthWrapper: Auth state changed:', event);
-      
-      if (event === 'SIGNED_IN' && session) {
-        console.log('AuthWrapper: User signed in');
-        const pendingSignup = localStorage.getItem('pending_signup');
-        
-        if (pendingSignup) {
-          console.log('AuthWrapper: Found pending signup');
-          try {
-            const { userId } = JSON.parse(pendingSignup);
-            // Don't call transferDataToDatabase here - it should be handled in Onboarding component
-            localStorage.setItem('auth_complete', 'true');
-            if (isMounted) {
-              setIsAuthenticated(true);
-            }
-          } catch (error) {
-            console.error('AuthWrapper: Error handling pending signup:', error);
-          }
-        } else {
-          if (isMounted) {
-            setIsAuthenticated(true);
-          }
-        }
-        
-        localStorage.setItem('supabase.auth.token', session.access_token);
-        localStorage.setItem('supabase.auth.refresh_token', session.refresh_token || '');
-        localStorage.setItem('last_auth_state', 'authenticated');
-      } else if (event === 'SIGNED_OUT') {
-        console.log('AuthWrapper: User signed out');
-        if (isMounted && !isOnboarding) {
-          setIsAuthenticated(false);
-          localStorage.removeItem('supabase.auth.token');
-          localStorage.removeItem('supabase.auth.refresh_token');
-          localStorage.removeItem('last_auth_state');
-          localStorage.removeItem('auth_complete');
-        }
-      }
-    });
-
-    // Start auth check
-    checkAuth();
-
-    // Cleanup
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, [location.pathname]);
-
-  if (isLoading && !initialCheckComplete) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-          <p className="loading-message text-muted-foreground">Initializing application...</p>
-        </div>
-      </div>
-    );
-  }
 
   // Always allow access to auth and onboarding paths
   if (location.pathname === '/auth' || location.pathname === '/onboarding') {
     return <>{children}</>;
+  }
+
+  // Show loading state only during initial check
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
+          <p className="loading-message text-muted-foreground">Loading your account...</p>
+        </div>
+      </div>
+    );
   }
 
   // Allow access during onboarding
@@ -254,27 +145,8 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
 
 // Auth redirector - redirects logged-in users to dashboard
 const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        const isLoggedIn = !!data.session;
-        console.log('AuthRedirector: Auth check complete, user is', isLoggedIn ? 'authenticated' : 'not authenticated');
-        setIsAuthenticated(isLoggedIn);
-      } catch (error) {
-        console.error('AuthRedirector: Error checking auth:', error);
-        setIsAuthenticated(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
 
   if (isLoading) {
     return (
@@ -325,119 +197,121 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
         <Router basename="/">
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-            
-            {/* All protected routes - wrapped in contexts */}
-            <Route path="/dashboard" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <Index />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            <Route path="/calendar" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <ContentCalendar />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            <Route path="/create" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <ContentCreation />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            <Route path="/settings" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            <Route path="/organization" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <Organization />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            <Route path="/setup" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute requireOrg={false}>
-                    <OrganisationSetup />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            <Route path="/team" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <TeamManagement />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            <Route path="/team-management" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <TeamManagement />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            <Route path="/websites" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <WebsiteManager />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            <Route path="/sitemap" element={
-              <AppContexts>
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <WebsiteSitemap />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              </AppContexts>
-            } />
-            
-            {/* Support for /app/* routes to handle redirects from old URLs */}
-            <Route path="/app/dashboard" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/app/calendar" element={<Navigate to="/calendar" replace />} />
-            <Route path="/app/create" element={<Navigate to="/create" replace />} />
-            <Route path="/app/settings" element={<Navigate to="/settings" replace />} />
-            <Route path="/app/organization" element={<Navigate to="/organization" replace />} />
-            <Route path="/app/setup" element={<Navigate to="/setup" replace />} />
-            <Route path="/app/team" element={<Navigate to="/team" replace />} />
-            <Route path="/app/team-management" element={<Navigate to="/team-management" replace />} />
-            <Route path="/app/websites" element={<Navigate to="/websites" replace />} />
-            <Route path="/app/sitemap" element={<Navigate to="/sitemap" replace />} />
-            
-            {/* Catch-all route */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AuthProvider>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={<AuthRedirector><LandingPage /></AuthRedirector>} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/onboarding" element={<Onboarding />} />
+              
+              {/* All protected routes - wrapped in contexts */}
+              <Route path="/dashboard" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute>
+                      <Index />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              <Route path="/calendar" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute>
+                      <ContentCalendar />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              <Route path="/create" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute>
+                      <ContentCreation />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              <Route path="/settings" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute>
+                      <Settings />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              <Route path="/organization" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute>
+                      <Organization />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              <Route path="/setup" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute requireOrg={false}>
+                      <OrganisationSetup />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              <Route path="/team" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute>
+                      <TeamManagement />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              <Route path="/team-management" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute>
+                      <TeamManagement />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              <Route path="/websites" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute>
+                      <WebsiteManager />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              <Route path="/sitemap" element={
+                <AppContexts>
+                  <AuthWrapper>
+                    <ProtectedRoute>
+                      <WebsiteSitemap />
+                    </ProtectedRoute>
+                  </AuthWrapper>
+                </AppContexts>
+              } />
+              
+              {/* Support for /app/* routes to handle redirects from old URLs */}
+              <Route path="/app/dashboard" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/app/calendar" element={<Navigate to="/calendar" replace />} />
+              <Route path="/app/create" element={<Navigate to="/create" replace />} />
+              <Route path="/app/settings" element={<Navigate to="/settings" replace />} />
+              <Route path="/app/organization" element={<Navigate to="/organization" replace />} />
+              <Route path="/app/setup" element={<Navigate to="/setup" replace />} />
+              <Route path="/app/team" element={<Navigate to="/team" replace />} />
+              <Route path="/app/team-management" element={<Navigate to="/team-management" replace />} />
+              <Route path="/app/websites" element={<Navigate to="/websites" replace />} />
+              <Route path="/app/sitemap" element={<Navigate to="/sitemap" replace />} />
+              
+              {/* Catch-all route */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
         </Router>
       </HelmetProvider>
     </QueryClientProvider>

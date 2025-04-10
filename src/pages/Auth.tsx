@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Mail, Loader2, ArrowLeft } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from '@/context/AuthContext';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -18,41 +19,9 @@ const Auth = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setIsAuthenticated(true);
-        console.log('Auth: User is already authenticated, waiting briefly before redirecting');
-        setTimeout(() => {
-          console.log('Auth: Redirecting to dashboard after delay');
-          navigate('/dashboard');
-        }, 1000);
-      } else {
-        setIsAuthenticated(false);
-      }
-    };
-    
-    checkAuth();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session) {
-          console.log('Auth: Auth state changed, user authenticated, waiting briefly before redirecting');
-          setTimeout(() => {
-            console.log('Auth: Redirecting to dashboard after auth state change delay');
-            navigate('/dashboard');
-          }, 1000);
-        }
-      }
-    );
-    
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+  const { isAuthenticated, isLoading: authLoading, checkAuth } = useAuth();
 
   useEffect(() => {
     // Check for signup parameter in URL
@@ -84,6 +53,19 @@ const Auth = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      const pendingSignup = localStorage.getItem('pending_signup');
+      const onboardingData = localStorage.getItem('website_info');
+      
+      if (pendingSignup || onboardingData) {
+        navigate('/onboarding');
+      } else {
+        navigate('/dashboard');
+      }
+    }
+  }, [isAuthenticated, navigate]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -107,8 +89,20 @@ const Auth = () => {
         
         if (error) throw error;
         
+        // Wait for auth state to be updated
+        await checkAuth();
+        
+        // Check if we need to redirect
+        const pendingSignup = localStorage.getItem('pending_signup');
+        const onboardingData = localStorage.getItem('website_info');
+        
+        if (pendingSignup || onboardingData) {
+          navigate('/onboarding');
+        } else {
+          navigate('/dashboard');
+        }
+        
         toast.success('Successfully logged in');
-        navigate('/dashboard');
       }
     } catch (error) {
       console.error('Authentication error:', error);
@@ -192,6 +186,19 @@ const Auth = () => {
       
       if (error) throw error;
       
+      // Wait for auth state to be updated
+      await checkAuth();
+      
+      // Check if we need to redirect
+      const pendingSignup = localStorage.getItem('pending_signup');
+      const onboardingData = localStorage.getItem('website_info');
+      
+      if (pendingSignup || onboardingData) {
+        navigate('/onboarding');
+      } else {
+        navigate('/dashboard');
+      }
+      
       // No need to navigate as the OAuth flow will redirect automatically
     } catch (error) {
       console.error('Google sign-in error:', error);
@@ -202,10 +209,13 @@ const Auth = () => {
     }
   };
 
-  if (isAuthenticated === null) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground mt-2">Checking authentication...</p>
+        </div>
       </div>
     );
   }
