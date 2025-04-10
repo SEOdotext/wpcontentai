@@ -168,11 +168,20 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
       const transferData = params.get('transfer') === 'true';
       
       if (onboardingComplete && transferData) {
-        console.log('AuthRedirector: Detected onboarding completion parameters, redirecting to dashboard');
-        navigate('/dashboard', { replace: true });
+        console.log('AuthRedirector: Detected onboarding completion parameters');
+        const userId = supabase.auth.getUser().then(({ data }) => {
+          if (data?.user?.id) {
+            console.log('AuthRedirector: Transferring data for user:', data.user.id);
+            import('@/api/onboardingImport').then(({ transferDataToDatabase }) => {
+              transferDataToDatabase(data.user.id).catch(error => {
+                console.error('Error transferring data:', error);
+              });
+            });
+          }
+        });
       }
     }
-  }, [isAuthenticated, isLoading, location.search, navigate]);
+  }, [isAuthenticated, isLoading, location.search]);
 
   console.log('AuthRedirector: Rendering with state:', {
     isAuthenticated,

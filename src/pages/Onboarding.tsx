@@ -2430,51 +2430,49 @@ const Onboarding = () => {
                             >
                               {day}
                             </Toggle>
-                            {state.postingDays.includes(day) && (
-                              <div className="flex items-center gap-1">
-                      <Button 
-                        variant="outline" 
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                        onClick={() => {
-                                    const currentCount = state.postingDays.filter(d => d === day).length;
-                                    if (currentCount > 0) {
-                                      setState(prev => ({
-                                        ...prev,
-                                        postingDays: prev.postingDays.filter((d, i) => 
-                                          !(d === day && i === prev.postingDays.lastIndexOf(day))
-                                        )
-                                      }));
-                                    }
-                                  }}
-                                >
-                                  -
-                      </Button>
-                                <span className="text-sm min-w-[1.5rem] text-center">
-                                  {state.postingDays.filter(d => d === day).length}
-                                </span>
-                      <Button
-                        variant="outline"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                        onClick={() => {
-                                    const currentCount = state.postingDays.filter(d => d === day).length;
-                                    const totalPosts = state.postingDays.length;
-                                    if (totalPosts < state.postingFrequency) {
-                                      setState(prev => ({
-                                        ...prev,
-                                        postingDays: [...prev.postingDays, day]
-                                      }));
-                                    }
-                                  }}
-                                >
-                                  +
-                      </Button>
-                    </div>
-                            )}
+                            <div className="flex items-center gap-1">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => {
+                                  const currentCount = state.postingDays.filter(d => d === day).length;
+                                  if (currentCount > 0) {
+                                    setState(prev => ({
+                                      ...prev,
+                                      postingDays: prev.postingDays.filter((d, i) => 
+                                        !(d === day && i === prev.postingDays.lastIndexOf(day))
+                                      )
+                                    }));
+                                  }
+                                }}
+                              >
+                                -
+                              </Button>
+                              <span className="text-sm min-w-[1.5rem] text-center">
+                                {state.postingDays.filter(d => d === day).length}
+                              </span>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => {
+                                  const currentCount = state.postingDays.filter(d => d === day).length;
+                                  const totalPosts = state.postingDays.length;
+                                  if (totalPosts < state.postingFrequency) {
+                                    setState(prev => ({
+                                      ...prev,
+                                      postingDays: [...prev.postingDays, day]
+                                    }));
+                                  }
+                                }}
+                              >
+                                +
+                              </Button>
+                            </div>
                           </div>
                         ))}
-                    </div>
+                      </div>
                     
                       {state.postingDays.length > 0 && (
                         <div className="text-sm text-muted-foreground mt-4">

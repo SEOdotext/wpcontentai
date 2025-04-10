@@ -134,6 +134,18 @@ export const transferDataToDatabase = async (userId: string) => {
       throw new Error('No active session found');
     }
 
+    // For Google auth users, we need to ensure we have website info
+    if (!websiteUrl && !websiteInfo.url) {
+      const { data: userData } = await supabase.auth.getUser();
+      const email = userData?.user?.email;
+      if (email) {
+        const domain = email.split('@')[1];
+        websiteInfo.url = `https://${domain}`;
+        websiteInfo.name = domain.split('.')[0];
+        localStorage.setItem('website_info', JSON.stringify(websiteInfo));
+      }
+    }
+
     // Call the edge function
     const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`, {
       method: 'POST',
