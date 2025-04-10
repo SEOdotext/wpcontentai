@@ -10,6 +10,7 @@ import { WebsiteContentProvider } from '@/context/WebsiteContentContext';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import Auth from '@/pages/Auth';
+import AuthCallback from '@/pages/AuthCallback';
 import Index from '@/pages/Index';
 import OrganisationSetup from '@/pages/OrganisationSetup';
 import Settings from '@/pages/Settings';
@@ -246,6 +247,7 @@ function App() {
               {/* Public routes */}
               <Route path="/" element={<AuthRedirector><LandingPage /></AuthRedirector>} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/onboarding" element={<Onboarding />} />
               
               {/* All protected routes - wrapped in contexts */}

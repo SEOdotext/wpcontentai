@@ -56,6 +56,14 @@ const Auth = () => {
         });
       }
     }
+
+    // Check for hash fragment in URL (for OAuth callbacks)
+    const hash = window.location.hash;
+    if (hash && (hash.includes('access_token=') || hash.includes('type=signup'))) {
+      console.log('Auth: OAuth callback detected in URL, redirecting to callback handler');
+      // Redirect to the callback handler
+      window.location.href = '/auth/callback' + hash;
+    }
   }, []);
 
   useEffect(() => {
