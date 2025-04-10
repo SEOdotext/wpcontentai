@@ -38,6 +38,7 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Website } from "@/types/website";
 import { transferDataToDatabase } from '@/api/onboardingImport';
+import { PublicationSettings } from "@/components/PublicationSettings";
 
 // Configuration
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
@@ -181,6 +182,8 @@ const Settings = () => {
   const [generatedCategories, setGeneratedCategories] = useState<{ name: string; slug: string }[]>([]);
   const [isGeneratingCategories, setIsGeneratingCategories] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [postingDays, setPostingDays] = useState<string[]>([]);
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -2100,29 +2103,64 @@ const Settings = () => {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Publication Settings</CardTitle>
-                    <CardDescription>
-                      Configure how often content should be scheduled for publication
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="frequency">Publication Frequency (days between posts)</Label>
-                      <div className="flex gap-2">
-                        <Input 
-                          id="frequency" 
-                          type="number" 
-                          min="1" 
-                          max="90" 
-                          value={frequency} 
-                          onChange={(e) => setFrequency(parseInt(e.target.value || "7", 10))}
-                        />
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <PublicationSettings
+                  initialFrequency={publicationFrequency}
+                  initialPostingDays={postingDays}
+                  onSave={async (frequency, days) => {
+                    setSaving(true);
+                    try {
+                      // Format posting days to match database structure
+                      const formattedPostingDays = days.reduce((acc: { day: string; count: number }[], day) => {
+                        const existingDay = acc.find(d => d.day === day);
+                        if (existingDay) {
+                          existingDay.count++;
+                        } else {
+                          acc.push({ day, count: 1 });
+                        }
+                        return acc;
+                      }, []);
+
+                      console.log('Saving settings:', {
+                        frequency,
+                        postingDays: formattedPostingDays,
+                        writingStyle,
+                        subjectMatters
+                      });
+
+                      const { error } = await supabase
+                        .from('publication_settings')
+                        .upsert({
+                          website_id: currentWebsite.id,
+                          organization_id: currentWebsite.organisation_id,
+                          frequency,
+                          posting_days: formattedPostingDays,
+                          writing_style: writingStyle,
+                          subject_matters: subjectMatters,
+                          updated_at: new Date().toISOString()
+                        });
+
+                      if (error) throw error;
+
+                      // Update local state
+                      setPublicationFrequency(frequency);
+                      setPostingDays(days);
+                      setWritingStyle(writingStyle);
+                      setSubjectMatters(subjectMatters);
+
+                      toast({
+                        description: "Settings saved successfully.",
+                      });
+                    } catch (error) {
+                      console.error('Error saving settings:', error);
+                      toast({
+                        description: "Failed to save settings. Please try again.",
+                        variant: "destructive"
+                      });
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                />
 
                 <Card>
                   <CardHeader>

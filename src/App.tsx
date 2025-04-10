@@ -21,7 +21,7 @@ import ContentCalendar from './pages/ContentCalendar';
 import ContentCreation from './pages/ContentCreation';
 import WebsiteManager from './pages/WebsiteManager';
 import WebsiteSitemap from './pages/WebsiteSitemap';
-import Organization from './pages/Organization';
+import Organisation from './pages/Organisation';
 import NotFound from './pages/NotFound';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
@@ -287,11 +287,11 @@ function App() {
                   </AuthWrapper>
                 </AppContexts>
               } />
-              <Route path="/organization" element={
+              <Route path="/organisation" element={
                 <AppContexts>
                   <AuthWrapper>
                     <ProtectedRoute>
-                      <Organization />
+                      <Organisation />
                     </ProtectedRoute>
                   </AuthWrapper>
                 </AppContexts>
@@ -347,7 +347,7 @@ function App() {
               <Route path="/app/calendar" element={<Navigate to="/calendar" replace />} />
               <Route path="/app/create" element={<Navigate to="/create" replace />} />
               <Route path="/app/settings" element={<Navigate to="/settings" replace />} />
-              <Route path="/app/organization" element={<Navigate to="/organization" replace />} />
+              <Route path="/app/organisation" element={<Navigate to="/organisation" replace />} />
               <Route path="/app/setup" element={<Navigate to="/setup" replace />} />
               <Route path="/app/team" element={<Navigate to="/team" replace />} />
               <Route path="/app/team-management" element={<Navigate to="/team-management" replace />} />

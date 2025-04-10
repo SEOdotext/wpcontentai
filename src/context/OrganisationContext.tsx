@@ -8,6 +8,9 @@ interface Organisation {
   id: string;
   name: string;
   created_at: string;
+  current_plan?: string;
+  credits?: number;
+  next_payment_date?: string;
 }
 
 interface OrganisationMembership {
@@ -150,38 +153,37 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       // Fetch organizations from the database
       const { data, error } = await supabase
-              .from('organisation_memberships')
-              .select(`
-                organisation:organisations (
-                  id,
-                  name,
-                  created_at
-                )
-              `)
+        .from('organisation_memberships')
+        .select(`
+          organisation:organisations (
+            id,
+            name,
+            created_at,
+            current_plan,
+            credits,
+            next_payment_date
+          )
+        `)
         .eq('member_id', session.user.id);
 
-            if (error) {
+      if (error) {
         console.error('OrganisationContext: Error fetching organizations:', error);
-              // Only reset state if we don't have any existing organization data
+        // Only reset state if we don't have any existing organization data
         if (!organization && organizations.length === 0) {
-                setHasOrganisation(false);
-              }
+          setHasOrganisation(false);
+        }
         if (mounted) {
           setIsLoading(false);
           setIsInitialized(true);
         }
-              return;
-            }
+        return;
+      }
 
-            if (mounted) {
+      if (mounted) {
         // Transform the data to match our Organization type
         const transformedData = (data || [])
-          .filter((item: any) => item.organisation)
-          .map((item: any) => ({
-            id: item.organisation.id,
-            name: item.organisation.name,
-            created_at: item.organisation.created_at
-          })) as Organisation[];
+          .map((item: any) => item.organisation)
+          .filter((org: any) => org !== null) as Organisation[];
         
         // Update organizations list
         setOrganizations(transformedData);
@@ -193,8 +195,8 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           const storedOrg = transformedData.find(org => org.id === storedOrgId);
           if (storedOrg) {
             setOrganization(storedOrg);
-                setHasOrganisation(true);
-              } else {
+            setHasOrganisation(true);
+          } else {
             // If stored org not found, use the first one or null
             if (transformedData && transformedData.length > 0) {
               setOrganization(transformedData[0]);
@@ -202,7 +204,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
               localStorage.setItem('current_organisation_id', transformedData[0].id);
             } else {
               setOrganization(null);
-                setHasOrganisation(false);
+              setHasOrganisation(false);
               localStorage.removeItem('current_organisation_id');
             }
           }
@@ -219,14 +221,14 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         setIsLoading(false);
         setIsInitialized(true);
       }
-        } catch (error) {
+    } catch (error) {
       console.error('OrganisationContext: Organization fetch timed out or failed:', error);
-          // Keep existing data if we have it
+      // Keep existing data if we have it
       if (!organization && organizations.length === 0) {
-            setHasOrganisation(false);
-          }
-          if (mounted) {
-            setIsLoading(false);
+        setHasOrganisation(false);
+      }
+      if (mounted) {
+        setIsLoading(false);
         setIsInitialized(true);
         console.log('OrganisationContext: Initialization completed, loading:', false);
       }

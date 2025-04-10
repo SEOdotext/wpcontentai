@@ -4,9 +4,11 @@ Date settings
 
 These dates should just be the same and only set in the frontend with the logic from the file! 
 
-All dates shown in the frontend should be the furthest in the future + settings amount of dates.
+All dates shown in the frontend should be the furthest in the future + settings amount of dates/days.
+For example, user has 7 posts pr. week. 1 monday, 2 tuesday, 1 wed, 2 thur, 1 friday
+Today is tuesday and 1 has been set to today. Then post 1 more today. Then schedule a post on wed and 2 on thur. etc. 
 
-The dates in the frontend can be updated by the user.
+The dates in the frontend can still be updated by the user.
 
 When the user likes the post, the date is unchanged for that post as it changes status.
 

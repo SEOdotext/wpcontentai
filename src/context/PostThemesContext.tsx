@@ -116,8 +116,8 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     try {
       // If no website is selected, use default calculation
       if (!currentWebsite) {
-        const result = addDays(new Date(), publicationFrequency);
-        console.log('No website selected, using today + frequency:', format(result, 'yyyy-MM-dd'));
+        const result = addDays(new Date(), 1);
+        console.log('No website selected, using tomorrow:', format(result, 'yyyy-MM-dd'));
         return result;
       }
 
@@ -131,8 +131,23 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       // Find the absolute latest date through a simple loop
       let latestTimestamp = 0;
       const currentTimestamp = new Date().getTime();
-      const minValidTimestamp = new Date('2020-01-01').getTime(); // No dates before 2020 are valid
+      const minValidTimestamp = new Date('2020-01-01').getTime();
       
+      // Type definition for day count
+      type DayCount = { [key: string]: number };
+      
+      // Track posts per day to respect publication settings
+      const postsPerDay: DayCount = {
+        monday: 0,
+        tuesday: 0,
+        wednesday: 0,
+        thursday: 0,
+        friday: 0,
+        saturday: 0,
+        sunday: 0
+      };
+      
+      // Find latest date and count posts per day
       for (const theme of websiteThemes) {
         if (!theme.scheduled_date) continue;
         
@@ -140,7 +155,6 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
           const dateObj = new Date(theme.scheduled_date);
           const timestamp = dateObj.getTime();
           
-          // Skip invalid dates, dates from 1970, or dates too far in the past
           if (isNaN(timestamp) || timestamp < minValidTimestamp) {
             console.warn('Skipping invalid or too old date:', theme.scheduled_date);
             continue;
@@ -149,31 +163,57 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
           if (timestamp > latestTimestamp) {
             latestTimestamp = timestamp;
           }
+          
+          // Count posts per day
+          const day = format(dateObj, 'EEEE').toLowerCase();
+          if (postsPerDay[day] !== undefined) {
+            postsPerDay[day]++;
+          }
         } catch (e) {
           console.error('Error parsing date:', theme.scheduled_date, e);
         }
       }
       
+      // If no valid dates found, use tomorrow
       if (latestTimestamp === 0) {
-        // No valid dates found, use today + publication frequency
-        const result = addDays(new Date(), publicationFrequency);
-        console.log(`No valid dates found for website ${currentWebsite.name}, using today + frequency:`, format(result, 'yyyy-MM-dd'));
+        const result = addDays(new Date(), 1);
+        console.log(`No valid dates found for website ${currentWebsite.name}, using tomorrow:`, format(result, 'yyyy-MM-dd'));
         return result;
       }
       
-      // We found a valid latest date, add publication frequency to it
-      const latestDate = new Date(latestTimestamp);
-      console.log(`Found latest calendar date for website ${currentWebsite.name}:`, format(latestDate, 'yyyy-MM-dd'));
+      // Start from the latest date found
+      let nextDate = new Date(latestTimestamp);
       
-      const result = addDays(latestDate, publicationFrequency);
-      console.log('Next publication date:', format(result, 'yyyy-MM-dd'));
-      return result;
+      // Find the next available day based on posting schedule
+      let daysToAdd = 1;
+      let maxAttempts = 14; // Prevent infinite loop
+      
+      while (maxAttempts > 0) {
+        nextDate = addDays(nextDate, 1);
+        const dayName = format(nextDate, 'EEEE').toLowerCase();
+        
+        // If this day has fewer posts than others, use it
+        const currentDayCount = postsPerDay[dayName] || 0;
+        const averagePostsPerDay = Object.values(postsPerDay).reduce((a, b) => a + b, 0) / 7;
+        
+        if (currentDayCount <= averagePostsPerDay) {
+          console.log(`Found next available day: ${dayName} with ${currentDayCount} posts`);
+          return nextDate;
+        }
+        
+        maxAttempts--;
+      }
+      
+      // Fallback: if no suitable day found, just add one day to latest date
+      console.log('No optimal day found, using next day after latest');
+      return addDays(new Date(latestTimestamp), 1);
+      
     } catch (error) {
       console.error('Error calculating next publication date:', error);
-      // Fallback to today + publication frequency
-      return addDays(new Date(), publicationFrequency);
+      // Fallback to tomorrow
+      return addDays(new Date(), 1);
     }
-  }, [currentWebsite, publicationFrequency, postThemes]);
+  }, [currentWebsite, postThemes]);
 
   // Function to fetch post themes from the database
   const fetchPostThemes = async () => {

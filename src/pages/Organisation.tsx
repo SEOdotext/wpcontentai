@@ -106,7 +106,7 @@ const Organisation = () => {
                               Cancel
                             </Button>
                           </div>
-                        ) :
+                        ) : (
                           <div className="flex items-center gap-2">
                             <p className="text-2xl font-semibold">{organisation?.name}</p>
                             <Button
@@ -120,7 +120,7 @@ const Organisation = () => {
                               <Pencil className="h-4 w-4" />
                             </Button>
                           </div>
-                        }
+                        )}
                       </div>
                     </div>
                     <div>

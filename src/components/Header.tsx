@@ -67,7 +67,7 @@ const Header: React.FC = () => {
     if (path === '/sitemap') return 'Website Content';
     if (path === '/settings') return 'Publication Settings';
     if (path === '/websites') return 'Websites';
-    if (path === '/organization') return 'Organization';
+    if (path === '/organisation') return 'Organisation';
     return '';
   };
 
@@ -141,13 +141,13 @@ const Header: React.FC = () => {
                 <DropdownMenuGroup>
                   <DropdownMenuLabel className="flex items-center gap-2">
                     <Building2 className="h-4 w-4" />
-                    Organization
+                    Organisation
                   </DropdownMenuLabel>
                   <DropdownMenuItem className="text-xs text-muted-foreground">
                     {organisation?.name || 'Loading...'}
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/organization')}>
-                    Manage Organization
+                  <DropdownMenuItem onClick={() => navigate('/organisation')}>
+                    Manage Organisation
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
