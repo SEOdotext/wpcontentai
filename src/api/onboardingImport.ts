@@ -18,6 +18,40 @@ export const transferDataToDatabase = async (userId: string) => {
       throw new Error('Website URL not found in localStorage');
     }
 
+    // Get current session for authentication
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session?.access_token) {
+      throw new Error('No active session found');
+    }
+
+    // Check for existing organization
+    const { data: existingOrgs } = await supabase
+      .from('organisation_memberships')
+      .select(`
+        organisation_id,
+        organisations (
+          name
+        )
+      `)
+      .eq('member_id', userId)
+      .single();
+
+    if (existingOrgs?.organisation_id && existingOrgs?.organisations) {
+      // Use existing organization instead of creating new one
+      organizationInfo.id = existingOrgs.organisation_id;
+      // @ts-ignore - we know organisations.name exists from the query
+      organizationInfo.name = existingOrgs.organisations.name;
+      
+      // Update website info to link to existing org
+      websiteInfo.organization_id = existingOrgs.organisation_id;
+      
+      toast.info(
+        "Adding to existing organization",
+        // @ts-ignore - we know organisations.name exists from the query
+        { description: `Website will be added to your organization: ${existingOrgs.organisations.name}` }
+      );
+    }
+
     // Format data according to edge function requirements
     const data = {
       userId,
@@ -126,12 +160,6 @@ export const transferDataToDatabase = async (userId: string) => {
         }
         return content;
       });
-    }
-
-    // Get current session for authentication
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session?.access_token) {
-      throw new Error('No active session found');
     }
 
     // For Google auth users, we need to ensure we have website info

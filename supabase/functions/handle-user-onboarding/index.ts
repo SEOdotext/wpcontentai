@@ -196,101 +196,120 @@ serve(async (req) => {
     // Skip user verification since they just signed up
     console.log('Proceeding with onboarding for user:', userId)
 
-    // Create organization
-    const { data: orgData, error: orgError } = await supabaseClient
-      .from('organisations')
-      .insert({
-        id: organizationInfo.id || undefined, // Use provided ID if it exists
-        name: organizationInfo.name,
-        created_at: organizationInfo.created_at || timestamp
-      })
-      .select()
-      .single()
+    let orgData;
+    
+    // Only create organization if no ID is provided
+    if (!organizationInfo.id) {
+      // Create organization
+      const { data: newOrgData, error: orgError } = await supabaseClient
+        .from('organisations')
+        .insert({
+          name: organizationInfo.name,
+          created_at: organizationInfo.created_at || timestamp
+        })
+        .select()
+        .single()
 
-    if (orgError) {
-      console.error('Organization creation error:', orgError);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: 'Failed to create organization',
-          error: orgError.message,
-          details: { organizationInfo }
-        }),
-        { 
-          status: 500, 
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          } 
-        }
-      );
+      if (orgError) {
+        console.error('Organization creation error:', orgError);
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: 'Failed to create organization',
+            error: orgError.message,
+            details: { organizationInfo }
+          }),
+          { 
+            status: 500, 
+            headers: { 
+              'Content-Type': 'application/json',
+              ...corsHeaders 
+            } 
+          }
+        );
+      }
+      
+      orgData = newOrgData;
+      console.log('Created new organization:', { 
+        id: orgData.id, 
+        name: organizationInfo.name
+      });
+    } else {
+      // Use existing organization
+      orgData = { id: organizationInfo.id };
+      console.log('Using existing organization:', orgData.id);
     }
 
-    console.log('Created organization:', { 
-      id: orgData.id, 
-      name: organizationInfo.name,
-      provided_id: organizationInfo.id 
-    });
-
-    // Create organization membership
-    console.log('Creating organization membership with data:', { 
-      organisation_id: orgData.id,
-      member_id: userId,
-      role: 'owner',
-      timestamp: timestamp
-    });
-
-    const { data: membershipData, error: membershipError } = await supabaseClient
+    // Create organization membership if it doesn't exist
+    const { data: existingMembership } = await supabaseClient
       .from('organisation_memberships')
-      .insert({
+      .select('id')
+      .eq('organisation_id', orgData.id)
+      .eq('member_id', userId)
+      .single();
+
+    if (!existingMembership) {
+      console.log('Creating organization membership with data:', { 
         organisation_id: orgData.id,
         member_id: userId,
         role: 'owner',
-        created_at: timestamp,
-        updated_at: timestamp
-      })
-      .select('id, organisation_id, member_id, role')
-      .single();
+        timestamp: timestamp
+      });
 
-    if (membershipError) {
-      console.error('Membership creation error:', membershipError)
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: 'Failed to create organization membership',
-          error: membershipError.message,
-          details: { userId, orgId: orgData.id }
-        }),
-        { 
-          status: 500, 
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          } 
-        }
-      )
+      const { data: membershipData, error: membershipError } = await supabaseClient
+        .from('organisation_memberships')
+        .insert({
+          organisation_id: orgData.id,
+          member_id: userId,
+          role: 'owner',
+          created_at: timestamp,
+          updated_at: timestamp
+        })
+        .select('id, organisation_id, member_id, role')
+        .single();
+
+      if (membershipError) {
+        console.error('Membership creation error:', membershipError)
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: 'Failed to create organization membership',
+            error: membershipError.message,
+            details: { userId, orgId: orgData.id }
+          }),
+          { 
+            status: 500, 
+            headers: { 
+              'Content-Type': 'application/json',
+              ...corsHeaders 
+            } 
+          }
+        )
+      }
+
+      // Verify membership was created
+      if (!membershipData?.id) {
+        console.error('Membership creation failed - no data returned');
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            message: 'Failed to verify organization membership creation',
+            details: { userId, orgId: orgData.id }
+          }),
+          { 
+            status: 500, 
+            headers: { 
+              'Content-Type': 'application/json',
+              ...corsHeaders 
+            } 
+          }
+        )
+      }
+
+      console.log('Successfully created organization membership:', membershipData);
+    } else {
+      console.log('User already has membership in organization:', orgData.id);
     }
-
-    // Verify membership was created
-    if (!membershipData?.id) {
-      console.error('Membership creation failed - no data returned');
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          message: 'Failed to verify organization membership creation',
-          details: { userId, orgId: orgData.id }
-        }),
-        { 
-          status: 500, 
-          headers: { 
-            'Content-Type': 'application/json',
-            ...corsHeaders 
-          } 
-        }
-      )
-    }
-
-    console.log('Successfully created organization membership:', membershipData);
 
     // Create website with proper organization link
     const { data: websiteData, error: websiteError } = await supabaseClient
