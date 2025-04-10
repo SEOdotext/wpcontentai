@@ -841,6 +841,16 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "publication_settings.posting_days",
+    "detail_1": "jsonb",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "publication_settings.website_id",
     "detail_1": "uuid",
     "detail_2": null,
@@ -913,6 +923,16 @@
     "section": "columns_and_checks",
     "identifier": "post_themes.updated_at",
     "detail_1": "timestamp with time zone",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "publication_settings.posting_frequency",
+    "detail_1": "smallint",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -1231,8 +1251,8 @@
   },
   {
     "section": "columns_and_checks",
-    "identifier": "websites.updated_at",
-    "detail_1": "timestamp with time zone",
+    "identifier": "wordpress_settings.is_connected",
+    "detail_1": "boolean",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -1241,8 +1261,8 @@
   },
   {
     "section": "columns_and_checks",
-    "identifier": "wordpress_settings.is_connected",
-    "detail_1": "boolean",
+    "identifier": "websites.updated_at",
+    "detail_1": "timestamp with time zone",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -1323,6 +1343,16 @@
     "section": "columns_and_checks",
     "identifier": "website_access.created_at",
     "detail_1": "timestamp with time zone",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "website_access.access_status",
+    "detail_1": "text",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -1831,6 +1861,26 @@
   },
   {
     "section": "pg_policies",
+    "identifier": "public.website_access",
+    "detail_1": "Users can confirm their own access",
+    "detail_2": "{authenticated}",
+    "detail_3": "UPDATE",
+    "detail_4": "((user_id = auth.uid()) AND (access_status = 'pending'::text))",
+    "detail_5": "((user_id = auth.uid()) AND (access_status = 'pending'::text))",
+    "detail_6": "PERMISSIVE"
+  },
+  {
+    "section": "pg_policies",
+    "identifier": "public.website_access",
+    "detail_1": "Admins can manage access status",
+    "detail_2": "{authenticated}",
+    "detail_3": "UPDATE",
+    "detail_4": "(EXISTS ( SELECT 1\n   FROM (organisation_memberships om\n     JOIN websites w ON ((w.organisation_id = om.organisation_id)))\n  WHERE ((om.member_id = auth.uid()) AND (om.role = 'admin'::text) AND (w.id = website_access.website_id))))",
+    "detail_5": null,
+    "detail_6": "PERMISSIVE"
+  },
+  {
+    "section": "pg_policies",
     "identifier": "public.image_generation_queue",
     "detail_1": "Enable read access for authenticated users",
     "detail_2": "{authenticated}",
@@ -2091,6 +2141,26 @@
   },
   {
     "section": "routines",
+    "identifier": "public.resend_website_access_confirmation",
+    "detail_1": "FUNCTION",
+    "detail_2": "USER-DEFINED",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "routines",
+    "identifier": "public.update_website_access_updated_at",
+    "detail_1": "FUNCTION",
+    "detail_2": "trigger",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "routines",
     "identifier": "extensions.uuid_nil",
     "detail_1": "FUNCTION",
     "detail_2": "uuid",
@@ -2134,6 +2204,16 @@
     "identifier": "extensions.uuid_ns_x500",
     "detail_1": "FUNCTION",
     "detail_2": "uuid",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "routines",
+    "identifier": "public.validate_posting_days",
+    "detail_1": "FUNCTION",
+    "detail_2": "trigger",
     "detail_3": null,
     "detail_4": null,
     "detail_5": null,

@@ -36,6 +36,7 @@ const WebsiteManager = () => {
   const [newWebsiteName, setNewWebsiteName] = useState('');
   const [newWebsiteUrl, setNewWebsiteUrl] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [urlError, setUrlError] = useState('');
   const [editingWebsite, setEditingWebsite] = useState<{ 
     id: string; 
     name: string; 
@@ -48,24 +49,34 @@ const WebsiteManager = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
+  const isValidDomain = (domain: string) => {
+    // Remove http:// or https:// if present for validation
+    const cleanDomain = domain.replace(/^https?:\/\//i, '');
+    
+    // Basic domain validation regex
+    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
+    return domainRegex.test(cleanDomain);
+  };
+
   const handleAddWebsite = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!newWebsiteName.trim() || !newWebsiteUrl.trim()) {
-      toast.error("Please enter both website name and URL");
+    setUrlError('');
+
+    if (!newWebsiteUrl.trim()) {
+      setUrlError('Please enter a website URL');
       return;
     }
-    
-    let formattedUrl = newWebsiteUrl;
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-      formattedUrl = 'https://' + formattedUrl;
+
+    if (!isValidDomain(newWebsiteUrl)) {
+      setUrlError('Please enter a valid website domain (e.g., example.com)');
+      return;
     }
-    
+
     setIsAdding(true);
     try {
       await addWebsite({
         name: newWebsiteName,
-        url: formattedUrl,
+        url: newWebsiteUrl,
         language: 'en',
         enable_ai_image_generation: false
       });
@@ -139,10 +150,17 @@ const WebsiteManager = () => {
                         <Input 
                           id="websiteUrl" 
                           value={newWebsiteUrl}
-                          onChange={(e) => setNewWebsiteUrl(e.target.value)}
+                          onChange={(e) => {
+                            setNewWebsiteUrl(e.target.value);
+                            setUrlError('');
+                          }}
                           placeholder="https://myblog.com"
+                          className={urlError ? 'border-red-500' : ''}
                           required
                         />
+                        {urlError && (
+                          <p className="text-sm text-red-500">{urlError}</p>
+                        )}
                       </div>
                     </div>
                   </CardContent>

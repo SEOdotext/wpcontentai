@@ -37,6 +37,7 @@ import { Select, SelectTrigger, SelectValue, SelectItem, SelectContent } from "@
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Website } from "@/types/website";
+import { transferDataToDatabase } from '@/api/onboardingImport';
 
 // Configuration
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
@@ -2029,7 +2030,7 @@ const Settings = () => {
                           <h4 className="font-medium mb-2">Before you start:</h4>
                           <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
                             <li>Make sure you're logged into your WordPress admin</li>
-                            <li>You'll create a secure connection key that only WP Content AI can use</li>
+                            <li>You'll create a secure connection key that only ContentGardener.ai can use</li>
                             <li>This is more secure than using your admin password</li>
                           </ul>
                         </div>
@@ -2089,7 +2090,7 @@ const Settings = () => {
                           <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
                             <p className="text-sm font-medium">What is a Connection Key?</p>
                             <p className="text-sm text-muted-foreground">
-                              A connection key (or application password) is a secure way to let WP Content AI connect to your WordPress site. 
+                              A connection key (or application password) is a secure way to let ContentGardener.ai connect to your WordPress site. 
                               Unlike your admin password, it has limited access and can be revoked at any time.
                             </p>
                           </div>
@@ -2616,6 +2617,45 @@ const Settings = () => {
               </>
             )}
           </div>
+
+          {/* Add Retrigger Data Transfer Button - only show on localhost */}
+          {window.location.href.includes('localhost:8080') && (
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Data Transfer (Development Only)</CardTitle>
+                <CardDescription>
+                  Manually retrigger data transfer from local storage to database
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  onClick={async () => {
+                    try {
+                      // Get current user session
+                      const { data: { session } } = await supabase.auth.getSession();
+                      const userId = session?.user?.id;
+                      
+                      if (!userId) {
+                        toast.error('Please log in to transfer data');
+                        return;
+                      }
+
+                      await transferDataToDatabase(userId);
+                      // Optionally refresh the page after successful transfer
+                      window.location.reload();
+                    } catch (error) {
+                      console.error('Data transfer error:', error);
+                      toast.error(`Data transfer failed: ${error.message}`);
+                    }
+                  }}
+                  variant="outline"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Retrigger Data Transfer
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </main>
       </div>
 

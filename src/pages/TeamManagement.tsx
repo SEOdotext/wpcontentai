@@ -460,7 +460,7 @@ const TeamManagement = () => {
           <main className="flex-1 px-4 py-6 overflow-y-auto">
             <div className="max-w-6xl mx-auto space-y-6">
               <Helmet>
-                <title>Team Management | WP Content AI</title>
+                <title>Team Management | ContentGardener.ai</title>
               </Helmet>
 
               {currentUserRole !== 'admin' ? (

@@ -15,8 +15,28 @@ import {
   Wand2,
   ThumbsUp,
   ThumbsDown,
-  X
+  X,
+  Code,
+  Eye,
+  Key,
+  Link,
+  HelpCircle,
+  Loader2,
+  Users,
+  UserPlus,
+  Trash2,
+  Shield,
+  Globe,
+  Mail
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Logo } from "@/components/Logo";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -24,7 +44,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Helmet } from 'react-helmet-async';
-import { Users, UserPlus, Trash2, Loader2, Shield, Globe } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { toast as sonnerToast } from 'sonner';
 import Header from '@/components/Header';
@@ -32,6 +51,13 @@ import AppSidebar from '@/components/Sidebar';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { useOrganisation } from '@/context/OrganisationContext';
 import { useWebsites } from '@/context/WebsitesContext';
+import { Toggle } from "@/components/ui/toggle";
+import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { supabase } from '@/integrations/supabase/client';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FcGoogle } from 'react-icons/fc';
+import { transferDataToDatabase } from '@/api/onboardingImport';
 
 // Types
 interface ContentType {
@@ -52,7 +78,7 @@ interface ContentStep {
 }
 
 interface OnboardingState {
-  step: number;
+  step: number | 'email-verification';
   websiteUrl: string;
   progress: number;
   currentStepIndex: number;
@@ -61,6 +87,18 @@ interface OnboardingState {
   contentGenerated: boolean;
   generatedContentTitle: string;
   generatedContentPreview: string;
+  showRawContent: boolean;
+  showWpAuthDialog: boolean;
+  wpUsername: string;
+  wpPassword: string;
+  isAuthenticating: boolean;
+  wpConnectionError: string | null;
+  postingFrequency: number;
+  postingDays: string[];
+  scheduledDates: string[];
+  showSignupModal: boolean;
+  verificationEmail?: string;
+  showEmailVerification: boolean;
 }
 
 interface Step {
@@ -86,7 +124,7 @@ const contentTypes: ContentType[] = [
   },
   {
     id: 'landing',
-    name: 'Landing Pages',
+    name: 'Landing pages',
     description: 'Convert visitors with compelling value propositions.',
     icon: <Layout className="w-5 h-5 text-primary" />,
     recommended: "Best for Conversions 💎"
@@ -96,7 +134,7 @@ const contentTypes: ContentType[] = [
 const contentSteps: ContentStep[] = [
   { 
     id: 1, 
-    name: "Account Setup", 
+    name: "Account setup", 
     description: "Creating your workspace",
     detail: "Setting up your personal account and workspace",
     duration: 1000,
@@ -107,7 +145,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 2, 
-    name: "Reading Website", 
+    name: "Reading website", 
     description: "Analyzing your website",
     detail: "Extracting and analyzing your website content",
     duration: 3000,
@@ -119,7 +157,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 3, 
-    name: "Language Detection", 
+    name: "Language detection", 
     description: "Identifying website language",
     detail: "Detecting the primary language of your content",
     duration: 1500,
@@ -131,7 +169,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 4, 
-    name: "Learning Tone-of-Voice", 
+    name: "Learning tone of voice", 
     description: "Understanding your style",
     detail: "Learning how you sound to match your voice",
     duration: 2500,
@@ -143,7 +181,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 5, 
-    name: "Reading Key Content", 
+    name: "Reading key content", 
     description: "Analyzing important pages",
     detail: "Reading your most important content in depth",
     duration: 2000,
@@ -155,7 +193,7 @@ const contentSteps: ContentStep[] = [
   },
   { 
     id: 6, 
-    name: "Suggesting Content Ideas", 
+    name: "Suggesting content ideas", 
     description: "Creating content ideas",
     detail: "Generating content ideas based on your site",
     duration: 2500,
@@ -204,39 +242,168 @@ const LogoAnimation = () => (
 const steps: Step[] = [
   { 
     id: 1, 
-    name: "Account Setup", 
+    name: "Account setup", 
     description: "Creating your workspace"
   },
   { 
     id: 2, 
-    name: "Reading Website", 
+    name: "Reading website", 
     description: "Analyzing your website"
   },
   { 
     id: 3, 
-    name: "Language Detection", 
+    name: "Language detection", 
     description: "Identifying website language"
   },
   { 
     id: 4, 
-    name: "Learning Tone-of-Voice", 
+    name: "Learning tone-of-voice", 
     description: "Understanding your style"
   },
   { 
     id: 5, 
-    name: "Reading Key Content", 
+    name: "Reading key content", 
     description: "Analyzing important pages"
   },
   { 
     id: 6, 
-    name: "Suggesting Content Ideas", 
+    name: "Suggesting content ideas", 
     description: "Creating content ideas"
   }
 ];
 
+// Add SignupModal component
+const SignupModal = ({ 
+  isOpen, 
+  onClose, 
+  onSignup,
+  onGoogleSignup 
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  onSignup: (email: string, password: string) => Promise<void>;
+  onGoogleSignup: () => Promise<void>;
+}) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      await onSignup(email, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create account');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    try {
+      setGoogleLoading(true);
+      setError(null);
+      await onGoogleSignup();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to sign up with Google');
+      setGoogleLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={() => !isLoading && !googleLoading && onClose()}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Create your account</DialogTitle>
+          <DialogDescription>
+            Save your schedule and start publishing content with AI.
+          </DialogDescription>
+        </DialogHeader>
+        
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <Button 
+          type="button" 
+          variant="outline" 
+          className="w-full flex items-center justify-center gap-2" 
+          onClick={handleGoogleSignup}
+          disabled={googleLoading || isLoading}
+        >
+          {googleLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <FcGoogle className="h-5 w-5" />
+          )}
+          <span>Sign up with Google</span>
+        </Button>
+        
+        <div className="relative py-2">
+          <div className="absolute inset-0 flex items-center">
+            <Separator className="w-full" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-card px-2 text-xs text-muted-foreground">
+              OR
+            </span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Create a password"
+              required
+            />
+          </div>
+          <Button 
+            type="submit" 
+            className="w-full"
+            disabled={isLoading || googleLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating account...
+              </>
+            ) : (
+              'Create Account with Email'
+            )}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const Onboarding = () => {
+  const navigate = useNavigate();
   const [state, setState] = useState<OnboardingState>({
-    step: 1, // Start with Setup 1
+    step: 1,
     websiteUrl: localStorage.getItem('onboardingWebsite') || 'https://example.com',
     progress: 0,
     currentStepIndex: 0,
@@ -245,18 +412,80 @@ const Onboarding = () => {
     contentGenerated: false,
     generatedContentTitle: '',
     generatedContentPreview: '',
+    showRawContent: false,
+    showWpAuthDialog: false,
+    wpUsername: '',
+    wpPassword: '',
+    isAuthenticating: false,
+    wpConnectionError: null,
+    postingFrequency: 3, // Default to 3 posts per week
+    postingDays: ['monday', 'wednesday', 'friday'], // Default posting days
+    scheduledDates: [], // Will be populated when scheduling
+    showSignupModal: false,
+    showEmailVerification: false,
   });
   const { toast } = useToast();
-  const navigate = useNavigate();
   
   // Track liked ideas
   const [likedIdeas, setLikedIdeas] = useState<string[]>([]);
   
+  // Track expanded states for each step
+  const [expandedSteps, setExpandedSteps] = useState<Record<number, boolean>>({});
+  
+  // Store step texts for completed steps
+  const [stepTexts, setStepTexts] = useState<Record<number, string>>({});
+  
+  // Add a ref to track if setup has started
+  const setupStarted = React.useRef(false);
+
+  // Helper function to update URL parameters
+  const updateUrlParams = (params: Record<string, string>) => {
+    const searchParams = new URLSearchParams(window.location.search);
+    
+    // Update each parameter
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) {
+        searchParams.set(key, value);
+      } else {
+        searchParams.delete(key);
+      }
+    });
+    
+    // Update URL without reloading the page
+    window.history.replaceState({}, '', `${window.location.pathname}?${searchParams.toString()}`);
+  };
+
+  // Toggle expanded state for a step
+  const toggleStepExpanded = (stepId: number) => {
+    setExpandedSteps(prev => ({
+      ...prev,
+      [stepId]: !prev[stepId]
+    }));
+  };
+
+  // Handle URL parameters
   useEffect(() => {
-    // Get URL from query parameters if exists
     const params = new URLSearchParams(window.location.search);
     const urlParam = params.get('url');
+    const stepParam = params.get('step');
+    const transferParam = params.get('transfer');
+    const onboardingParam = params.get('onboarding');
     
+    // Handle data transfer after email verification
+    if (transferParam === 'true' && onboardingParam === 'complete') {
+      const userId = localStorage.getItem('pending_user_id');
+      if (userId) {
+        console.log('Auto-transferring data after email verification for user:', userId);
+        transferDataToDatabase(userId).catch(error => {
+          console.error('Error auto-transferring data:', error);
+          sonnerToast.error("Error completing setup", {
+            description: error.message || "Failed to complete setup. Please try again."
+          });
+        });
+      }
+    }
+    
+    // Handle website URL parameter
     if (urlParam) {
       let formattedUrl = urlParam;
       if (!/^https?:\/\//i.test(formattedUrl)) {
@@ -268,10 +497,57 @@ const Onboarding = () => {
       setState(prev => ({ ...prev, websiteUrl: formattedUrl }));
     }
     
-    // Start onboarding immediately - no auth required
-    console.log("Starting onboarding process for website:", state.websiteUrl);
-    startSetup1();
-  }, []);
+    // Handle step parameter
+    if (stepParam) {
+      // Map step parameter to step number
+      const stepMap: Record<string, number> = {
+        'ideas': 2,
+        'post-draft': 3,
+        'scheduling': 4,
+        'auth': 5,
+        'integration': 6 // Completion
+      };
+      
+      const stepNumber = stepMap[stepParam];
+      
+      if (stepNumber) {
+        console.log(`Navigating to step ${stepNumber} based on URL parameter`);
+        
+        // Only allow navigation to steps that are implemented
+        if (stepNumber <= 4) { // Updated to include scheduling step
+          setState(prev => ({ ...prev, step: stepNumber }));
+          
+          // If we're skipping to a later step, we need to ensure previous steps are completed
+          if (stepNumber > 1) {
+            // Mark setup as started to prevent automatic start
+            setupStarted.current = true;
+            
+            // Set progress to 100% for previous steps
+            setState(prev => ({ 
+              ...prev, 
+              progress: 100,
+              currentStepIndex: steps.length - 1
+            }));
+          }
+        } else {
+          // For steps that are coming soon, show a toast message
+          sonnerToast("Coming Soon", {
+            description: "This feature is coming soon! Starting from the beginning.",
+          });
+        }
+      }
+    }
+  }, []); // Only run once on mount
+
+  // Handle initial setup
+  useEffect(() => {
+    // Only start setup if we're on step 1 and haven't started yet
+    if (state.step === 1 && !setupStarted.current) {
+      console.log("Starting onboarding process for website:", state.websiteUrl);
+      setupStarted.current = true;
+      startSetup1();
+    }
+  }, [state.step]); // Only depend on state.step
 
   // Helper function to call Supabase Edge Functions directly without authentication
   const callEdgeFunction = async (functionName: string, body: any) => {
@@ -279,65 +555,16 @@ const Onboarding = () => {
       // Log the function name and parameters for debugging
       console.log(`Calling edge function: ${functionName}`, body);
       
-      // SPECIAL CASE: Generate content directly for onboarding without using the Edge Function
-      // This completely bypasses Supabase Edge Functions authentication issues
-      if (functionName === 'generate-content-v3' && body.is_onboarding) {
-        console.log('USING DIRECT CONTENT GENERATION FOR ONBOARDING - bypassing Edge Function');
-        
-        // Skip the Edge Function entirely and generate content directly
-        try {
-          // Simulate network latency for UX
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          // Create simple content for onboarding
-          const title = body.title;
-          const previewContent = `
-            <p>Dette er et eksempel på indhold genereret under onboarding. Når du opretter en konto, vil du få adgang til fuldt genereret indhold baseret på dine præferencer.</p>
-            
-            <h2>Introduktion</h2>
-            <p>Dette indlæg vil dække emnet "${title}" og give dig indsigt i, hvordan du kan forbedre din virksomheds digitale tilstedeværelse.</p>
-            
-            <h2>Hovedpunkter</h2>
-            <ul>
-              <li>Strategi for digital markedsføring</li>
-              <li>Optimering af brugeroplevelse</li>
-              <li>Datadrevet beslutningstagning</li>
-            </ul>
-            
-            <p>Ved at implementere disse strategier kan du se betydelige forbedringer i din online performance og kundeengagement.</p>
-            
-            <h2>Konklusion</h2>
-            <p>Det er afgørende at have en solid digital strategi i den moderne forretningsverden. Ved at fokusere på de områder, vi har diskuteret, kan du positionere din virksomhed til succes.</p>
-          `;
-          
-          console.log('Generated preview content for onboarding');
-          
-          // Return mock response that matches the expected format
-          return {
-            success: true,
-            content: previewContent,
-            title: title
-          };
-        } catch (directError) {
-          console.error('Error in direct content generation:', directError);
-          throw new Error('Failed to generate preview content');
-        }
-      }
-      
       // Create headers with specific handling for generate-content-v3
       const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       };
       
-      // Special case for generate-content-v3: add a dummy auth header
-      // This is required because this function checks auth before parsing the request body
-      if (functionName === 'generate-content-v3') {
-        console.log('Adding dummy auth header for generate-content-v3');
-        headers['Authorization'] = 'Bearer onboarding-mode';
-      }
+      // Add anon key for all function calls during onboarding
+      headers['Authorization'] = `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`;
       
-      // Use a direct fetch to the Supabase Edge Function - no auth token required for onboarding
+      // Use a direct fetch to the Supabase Edge Function
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${functionName}`, {
         method: 'POST',
         headers,
@@ -371,6 +598,9 @@ const Onboarding = () => {
       currentStepIndex: 0,
       currentStepText: "Setting up your workspace..."
     }));
+    
+    // Reset step texts
+    setStepTexts({});
     
     // Create website and organization IDs with uuid
     const websiteId = localStorage.getItem('website_id') || uuidv4();
@@ -879,6 +1109,13 @@ const Onboarding = () => {
       // Display message if any
       if (message) {
         setState(prev => ({ ...prev, currentStepText: message }));
+        
+        // Store the message for this step
+        setStepTexts(prev => ({
+          ...prev,
+          [steps[i].id]: message
+        }));
+        
         await new Promise(r => setTimeout(r, 2000)); // Pause to show message
       }
           
@@ -951,6 +1188,9 @@ const Onboarding = () => {
       progress: 100,
       step: 2 // Move to Setup 2: Content Idea Selection
     }));
+    
+    // Update URL to reflect current step
+    updateUrlParams({ step: 'ideas' });
     } catch (error) {
       console.error("Error in setup process:", error);
       sonnerToast("Setup Error", {
@@ -1111,6 +1351,9 @@ const Onboarding = () => {
       contentGenerated: false
     }));
     
+    // Update URL to reflect current step
+    updateUrlParams({ step: 'post-draft' });
+    
     startContentGeneration();
   };
 
@@ -1137,53 +1380,95 @@ const Onboarding = () => {
       const progressInterval = setInterval(() => {
         setState(prev => {
           const newProgress = Math.min(prev.progress + 1, 95); // Cap at 95% until we get actual result
-        return { ...prev, progress: newProgress };
-      });
+          return { ...prev, progress: newProgress };
+        });
       }, 100);
-    
-    callEdgeFunction('generate-content-v3', {
+
+      // Get the scraped content and key pages from localStorage
+      const scrapedContent = JSON.parse(localStorage.getItem('scraped_content') || '[]');
+      const keyContentPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
+
+      console.log('Content generation context:', {
+        scrapedContentCount: scrapedContent.length,
+        keyPagesCount: keyContentPages.length
+      });
+
+      // Format the cornerstone content for link generation
+      // This matches the database format expected by generate-content-v3
+      const cornerstoneContent = keyContentPages.map(page => ({
+        title: page.title || '',
+        url: page.url || '',
+        is_cornerstone: true,
+        content: page.content || '',
+        digest: page.digest || ''
+      }));
+
+      // Format the scraped content to match database format
+      const formattedScrapedContent = scrapedContent.map(item => ({
+        title: item.title || '',
+        url: item.url || item.original_url || '',
+        content: item.content || '',
+        digest: item.digest || '',
+        is_cornerstone: false
+      }));
+
+      // Call generate-content-v3 with properly formatted data
+      callEdgeFunction('generate-content-v3', {
         website_id: localStorage.getItem('website_id') || '',
         website_url: state.websiteUrl,
-      title: likedIdea.title,
+        title: likedIdea.title,
         description: likedIdea.description,
-        is_onboarding: true
-    })
+        is_onboarding: true,
+        cornerstone_content: cornerstoneContent,
+        scraped_content: formattedScrapedContent,
+        language: localStorage.getItem('website_language') || 'en'
+      })
       .then(result => {
-          // Clear the progress interval
-          clearInterval(progressInterval);
-          
+        // Clear the progress interval
+        clearInterval(progressInterval);
+        
         if (result?.content) {
-            // Complete the progress bar
+          // Complete the progress bar
           setState(prev => ({
             ...prev,
-              progress: 100,
+            progress: 100,
             contentGenerated: true,
             generatedContentTitle: likedIdea.title,
             generatedContentPreview: result.content
           }));
+
+          // Store generated content in localStorage
+          const generatedContent = {
+            title: likedIdea.title,
+            content: result.content,
+            status: 'textgenerated',
+            created_at: new Date().toISOString(),
+            website_id: localStorage.getItem('website_id')
+          };
+          localStorage.setItem('generated_content', JSON.stringify(generatedContent));
         } else {
-            // Handle error case
-            clearInterval(progressInterval);
-            setState(prev => ({ ...prev, progress: 0 }));
-            
-            sonnerToast("Error", {
-            description: "Failed to generate content. Please try again."
-          });
-            
-            console.error("No content returned from generate-content-v3 function");
-        }
-      })
-      .catch(error => {
-          // Clear the progress interval
+          // Handle error case
           clearInterval(progressInterval);
           setState(prev => ({ ...prev, progress: 0 }));
           
           sonnerToast("Error", {
-            description: error.message || "Failed to generate content. Please try again."
+            description: "Failed to generate content. Please try again."
           });
           
-        console.error("Error generating content:", error);
+          console.error("No content returned from generate-content-v3 function");
+        }
+      })
+      .catch(error => {
+        // Clear the progress interval
+        clearInterval(progressInterval);
+        setState(prev => ({ ...prev, progress: 0 }));
+        
+        sonnerToast("Error", {
+          description: error.message || "Failed to generate content. Please try again."
         });
+        
+        console.error("Error generating content:", error);
+      });
     } catch (error) {
       setState(prev => ({ ...prev, progress: 0 }));
       
@@ -1206,21 +1491,467 @@ const Onboarding = () => {
     startContentGeneration();
   };
 
+  // Move to scheduling step
+  const handleContinueToScheduling = () => {
+    setState(prev => ({
+      ...prev,
+      step: 4,
+      progress: 0
+    }));
+    
+    // Update URL to reflect current step
+    updateUrlParams({ step: 'scheduling' });
+  };
+
+  // Handle frequency change
+  const handleFrequencyChange = (frequency: number) => {
+    setState(prev => ({
+      ...prev,
+      postingFrequency: frequency,
+      // Update default posting days based on frequency
+      postingDays: getDefaultPostingDays(frequency)
+    }));
+  };
+
+  // Get default posting days based on frequency
+  const getDefaultPostingDays = (frequency: number): string[] => {
+    switch (frequency) {
+      case 1:
+        return ['monday'];
+      case 2:
+        return ['monday', 'thursday'];
+      case 3:
+        return ['monday', 'wednesday', 'friday'];
+      case 4:
+        return ['monday', 'tuesday', 'thursday', 'friday'];
+      case 5:
+        return ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+      case 6:
+        return ['monday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+      case 7:
+        return ['monday', 'monday', 'tuesday', 'wednesday', 'thursday', 'thursday', 'friday'];
+      case 8:
+        return ['monday', 'monday', 'tuesday', 'tuesday', 'wednesday', 'thursday', 'thursday', 'friday'];
+      case 9:
+        return ['monday', 'monday', 'tuesday', 'tuesday', 'wednesday', 'wednesday', 'thursday', 'thursday', 'friday'];
+      case 10:
+        return ['monday', 'monday', 'tuesday', 'tuesday', 'wednesday', 'wednesday', 'thursday', 'thursday', 'friday', 'friday'];
+      default:
+        return ['monday', 'wednesday', 'friday'];
+    }
+  };
+
+  // Handle posting day toggle
+  const handleDayToggle = (day: string) => {
+    setState(prev => {
+      const newDays = prev.postingDays.includes(day)
+        ? prev.postingDays.filter(d => d !== day)
+        : [...prev.postingDays, day];
+      
+      // Ensure we don't exceed the posting frequency
+      if (newDays.length > prev.postingFrequency) {
+        sonnerToast("Warning", {
+          description: `You can only select ${prev.postingFrequency} days for your current frequency.`
+        });
+        return prev;
+      }
+      
+      return {
+        ...prev,
+        postingDays: newDays
+      };
+    });
+  };
+
+  // Handle continue to WordPress auth
+  const handleContinueToWordPress = () => {
+    // Save publication settings
+    const publicationSettings = {
+      posting_frequency: state.postingFrequency,
+      posting_days: state.postingDays.reduce((acc, day) => {
+        // Count occurrences of each day
+        const count = state.postingDays.filter(d => d === day).length;
+        // Only add each day once with its total count
+        if (!acc.some(d => d.day === day)) {
+          acc.push({ day, count });
+        }
+        return acc;
+      }, []),
+      website_id: localStorage.getItem('website_id'),
+      organisation_id: localStorage.getItem('organisation_id'),
+      writing_style: 'Professional and informative',
+      subject_matters: []
+    };
+    
+    localStorage.setItem('publication_settings', JSON.stringify(publicationSettings));
+    
+    setState(prev => ({ ...prev, step: 5 })); // Move to WordPress auth
+    updateUrlParams({ step: 'auth' });
+  };
+
   // Publish content and complete
   const handlePublishContent = () => {
-    sonnerToast("Content published!", {
-      description: "Your content has been published successfully."
+    setState(prev => ({ ...prev, step: 4 })); // Now goes to scheduling step
+    updateUrlParams({ step: 'scheduling' });
+  };
+
+  // Add WordPress connection handlers
+  const handleSkipWordPress = () => {
+    sonnerToast("Content saved as draft", {
+      description: "You can connect WordPress later from the settings."
     });
+    setState(prev => ({ ...prev, step: 5 })); // Go to completion
     
-    setState(prev => ({ ...prev, step: 4 }));
+    // Update URL to reflect current step
+    updateUrlParams({ step: 'integration' });
+  };
+
+  const handleStartWordPressAuth = () => {
+    setState(prev => ({ ...prev, showWpAuthDialog: true }));
+  };
+
+  const handleCompleteWordPressAuth = async () => {
+    if (!state.wpUsername || !state.wpPassword) {
+      setState(prev => ({ 
+        ...prev, 
+        wpConnectionError: 'Please enter both username and application password' 
+      }));
+      return;
+    }
+
+    setState(prev => ({ 
+      ...prev, 
+      isAuthenticating: true,
+      wpConnectionError: null 
+    }));
+
+    try {
+      // Store credentials in sessionStorage
+      const wpCredentials = {
+        website_url: state.websiteUrl,
+        username: state.wpUsername,
+        password: state.wpPassword,
+        created_at: new Date().toISOString()
+      };
+      sessionStorage.setItem('wp_credentials', JSON.stringify(wpCredentials));
+
+      // Test the connection using the Edge Function
+      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/wordpress-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          wpUrl: state.websiteUrl,
+          username: state.wpUsername,
+          password: state.wpPassword
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        sonnerToast.success("WordPress connected successfully!");
+        setState(prev => ({ 
+          ...prev, 
+          showWpAuthDialog: false,
+          isAuthenticating: false 
+        }));
+        // Move to completion step
+        setState(prev => ({ ...prev, step: 5 }));
+      } else {
+        throw new Error(data.error || 'Failed to connect to WordPress');
+      }
+    } catch (error) {
+      console.error('WordPress connection error:', error);
+      setState(prev => ({ 
+        ...prev, 
+        isAuthenticating: false,
+        wpConnectionError: error.message || 'Failed to connect to WordPress' 
+      }));
+    }
   };
 
   // Complete onboarding and go to dashboard
   const handleComplete = () => {
-    sonnerToast("Setup Complete!", {
-      description: "You're ready to start creating content."
-    });
-    navigate('/dashboard');
+    const userId = localStorage.getItem('pending_user_id');
+    if (userId) {
+      console.log('Transferring data for user:', userId);
+      transferDataToDatabase(userId)
+        .then(() => {
+          sonnerToast("Setup Complete!", {
+            description: "You're ready to start creating content."
+          });
+          navigate('/dashboard');
+        })
+        .catch(error => {
+          console.error('Error transferring data:', error);
+          sonnerToast.error("Error completing setup", {
+            description: error.message || "Failed to complete setup. Please try again."
+          });
+        });
+    } else {
+      console.error('No user ID found for data transfer');
+      sonnerToast.error("Setup Error", {
+        description: "User ID not found. Please try signing up again."
+      });
+    }
+  };
+
+  // Handle signup
+  const handleSignup = async (email: string, password: string) => {
+    try {
+      console.log('Starting signup process...');
+      
+      // Use hardcoded URL for production
+      const redirectUrl = 'https://contentgardener.ai/dashboard?onboarding=complete&transfer=true';
+      console.log('Using redirect URL:', redirectUrl);
+      
+      // Sign up with email verification and proper redirect
+      const { data: signUpData, error: signupError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            website_url: state.websiteUrl,
+            organization_name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
+          },
+          emailRedirectTo: redirectUrl
+        }
+      });
+      
+      if (signupError) {
+        console.error('Signup error:', signupError);
+        throw signupError;
+      }
+
+      if (!signUpData.user) {
+        throw new Error('Failed to create user');
+      }
+
+      console.log('User created successfully:', signUpData.user.id);
+
+      // Store signup data
+      localStorage.setItem('pending_user_id', signUpData.user.id);
+      localStorage.setItem('signup_email', email);
+
+      // Close signup modal and show email verification view
+      setState(prev => ({ 
+        ...prev, 
+        showSignupModal: false,
+        step: 'email-verification',
+        verificationEmail: email
+      }));
+
+      sonnerToast.info(
+        "Please verify your email",
+        {
+          description: "We've sent you a verification link. Please check your email and click the link to continue.",
+          duration: 10000
+        }
+      );
+
+      // Store signup data for later
+      localStorage.setItem('pending_signup', JSON.stringify({
+        userId: signUpData.user.id,
+        email,
+        timestamp: new Date().toISOString()
+      }));
+
+    } catch (error) {
+      console.error('Signup error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
+      sonnerToast.error("Signup Error", {
+        description: errorMessage,
+        duration: 5000
+      });
+      throw error;
+    }
+  };
+
+  // Handle Google signup
+  const handleGoogleSignup = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`
+        }
+      });
+      
+      if (error) throw error;
+      
+      // The OAuth flow will handle the redirect
+    } catch (error) {
+      console.error('Google signup error:', error);
+      throw error;
+    }
+  };
+
+  // Update handleContinueToAuth to show signup modal
+  const handleContinueToAuth = () => {
+    // Format posting days to match database structure
+    const formattedPostingDays = state.postingDays.reduce<Array<{ day: string; count: number }>>((acc, day) => {
+      const existingDay = acc.find(d => d.day === day);
+      if (existingDay) {
+        existingDay.count += 1;
+      } else {
+        acc.push({ day, count: 1 });
+      }
+      return acc;
+    }, []);
+
+    // Save publication settings to localStorage
+    const publicationSettings = {
+      posting_frequency: state.postingFrequency,
+      posting_days: formattedPostingDays,
+      website_id: localStorage.getItem('website_id'),
+      organisation_id: localStorage.getItem('organisation_id'),
+      writing_style: 'Professional and informative',
+      subject_matters: []
+    };
+    
+    localStorage.setItem('publication_settings', JSON.stringify(publicationSettings));
+    
+    // Show signup modal
+    setState(prev => ({ ...prev, showSignupModal: true }));
+  };
+
+  // Transfer data to database after successful auth
+  const transferDataToDatabase = async (userId: string) => {
+    try {
+      console.log('Starting data transfer to database for user:', userId);
+
+      // Get website URL and generate organization name
+      const websiteUrl = localStorage.getItem('onboardingWebsite');
+      if (!websiteUrl) {
+        throw new Error('Website URL not found in localStorage');
+      }
+      console.log('Retrieved website URL:', websiteUrl);
+
+      const urlWithoutProtocol = websiteUrl.replace(/^https?:\/\/(www\.)?/, '');
+      const organizationName = urlWithoutProtocol
+        .split('.')[0]
+        .split(/[-_]/)
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+      console.log('Generated organization name:', organizationName);
+
+      // Get publication settings with validation
+      const publicationSettings = JSON.parse(localStorage.getItem('publication_settings') || '{}');
+      if (!publicationSettings.posting_frequency || !publicationSettings.posting_days) {
+        console.warn('Missing required publication settings');
+      }
+      console.log('Publication settings:', publicationSettings);
+
+      // Get post ideas and generated content with today's date
+      const today = new Date().toISOString();
+      const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]')
+        .filter((idea: any) => idea.liked)
+        .map((idea: any) => ({
+          title: idea.title || '',
+          description: idea.description || '',
+          created_at: today
+        }));
+      console.log(`Found ${postIdeas.length} liked post ideas`);
+
+      const generatedContent = state.contentGenerated ? {
+        title: state.generatedContentTitle || '',
+        content: state.generatedContentPreview || '',
+        created_at: today,
+        scheduled_for: today,
+        status: 'generatedtext' // Generated content has status generatedtext
+      } : undefined;
+
+      if (generatedContent) {
+        console.log('Generated content:', generatedContent);
+      }
+
+      // Format data according to OnboardingData interface
+      const data = {
+        userId,
+        websiteInfo: {
+          url: websiteUrl,
+          name: organizationName
+        },
+        organizationInfo: {
+          name: organizationName,
+          website_id: null // Will be set by the backend
+        },
+        publicationSettings: {
+          ...publicationSettings,
+          posting_frequency: publicationSettings.posting_frequency || 'weekly',
+          posting_days: publicationSettings.posting_days || ['Monday'],
+          writing_style: publicationSettings.writing_style || 'professional'
+        },
+        contentData: {
+          postIdeas,
+          generatedContent: state.contentGenerated ? {
+            content: state.generatedContent,
+            created_at: today
+          } : null,
+          websiteContent: state.websiteContent || []
+        }
+      };
+
+      console.log('Formatted data for API request:', data);
+
+      // Make request to Edge Function
+      const response = await fetch(`${supabaseUrl}/functions/v1/handle-user-onboarding`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`
+        },
+        body: JSON.stringify(data)
+      });
+
+      // Log the response status
+      console.log('Edge function response status:', response.status);
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Failed to complete onboarding');
+      }
+
+      const responseData = await response.json();
+      console.log('Edge function response:', responseData);
+
+      if (!responseData.success) {
+        throw new Error(responseData.message || 'Failed to complete onboarding');
+      }
+
+      // Store the returned IDs
+      const websiteInfo = {
+        id: responseData.data.website_id,
+        name: organizationName,
+        url: websiteUrl
+      };
+      localStorage.setItem('website_info', JSON.stringify(websiteInfo));
+
+      const organizationInfo = {
+        id: responseData.data.organisation_id,
+        name: organizationName
+      };
+      localStorage.setItem('organization_info', JSON.stringify(organizationInfo));
+
+      // Clear onboarding data from localStorage
+      localStorage.removeItem('post_ideas');
+      localStorage.removeItem('publication_settings');
+      localStorage.removeItem('onboardingWebsite');
+      localStorage.removeItem('key_content_pages');
+      localStorage.removeItem('scraped_content');
+      localStorage.removeItem('website_content');
+
+      sonnerToast.success('Setup completed successfully!');
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error transferring data:', error);
+      sonnerToast.error(error.message || 'Failed to complete setup');
+      throw error;
+    }
   };
 
   return (
@@ -1243,12 +1974,16 @@ const Onboarding = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
               className="flex flex-col items-center justify-center py-8"
             >
               <div className="w-full max-w-3xl">
                 <h2 className="text-2xl font-bold mb-8 text-center">
-                  ⚡ Setup 1: Website Onboarding
+                  ⚡ Website onboarding
                 </h2>
                 
                 <div className="mb-8">
@@ -1267,18 +2002,77 @@ const Onboarding = () => {
                     {steps[state.currentStepIndex]?.name}
                   </h3>
                   
-                  <p className="text-muted-foreground mb-6">
-                    {steps[state.currentStepIndex]?.description}
-                  </p>
-                  
-                  <div className="bg-muted/50 p-4 rounded-md border">
-                    <div className="flex">
-                      <Sparkles className="w-5 h-5 text-primary mr-3 animate-pulse mt-1" />
-                      <div>
-                        {state.currentStepText.split('\n').map((line, i) => (
-                          <p key={i} className={`font-medium ${i > 0 ? 'mt-2' : ''}`}>{line}</p>
-                        ))}
-                      </div>
+                  <div className="bg-muted/50 p-4 rounded-md border max-h-[300px] overflow-y-auto">
+                    <div className="space-y-2">
+                      {steps.slice(0, state.currentStepIndex + 1).reverse().map((step, index) => {
+                        const isCurrentStep = index === 0;
+                        const isExpanded = isCurrentStep || expandedSteps[step.id];
+                        const stepText = isCurrentStep ? state.currentStepText : stepTexts[step.id] || '';
+                        
+                        return (
+                          <motion.div
+                            key={step.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: index * 0.1 }}
+                            className={`flex items-start gap-3 p-2 rounded-lg ${
+                              isCurrentStep 
+                                ? 'bg-primary/5 border border-primary/20' 
+                                : 'bg-background/50'
+                            }`}
+                          >
+                            <div className="mt-1">
+                              {!isCurrentStep ? (
+                                <CheckCircle2 className="w-5 h-5 text-primary" />
+                              ) : (
+                                <Sparkles className="w-5 h-5 text-primary animate-pulse" />
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <div 
+                                className="flex items-center justify-between cursor-pointer"
+                                onClick={() => !isCurrentStep && toggleStepExpanded(step.id)}
+                              >
+                                <div>
+                                  <p className="font-medium">{step.name}</p>
+                                </div>
+                                {!isCurrentStep && (
+                                  <ChevronRight 
+                                    className={`w-4 h-4 text-muted-foreground transition-transform ${
+                                      isExpanded ? 'rotate-90' : ''
+                                    }`}
+                                  />
+                                )}
+                              </div>
+                              {isCurrentStep && state.currentStepText && (
+                                <motion.div
+                                  initial={{ opacity: 0 }}
+                                  animate={{ opacity: 1 }}
+                                  transition={{ duration: 0.3 }}
+                                  className="mt-2 text-sm"
+                                >
+                                  {state.currentStepText.split('\n').map((line, i) => (
+                                    <p key={i} className={`${i > 0 ? 'mt-1' : ''}`}>{line}</p>
+                                  ))}
+                                </motion.div>
+                              )}
+                              {!isCurrentStep && isExpanded && stepText && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="mt-2 text-sm"
+                                >
+                                  {stepText.split('\n').map((line, i) => (
+                                    <p key={i} className={`${i > 0 ? 'mt-1' : ''}`}>{line}</p>
+                                  ))}
+                                </motion.div>
+                              )}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1293,12 +2087,16 @@ const Onboarding = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
               className="py-6"
             >
-              <div className="w-full max-w-5xl mx-auto">
+              <div className="w-full max-w-3xl mx-auto">
                 <h2 className="text-2xl font-semibold mb-6">
-                  🌱✨ Choose Your Content Seeds 🪴
+                  🌱✨ Choose your content seeds 🪴
                 </h2>
                 
                 <p className="text-muted-foreground mb-8">
@@ -1324,7 +2122,7 @@ const Onboarding = () => {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7"
+                              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-50"
                               onClick={() => handleThumbsUp(idea.id)}
                               title="Like this idea"
                             >
@@ -1335,7 +2133,7 @@ const Onboarding = () => {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7"
+                              className="h-7 w-7 text-gray-400 hover:text-gray-500 hover:bg-gray-50"
                               onClick={() => handleThumbsDown(idea.id)}
                               title="Dislike this idea"
                             >
@@ -1446,12 +2244,16 @@ const Onboarding = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
               className="flex flex-col items-center justify-center py-8"
             >
               <div className="w-full max-w-3xl mx-auto">
                 <h2 className="text-2xl font-bold mb-8 text-center">
-                  📝 Setup 3: Generating Your First Piece of Content
+                  📝 Generating your first piece of content
                 </h2>
                 
                 {!state.contentGenerated ? (
@@ -1461,7 +2263,7 @@ const Onboarding = () => {
                     <Wand2 className="h-10 w-10 text-primary animate-pulse" />
                   </div>
                   
-                      <h3 className="text-xl font-medium mb-2">🛠️ Generating First Draft</h3>
+                      <h3 className="text-xl font-medium mb-2">🛠️ Generating first draft</h3>
                       <p className="text-muted-foreground mb-4">
                         We're putting your favorite idea into words...
                       </p>
@@ -1483,35 +2285,56 @@ const Onboarding = () => {
                         <CheckCircle2 className="h-10 w-10 text-primary" />
                 </div>
                 
-                      <h3 className="text-xl font-medium mb-2">📄 Your First Draft Is Ready!</h3>
+                      <h3 className="text-xl font-medium mb-2">📄 Your first draft is ready!</h3>
                       <p className="text-muted-foreground mb-4">
                         Here's your AI-generated content — tailored to your tone and style.
                       </p>
                     </div>
                 
                     <div className="border rounded-lg p-6 mb-8 bg-card">
-                      <h3 className="text-xl font-medium mb-4">{state.generatedContentTitle}</h3>
-                      <div className="prose prose-sm max-w-none mb-4">
-                        {state.generatedContentPreview.split('\n').map((line, i) => (
-                          <p key={i} className={`${i > 0 ? 'mt-2' : ''}`}>{line}</p>
-                        ))}
-                </div>
-                      <p className="text-muted-foreground italic text-sm">
-                        View the full content for more...
-                      </p>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-medium">{state.generatedContentTitle}</h3>
+                        <div className="flex items-center gap-2">
+                          <Toggle
+                            aria-label="Toggle raw content"
+                            pressed={state.showRawContent}
+                            onPressedChange={(pressed) => setState(prev => ({ ...prev, showRawContent: pressed }))}
+                          >
+                            <Code className={`h-4 w-4 ${state.showRawContent ? 'text-primary' : 'text-muted-foreground'}`} />
+                          </Toggle>
+                          <Toggle
+                            aria-label="Toggle rendered content"
+                            pressed={!state.showRawContent}
+                            onPressedChange={(pressed) => setState(prev => ({ ...prev, showRawContent: !pressed }))}
+                          >
+                            <Eye className={`h-4 w-4 ${!state.showRawContent ? 'text-primary' : 'text-muted-foreground'}`} />
+                          </Toggle>
+                        </div>
+                      </div>
+                      
+                      {state.showRawContent ? (
+                        <div className="font-mono text-sm bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap">
+                          {state.generatedContentPreview}
+                        </div>
+                      ) : (
+                        <div 
+                          className="prose prose-sm max-w-none dark:prose-invert"
+                          dangerouslySetInnerHTML={{ __html: state.generatedContentPreview }}
+                        />
+                      )}
                     </div>
                     
-                    <div className="flex justify-center gap-4">
+                    <div className="flex justify-end gap-4">
                       <Button 
-                        onClick={handleRegenerateContent}
                         variant="outline"
+                        onClick={handleRegenerateContent}
                       >
                         ♻️ Regenerate
                       </Button>
                       <Button 
                         onClick={handlePublishContent}
                       >
-                        📤 Publish
+                        Continue to Schedule <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </div>
                   </>
@@ -1520,14 +2343,242 @@ const Onboarding = () => {
             </motion.div>
           )}
 
-          {/* Completion */}
+          {/* Setup 4: WordPress Integration */}
           {state.step === 4 && (
             <motion.div
               key="step-4"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ duration: 0.3 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
+              className="flex flex-col items-center justify-center py-8"
+            >
+              <div className="w-full max-w-3xl mx-auto">
+                <h2 className="text-2xl font-bold mb-4 text-center">
+                  📅 Schedule Your Content
+                </h2>
+                
+                <p className="text-muted-foreground text-center mb-8">
+                  Let's set up your content publishing schedule
+                </p>
+
+                <Card className="mb-8">
+                  <CardHeader>
+                    <CardTitle>Publishing Frequency</CardTitle>
+                    <CardDescription>How often would you like fresh content for your audience?</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                <div className="space-y-6">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">1x per week</span>
+                        <span className="text-sm font-medium">10x per week</span>
+                  </div>
+                      <div className="relative">
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          step="1"
+                          value={state.postingFrequency}
+                          onChange={(e) => handleFrequencyChange(parseInt(e.target.value))}
+                          className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="text-center">
+                          <div className="text-2xl font-semibold">{state.postingFrequency}x</div>
+                          <div className="text-sm text-muted-foreground">per week</div>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {state.postingFrequency === 1 ? 'Perfect for maintaining a steady presence' :
+                           state.postingFrequency <= 3 ? 'Ideal for growing your audience consistently' :
+                           state.postingFrequency <= 5 ? 'Great for high engagement and SEO impact' :
+                           'Maximum impact and authority building'}
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground text-center">
+                        {state.postingFrequency <= 1 ? 'Hobby Plan for €15/month - Starting with a free trial' :
+                         state.postingFrequency <= 3 ? 'Pro Plan - Starting at €49/month - Starting with a free trial' :
+                         state.postingFrequency <= 5 ? 'Pro Plan (€49/month) + Article Package (10 articles for €20) - Starting with a free trial' :
+                         state.postingFrequency <= 7 ? 'Pro Plan (€49/month) + Article Packages (20 articles for €40) - Starting with a free trial' :
+                         'Pro Plan (€49/month) + Article Packages (30 articles for €60) - Starting with a free trial'}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="mb-8">
+                  <CardHeader>
+                    <CardTitle>Publishing Days</CardTitle>
+                    <CardDescription>
+                      When would you like to publish your content?
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                  <div className="space-y-4">
+                      <div className="grid grid-cols-5 gap-2">
+                        {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
+                          <div key={day} className="flex flex-col items-center gap-2">
+                            <Toggle
+                              pressed={state.postingDays.includes(day)}
+                              onPressedChange={() => handleDayToggle(day)}
+                              className="capitalize w-full"
+                            >
+                              {day}
+                            </Toggle>
+                            {state.postingDays.includes(day) && (
+                              <div className="flex items-center gap-1">
+                      <Button 
+                        variant="outline" 
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                        onClick={() => {
+                                    const currentCount = state.postingDays.filter(d => d === day).length;
+                                    if (currentCount > 0) {
+                                      setState(prev => ({
+                                        ...prev,
+                                        postingDays: prev.postingDays.filter((d, i) => 
+                                          !(d === day && i === prev.postingDays.lastIndexOf(day))
+                                        )
+                                      }));
+                                    }
+                                  }}
+                                >
+                                  -
+                      </Button>
+                                <span className="text-sm min-w-[1.5rem] text-center">
+                                  {state.postingDays.filter(d => d === day).length}
+                                </span>
+                      <Button
+                        variant="outline"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                        onClick={() => {
+                                    const currentCount = state.postingDays.filter(d => d === day).length;
+                                    const totalPosts = state.postingDays.length;
+                                    if (totalPosts < state.postingFrequency) {
+                                      setState(prev => ({
+                                        ...prev,
+                                        postingDays: [...prev.postingDays, day]
+                                      }));
+                                    }
+                                  }}
+                                >
+                                  +
+                      </Button>
+                    </div>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                    
+                      {state.postingDays.length > 0 && (
+                        <div className="text-sm text-muted-foreground mt-4">
+                          <p className="font-medium">Your publishing schedule:</p>
+                          <div className="mt-2 space-y-2">
+                            {Array.from(new Set(state.postingDays)).map((day) => {
+                              const postsOnDay = state.postingDays.filter(d => d === day).length;
+                              return (
+                                <div key={day} className="flex items-center gap-2">
+                                  <span className="capitalize font-medium min-w-[100px]">{day}:</span>
+                                  <div className="flex gap-1">
+                                    {Array.from({ length: postsOnDay }).map((_, i) => (
+                                      <div
+                                        key={i}
+                                        className="w-2 h-2 rounded-full bg-primary"
+                                      />
+                                    ))}
+                    </div>
+                                  <span className="ml-2">{postsOnDay} post{postsOnDay !== 1 ? 's' : ''}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <p className="mt-3 text-xs">
+                            Total: {state.postingDays.length} post{state.postingDays.length !== 1 ? 's' : ''} per week
+                          </p>
+                      </div>
+                    )}
+                  </div>
+                  </CardContent>
+                </Card>
+                  
+                <div className="flex justify-end gap-4">
+                    <Button
+                      variant="outline"
+                    onClick={() => {
+                      setState(prev => ({ ...prev, step: 3 }));
+                      updateUrlParams({ step: 'post-draft' });
+                    }}
+                    >
+                    Back
+                    </Button>
+                    <Button
+                    onClick={handleContinueToAuth}
+                    disabled={state.postingDays.length !== state.postingFrequency}
+                  >
+                    Continue to Setup <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Completion - Now step 5 */}
+          {state.step === 5 && (
+            <motion.div
+              key="step-5"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
+              className="flex flex-col items-center justify-center py-8"
+            >
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center mb-6"
+              >
+                <CheckCircle2 className="h-12 w-12 text-primary" />
+              </motion.div>
+              
+              <h2 className="text-3xl font-bold mb-3">
+                Setup Complete!
+              </h2>
+              
+              <p className="text-lg text-muted-foreground max-w-md mb-8">
+                {state.step === 5 ? 
+                  "Your content is ready and WordPress is connected. Let's start creating!" :
+                  "Your content is saved and ready. You can connect WordPress anytime from settings."}
+              </p>
+              
+              <Button onClick={handleComplete} size="lg" className="px-8">
+                Go to Dashboard <ChevronRight className="ml-2 h-5 w-5" />
+              </Button>
+            </motion.div>
+          )}
+
+          {/* Completion - Now step 6 */}
+          {state.step === 6 && (
+            <motion.div
+              key="step-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
               className="flex flex-col items-center justify-center min-h-[70vh] text-center"
             >
               <motion.div
@@ -1540,16 +2591,82 @@ const Onboarding = () => {
               </motion.div>
               
               <h2 className="text-3xl font-bold mb-3">
-                You're all set!
+                Setup Complete!
               </h2>
               
               <p className="text-lg text-muted-foreground max-w-md mb-8">
-                Your website's content DNA is mapped and we're ready to create perfectly matched content for your audience.
+                {state.step === 6 ? 
+                  "Your content is ready and WordPress is connected. Let's start creating!" :
+                  "Your content is saved and ready. You can connect WordPress anytime from settings."}
               </p>
               
               <Button onClick={handleComplete} size="lg" className="px-8">
                 Go to Dashboard <ChevronRight className="ml-2 h-5 w-5" />
               </Button>
+            </motion.div>
+          )}
+          
+          {/* Add SignupModal */}
+          <SignupModal
+            isOpen={state.showSignupModal}
+            onClose={() => setState(prev => ({ ...prev, showSignupModal: false }))}
+            onSignup={handleSignup}
+            onGoogleSignup={handleGoogleSignup}
+          />
+
+          {/* Add new Email Verification step */}
+          {state.step === 'email-verification' && (
+            <motion.div
+              key="email-verification"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ 
+                duration: 0.5,
+                ease: "easeInOut",
+                opacity: { duration: 0.3 }
+              }}
+              className="flex flex-col items-center justify-center py-8 text-center"
+            >
+              <div className="w-full max-w-md">
+                <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+                  <Mail className="h-10 w-10 text-primary" />
+                </div>
+                
+                <h2 className="text-2xl font-bold mb-4">
+                  Check your email
+                </h2>
+                
+                <p className="text-muted-foreground mb-6">
+                  We've sent a verification link to:<br />
+                  <span className="font-medium text-foreground">{state.verificationEmail}</span>
+                </p>
+                
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Click the link in your email to verify your account and access your dashboard.
+                  </p>
+                  
+                  <div className="bg-muted/50 rounded-lg p-4 text-sm">
+                    <p className="font-medium mb-2">Can't find the email?</p>
+                    <ul className="space-y-2 text-muted-foreground">
+                      <li>• Check your spam folder</li>
+                      <li>• Make sure the email address is correct</li>
+                      <li>• Allow a few minutes for the email to arrive</li>
+                    </ul>
+                  </div>
+
+                  <div className="pt-4">
+                    <Button 
+                      onClick={() => navigate('/auth')} 
+                      variant="default" 
+                      className="w-full"
+                    >
+                      Continue to Login
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

@@ -1,5 +1,9 @@
 # Content Creation Date Logic
 
+Update to use the new posting_days
+posting_frequency
+
+
 ## Overview
 The date setting in content creation follows a specific pattern to ensure consistent content scheduling:
 

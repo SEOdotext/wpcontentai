@@ -41,21 +41,41 @@ const LogoAnimation = () => (
 
 const LandingPage = () => {
   const [website, setWebsite] = useState('');
+  const [error, setError] = useState('');
   const navigate = useNavigate();
   
+  const isValidDomain = (domain: string) => {
+    // Remove http:// or https:// if present for validation
+    const cleanDomain = domain.replace(/^https?:\/\//i, '');
+    
+    // Basic domain validation regex
+    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
+    return domainRegex.test(cleanDomain);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (website) {
-      // Format website URL - add https:// if missing
-      let formattedUrl = website;
-      if (!/^https?:\/\//i.test(formattedUrl)) {
-        formattedUrl = 'https://' + formattedUrl;
-      }
-      
-      // Store the formatted website URL
-      localStorage.setItem('onboardingWebsite', formattedUrl);
-      navigate('/onboarding');
+    setError('');
+
+    if (!website) {
+      setError('Please enter a website domain');
+      return;
     }
+
+    if (!isValidDomain(website)) {
+      setError('Please enter a valid website domain (e.g., example.com)');
+      return;
+    }
+
+    // Format website URL - add https:// if missing
+    let formattedUrl = website;
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = 'https://' + formattedUrl;
+    }
+    
+    // Store the formatted website URL
+    localStorage.setItem('onboardingWebsite', formattedUrl);
+    navigate('/onboarding');
   };
 
   // Apply styles to override any sidebar or parent container styles
@@ -161,15 +181,28 @@ const LandingPage = () => {
               className="w-full max-w-md mx-auto"
             >
               <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
-                <Input
-                  type="text"
-                  placeholder="yourdomain.com"
-                  className="h-14 text-lg flex-1"
-                  value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                  required
-                />
-                <Button type="submit" size="lg" className="h-14 px-8 text-base font-medium">
+                <div className="flex-1">
+                  <Input
+                    type="text"
+                    placeholder="yourdomain.com"
+                    className={`h-14 text-lg flex-1 ${error ? 'border-red-500' : ''}`}
+                    value={website}
+                    onChange={(e) => {
+                      setWebsite(e.target.value);
+                      setError('');
+                    }}
+                    required
+                  />
+                  {error && (
+                    <p className="text-sm text-red-500 mt-1">{error}</p>
+                  )}
+                </div>
+                <Button 
+                  type="submit" 
+                  size="lg" 
+                  className="h-14 px-8 text-base font-medium"
+                  disabled={!!error}
+                >
                   Get Started <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </form>

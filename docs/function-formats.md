@@ -1,6 +1,6 @@
 # Supabase Edge Function Formats
 
-This document outlines the proper request formats for the Supabase edge functions used in the WP Content AI application.
+This document outlines the proper request formats for the Supabase edge functions used in the ContentGardener.ai application.
 
 ## generate-post-ideas
 

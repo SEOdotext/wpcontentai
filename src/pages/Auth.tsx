@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Mail, Loader2, ArrowLeft } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from '@/context/AuthContext';
 
 const Auth = () => {
   const [email, setEmail] = useState('');
@@ -18,47 +19,17 @@ const Auth = () => {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [mode, setMode] = useState<'login' | 'signup' | 'reset'>('login');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading: authLoading, checkAuth } = useAuth();
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        setIsAuthenticated(true);
-        console.log('Auth: User is already authenticated, waiting briefly before redirecting');
-        setTimeout(() => {
-          console.log('Auth: Redirecting to dashboard after delay');
-          navigate('/dashboard');
-        }, 1000);
-      } else {
-        setIsAuthenticated(false);
-      }
-    };
-    
-    checkAuth();
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session) {
-          console.log('Auth: Auth state changed, user authenticated, waiting briefly before redirecting');
-          setTimeout(() => {
-            console.log('Auth: Redirecting to dashboard after auth state change delay');
-            navigate('/dashboard');
-          }, 1000);
-        }
-      }
-    );
-    
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
-  useEffect(() => {
+    console.log('Auth: Component mounted, checking URL parameters');
     // Check for signup parameter in URL
     const query = new URLSearchParams(window.location.search);
     const signupParam = query.get('signup');
     if (signupParam === 'true') {
+      console.log('Auth: Signup parameter detected, switching to signup mode');
       setMode('signup');
     }
 
@@ -67,16 +38,19 @@ const Auth = () => {
     const errorDescription = query.get('error_description');
     
     if (error && errorDescription) {
+      console.log('Auth: Error parameters detected:', { error, errorDescription });
       const decodedError = decodeURIComponent(errorDescription);
       setAuthError(decodedError);
       
       // Check specifically for "Email not confirmed" error
       if (decodedError.includes('Email not confirmed')) {
+        console.log('Auth: Email not confirmed error detected');
         toast.info('Please check your email', {
           description: 'You need to confirm your email address before logging in. Check your inbox for a confirmation link.',
           duration: 5000
         });
       } else {
+        console.log('Auth: Generic authentication error:', decodedError);
         toast.error('Authentication failed', {
           description: decodedError,
         });
@@ -84,13 +58,22 @@ const Auth = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      console.log('Auth: User authenticated, redirecting to dashboard');
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, navigate]);
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Auth: Starting authentication process', { mode, email });
     setIsLoading(true);
     setAuthError(null);
 
     try {
       if (mode === 'signup') {
+        console.log('Auth: Attempting signup');
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -98,8 +81,10 @@ const Auth = () => {
         
         if (error) throw error;
         
+        console.log('Auth: Signup successful, confirmation email sent');
         toast.success('Check your email to confirm your account');
       } else {
+        console.log('Auth: Attempting login');
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -107,21 +92,29 @@ const Auth = () => {
         
         if (error) throw error;
         
-        toast.success('Successfully logged in');
+        console.log('Auth: Login successful, checking auth state');
+        // Wait for auth state to be updated
+        await checkAuth();
+        
+        console.log('Auth: Redirecting to dashboard');
         navigate('/dashboard');
+        
+        toast.success('Successfully logged in');
       }
     } catch (error) {
-      console.error('Authentication error:', error);
+      console.error('Auth: Authentication error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
       setAuthError(errorMessage);
       
       // Check specifically for "Email not confirmed" error
       if (errorMessage.includes('Email not confirmed')) {
+        console.log('Auth: Email not confirmed error during login');
         toast.info('Please check your email', {
           description: 'You need to confirm your email address before logging in. Check your inbox for a confirmation link.',
           duration: 5000
         });
       } else {
+        console.log('Auth: Generic authentication error:', errorMessage);
         toast.error(errorMessage);
       }
     } finally {
@@ -192,6 +185,12 @@ const Auth = () => {
       
       if (error) throw error;
       
+      // Wait for auth state to be updated
+      await checkAuth();
+      
+      console.log('Auth: Redirecting to dashboard');
+      navigate('/dashboard');
+      
       // No need to navigate as the OAuth flow will redirect automatically
     } catch (error) {
       console.error('Google sign-in error:', error);
@@ -202,10 +201,13 @@ const Auth = () => {
     }
   };
 
-  if (isAuthenticated === null) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground mt-2">Checking authentication...</p>
+        </div>
       </div>
     );
   }

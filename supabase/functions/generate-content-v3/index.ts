@@ -140,14 +140,51 @@ serve(async (req) => {
       // Get language from request or use default
       contentLanguage = body.language || 'en';
       
-      // No cornerstone content in onboarding mode
-      cornerstoneContent = [];
+      // Use the provided cornerstone content and scraped content
+      cornerstoneContent = body.cornerstone_content || [];
+      websiteContent = body.scraped_content || [];
       
+      // Log the data we're using
       console.log('Using onboarding data:', {
         title: body.title,
         website_url: body.website_url,
-        language: contentLanguage
+        language: contentLanguage,
+        cornerstoneContentCount: cornerstoneContent.length,
+        websiteContentCount: websiteContent.length,
+        cornerstoneContentSample: cornerstoneContent[0] ? {
+          title: cornerstoneContent[0].title,
+          url: cornerstoneContent[0].url,
+          hasContent: !!cornerstoneContent[0].content,
+          hasDigest: !!cornerstoneContent[0].digest
+        } : null,
+        websiteContentSample: websiteContent[0] ? {
+          title: websiteContent[0].title,
+          url: websiteContent[0].url,
+          hasContent: !!websiteContent[0].content,
+          hasDigest: !!websiteContent[0].digest
+        } : null
       });
+
+      // Validate the content format
+      const validateContent = (content: any[]) => {
+        return content.every(item => 
+          typeof item === 'object' &&
+          typeof item.title === 'string' &&
+          typeof item.url === 'string' &&
+          (item.content === undefined || typeof item.content === 'string') &&
+          (item.digest === undefined || typeof item.digest === 'string')
+        );
+      };
+
+      if (!validateContent(cornerstoneContent)) {
+        console.error('Invalid cornerstone content format:', cornerstoneContent);
+        throw new Error('Invalid cornerstone content format');
+      }
+
+      if (!validateContent(websiteContent)) {
+        console.error('Invalid website content format:', websiteContent);
+        throw new Error('Invalid website content format');
+      }
     } else {
       // Regular flow - validate postThemeId
       const { postThemeId } = body;
@@ -233,13 +270,52 @@ serve(async (req) => {
       cornerstoneContent = websiteContent?.filter(content => content.is_cornerstone) || [];
     }
 
-    // Prepare the content context
-    const contextForPrompt = cornerstoneContent
+    // Prepare the content context with exact URLs
+    const availableLinks = cornerstoneContent
       .slice(0, 3) // Only use up to 3 cornerstone pages for context
-      .map(content => ({ title: content.title, url: content.url }));
+      .map(content => `<a href="${content.url}">${content.title}</a>`);
 
-    // THIS IS THE FIX - Using our detailed prompt instead of the simplified one
-    // Generate content using OpenAI
+    console.log('Available links for content:', availableLinks);
+
+    // Prepare formatting instructions based on mode
+    let formattingInstructions = '';
+    if (isOnboarding) {
+      formattingInstructions = `HTML FORMATTING REQUIREMENTS:
+- DO NOT include the headline/title in the HTML content - it will be added separately
+- Wrap each paragraph in <p> tags
+- Use <h2> for main section headers
+- Use <h3> for subsection headers if needed
+- Use <ul> and <li> for unordered lists
+- Use <ol> and <li> for ordered lists
+- Use <blockquote> for quotes
+- NEVER use code blocks, backticks (\`\`\`), or any code formatting
+- DO NOT include extra newlines between elements
+- Ensure all HTML tags are properly closed
+- Format lists properly with each <li> on its own line`;
+    } else if (wordpressTemplate) {
+      formattingInstructions = `WORDPRESS TEMPLATE FORMAT:
+Use this exact HTML structure for your content:
+${wordpressTemplate}
+
+Replace the content between the entry-content tags with your generated content.
+Ensure your content matches the styling and structure of the template.
+DO NOT include the headline/title in the content - it will be added separately.`;
+    } else {
+      // Default formatting for non-onboarding without template
+      formattingInstructions = `HTML FORMATTING REQUIREMENTS:
+- DO NOT include the headline/title in the HTML content - it will be added separately
+- Wrap each paragraph in <p> tags
+- Use <h2> for main section headers
+- Use <h3> for subsection headers if needed
+- Use <ul> and <li> for unordered lists
+- Use <ol> and <li> for ordered lists
+- Use <blockquote> for quotes
+- NEVER use code blocks, backticks (\`\`\`), or any code formatting
+- DO NOT include extra newlines between elements
+- Ensure all HTML tags are properly closed
+- Format lists properly with each <li> on its own line`;
+    }
+
     const prompt = `Write a high-quality WordPress blog post with the title:
 "${postTheme.subject_matter}"
 
@@ -252,27 +328,19 @@ Subject Matters to Consider: ${subjectMatters.join(', ')}
 Website Content Summary (to reference and link back to where relevant): 
 ${websiteContent?.[0]?.content?.substring(0, 1500) || ''}
 
-Key content pages to reference (only use if relevant to the content):
-${cornerstoneContent.map(content => `- ${content.title}: ${content.url}`).join('\n') || 'No key content pages available'}
+Available links for reference (use these where relevant):
+${availableLinks.map((link, i) => `${i + 1}. ${link}`).join('\n')}
 
-The content should:
+Content Requirements:
 1. Have an engaging introduction that hooks the reader
 2. Include 3-5 main sections with descriptive subheadings
 3. Incorporate the keywords naturally throughout the text
-4. Include 2-3 internal links to other content on the website (using the provided key content pages)
-5. End with a conclusion and call to action
-6. Be approximately 800-1200 words
+4. End with a conclusion
+5. Be approximately 800-1200 words
 
-IMPORTANT: 
-- DO NOT include the title as an H1 or H2 at the beginning of the article. The title will already be displayed in the WordPress theme.
-- DO NOT include post metadata like date, author, categories, or tags.
-- DO NOT include phrases like "Posted on", "Posted by", "Posted in", or "Tagged with".
-- DO NOT include any headers or footers that would typically be handled by the WordPress theme.
-- For Danish content: Do NOT capitalize every word in headers (h2, h3, etc.). Danish headers should only capitalize the first word and proper nouns.
-- Start directly with the introduction paragraph.
+${formattingInstructions}
 
-Format the response as HTML with proper heading tags (h2, h3), paragraphs, lists, and link elements.
-Use internal links with anchor text that flows naturally in the content.`;
+For Danish content: Only capitalize first word and proper nouns in headers`;
 
     // Print the full prompt to logs for debugging
     console.log('FULL PROMPT:', prompt);
@@ -283,15 +351,12 @@ Use internal links with anchor text that flows naturally in the content.`;
       messages: [
         { 
           role: 'system', 
-          content: 'You are a professional blog writer who specializes in creating well-structured HTML content for WordPress. Always format your response with proper HTML tags including <h2>, <h3>, <p>, <ul>, <ol>, <li>, and <blockquote> where appropriate. Never include the title as an H1 or H2 at the beginning of the article. Start directly with the introduction paragraph.' 
+          content: 'You are a professional blog writer who specializes in creating well-structured HTML content for WordPress. You must use the exact links provided in the prompt by copying and pasting them. Never modify URLs or create placeholder links. Format your content exactly as specified in the formatting instructions. IMPORTANT: Do not wrap your content in markdown code blocks (```) or use any markdown formatting. Return pure HTML content only.' 
         },
         { role: 'user', content: prompt }
       ],
       temperature: 0.7
     };
-    
-    // Double check the final prompt being sent
-    console.log('SENDING THIS EXACT PROMPT:', openaiRequestBody.messages[1].content);
 
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openaiApiKey) {
@@ -343,48 +408,8 @@ Use internal links with anchor text that flows naturally in the content.`;
     const generatedContent = openaiData.choices[0].message.content;
     console.log('Generated content length:', generatedContent.length);
 
-    // Format the content with proper HTML structure
-    let formattedContent = generatedContent
-      // Ensure the content starts with a paragraph
-      .replace(/^([^<])/m, '<p>$1')
-      // Replace numbered lists with proper HTML
-      .replace(/(\d+\.\s+.*?)(?=\n\n|\n$|$)/gs, (match) => {
-        const items = match.split('\n').map(item => item.replace(/^\d+\.\s+/, ''));
-        return `<ol>${items.map(item => `<li>${item}</li>`).join('')}</ol>`;
-      })
-      // Replace bullet points with proper HTML
-      .replace(/([•-]\s+.*?)(?=\n\n|\n$|$)/gs, (match) => {
-        const items = match.split('\n').map(item => item.replace(/^[•-]\s+/, ''));
-        return `<ul>${items.map(item => `<li>${item}</li>`).join('')}</ul>`;
-      })
-      // Ensure paragraphs are wrapped in <p> tags
-      .split('\n\n')
-      .map(para => para.trim())
-      .filter(para => para)
-      .map(para => {
-        if (para.startsWith('<h') || para.startsWith('<ul') || para.startsWith('<ol') || para.startsWith('<blockquote')) {
-          return para;
-        }
-        return `<p>${para}</p>`;
-      })
-      .join('\n');
-
-    // Apply WordPress template if available
-    let finalContent = formattedContent;
-    if (wordpressTemplate) {
-      console.log('Applying WordPress template to content');
-      // Use string replacement instead of DOM manipulation
-      if (wordpressTemplate.includes('.entry-content')) {
-        // Replace content between .entry-content tags with our formatted content
-        finalContent = wordpressTemplate.replace(
-          /<div class="entry-content">([\s\S]*?)<\/div>/,
-          `<div class="entry-content">${formattedContent}</div>`
-        );
-      } else {
-        // If no entry-content div is found, just use the formatted content
-        finalContent = formattedContent;
-      }
-    }
+    // Use the content directly without additional formatting
+    const finalContent = generatedContent;
 
     // Update the post theme in the database
     console.log('Content generation completed with final content length:', finalContent.length);

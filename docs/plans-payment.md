@@ -27,3 +27,62 @@ Every month we "reset" the plans so that the user has the amount of credits in t
 ---
 
 Users buying 
+
+
+🌱
+Hobby
+€15
+/month
+✓
+5 Articles per Month
+
+✓
+1 Website
+
+✓
+100 Pages Max Indexing
+
+✓
+Standard AI Models
+
+Select Hobby
+🌿
+Pro
+€49
+/month
+✓
+15 Articles per Month
+
+✓
+1 Website (+€20 per extra)
+
+✓
+500 Pages Max Indexing
+
+✓
+Advanced AI Models
+
+→
+Buy Extra Articles: 10 for €20
+
+Select Pro
+🌳
+Agency / Enterprise
+€149
+/month
+✓
+50 Articles per Month
+
+✓
+Unlimited Websites
+
+✓
+Unlimited Pages Indexing
+
+✓
+Advanced AI Models
+
+→
+Buy Extra Articles: 50 for €100
+
+Select Agency

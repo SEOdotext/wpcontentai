@@ -80,7 +80,7 @@ const Organization = () => {
           <main className="flex-1 px-4 py-6 overflow-y-auto">
             <div className="max-w-6xl mx-auto space-y-6">
               <Helmet>
-                <title>Organization Settings | WP Content AI</title>
+                <title>Organization Settings | ContentGardener.ai</title>
               </Helmet>
 
               <Separator />
