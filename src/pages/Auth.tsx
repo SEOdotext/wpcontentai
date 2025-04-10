@@ -170,11 +170,12 @@ const Auth = () => {
       
       // Use current origin for localhost testing
       const currentOrigin = window.location.origin;
-      const redirectUrl = `${currentOrigin}/dashboard`;
+      // Check if we're in signup mode (new user)
+      const redirectUrl = mode === 'signup' 
+        ? `${currentOrigin}/dashboard?onboarding=complete&transfer=true`
+        : `${currentOrigin}/dashboard`;
       
-      console.log('Auth: Attempting Google sign-in');
-      console.log(`Auth: Current origin: ${currentOrigin}`);
-      console.log(`Auth: Redirect URL: ${redirectUrl}`);
+      console.log('Auth: Attempting Google sign-in', { mode, redirectUrl });  
       
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
