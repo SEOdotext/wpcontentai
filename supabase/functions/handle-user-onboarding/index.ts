@@ -91,6 +91,44 @@ function validateOnboardingData(data: any): { isValid: boolean; error?: string }
   return { isValid: true }
 }
 
+// Add this helper function before the serve function
+function getNextPostingDates(postingDays: Array<{ day: string; count: number }>, count: number): string[] {
+  const dayMap: Record<string, number> = {
+    'sunday': 0,
+    'monday': 1,
+    'tuesday': 2,
+    'wednesday': 3,
+    'thursday': 4,
+    'friday': 5,
+    'saturday': 6
+  };
+
+  // Create a repeating array of days based on count
+  const allDays = postingDays.flatMap(({ day, count: dayCount }) => 
+    Array(dayCount).fill(day.toLowerCase())
+  );
+
+  const dates: string[] = [];
+  const today = new Date();
+  let currentDate = new Date(today);
+
+  // Start from tomorrow
+  currentDate.setDate(currentDate.getDate() + 1);
+
+  while (dates.length < count) {
+    const dayOfWeek = currentDate.getDay();
+    const dayName = Object.keys(dayMap).find(key => dayMap[key] === dayOfWeek);
+    
+    if (allDays.includes(dayName)) {
+      dates.push(new Date(currentDate).toISOString());
+    }
+    
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return dates;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   const corsResponse = handleCors(req)
@@ -384,13 +422,18 @@ serve(async (req) => {
       console.log('Processing post ideas and generated content');
       const postThemes = [];
 
+      // Calculate total number of posts to schedule
+      const totalPosts = (contentData.postIdeas?.length || 0) + (contentData.generatedContent ? 1 : 0);
+      const postingDates = getNextPostingDates(publicationSettings.posting_days, totalPosts);
+      let dateIndex = 0;
+
       // Process regular post ideas
       if (contentData.postIdeas?.length > 0) {
         const ideaThemes = contentData.postIdeas.map(idea => ({
           website_id: websiteData.id,
           subject_matter: idea.title || 'Untitled Post',
           status: idea.liked ? 'approved' : 'pending',
-          scheduled_date: idea.liked ? timestamp : null,
+          scheduled_date: idea.liked ? postingDates[dateIndex++] : null,
           keywords: idea.tags || [],
           post_content: idea.post_content || '',
           created_at: timestamp,
@@ -409,7 +452,7 @@ serve(async (req) => {
           website_id: websiteData.id,
           subject_matter: contentData.generatedContent.title || contentData.generatedContent.subject_matter || 'Untitled Generated Post',
           status: 'textgenerated',
-          scheduled_date: timestamp,
+          scheduled_date: postingDates[dateIndex++],
           keywords: contentData.generatedContent.tags || [],
           post_content: contentData.generatedContent.post_content || '',
           created_at: timestamp,
@@ -422,7 +465,11 @@ serve(async (req) => {
         postThemes.push(generatedTheme);
       }
 
-      console.log('Inserting post themes:', JSON.stringify(postThemes, null, 2));
+      console.log('Inserting post themes with scheduled dates:', JSON.stringify(postThemes.map(theme => ({
+        title: theme.subject_matter,
+        status: theme.status,
+        scheduled_date: theme.scheduled_date
+      })), null, 2));
 
       const { error: postThemesError } = await supabaseClient
         .from('post_themes')
