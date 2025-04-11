@@ -11,3 +11,6 @@ alwaysApply: true
 
 Avoid using mock data when coding. 
 Don't try to npm run dev, the project is already running.
+We use British English
+Don't use "Newspaper Headers", just "Normal headers" - 
+Make sure not to use article casing for all headers in the onboarding. Use a normal case for the headers etc. - Only "newsletter casing" when really relevant

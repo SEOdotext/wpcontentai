@@ -27,7 +27,8 @@ import {
   Trash2,
   Shield,
   Globe,
-  Mail
+  Mail,
+  Seedling
 } from "lucide-react";
 import {
   Dialog,
@@ -213,9 +214,9 @@ const LogoAnimation = () => (
     viewBox="0 0 40 40" 
     fill="none" 
     xmlns="http://www.w3.org/2000/svg"
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    transition={{ duration: 0.3 }}
+    initial={{ opacity: 0, scale: 0.8 }}
+    animate={{ opacity: 1, scale: 1 }}
+    transition={{ duration: 0.5, ease: "easeOut" }}
   >
     <motion.path
       d="M8 20C8 13.3726 13.3726 8 20 8C26.6274 8 32 13.3726 32 20C32 26.6274 26.6274 32 20 32C16.6863 32 14 29.3137 14 26C14 22.6863 16.6863 20 20 20"
@@ -397,6 +398,54 @@ const SignupModal = ({
         </form>
       </DialogContent>
     </Dialog>
+  );
+};
+
+// Add these components before the Onboarding component
+const AnimatedResult: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  
+  useEffect(() => {
+    // Trigger animation after component mounts
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: isVisible ? 1 : 0, y: isVisible ? 0 : 10 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+const AnimatedListItem: React.FC<{ children: React.ReactNode, index: number }> = ({ children, index }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  
+  useEffect(() => {
+    // Trigger animation after component mounts with staggered delay
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, 100 + (index * 100)); // Stagger the animations
+    
+    return () => clearTimeout(timer);
+  }, [index]);
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: isVisible ? 1 : 0, x: isVisible ? 0 : -10 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className="py-1"
+    >
+      {children}
+    </motion.div>
   );
 };
 
@@ -751,7 +800,7 @@ const Onboarding = () => {
       
       // Step 4: Learning Tone-of-Voice
       async () => {
-        setState(prev => ({ ...prev, currentStepIndex: 3, currentStepText: "Learning your tone..." }));
+        setState(prev => ({ ...prev, currentStepIndex: 3, currentStepText: "Learning how you sound so we can write like you.\n🔍 Selecting and prioritising key pages to understand your tone." }));
         try {
           // Get ALL sitemap pages stored in localStorage
           const rawWebsiteContent = JSON.parse(localStorage.getItem('website_content') || '[]');
@@ -815,6 +864,12 @@ const Onboarding = () => {
             throw new Error("No pages found in website content. Please try a different website.");
           }
           
+          // Update the step text to show a more fluid message
+          setState(prev => ({ 
+            ...prev, 
+            currentStepText: "Learning how you sound so we can write like you.\n🔍 Selecting and prioritising key pages to understand your tone."
+          }));
+          
           // Send ALL pages to suggest-key-content so it has full context
           const payload = {
             website_id: websiteId,
@@ -855,9 +910,13 @@ const Onboarding = () => {
                 // Fallback if URL parsing fails
                 return page.url?.replace(state.websiteUrl, '') || '/';
               }
-            }).join('\n');
+            });
             
-            return `🗣️ Learning Tone-of-Voice\n\nWe're learning how you sound so we can write like you.\n🔍 Selected and prioritised these key pages to understand your tone and style:\n${pageUrls}\n(Don't worry, you can adjust this later.)`;
+            // Add a small delay before showing the final message to make the transition smoother
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Return the message with the page URLs
+            return `We've learned how you sound so we can write like you.\n🔍 Selected and prioritised these key pages to understand your tone and style:\n${pageUrls.join('\n')}\n(Don't worry, you can adjust this later.)`;
           } else {
             // Don't use mock data - show the actual error
             console.error("No suggestions returned from suggest-key-content:", result);
@@ -876,7 +935,7 @@ const Onboarding = () => {
       
       // Step 5: Reading Key Content
       async () => {
-        setState(prev => ({ ...prev, currentStepIndex: 4, currentStepText: "Reading key content..." }));
+        setState(prev => ({ ...prev, currentStepIndex: 4, currentStepText: "We're digging deeper into your key content to fully understand your voice and topics." }));
         try {
           const keyPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
           let success = false;
@@ -909,6 +968,15 @@ const Onboarding = () => {
                 
                 console.log(`Scraping content for page: ${page.title || 'Untitled'} (${pageUrl})`);
                 
+                // Update the step text to show a more fluid message for each page
+                setState(prev => ({ 
+                  ...prev, 
+                  currentStepText: `We're digging deeper into your key content to fully understand your voice and topics.\n🔍 Analyzing: ${page.title || 'Page'}\n${pageUrl}`
+                }));
+                
+                // Add a small delay to make the animation feel more natural
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
                 // Call scrape-content to actually get the content
                 const scrapeResult = await callEdgeFunction('scrape-content', {
                   website_id: websiteId,
@@ -932,7 +1000,7 @@ const Onboarding = () => {
                     });
                   });
                   
-              success = true;
+                  success = true;
                 } else {
                   console.error(`Scrape failed for ${pageUrl}:`, scrapeResult);
                   
@@ -984,7 +1052,10 @@ const Onboarding = () => {
             throw new Error("Failed to scrape content from any key pages");
           }
           
-          return "📚 Reading Key Content\n\nWe're digging deeper into your key content to fully understand your voice and topics.\n\nYour most important pages are now being read — this helps us learn how to write like you.";
+          // Add a small delay before showing the final message to make the transition smoother
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          return "We've successfully analyzed your key content to understand your voice and topics.\n\nYour most important pages have been processed — this helps us learn how to write like you.";
         } catch (error) {
           console.error("Error reading content:", error);
           // Don't mask errors with mock data - show the real issue
@@ -994,7 +1065,7 @@ const Onboarding = () => {
       
       // Step 6: Suggesting Content Ideas
       async () => {
-        setState(prev => ({ ...prev, currentStepIndex: 5, currentStepText: "Generating ideas..." }));
+        setState(prev => ({ ...prev, currentStepIndex: 5, currentStepText: "Your content garden is blooming! 🌱\n\nWe're generating unique content ideas based on your tone and themes." }));
         try {
           // Get the detected language
           const language = localStorage.getItem('website_language') || 'en';
@@ -1035,6 +1106,18 @@ const Onboarding = () => {
             throw new Error("Missing key content pages. Previous steps are incomplete.");
           }
           
+          // Add a small delay to make the animation feel more natural
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Update the step text to show progress
+          setState(prev => ({ 
+            ...prev, 
+            currentStepText: "Your content garden is blooming! 🌱\n\nWe're generating unique content ideas based on your tone and themes.\n🌱 Planting seeds of inspiration..."
+          }));
+          
+          // Add another small delay to make the animation feel more natural
+          await new Promise(resolve => setTimeout(resolve, 800));
+          
           // Send key information to generate-post-ideas
           const payload = {
             website_id: websiteId,
@@ -1055,14 +1138,23 @@ const Onboarding = () => {
           
           console.log("Calling generate-post-ideas with full payload:", JSON.stringify(payload, null, 2));
           
+          // Update the step text to show more progress
+          setState(prev => ({ 
+            ...prev, 
+            currentStepText: "Your content garden is blooming! 🌱\n\nWe're generating unique content ideas based on your tone and themes.\n🌱 Planting seeds of inspiration...\n🌿 Growing your content ideas..."
+          }));
+          
           const result = await callEdgeFunction('generate-post-ideas', payload);
           
           console.log("Generate post ideas result:", result);
           
+          // Add a small delay before showing the final message to make the transition smoother
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           if (result?.ideas && result.ideas.length > 0) {
             // Store the ideas in localStorage
             localStorage.setItem('post_ideas', JSON.stringify(result.ideas));
-            return "💡 Suggesting Relevant Content Ideas\n\nYour content garden is blooming! 🌱\n\nWe've generated 5 unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
+            return "Your content garden is blooming! 🌱\n\nWe've generated 5 unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
           } else if (result?.success && Array.isArray(result.titles)) {
             // Handle older API response format
             const formattedIdeas = result.titles.map((title, index) => ({
@@ -1074,8 +1166,8 @@ const Onboarding = () => {
             }));
             
             localStorage.setItem('post_ideas', JSON.stringify(formattedIdeas));
-            return "💡 Suggesting Relevant Content Ideas\n\nYour content garden is blooming! 🌱\n\nWe've generated unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
-        } else {
+            return "Your content garden is blooming! 🌱\n\nWe've generated unique content ideas based on your tone and themes.\n🧠 You'll now see them and get to pick your favorites.";
+          } else {
             console.warn('No ideas returned from generate-post-ideas function');
             // Don't use mock data - show the actual error
             throw new Error("No content ideas could be generated. API returned empty result.");
@@ -1376,13 +1468,30 @@ const Onboarding = () => {
     console.log("Starting content generation with website URL:", state.websiteUrl);
 
     try {
-      // Start progress animation
+      // Start progress animation - adjusted to take approximately 15 seconds
+      // Changed to 1% every 200ms to make the loading take around 15 seconds
       const progressInterval = setInterval(() => {
         setState(prev => {
-          const newProgress = Math.min(prev.progress + 1, 95); // Cap at 95% until we get actual result
-          return { ...prev, progress: newProgress };
+          const newProgress = Math.min(prev.progress + 1, 95); // Increment by 1% each time
+          
+          // Update the step text based on progress to make it more animated
+          let stepText = "Analyzing your tone and style...";
+          
+          if (newProgress < 20) {
+            stepText = "Analyzing your tone and style...";
+          } else if (newProgress < 40) {
+            stepText = "Analyzing your tone and style...\n\nStructuring your content...";
+          } else if (newProgress < 60) {
+            stepText = "Analyzing your tone and style...\n\nStructuring your content...\n\nWriting engaging paragraphs...";
+          } else if (newProgress < 80) {
+            stepText = "Analyzing your tone and style...\n\nStructuring your content...\n\nWriting engaging paragraphs...\n\nPolishing your content...";
+          } else {
+            stepText = "Analyzing your tone and style...\n\nStructuring your content...\n\nWriting engaging paragraphs...\n\nPolishing your content...\n\nAlmost ready...";
+          }
+          
+          return { ...prev, progress: newProgress, currentStepText: stepText };
         });
-      }, 100);
+      }, 200); // Set to 200ms interval
 
       // Get the scraped content and key pages from localStorage
       const scrapedContent = JSON.parse(localStorage.getItem('scraped_content') || '[]');
@@ -1428,24 +1537,28 @@ const Onboarding = () => {
         clearInterval(progressInterval);
         
         if (result?.content) {
-          // Complete the progress bar
-          setState(prev => ({
-            ...prev,
-            progress: 100,
-            contentGenerated: true,
-            generatedContentTitle: likedIdea.title,
-            generatedContentPreview: result.content
-          }));
+          // Add a small delay before showing the final result to make the transition smoother
+          setTimeout(() => {
+            // Complete the progress bar
+            setState(prev => ({
+              ...prev,
+              progress: 100,
+              contentGenerated: true,
+              generatedContentTitle: likedIdea.title,
+              generatedContentPreview: result.content,
+              currentStepText: "Analyzing your tone and style...\n\nStructuring your content...\n\nWriting engaging paragraphs...\n\nPolishing your content...\n\nYour content is ready!"
+            }));
 
-          // Store generated content in localStorage
-          const generatedContent = {
-            title: likedIdea.title,
-            content: result.content,
-            status: 'textgenerated',
-            created_at: new Date().toISOString(),
-            website_id: localStorage.getItem('website_id')
-          };
-          localStorage.setItem('generated_content', JSON.stringify(generatedContent));
+            // Store generated content in localStorage
+            const generatedContent = {
+              title: likedIdea.title,
+              content: result.content,
+              status: 'textgenerated',
+              created_at: new Date().toISOString(),
+              website_id: localStorage.getItem('website_id')
+            };
+            localStorage.setItem('generated_content', JSON.stringify(generatedContent));
+          }, 500); // Add a 500ms delay for a smoother transition
         } else {
           // Handle error case
           clearInterval(progressInterval);
@@ -1966,7 +2079,7 @@ const Onboarding = () => {
       </header>
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           {/* Setup 1: Website Onboarding */}
           {state.step === 1 && (
             <motion.div
@@ -1982,98 +2095,199 @@ const Onboarding = () => {
               className="flex flex-col items-center justify-center py-8"
             >
               <div className="w-full max-w-3xl">
-                <h2 className="text-2xl font-bold mb-8 text-center">
-                  ⚡ Website onboarding
-                </h2>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <motion.div
+                      initial={{ scale: 0, rotate: -180 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ 
+                        type: "spring",
+                        stiffness: 260,
+                        damping: 20,
+                        delay: 0.2
+                      }}
+                    >
+                      <Seedling className="w-6 h-6 text-primary" />
+                    </motion.div>
+                    <motion.h2 
+                      className="text-2xl font-semibold"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5, delay: 0.3 }}
+                    >
+                      Let's Grow Your Content Garden
+                    </motion.h2>
+                  </div>
+                  <p className="text-muted-foreground">
+                    First, let's connect your website to start growing your content.
+                  </p>
+                </div>
                 
                 <div className="mb-8">
-                  <Progress value={state.progress} className="h-2 mb-2" />
+                  <Progress 
+                    value={state.progress} 
+                    className="h-4 mb-2 bg-muted/50 overflow-hidden" 
+                    style={{
+                      background: 'linear-gradient(90deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.15) 100%)',
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                      borderRadius: '8px',
+                      transition: 'all 0.3s ease',
+                      position: 'relative'
+                    }}
+                  >
+                    <div 
+                      className="absolute inset-0 opacity-20" 
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50,20 C60,20 70,30 70,40 C70,50 60,60 50,60 C40,60 30,50 30,40 C30,30 40,20 50,20 Z M50,40 C55,40 60,45 60,50 C60,55 55,60 50,60 C45,60 40,55 40,50 C40,45 45,40 50,40 Z' fill='%2310B981'/%3E%3C/svg%3E")`,
+                        backgroundSize: '20px 20px',
+                        backgroundRepeat: 'repeat'
+                      }}
+                    />
+                  </Progress>
                   <div className="flex justify-between items-center">
                     <p className="text-sm text-muted-foreground">Step {state.currentStepIndex + 1} of {steps.length}</p>
                     <p className="text-sm font-medium">{Math.round(state.progress)}%</p>
                   </div>
                 </div>
                 
-                <div className="border rounded-lg p-6 mb-8 bg-card">
-                  <h3 className="text-lg font-medium mb-4 flex items-center">
-                    <span className="bg-primary/10 p-2 rounded-full mr-3">
-                      <Sparkles className="h-5 w-5 text-primary" />
-                    </span>
-                    {steps[state.currentStepIndex]?.name}
-                  </h3>
-                  
-                  <div className="bg-muted/50 p-4 rounded-md border max-h-[300px] overflow-y-auto">
-                    <div className="space-y-2">
-                      {steps.slice(0, state.currentStepIndex + 1).reverse().map((step, index) => {
-                        const isCurrentStep = index === 0;
-                        const isExpanded = isCurrentStep || expandedSteps[step.id];
-                        const stepText = isCurrentStep ? state.currentStepText : stepTexts[step.id] || '';
-                        
-                        return (
-                          <motion.div
-                            key={step.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: index * 0.1 }}
-                            className={`flex items-start gap-3 p-2 rounded-lg ${
-                              isCurrentStep 
-                                ? 'bg-primary/5 border border-primary/20' 
-                                : 'bg-background/50'
-                            }`}
-                          >
-                            <div className="mt-1">
-                              {!isCurrentStep ? (
-                                <CheckCircle2 className="w-5 h-5 text-primary" />
-                              ) : (
-                                <Sparkles className="w-5 h-5 text-primary animate-pulse" />
-                              )}
-                            </div>
-                            <div className="flex-1">
-                              <div 
-                                className="flex items-center justify-between cursor-pointer"
-                                onClick={() => !isCurrentStep && toggleStepExpanded(step.id)}
+                <div className="bg-muted/50 p-4 rounded-md border max-h-[500px] overflow-y-auto">
+                  <div className="space-y-2">
+                    {steps.slice(0, state.currentStepIndex + 1).reverse().map((step, index) => {
+                      const isCurrentStep = index === 0;
+                      const isExpanded = isCurrentStep || expandedSteps[step.id];
+                      const stepText = isCurrentStep ? state.currentStepText : stepTexts[step.id] || '';
+                      
+                      return (
+                        <motion.div
+                          key={step.id}
+                          initial={index === 0 ? { opacity: 0, y: -20, scale: 0.95 } : false}
+                          animate={index === 0 ? { opacity: 1, y: 0, scale: 1 } : false}
+                          transition={{ 
+                            duration: 0.4, 
+                            ease: "easeOut"
+                          }}
+                          layout="position"
+                          className={`flex items-start gap-3 p-3 rounded-lg transition-all duration-300 ${
+                            isCurrentStep 
+                              ? 'bg-primary/5 border border-primary/20 shadow-sm' 
+                              : 'bg-background/50 hover:bg-background/80'
+                          }`}
+                        >
+                          <div className="mt-1 flex-shrink-0">
+                            {!isCurrentStep ? (
+                              <motion.div
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ type: "spring", stiffness: 300, damping: 20 }}
                               >
-                                <div>
-                                  <p className="font-medium">{step.name}</p>
-                                </div>
-                                {!isCurrentStep && (
+                                <CheckCircle2 className="w-5 h-5 text-primary" />
+                              </motion.div>
+                            ) : (
+                              <motion.div
+                                animate={{ 
+                                  scale: [1, 1.1, 1],
+                                  rotate: [0, 5, -5, 0]
+                                }}
+                                transition={{ 
+                                  duration: 2,
+                                  repeat: Infinity,
+                                  ease: "easeInOut"
+                                }}
+                              >
+                                <Sparkles className="w-5 h-5 text-primary" />
+                              </motion.div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div 
+                              className="flex items-center justify-between cursor-pointer group"
+                              onClick={() => !isCurrentStep && toggleStepExpanded(step.id)}
+                            >
+                              <div className="min-w-0">
+                                <motion.p 
+                                  className="font-medium truncate"
+                                  initial={index === 0 ? { opacity: 0, x: -10 } : false}
+                                  animate={index === 0 ? { opacity: 1, x: 0 } : false}
+                                  transition={{ duration: 0.3 }}
+                                >
+                                  {step.name}
+                                </motion.p>
+                              </div>
+                              {!isCurrentStep && (
+                                <motion.div
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  className="flex-shrink-0 ml-2"
+                                >
                                   <ChevronRight 
-                                    className={`w-4 h-4 text-muted-foreground transition-transform ${
+                                    className={`w-4 h-4 text-muted-foreground transition-transform duration-300 ${
                                       isExpanded ? 'rotate-90' : ''
                                     }`}
                                   />
-                                )}
-                              </div>
-                              {isCurrentStep && state.currentStepText && (
-                                <motion.div
-                                  initial={{ opacity: 0 }}
-                                  animate={{ opacity: 1 }}
-                                  transition={{ duration: 0.3 }}
-                                  className="mt-2 text-sm"
-                                >
-                                  {state.currentStepText.split('\n').map((line, i) => (
-                                    <p key={i} className={`${i > 0 ? 'mt-1' : ''}`}>{line}</p>
-                                  ))}
-                                </motion.div>
-                              )}
-                              {!isCurrentStep && isExpanded && stepText && (
-                                <motion.div
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  transition={{ duration: 0.2 }}
-                                  className="mt-2 text-sm"
-                                >
-                                  {stepText.split('\n').map((line, i) => (
-                                    <p key={i} className={`${i > 0 ? 'mt-1' : ''}`}>{line}</p>
-                                  ))}
                                 </motion.div>
                               )}
                             </div>
-                          </motion.div>
-                        );
-                      })}
-                    </div>
+                            {isCurrentStep && state.currentStepText && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                transition={{ duration: 0.4, ease: "easeOut" }}
+                                className="mt-2 text-sm"
+                              >
+                                {state.currentStepText.split('\n').map((line, i) => {
+                                  if (line.startsWith('/') || line.startsWith('http')) {
+                                    return (
+                                      <motion.div
+                                        key={i}
+                                        initial={{ opacity: 0, x: -10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ duration: 0.3, delay: i * 0.1 }}
+                                        className="flex items-center gap-2 text-primary/80 hover:text-primary transition-colors"
+                                      >
+                                        <Link className="w-4 h-4 flex-shrink-0" />
+                                        <span className="truncate">{line}</span>
+                                      </motion.div>
+                                    );
+                                  }
+                                  return (
+                                    <motion.p
+                                      key={i}
+                                      initial={{ opacity: 0, y: 10 }}
+                                      animate={{ opacity: 1, y: 0 }}
+                                      transition={{ duration: 0.3, delay: i * 0.1 }}
+                                      className={`${i > 0 ? 'mt-1' : ''} break-words`}
+                                    >
+                                      {line}
+                                    </motion.p>
+                                  );
+                                })}
+                              </motion.div>
+                            )}
+                            {!isCurrentStep && isExpanded && stepText && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="mt-2 text-sm"
+                              >
+                                {stepText.split('\n').map((line, i) => (
+                                  <motion.p
+                                    key={i}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.3, delay: i * 0.1 }}
+                                    className={`${i > 0 ? 'mt-1' : ''} break-words`}
+                                  >
+                                    {line}
+                                  </motion.p>
+                                ))}
+                              </motion.div>
+                            )}
+                          </div>
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -2252,92 +2466,115 @@ const Onboarding = () => {
               className="flex flex-col items-center justify-center py-8"
             >
               <div className="w-full max-w-3xl mx-auto">
-                <h2 className="text-2xl font-bold mb-8 text-center">
+                <motion.h2 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2, duration: 0.4 }}
+                  className="text-2xl font-bold mb-8 text-center"
+                >
                   📝 Generating your first piece of content
-                </h2>
+                </motion.h2>
                 
                 {!state.contentGenerated ? (
-                  <>
-                    <div className="text-center mb-8">
-                  <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                    <Wand2 className="h-10 w-10 text-primary animate-pulse" />
-                  </div>
-                  
-                      <h3 className="text-xl font-medium mb-2">🛠️ Generating first draft</h3>
-                      <p className="text-muted-foreground mb-4">
-                        We're putting your favorite idea into words...
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        ✍️ Based on your first selected content idea and your website's tone of voice, we're drafting your first piece of content.
-                  </p>
-                </div>
-                
-                    <Progress value={state.progress} className="h-2 mb-2" />
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Creating your content...</span>
-                    <span>{Math.round(state.progress)}%</span>
-                  </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-center mb-8">
-                      <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle2 className="h-10 w-10 text-primary" />
-                </div>
-                
-                      <h3 className="text-xl font-medium mb-2">📄 Your first draft is ready!</h3>
-                      <p className="text-muted-foreground mb-4">
-                        Here's your AI-generated content — tailored to your tone and style.
-                      </p>
-                    </div>
-                
-                    <div className="border rounded-lg p-6 mb-8 bg-card">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-medium">{state.generatedContentTitle}</h3>
-                        <div className="flex items-center gap-2">
-                          <Toggle
-                            aria-label="Toggle raw content"
-                            pressed={state.showRawContent}
-                            onPressedChange={(pressed) => setState(prev => ({ ...prev, showRawContent: pressed }))}
-                          >
-                            <Code className={`h-4 w-4 ${state.showRawContent ? 'text-primary' : 'text-muted-foreground'}`} />
-                          </Toggle>
-                          <Toggle
-                            aria-label="Toggle rendered content"
-                            pressed={!state.showRawContent}
-                            onPressedChange={(pressed) => setState(prev => ({ ...prev, showRawContent: !pressed }))}
-                          >
-                            <Eye className={`h-4 w-4 ${!state.showRawContent ? 'text-primary' : 'text-muted-foreground'}`} />
-                          </Toggle>
-                        </div>
-                      </div>
-                      
-                      {state.showRawContent ? (
-                        <div className="font-mono text-sm bg-muted p-4 rounded-md overflow-x-auto whitespace-pre-wrap">
-                          {state.generatedContentPreview}
-                        </div>
-                      ) : (
-                        <div 
-                          className="prose prose-sm max-w-none dark:prose-invert"
-                          dangerouslySetInnerHTML={{ __html: state.generatedContentPreview }}
-                        />
-                      )}
-                    </div>
+                  <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3, duration: 0.4 }}
+                    className="text-center mb-8"
+                  >
+                    <motion.div 
+                      initial={{ scale: 0.8 }}
+                      animate={{ scale: 1 }}
+                      transition={{ 
+                        type: "spring",
+                        stiffness: 200,
+                        damping: 15,
+                        delay: 0.4 
+                      }}
+                      className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6"
+                    >
+                      <Wand2 className="h-10 w-10 text-primary animate-pulse" />
+                    </motion.div>
                     
-                    <div className="flex justify-end gap-4">
-                      <Button 
+                    <motion.h3 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5, duration: 0.4 }}
+                      className="text-xl font-medium mb-2"
+                    >
+                      🛠️ Generating first draft
+                    </motion.h3>
+                    
+                    <motion.p 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.6, duration: 0.4 }}
+                      className="text-muted-foreground mb-4"
+                    >
+                      We're putting your favorite idea into words...
+                    </motion.p>
+                    
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.7, duration: 0.4 }}
+                      className="w-full max-w-md mx-auto"
+                    >
+                      <Progress value={state.progress} className="h-2" />
+                      <motion.p 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.8, duration: 0.4 }}
+                        className="text-sm text-muted-foreground mt-2 whitespace-pre-line text-center"
+                      >
+                        {state.currentStepText}
+                      </motion.p>
+                    </motion.div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="space-y-6"
+                  >
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2, duration: 0.4 }}
+                      className="bg-card rounded-lg p-6 border border-border/50"
+                    >
+                      <h3 className="text-xl font-medium mb-4">{state.generatedContentTitle}</h3>
+                      <div className="prose prose-sm max-w-none">
+                        {state.showRawContent ? (
+                          <pre className="whitespace-pre-wrap text-sm">{state.generatedContentPreview}</pre>
+                        ) : (
+                          <div 
+                            className="text-sm"
+                            dangerouslySetInnerHTML={{ __html: state.generatedContentPreview }}
+                          />
+                        )}
+                      </div>
+                    </motion.div>
+                    
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4, duration: 0.4 }}
+                      className="flex justify-end gap-3"
+                    >
+                      <Button
                         variant="outline"
-                        onClick={handleRegenerateContent}
+                        onClick={() => setState(prev => ({ ...prev, showRawContent: !prev.showRawContent }))}
                       >
-                        ♻️ Regenerate
+                        {state.showRawContent ? 'Show Formatted' : 'Show Raw'}
                       </Button>
-                      <Button 
-                        onClick={handlePublishContent}
-                      >
-                        Continue to Schedule <ArrowRight className="ml-2 h-4 w-4" />
+                      <Button onClick={handleContinueToScheduling}>
+                        Continue to Scheduling
+                        <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
-                    </div>
-                  </>
+                    </motion.div>
+                  </motion.div>
                 )}
               </div>
             </motion.div>
