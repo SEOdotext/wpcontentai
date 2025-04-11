@@ -28,6 +28,7 @@ import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from 'react-helmet-async';
+import GoogleTagManager from '@/components/GoogleTagManager';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -241,6 +242,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <HelmetProvider>
+        <GoogleTagManager />
         <Router basename="/">
           <AuthProvider>
             <Routes>
