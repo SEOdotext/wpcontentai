@@ -198,9 +198,9 @@ export function PublicationSettings({
     } else if (frequency <= 3) {
       return 'Pro Plan - Starting at €49/month';
     } else if (frequency <= 5) {
-      return 'Pro Plan (€49/month) + Article Package (10 articles for €20)';
+      return 'Pro Plan (€49/month) + Article Package (10 articles for €20) = €69/month total';
     } else if (frequency <= 7) {
-      return 'Pro Plan (€49/month) + Article Packages (20 articles for €40)';
+      return 'Pro Plan (€49/month) + Article Packages (20 articles for €40) = €89/month total';
     } else {
       // Calculate additional packages needed (1 package per 2 posts above 7)
       const additionalPackages = Math.ceil((frequency - 7) / 2);
@@ -420,7 +420,7 @@ export function PublicationSettings({
                   <p className="text-xs">
                     Total: {postingDays.length} post{postingDays.length !== 1 ? 's' : ''} per week
                   </p>
-                  <div className="mt-4 text-sm text-gray-500">
+                  <div className="text-sm text-gray-500">
                     {calculatePrice(postingDays.length)}
                   </div>
                 </div>

@@ -239,7 +239,7 @@ serve(async (req) => {
         } 
       }
     );
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Error in stripe-portal function:', error);
     return new Response(
       JSON.stringify({ 
