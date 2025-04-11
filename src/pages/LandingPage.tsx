@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/Logo';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, ChevronRight, Sparkles } from 'lucide-react';
+import { ArrowRight, ChevronRight, Sparkles, Shield } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { SiWordpress } from 'react-icons/si';
 
 const LogoAnimation = () => (
   <motion.svg 
@@ -152,7 +153,7 @@ const LandingPage = () => {
             >
               <div className="inline-flex items-center py-1 px-3 mb-4 border border-primary/20 rounded-full bg-primary/5">
                 <Sparkles className="h-4 w-4 text-primary mr-2" />
-                <span className="text-sm font-medium text-primary">AI-powered WordPress Content</span>
+                <span className="text-sm font-medium text-primary">The best content manager you never hired</span>
               </div>
             </motion.div>
             
@@ -162,7 +163,7 @@ const LandingPage = () => {
               transition={{ duration: 0.5, delay: 0.4 }}
               className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-tight"
             >
-              <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">Tailored content</span> that knows your website
+              Fresh posts. <span className="bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">No fuss!</span>
             </motion.h1>
             
             <motion.p
@@ -171,7 +172,7 @@ const LandingPage = () => {
               transition={{ duration: 0.5, delay: 0.5 }}
               className="text-xl text-muted-foreground max-w-2xl mx-auto mb-12"
             >
-              Just enter your website URL. Our AI analyzes your existing content, tone, and audience to create perfectly matched posts that feel like you wrote them yourself.
+              Finds your voice. Lets your brand flourish.
             </motion.p>
             
             <motion.div
@@ -180,6 +181,7 @@ const LandingPage = () => {
               transition={{ duration: 0.5, delay: 0.6 }}
               className="w-full max-w-md mx-auto"
             >
+              <p className="text-lg font-medium mb-3">Plant your URL. Content grows.</p>
               <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1">
                   <Input
@@ -206,9 +208,21 @@ const LandingPage = () => {
                   Get Started <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </form>
-              <p className="mt-3 text-sm text-muted-foreground text-center">
-                No credit card required • Free 14-day trial • No code needed
-              </p>
+              <div className="mt-6 flex flex-col items-center gap-4">
+                <p className="text-sm text-muted-foreground text-center">
+                  Free to try. Fun to use • We grow the words. You own the tone.
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <div className="flex items-center gap-1 text-primary/70">
+                    <SiWordpress className="h-4 w-4" />
+                    <span className="text-xs font-medium">WordPress Ready</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-primary/70">
+                    <Shield className="h-4 w-4" />
+                    <span className="text-xs font-medium">GDPR Compliant</span>
+                  </div>
+                </div>
+              </div>
             </motion.div>
           </div>
 

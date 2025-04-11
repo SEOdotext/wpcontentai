@@ -29,6 +29,7 @@ import { Loader2 } from 'lucide-react';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from 'react-helmet-async';
 import GoogleTagManager from '@/components/GoogleTagManager';
+import GDPRConsentBanner from '@/components/GDPRConsentBanner';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -361,6 +362,7 @@ function App() {
             </Routes>
           </AuthProvider>
         </Router>
+        <GDPRConsentBanner />
       </HelmetProvider>
     </QueryClientProvider>
   );
