@@ -5,15 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
+import { useSettings } from '../context/SettingsContext';
 
 interface PublicationSettingsProps {
   initialFrequency?: number;
   initialPostingDays?: string[];
   onSave?: (settings: {
-    publication_frequency: number;
     postingDays: string[];
-    writingStyle: string;
-    subjectMatters: any[];
   }) => Promise<void>;
   showSaveButton?: boolean;
   disabled?: boolean;
@@ -26,11 +24,24 @@ export function PublicationSettings({
   showSaveButton = true,
   disabled = false
 }: PublicationSettingsProps) {
-  const [postingFrequency, setPostingFrequency] = useState(initialFrequency);
+  const { 
+    postingFrequency, 
+    setPostingFrequency,
+    writingStyle,
+    subjectMatters,
+    updateSettingsInDatabase 
+  } = useSettings();
   const [postingDays, setPostingDays] = useState<string[]>(initialPostingDays);
   const [isSaving, setIsSaving] = useState(false);
   const [showWeekends, setShowWeekends] = useState(false);
   const { toast } = useToast();
+
+  // Update state when props change
+  useEffect(() => {
+    console.log('Publication settings props updated:', { initialFrequency, initialPostingDays });
+    setPostingFrequency(initialFrequency);
+    setPostingDays(initialPostingDays || ['monday', 'wednesday', 'friday']);
+  }, [initialFrequency, initialPostingDays]);
 
   // Get default posting days based on frequency
   const getDefaultPostingDays = (frequency: number): string[] => {
@@ -60,9 +71,9 @@ export function PublicationSettings({
     }
   };
 
-  const handleFrequencyChange = (frequency: number) => {
+  const handleFrequencyChange = (value: number) => {
     // Check if the new frequency would exceed the maximum limit
-    if (frequency > 299) {
+    if (value > 299) {
       toast({
         title: "Maximum limit reached",
         description: "You can schedule a maximum of 299 articles per week.",
@@ -72,16 +83,16 @@ export function PublicationSettings({
     }
     
     // Always update the frequency first
-    setPostingFrequency(frequency);
+    setPostingFrequency(value);
     
     // For specific frequencies, always use the standard pattern
-    if ([1, 2, 3, 4, 5].includes(frequency)) {
-      setPostingDays(getDefaultPostingDays(frequency));
+    if ([1, 2, 3, 4, 5].includes(value)) {
+      setPostingDays(getDefaultPostingDays(value));
       return;
     }
     
     // For other frequencies, keep existing days and add more if needed
-    if (postingDays.length < frequency) {
+    if (postingDays.length < value) {
       // Get available days (including weekends if they're in the current selection)
       const availableDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
       if (postingDays.some(day => day === 'saturday' || day === 'sunday')) {
@@ -92,7 +103,7 @@ export function PublicationSettings({
       const newDays = [...postingDays];
       
       // Add more days until we reach the desired frequency
-      while (newDays.length < frequency) {
+      while (newDays.length < value) {
         // Find the day with the least posts
         const dayCounts = availableDays.map(day => ({
           day,
@@ -110,9 +121,12 @@ export function PublicationSettings({
       setPostingDays(newDays);
     } 
     // If current days are more than new frequency, remove excess days
-    else if (postingDays.length > frequency) {
-      setPostingDays(prev => prev.slice(0, frequency));
+    else if (postingDays.length > value) {
+      setPostingDays(prev => prev.slice(0, value));
     }
+    
+    // Update the database
+    updateSettingsInDatabase(value, writingStyle, subjectMatters);
   };
 
   const handleDayToggle = (day: string) => {
@@ -202,10 +216,7 @@ export function PublicationSettings({
       setIsSaving(true);
       try {
         await onSave({
-          publication_frequency: postingFrequency,
-          postingDays,
-          writingStyle: '',
-          subjectMatters: []
+          postingDays
         });
         toast({
           title: "Success",

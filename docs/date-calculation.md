@@ -10,7 +10,7 @@ This document explains the centralized approach to date calculation in the Conte
 
 2. **Status consideration**: The `getNextPublicationDate()` function considers all post statuses except 'pending' and 'declined' when determining the furthest future date. This includes 'approved', 'generated', 'published', 'generatingidea', and 'textgenerated'.
 
-3. **Date updates on post approval**: When a post is approved (liked), the approved post keeps its date, and all other pending posts are scheduled to maintain the correct publication frequency.
+3. **Date updates on post approval**: When a post is approved (liked), the approved post keeps its date, and all other pending posts are scheduled to maintain the correct posting frequency.
 
 4. **No custom date calculation**: Components should not implement their own date calculation logic or maintain separate state for future dates.
 

@@ -57,6 +57,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   
   const [liked, setLiked] = useState(status === 'approved');
   const [disliked, setDisliked] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
   
   /**
    * Handles the approval (like) action for a title suggestion
@@ -73,14 +74,12 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       setDisliked(false);
       
       // Calculate a publication date based on the website's publication frequency
-      const nextPublicationDate = getNextPublicationDate();
+      const nextPublicationDate = await getNextPublicationDate();
       
       // Check if the user has manually set a custom date using the date picker
       const isCustomDate = date.getTime() !== new Date().getTime();
       
       // Determine which date to use:
-      // - If the user selected a custom date, use that
-      // - Otherwise, use the calculated date based on publication frequency
       const scheduledDate = isCustomDate ? date : nextPublicationDate;
       
       console.log('Scheduling post for:', format(scheduledDate, 'MMM dd, yyyy'));
@@ -100,14 +99,23 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
           }
         );
         
-        // Call the parent's onLiked handler if provided
-        if (onLiked) {
-          onLiked();
-        }
+        // Start exit animation
+        setIsExiting(true);
+        
+        // Call onLiked after animation completes
+        setTimeout(() => {
+          if (onLiked) {
+            onLiked();
+          }
+        }, 300);
       } else {
+        setIsExiting(false);
+        setLiked(false);
         toast.error("Failed to update post status");
       }
     } catch (error) {
+      setIsExiting(false);
+      setLiked(false);
       console.error('Error approving content:', error);
       toast.error('An error occurred while approving the content');
     }
@@ -239,6 +247,18 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       });
   };
 
+  // Handle animation end
+  const handleTransitionEnd = useCallback(() => {
+    if (isExiting && onRemove) {
+      onRemove(id);
+    }
+  }, [isExiting, onRemove, id]);
+
+  // Don't hide approved items until animation completes
+  if (status === 'approved' && !isExiting && !liked) {
+    return null;
+  }
+
   // Get status badge color
   const getStatusBadge = () => {
     switch (status) {
@@ -259,17 +279,31 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     }
   };
 
+  const formatDate = (date: Date) => {
+    // Validate date before formatting
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+      console.warn('Invalid date provided to TitleSuggestion:', date);
+      return format(addDays(new Date(), 1), 'MMM dd, yyyy');
+    }
+    return format(date, 'MMM dd, yyyy');
+  };
+
   return (
     <div 
       className={cn(
-        'p-4 rounded-lg border transition-all hover:shadow-subtle',
+        'p-4 rounded-lg border transition-all duration-300 ease-in-out hover:shadow-subtle',
         selected 
           ? 'bg-primary/5 border-primary/30 dark:bg-primary/10' 
           : 'bg-card border-border/50',
+        isExiting && 'opacity-0 transform translate-x-full pointer-events-none',
         'animate-fade-in',
         className
       )}
-      onClick={() => onSelect?.(id)}
+      onClick={() => !isExiting && onSelect?.(id)}
+      style={{
+        transform: isExiting ? 'translateX(100%)' : 'translateX(0)',
+        opacity: isExiting ? 0 : 1,
+      }}
     >
       <div className="flex justify-between items-start mb-2">
         <div>
@@ -324,7 +358,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <CalendarIcon className="h-3 w-3 mr-1" />
-                    <span>{format(date, 'MMM dd, yyyy')}</span>
+                    <span>{formatDate(date)}</span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="end">

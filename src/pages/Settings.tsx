@@ -15,6 +15,7 @@ import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap, Link, HelpCirc
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
+import { ImportLimitsSettings } from '@/components/ImportLimitsSettings';
 import {
   Dialog,
   DialogContent,
@@ -127,20 +128,6 @@ interface Category {
   updated_at: string;
 }
 
-interface Website {
-  id: string;
-  name: string;
-  url: string;
-  organisation_id: string;
-  created_at: string;
-  updated_at?: string;
-  language?: string;
-  enable_ai_image_generation?: boolean;
-  image_prompt?: string;
-  page_import_limit?: number;
-  key_content_limit?: number;
-}
-
 interface Organisation {
   id: string;
   name: string;
@@ -148,11 +135,10 @@ interface Organisation {
 }
 
 const Settings = () => {
-  const { publicationFrequency, setPublicationFrequency, writingStyle, setWritingStyle, restoreDefaultWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt, imageModel, setImageModel, negativePrompt, setNegativePrompt } = useSettings();
+  const { writingStyle, setWritingStyle, restoreDefaultWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt, imageModel, setImageModel, negativePrompt, setNegativePrompt } = useSettings();
   const { currentWebsite, updateWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
   const { addPostTheme } = usePostThemes();
-  const [frequency, setFrequency] = useState(publicationFrequency);
   const [styleInput, setStyleInput] = useState(writingStyle);
   const [subjects, setSubjects] = useState<string[]>(subjectMatters);
   const [newSubject, setNewSubject] = useState('');
@@ -184,6 +170,7 @@ const Settings = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [postingDays, setPostingDays] = useState<string[]>([]);
+  const [postingFrequency, setPostingFrequency] = useState(3);
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -251,15 +238,12 @@ const Settings = () => {
 
   useEffect(() => {
     if (!settingsLoading) {
-      setFrequency(publicationFrequency);
       setStyleInput(writingStyle);
       setSubjects(subjectMatters);
-      
-      // Use the template from context instead of overriding it
       setHtmlTemplate(wordpressTemplate);
       console.log('Using WordPress template from context:', wordpressTemplate.substring(0, 50) + '...');
     }
-  }, [settingsLoading, publicationFrequency, writingStyle, subjectMatters, wordpressTemplate]);
+  }, [settingsLoading, writingStyle, subjectMatters, wordpressTemplate]);
 
   // First fix useEffect to fetch WordPress settings with proper table name
   useEffect(() => {
@@ -489,14 +473,162 @@ const Settings = () => {
     }
   }, [htmlTemplate, wordpressTemplate, settingsLoading]);
 
+  // Load publication settings when component mounts
+  useEffect(() => {
+    const loadPublicationSettings = async () => {
+      if (!currentWebsite) return;
+
+      try {
+        console.log('Loading publication settings for website:', currentWebsite.id);
+        
+        // Get the most recent publication settings
+        const { data: settings, error } = await supabase
+          .from('publication_settings')
+          .select('*')
+          .eq('website_id', currentWebsite.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error('Error loading publication settings:', error);
+          return;
+        }
+
+        // Use the first (most recent) settings if available
+        const currentSettings = settings?.[0];
+        if (currentSettings) {
+          console.log('Found existing publication settings:', currentSettings);
+          // Convert the posting_days from database format to array format
+          const days = currentSettings.posting_days?.reduce((acc: string[], day: { day: string; count: number }) => {
+            return [...acc, ...Array(day.count).fill(day.day)];
+          }, []) || ['monday', 'wednesday', 'friday'];
+          
+          setPostingDays(days);
+          setPostingFrequency(days.length);
+          
+          // Set other settings
+          if (currentSettings.writing_style) {
+            setWritingStyle(currentSettings.writing_style);
+            setStyleInput(currentSettings.writing_style);
+          }
+          if (currentSettings.subject_matters) {
+            setSubjectMatters(currentSettings.subject_matters);
+            setSubjects(currentSettings.subject_matters);
+          }
+        } else {
+          console.log('No existing publication settings, using defaults');
+          setPostingDays(['monday', 'wednesday', 'friday']);
+          setPostingFrequency(3);
+        }
+      } catch (error) {
+        console.error('Error loading publication settings:', error);
+      }
+    };
+
+    loadPublicationSettings();
+  }, [currentWebsite]);
+
+  // Update the publication settings save handler
+  const handleSavePublicationSettings = async (settings: { postingDays: string[] }) => {
+    if (!currentWebsite) {
+      toast.error("Please select a website first");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Format posting days to match database structure
+      const formattedPostingDays = settings.postingDays.reduce((acc: { day: string; count: number }[], day) => {
+        const existingDay = acc.find(d => d.day === day);
+        if (existingDay) {
+          existingDay.count++;
+        } else {
+          acc.push({ day, count: 1 });
+        }
+        return acc;
+      }, []);
+
+      console.log('Saving publication settings:', {
+        website_id: currentWebsite.id,
+        posting_frequency: settings.postingDays.length,
+        posting_days: formattedPostingDays,
+        writing_style: writingStyle,
+        subject_matters: subjects
+      });
+
+      // Get the most recent settings
+      const { data: existingSettings } = await supabase
+        .from('publication_settings')
+        .select('id')
+        .eq('website_id', currentWebsite.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (existingSettings?.[0]) {
+        // Update existing settings
+        const { error: updateError } = await supabase
+          .from('publication_settings')
+          .update({
+            posting_frequency: settings.postingDays.length,
+            posting_days: formattedPostingDays,
+            writing_style: writingStyle || '',
+            subject_matters: subjects || [],
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSettings[0].id);
+
+        if (updateError) throw updateError;
+      } else {
+        // Insert new settings
+        const { error: insertError } = await supabase
+          .from('publication_settings')
+          .insert({
+            website_id: currentWebsite.id,
+            posting_frequency: settings.postingDays.length,
+            posting_days: formattedPostingDays,
+            writing_style: writingStyle || '',
+            subject_matters: subjects || [],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      // Update local state
+      setPostingDays(settings.postingDays);
+      setPostingFrequency(settings.postingDays.length);
+
+      toast.success("Publication settings saved successfully");
+    } catch (error) {
+      console.error('Error saving publication settings:', error);
+      toast.error("Failed to save publication settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Update the main settings save handler to also save publication settings
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      setPublicationFrequency(frequency);
       setWritingStyle(styleInput);
       setSubjectMatters(subjects);
-      // Also save the HTML template here if needed
-      // You would typically save it to your backend or context
+
+      // Also update publication settings with the new writing style and subjects
+      if (currentWebsite) {
+        const { error: updateError } = await supabase
+          .from('publication_settings')
+          .update({
+            writing_style: styleInput,
+            subject_matters: subjects,
+            updated_at: new Date().toISOString()
+          })
+          .eq('website_id', currentWebsite.id);
+
+        if (updateError) throw updateError;
+      }
+
       toast.success("Settings saved successfully");
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -728,7 +860,7 @@ const Settings = () => {
       
       // Calculate a scheduled date based on publication frequency
       const scheduledDate = new Date();
-      scheduledDate.setDate(scheduledDate.getDate() + frequency);
+      scheduledDate.setDate(scheduledDate.getDate() + 1); // Default to next day
       
       // Create post themes for each title
       const creationPromises = result.titles.map(title => 
@@ -736,7 +868,11 @@ const Settings = () => {
           website_id: currentWebsite?.id || '',
           subject_matter: title,
           keywords: result.keywordsByTitle?.[title] || result.keywords,
-          categories: result.categoriesByTitle?.[title] || result.categories,
+          categories: (result.categoriesByTitle?.[title] || result.categories).map(cat => ({
+            id: `temp-${Math.random()}`,
+            name: cat,
+            slug: cat.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+          })),
           status: 'pending',
           scheduled_date: scheduledDate.toISOString(),
           post_content: null,
@@ -1330,11 +1466,9 @@ const Settings = () => {
     
     try {
       // Update website language in database
-      const success = await updateWebsite(currentWebsite.id, { language });
-      if (success) {
-        const languageName = languages.find(l => l.code === language)?.name || language;
-        toast.success(`Website language updated to ${languageName}`);
-      }
+      await updateWebsite(currentWebsite.id, { language });
+      const languageName = languages.find(l => l.code === language)?.name || language;
+      toast.success(`Website language updated to ${languageName}`);
     } catch (error) {
       console.error('Failed to update website language:', error);
       toast.error('Failed to update website language');
@@ -1361,10 +1495,8 @@ const Settings = () => {
     
     try {
       // Update website language in database
-      const success = await updateWebsite(currentWebsite!.id, { language: customCode });
-      if (success) {
-        toast.success(`Website language updated to custom code: ${customCode}`);
-      }
+      await updateWebsite(currentWebsite!.id, { language: customCode });
+      toast.success(`Website language updated to custom code: ${customCode}`);
     } catch (error) {
       console.error('Failed to update website language:', error);
       toast.error('Failed to update website language');
@@ -2104,62 +2236,10 @@ const Settings = () => {
                 </Card>
 
                 <PublicationSettings
-                  initialFrequency={publicationFrequency}
                   initialPostingDays={postingDays}
-                  onSave={async (frequency, days) => {
-                    setSaving(true);
-                    try {
-                      // Format posting days to match database structure
-                      const formattedPostingDays = days.reduce((acc: { day: string; count: number }[], day) => {
-                        const existingDay = acc.find(d => d.day === day);
-                        if (existingDay) {
-                          existingDay.count++;
-                        } else {
-                          acc.push({ day, count: 1 });
-                        }
-                        return acc;
-                      }, []);
-
-                      console.log('Saving settings:', {
-                        frequency,
-                        postingDays: formattedPostingDays,
-                        writingStyle,
-                        subjectMatters
-                      });
-
-                      const { error } = await supabase
-                        .from('publication_settings')
-                        .upsert({
-                          website_id: currentWebsite.id,
-                          organization_id: currentWebsite.organisation_id,
-                          frequency,
-                          posting_days: formattedPostingDays,
-                          writing_style: writingStyle,
-                          subject_matters: subjectMatters,
-                          updated_at: new Date().toISOString()
-                        });
-
-                      if (error) throw error;
-
-                      // Update local state
-                      setPublicationFrequency(frequency);
-                      setPostingDays(days);
-                      setWritingStyle(writingStyle);
-                      setSubjectMatters(subjectMatters);
-
-                      toast({
-                        description: "Settings saved successfully.",
-                      });
-                    } catch (error) {
-                      console.error('Error saving settings:', error);
-                      toast({
-                        description: "Failed to save settings. Please try again.",
-                        variant: "destructive"
-                      });
-                    } finally {
-                      setSaving(false);
-                    }
-                  }}
+                  initialFrequency={postingFrequency}
+                  onSave={handleSavePublicationSettings}
+                  disabled={!currentWebsite}
                 />
 
                 <Card>
@@ -2424,79 +2504,7 @@ const Settings = () => {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Import Limits</CardTitle>
-                    <CardDescription>
-                      Configure limits for page imports and key content
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Page Import Limit</Label>
-                      <div className="flex items-center space-x-2">
-                        <Slider
-                          value={[currentWebsite?.page_import_limit || 500]}
-                          onValueChange={async (value) => {
-                            if (!currentWebsite) {
-                              toast.error("Please select a website first");
-                              return;
-                            }
-                            try {
-                              await updateWebsite(currentWebsite.id, {
-                                page_import_limit: value[0]
-                              });
-                              toast.success(`Page import limit updated to ${value[0]} pages`);
-                            } catch (error) {
-                              console.error('Failed to update page import limit:', error);
-                              toast.error('Failed to update page import limit');
-                            }
-                          }}
-                          min={100}
-                          max={5000}
-                          step={100}
-                          className="w-[200px]"
-                        />
-                        <span className="w-16 text-right">{currentWebsite?.page_import_limit || 500}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Maximum number of pages that can be imported at once. Higher limits may take longer to process.
-                      </p>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Key Content Limit</Label>
-                      <div className="flex items-center space-x-2">
-                        <Slider
-                          value={[currentWebsite?.key_content_limit || 10]}
-                          onValueChange={async (value) => {
-                            if (!currentWebsite) {
-                              toast.error("Please select a website first");
-                              return;
-                            }
-                            try {
-                              await updateWebsite(currentWebsite.id, {
-                                key_content_limit: value[0]
-                              });
-                              toast.success(`Key content limit updated to ${value[0]} pages`);
-                            } catch (error) {
-                              console.error('Failed to update key content limit:', error);
-                              toast.error('Failed to update key content limit');
-                            }
-                          }}
-                          min={5}
-                          max={50}
-                          step={5}
-                          className="w-[200px]"
-                        />
-                        <span className="w-16 text-right">{currentWebsite?.key_content_limit || 10}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Maximum number of key content pages that can be marked. These pages are used as reference for content generation.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+                <ImportLimitsSettings />
 
                 <Card>
                   <CardHeader>
@@ -2522,12 +2530,10 @@ const Settings = () => {
                               return;
                             }
                             try {
-                              const success = await updateWebsite(currentWebsite.id, {
+                              await updateWebsite(currentWebsite.id, {
                                 enable_ai_image_generation: checked
                               });
-                              if (success) {
-                                toast.success(checked ? "AI image generation enabled" : "AI image generation disabled");
-                              }
+                              toast.success(checked ? "AI image generation enabled" : "AI image generation disabled");
                             } catch (error) {
                               console.error('Failed to update AI image generation setting:', error);
                               toast.error('Failed to update AI image generation setting');

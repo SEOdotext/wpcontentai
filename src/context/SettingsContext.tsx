@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useWebsites } from '@/context/WebsitesContext';
@@ -10,7 +10,7 @@ type Json = string[] | number[] | boolean[] | {[key: string]: any} | string | nu
 interface PublicationSettings {
   id: string;
   organisation_id: string;
-  publication_frequency: number;
+  posting_frequency: number;
   writing_style: string;
   subject_matters: Json;
   wordpress_template?: string;
@@ -23,8 +23,8 @@ interface PublicationSettings {
 }
 
 interface SettingsContextType {
-  publicationFrequency: number; // Days between posts
-  setPublicationFrequency: (days: number) => void;
+  postingFrequency: number; // Days between posts
+  setPostingFrequency: (days: number) => void;
   writingStyle: string;
   setWritingStyle: (style: string) => void;
   restoreDefaultWritingStyle: () => void;
@@ -39,10 +39,19 @@ interface SettingsContextType {
   negativePrompt: string;
   setNegativePrompt: (prompt: string) => void;
   isLoading: boolean;
+  updateSettingsInDatabase: (
+    frequency: number,
+    style: string,
+    subjects: string[],
+    template?: string,
+    prompt?: string,
+    model?: string,
+    negPrompt?: string
+  ) => Promise<void>;
 }
 
 const defaultSettings = {
-  publicationFrequency: 7, // Default to weekly
+  postingFrequency: 7, // Default to weekly
   writingStyle: 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through. Structure your content to grab attention with a strong hook, provide context that connects with your reader, deliver clear value, back it up with proof, and end with a clear action step. This natural flow helps both readers and AI understand your message better.',
   subjectMatters: [], // Empty array for default subjects
   wordpressTemplate: `<!-- WordPress Post HTML Structure Example -->
@@ -88,7 +97,7 @@ const defaultSettings = {
 
 const SettingsContext = createContext<SettingsContextType>({
   ...defaultSettings,
-  setPublicationFrequency: () => {},
+  setPostingFrequency: () => {},
   setWritingStyle: () => {},
   restoreDefaultWritingStyle: () => {},
   setSubjectMatters: () => {},
@@ -97,12 +106,13 @@ const SettingsContext = createContext<SettingsContextType>({
   setImageModel: () => {},
   setNegativePrompt: () => {},
   isLoading: false,
+  updateSettingsInDatabase: async () => {},
 });
 
 export const useSettings = () => useContext(SettingsContext);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [publicationFrequency, setPublicationFrequency] = useState<number>(defaultSettings.publicationFrequency);
+  const [postingFrequency, setPostingFrequency] = useState<number>(defaultSettings.postingFrequency);
   const [writingStyle, setWritingStyle] = useState<string>(defaultSettings.writingStyle);
   const [subjectMatters, setSubjectMatters] = useState<string[]>(defaultSettings.subjectMatters);
   const [wordpressTemplate, setWordpressTemplate] = useState<string>(defaultSettings.wordpressTemplate);
@@ -118,7 +128,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const fetchSettings = async () => {
       if (!currentWebsite) {
         console.log("No website selected, using default settings");
-        setPublicationFrequency(defaultSettings.publicationFrequency);
+        setPostingFrequency(defaultSettings.postingFrequency);
         setWritingStyle(defaultSettings.writingStyle);
         setSubjectMatters(defaultSettings.subjectMatters);
         setWordpressTemplate(defaultSettings.wordpressTemplate);
@@ -156,7 +166,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           console.log("Found existing settings:", data[0]);
           const settings = data[0] as PublicationSettings; // Cast to our interface type
           setSettingsId(settings.id);
-          setPublicationFrequency(settings.publication_frequency);
+          setPostingFrequency(settings.posting_frequency);
           setWritingStyle(settings.writing_style);
           
           // Set WordPress template if it exists
@@ -245,7 +255,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const { data: newSettings, error: insertError } = await supabase
             .from('publication_settings')
             .insert({
-              publication_frequency: defaultSettings.publicationFrequency,
+              posting_frequency: defaultSettings.postingFrequency,
               writing_style: defaultSettings.writingStyle,
               subject_matters: defaultSettings.subjectMatters,
               wordpress_template: defaultSettings.wordpressTemplate,
@@ -266,7 +276,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           if (newSettings) {
             console.log("Created new settings:", newSettings);
             setSettingsId(newSettings.id);
-            setPublicationFrequency(defaultSettings.publicationFrequency);
+            setPostingFrequency(defaultSettings.postingFrequency);
             setWritingStyle(defaultSettings.writingStyle);
             setSubjectMatters(defaultSettings.subjectMatters);
             setWordpressTemplate(defaultSettings.wordpressTemplate);
@@ -278,7 +288,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } catch (error) {
         console.error('Error fetching settings:', error);
         toast.error('Failed to load settings from database, using defaults instead.');
-        setPublicationFrequency(defaultSettings.publicationFrequency);
+        setPostingFrequency(defaultSettings.postingFrequency);
         setWritingStyle(defaultSettings.writingStyle);
         setSubjectMatters(defaultSettings.subjectMatters);
         setWordpressTemplate(defaultSettings.wordpressTemplate);
@@ -294,7 +304,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [currentWebsite]);
 
   // Update settings in Supabase when they change
-  const updateSettingsInDatabase = async (
+  const updateSettingsInDatabase = useCallback(async (
     frequency: number, 
     style: string, 
     subjects: string[],
@@ -303,12 +313,17 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     model?: string,
     negPrompt?: string
   ) => {
-    if (!currentWebsite) {
-      console.error("Cannot update settings: No website selected");
-      toast.error("Please select a website to save settings");
+    if (!currentWebsite) return;
+    
+    // Skip update if subjects haven't changed
+    const currentSubjects = JSON.stringify(subjectMatters);
+    const newSubjects = JSON.stringify(subjects);
+    if (currentSubjects === newSubjects) {
+      console.log('SettingsContext: Skipping update - subjects unchanged');
       return;
     }
 
+    console.log('SettingsContext: Saving subject matters to database:', subjects);
     try {
       // Check if user is authenticated
       const { data: sessionData } = await supabase.auth.getSession();
@@ -318,10 +333,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       
       // Use current values if not provided
-      const templateToUpdate = template !== undefined ? template : wordpressTemplate;
-      const promptToUpdate = prompt !== undefined ? prompt : imagePrompt;
-      const modelToUpdate = model !== undefined ? model : imageModel;
-      const negPromptToUpdate = negPrompt !== undefined ? negPrompt : negativePrompt;
+      const templateToUpdate = template || wordpressTemplate;
+      const promptToUpdate = prompt || imagePrompt;
+      const modelToUpdate = model || imageModel;
+      const negPromptToUpdate = negPrompt || negativePrompt;
       
       // Ensure subjects is a clean array of strings
       const cleanSubjects = subjects.filter(s => s && s.trim().length > 0);
@@ -333,7 +348,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const { data: newSettings, error: insertError } = await supabase
           .from('publication_settings')
           .insert({
-            publication_frequency: frequency,
+            posting_frequency: frequency,
             writing_style: style,
             subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
             wordpress_template: templateToUpdate,
@@ -362,7 +377,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const { error: updateError } = await supabase
           .from('publication_settings')
           .update({
-            publication_frequency: frequency,
+            posting_frequency: frequency,
             writing_style: style,
             subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
             wordpress_template: templateToUpdate,
@@ -385,18 +400,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Error saving settings:', error);
       toast.error('Failed to save settings. Please try again.');
     }
-  };
+  }, [currentWebsite, settingsId, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt]);
 
   // Handle publication frequency changes
-  const handleSetPublicationFrequency = (days: number) => {
-    setPublicationFrequency(days);
+  const handleSetPostingFrequency = (days: number) => {
+    setPostingFrequency(days);
     updateSettingsInDatabase(days, writingStyle, subjectMatters);
   };
 
   // Handle writing style changes
   const handleSetWritingStyle = (style: string) => {
     setWritingStyle(style);
-    updateSettingsInDatabase(publicationFrequency, style, subjectMatters);
+    updateSettingsInDatabase(postingFrequency, style, subjectMatters);
   };
 
   // Handle subject matters changes
@@ -406,45 +421,45 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Add a small delay to ensure state is updated before saving to database
     setTimeout(() => {
       console.log("Updating database with subject matters:", subjects);
-      updateSettingsInDatabase(publicationFrequency, writingStyle, subjects);
+      updateSettingsInDatabase(postingFrequency, writingStyle, subjects);
     }, 100);
   };
 
   // Add handler for WordPress template
   const handleSetWordpressTemplate = (template: string) => {
     setWordpressTemplate(template);
-    updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, template);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, template);
   };
 
   // Add handler for image prompt
   const handleSetImagePrompt = (prompt: string) => {
     setImagePrompt(prompt);
-    updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, wordpressTemplate, prompt);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, prompt);
   };
 
   // Add handler for image model
   const handleSetImageModel = (model: string) => {
     setImageModel(model);
-    updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, model);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, model);
   };
 
   // Add handler for negative prompt
   const handleSetNegativePrompt = (prompt: string) => {
     setNegativePrompt(prompt);
-    updateSettingsInDatabase(publicationFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, prompt);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, prompt);
   };
 
   // Add handler for restoring default writing style
   const handleRestoreDefaultWritingStyle = () => {
     setWritingStyle(defaultSettings.writingStyle);
-    updateSettingsInDatabase(publicationFrequency, defaultSettings.writingStyle, subjectMatters);
+    updateSettingsInDatabase(postingFrequency, defaultSettings.writingStyle, subjectMatters);
   };
 
   return (
     <SettingsContext.Provider 
       value={{ 
-        publicationFrequency, 
-        setPublicationFrequency: handleSetPublicationFrequency, 
+        postingFrequency, 
+        setPostingFrequency: handleSetPostingFrequency, 
         writingStyle, 
         setWritingStyle: handleSetWritingStyle,
         restoreDefaultWritingStyle: handleRestoreDefaultWritingStyle,
@@ -458,7 +473,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setImageModel: handleSetImageModel,
         negativePrompt,
         setNegativePrompt: handleSetNegativePrompt,
-        isLoading
+        isLoading,
+        updateSettingsInDatabase
       }}
     >
       {children}

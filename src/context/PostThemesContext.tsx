@@ -58,7 +58,7 @@ interface PublicationSettings {
   id: string;
   website_id: string;
   organisation_id: string;
-  publication_frequency: number;
+  posting_frequency: number;
   writing_style: string;
   subject_matters: any; // Using any for now since we don't have the Json type
   wordpress_template: string;
@@ -77,7 +77,7 @@ interface PostThemesContextType {
   generateContent: (id: string) => Promise<PostTheme>;
   sendToWordPress: (id: string) => Promise<boolean>;
   isGeneratingContent: (id: string) => boolean;
-  getNextPublicationDate: () => Date;
+  getNextPublicationDate: () => Promise<Date>;
   setPostThemes: React.Dispatch<React.SetStateAction<PostTheme[]>>;
 }
 
@@ -92,7 +92,7 @@ const PostThemesContext = createContext<PostThemesContextType>({
   generateContent: async () => { throw new Error('Method not implemented'); },
   sendToWordPress: async () => false,
   isGeneratingContent: () => false,
-  getNextPublicationDate: () => new Date(),
+  getNextPublicationDate: async () => new Date(),
   setPostThemes: () => {},
 });
 
@@ -112,102 +112,95 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
   }, [currentWebsite?.id]);
 
   // Function to get the next publication date
-  const getNextPublicationDate = useCallback(() => {
+  const getNextPublicationDate = useCallback(async () => {
+    if (!currentWebsite) {
+      console.log('No current website selected');
+      return addDays(new Date(), 1);
+    }
+
     try {
-      // If no website is selected, use default calculation
-      if (!currentWebsite) {
-        const result = addDays(new Date(), 1);
-        console.log('No website selected, using tomorrow:', format(result, 'yyyy-MM-dd'));
-        return result;
+      // Get publication settings
+      const { data: settings, error: settingsError } = await supabase
+        .from('publication_settings')
+        .select('*')
+        .eq('website_id', currentWebsite.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (settingsError) {
+        console.error('Error fetching publication settings:', settingsError);
+        return addDays(new Date(), 1);
       }
 
-      // Get themes with valid statuses for the current website
-      // Include all statuses except pending and declined as per date.md
-      const websiteThemes = postThemes.filter(theme => 
+      if (!settings || settings.length === 0 || !settings[0].posting_days || settings[0].posting_days.length === 0) {
+        console.log('No publication settings found, using default (tomorrow)');
+        return addDays(new Date(), 1);
+      }
+
+      // Convert posting_days to target posts per day
+      const targetPostsPerDay: { [key: string]: number } = {};
+      settings[0].posting_days.forEach((day: { day: string; count: number }) => {
+        targetPostsPerDay[day.day.toLowerCase()] = day.count;
+      });
+
+      // Get all scheduled dates from existing themes with valid statuses
+      const postsPerDay: { [key: string]: number } = {};
+      let latestTimestamp = 0;
+
+      // Get themes with valid statuses (all except pending and declined)
+      const validThemes = postThemes.filter(theme => 
         theme.website_id === currentWebsite.id && 
         !['pending', 'declined'].includes(theme.status)
       );
-      
-      // Find the absolute latest date through a simple loop
-      let latestTimestamp = 0;
-      const currentTimestamp = new Date().getTime();
-      const minValidTimestamp = new Date('2020-01-01').getTime();
-      
-      // Type definition for day count
-      type DayCount = { [key: string]: number };
-      
-      // Track posts per day to respect publication settings
-      const postsPerDay: DayCount = {
-        monday: 0,
-        tuesday: 0,
-        wednesday: 0,
-        thursday: 0,
-        friday: 0,
-        saturday: 0,
-        sunday: 0
-      };
-      
-      // Find latest date and count posts per day
-      for (const theme of websiteThemes) {
+
+      for (const theme of validThemes) {
         if (!theme.scheduled_date) continue;
-        
+
         try {
-          const dateObj = new Date(theme.scheduled_date);
-          const timestamp = dateObj.getTime();
-          
-          if (isNaN(timestamp) || timestamp < minValidTimestamp) {
-            console.warn('Skipping invalid or too old date:', theme.scheduled_date);
-            continue;
-          }
-          
-          if (timestamp > latestTimestamp) {
-            latestTimestamp = timestamp;
-          }
-          
-          // Count posts per day
-          const day = format(dateObj, 'EEEE').toLowerCase();
-          if (postsPerDay[day] !== undefined) {
-            postsPerDay[day]++;
-          }
+          const date = new Date(theme.scheduled_date);
+          if (isNaN(date.getTime())) continue;
+
+          latestTimestamp = Math.max(latestTimestamp, date.getTime());
+          const day = format(date, 'EEEE').toLowerCase();
+          postsPerDay[day] = (postsPerDay[day] || 0) + 1;
         } catch (e) {
           console.error('Error parsing date:', theme.scheduled_date, e);
         }
       }
-      
+
       // If no valid dates found, use tomorrow
       if (latestTimestamp === 0) {
-        const result = addDays(new Date(), 1);
-        console.log(`No valid dates found for website ${currentWebsite.name}, using tomorrow:`, format(result, 'yyyy-MM-dd'));
-        return result;
+        console.log(`No valid dates found for website ${currentWebsite.name}, using tomorrow`);
+        return addDays(new Date(), 1);
       }
-      
+
       // Start from the latest date found
       let nextDate = new Date(latestTimestamp);
-      
-      // Find the next available day based on posting schedule
-      let daysToAdd = 1;
       let maxAttempts = 14; // Prevent infinite loop
-      
+
       while (maxAttempts > 0) {
         nextDate = addDays(nextDate, 1);
         const dayName = format(nextDate, 'EEEE').toLowerCase();
-        
-        // If this day has fewer posts than others, use it
-        const currentDayCount = postsPerDay[dayName] || 0;
-        const averagePostsPerDay = Object.values(postsPerDay).reduce((a, b) => a + b, 0) / 7;
-        
-        if (currentDayCount <= averagePostsPerDay) {
-          console.log(`Found next available day: ${dayName} with ${currentDayCount} posts`);
+
+        // Skip days that don't have any target posts
+        if (!targetPostsPerDay[dayName]) {
+          continue;
+        }
+
+        // Check if this day has room for more posts
+        const currentCount = postsPerDay[dayName] || 0;
+        if (currentCount < targetPostsPerDay[dayName]) {
+          console.log(`Found next available slot: ${dayName} (${currentCount + 1}/${targetPostsPerDay[dayName]} posts)`);
           return nextDate;
         }
-        
+
         maxAttempts--;
       }
-      
+
       // Fallback: if no suitable day found, just add one day to latest date
       console.log('No optimal day found, using next day after latest');
       return addDays(new Date(latestTimestamp), 1);
-      
+
     } catch (error) {
       console.error('Error calculating next publication date:', error);
       // Fallback to tomorrow
@@ -623,6 +616,70 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       console.error('Error sending to WordPress:', err);
       toast.error('Failed to send content to WordPress');
       return false;
+    }
+  };
+
+  // Update handleTitleLiked to use getNextPublicationDate
+  const handleTitleLiked = async (id: string) => {
+    try {
+      // Get the current post's date before updating
+      const postToUpdate = postThemes.find(theme => theme.id === id);
+      if (!postToUpdate) return;
+
+      // Validate the date
+      let approvedDate;
+      try {
+        if (!postToUpdate.scheduled_date) {
+          // If no date is set, use getNextPublicationDate
+          const nextDate = await getNextPublicationDate();
+          console.log('No date set for approved post, using calculated next date:', nextDate);
+          approvedDate = nextDate;
+        } else {
+          approvedDate = new Date(postToUpdate.scheduled_date);
+          const timestamp = approvedDate.getTime();
+          const minValidTimestamp = new Date('2020-01-01').getTime();
+          
+          // If we have an invalid or too old date, use calculated date instead
+          if (isNaN(timestamp) || timestamp < minValidTimestamp) {
+            const nextDate = await getNextPublicationDate();
+            console.warn('Found invalid date in approved post, using calculated next date:', postToUpdate.scheduled_date, nextDate);
+            approvedDate = nextDate;
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing date in handleTitleLiked:', e);
+        approvedDate = await getNextPublicationDate();
+      }
+
+      // Update the liked post's status to approved while keeping its date
+      const success = await updatePostTheme(id, {
+        status: 'approved',
+        scheduled_date: approvedDate.toISOString()
+      });
+
+      if (!success) throw new Error('Failed to update post theme');
+
+      // Get all pending posts except the one being approved
+      const pendingThemes = postThemes.filter(theme => 
+        theme.status === 'pending' && theme.id !== id
+      );
+
+      // Update each pending post's date using the context function
+      for (const theme of pendingThemes) {
+        const nextDate = await getNextPublicationDate();
+        await updatePostTheme(theme.id, {
+          scheduled_date: nextDate.toISOString(),
+          status: 'pending'
+        }, false); // Don't show toast for each update
+      }
+
+      // Refresh post themes to get all the latest data
+      await fetchPostThemes();
+
+      toast.success('Post approved');
+    } catch (error) {
+      console.error('Error updating post status:', error);
+      toast.error('Failed to update post status');
     }
   };
 

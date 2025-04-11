@@ -218,6 +218,8 @@ export type Database = {
           language?: string
           enable_ai_image_generation?: boolean
           image_prompt?: string
+          page_import_limit?: number
+          key_content_limit?: number
         }
         Insert: {
           id?: string
@@ -229,6 +231,8 @@ export type Database = {
           language?: string
           enable_ai_image_generation?: boolean
           image_prompt?: string
+          page_import_limit?: number
+          key_content_limit?: number
         }
         Update: {
           id?: string
@@ -240,6 +244,8 @@ export type Database = {
           language?: string
           enable_ai_image_generation?: boolean
           image_prompt?: string
+          page_import_limit?: number
+          key_content_limit?: number
         }
         Relationships: [
           {

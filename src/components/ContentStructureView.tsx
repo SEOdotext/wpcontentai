@@ -445,9 +445,9 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     setSelectedTitleId(id === selectedTitleId ? null : id);
   };
 
-  const handleRemoveTitle = (id: string) => {
-    // This will be handled by the TitleSuggestion component
-  };
+  const handleRemoveTitle = useCallback((id: string) => {
+    setPostThemes(prev => prev.filter(theme => theme.id !== id));
+  }, [setPostThemes]);
 
   // Update handleTitleLiked to use getNextPublicationDate
   const handleTitleLiked = async (id: string) => {
@@ -461,7 +461,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       try {
         if (!postToUpdate.scheduled_date) {
           // If no date is set, use getNextPublicationDate
-          const nextDate = getNextPublicationDate();
+          const nextDate = await getNextPublicationDate();
           console.log('No date set for approved post, using calculated next date:', nextDate);
           approvedDate = nextDate;
         } else {
@@ -471,14 +471,14 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
           
           // If we have an invalid or too old date, use calculated date instead
           if (isNaN(timestamp) || timestamp < minValidTimestamp) {
-            const nextDate = getNextPublicationDate();
+            const nextDate = await getNextPublicationDate();
             console.warn('Found invalid date in approved post, using calculated next date:', postToUpdate.scheduled_date, nextDate);
             approvedDate = nextDate;
           }
         }
       } catch (e) {
         console.error('Error parsing date in handleTitleLiked:', e);
-        approvedDate = getNextPublicationDate();
+        approvedDate = await getNextPublicationDate();
       }
 
       // Update the liked post's status to approved while keeping its date
@@ -495,19 +495,16 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       );
 
       // Update each pending post's date using the context function
-      const updatePromises = pendingThemes.map(theme => 
-        updatePostTheme(theme.id, {
-          scheduled_date: addDays(approvedDate, publicationFrequency).toISOString(),
+      for (const theme of pendingThemes) {
+        const nextDate = await getNextPublicationDate();
+        await updatePostTheme(theme.id, {
+          scheduled_date: nextDate.toISOString(),
           status: 'pending'
-        }, false) // Don't show toast for each update
-      );
-
-      await Promise.all(updatePromises);
+        }, false); // Don't show toast for each update
+      }
 
       // Refresh post themes to get all the latest data
       await fetchPostThemes();
-
-      toast.success('Post approved');
     } catch (error) {
       console.error('Error updating post status:', error);
       toast.error('Failed to update post status');
@@ -533,19 +530,19 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       let themeDate: Date;
       try {
         if (!theme.scheduled_date || theme.scheduled_date === '') {
-          // If no date, calculate proper next date for pending posts
-          themeDate = theme.status === 'pending' ? getNextPublicationDate() : new Date();
+          // If no date, use tomorrow for pending posts, today for others
+          themeDate = theme.status === 'pending' ? addDays(new Date(), 1) : new Date();
         } else {
           themeDate = new Date(theme.scheduled_date);
           // Validate the date - if it's invalid, use a fallback
           if (isNaN(themeDate.getTime())) {
             console.warn('Invalid date in theme, using fallback:', theme.id, theme.scheduled_date);
-            themeDate = theme.status === 'pending' ? getNextPublicationDate() : new Date();
+            themeDate = theme.status === 'pending' ? addDays(new Date(), 1) : new Date();
           }
         }
       } catch (e) {
         console.error('Error parsing date:', theme.scheduled_date, e);
-        themeDate = theme.status === 'pending' ? getNextPublicationDate() : new Date();
+        themeDate = theme.status === 'pending' ? addDays(new Date(), 1) : new Date();
       }
       
       return {
