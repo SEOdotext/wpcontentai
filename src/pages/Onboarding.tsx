@@ -28,7 +28,7 @@ import {
   Shield,
   Globe,
   Mail,
-  Seedling
+  Sprout
 } from "lucide-react";
 import {
   Dialog,
@@ -2107,7 +2107,7 @@ const Onboarding = () => {
                         delay: 0.2
                       }}
                     >
-                      <Seedling className="w-6 h-6 text-primary" />
+                      <Sprout className="w-6 h-6 text-primary" />
                     </motion.div>
                     <motion.h2 
                       className="text-2xl font-semibold"
@@ -2115,7 +2115,7 @@ const Onboarding = () => {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.5, delay: 0.3 }}
                     >
-                      Let's Grow Your Content Garden
+                      Let's grow your content garden
                     </motion.h2>
                   </div>
                   <p className="text-muted-foreground">
