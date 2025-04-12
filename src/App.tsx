@@ -9,6 +9,7 @@ import { PostThemesProvider } from '@/context/PostThemesContext';
 import { WebsiteContentProvider } from '@/context/WebsiteContentContext';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { AdminProvider } from '@/context/AdminContext';
 import Auth from '@/pages/Auth';
 import AuthCallback from '@/pages/AuthCallback';
 import Index from '@/pages/Index';
@@ -23,6 +24,7 @@ import WebsiteManager from './pages/WebsiteManager';
 import WebsiteSitemap from './pages/WebsiteSitemap';
 import Organisation from './pages/Organisation';
 import NotFound from './pages/NotFound';
+import Admin from './pages/Admin';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -218,24 +220,26 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
 // Application contexts wrapper
 const AppContexts = ({ children }: { children: React.ReactNode }) => {
   return (
-    <OrganisationProvider>
-      <WebsitesProvider>
-        <SettingsProvider>
-          <PostThemesProvider>
-            <WebsiteContentProvider>
-              <WordPressProvider>
-                <TooltipProvider>
+    <AuthProvider>
+      <AdminProvider>
+        <OrganisationProvider>
+          <WebsitesProvider>
+            <SettingsProvider>
+              <PostThemesProvider>
+                <WebsiteContentProvider>
                   <SidebarProvider>
-                    {children}
-                    <Toaster />
+                    <TooltipProvider>
+                      <Toaster />
+                      {children}
+                    </TooltipProvider>
                   </SidebarProvider>
-                </TooltipProvider>
-              </WordPressProvider>
-            </WebsiteContentProvider>
-          </PostThemesProvider>
-        </SettingsProvider>
-      </WebsitesProvider>
-    </OrganisationProvider>
+                </WebsiteContentProvider>
+              </PostThemesProvider>
+            </SettingsProvider>
+          </WebsitesProvider>
+        </OrganisationProvider>
+      </AdminProvider>
+    </AuthProvider>
   );
 };
 
@@ -245,104 +249,76 @@ function App() {
       <HelmetProvider>
         <GoogleTagManager />
         <Router basename="/">
-          <AuthProvider>
+          <AppContexts>
             <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<AuthRedirector><LandingPage /></AuthRedirector>} />
-              <Route path="/auth" element={<Auth />} />
+              <Route path="/auth" element={<AuthRedirector><Auth /></AuthRedirector>} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              
-              {/* All protected routes - wrapped in contexts */}
+              <Route path="/" element={<AuthWrapper><LandingPage /></AuthWrapper>} />
+              <Route path="/setup" element={<AuthWrapper><OrganisationSetup /></AuthWrapper>} />
+              <Route path="/onboarding" element={<AuthWrapper><Onboarding /></AuthWrapper>} />
+              <Route path="/admin" element={<AuthWrapper><Admin /></AuthWrapper>} />
               <Route path="/dashboard" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <Index />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
+                <AuthWrapper>
+                  <ProtectedRoute>
+                    <Index />
+                  </ProtectedRoute>
+                </AuthWrapper>
               } />
               <Route path="/calendar" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <ContentCalendar />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
+                <AuthWrapper>
+                  <ProtectedRoute>
+                    <ContentCalendar />
+                  </ProtectedRoute>
+                </AuthWrapper>
               } />
               <Route path="/create" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <ContentCreation />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
+                <AuthWrapper>
+                  <ProtectedRoute>
+                    <ContentCreation />
+                  </ProtectedRoute>
+                </AuthWrapper>
               } />
               <Route path="/settings" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <Settings />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
+                <AuthWrapper>
+                  <ProtectedRoute>
+                    <Settings />
+                  </ProtectedRoute>
+                </AuthWrapper>
               } />
               <Route path="/organisation" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <Organisation />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
-              } />
-              <Route path="/setup" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute requireOrg={false}>
-                      <OrganisationSetup />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
+                <AuthWrapper>
+                  <ProtectedRoute>
+                    <Organisation />
+                  </ProtectedRoute>
+                </AuthWrapper>
               } />
               <Route path="/team" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <TeamManagement />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
+                <AuthWrapper>
+                  <ProtectedRoute>
+                    <TeamManagement />
+                  </ProtectedRoute>
+                </AuthWrapper>
               } />
               <Route path="/team-management" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <TeamManagement />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
+                <AuthWrapper>
+                  <ProtectedRoute>
+                    <TeamManagement />
+                  </ProtectedRoute>
+                </AuthWrapper>
               } />
               <Route path="/websites" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <WebsiteManager />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
+                <AuthWrapper>
+                  <ProtectedRoute>
+                    <WebsiteManager />
+                  </ProtectedRoute>
+                </AuthWrapper>
               } />
               <Route path="/sitemap" element={
-                <AppContexts>
-                  <AuthWrapper>
-                    <ProtectedRoute>
-                      <WebsiteSitemap />
-                    </ProtectedRoute>
-                  </AuthWrapper>
-                </AppContexts>
+                <AuthWrapper>
+                  <ProtectedRoute>
+                    <WebsiteSitemap />
+                  </ProtectedRoute>
+                </AuthWrapper>
               } />
               
               {/* Support for /app/* routes to handle redirects from old URLs */}
@@ -360,7 +336,7 @@ function App() {
               {/* Catch-all route */}
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </AuthProvider>
+          </AppContexts>
         </Router>
         <GDPRConsentBanner />
       </HelmetProvider>
