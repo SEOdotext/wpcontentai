@@ -8,6 +8,10 @@ Finish the onboarding / Dash
 Dashboard
 Make the calendar view less tall, each of the "days" are very tall...
 
+---
+
+Reset password feature
+
 
 ---
 

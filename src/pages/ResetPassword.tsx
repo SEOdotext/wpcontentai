@@ -20,12 +20,26 @@ const ResetPassword = () => {
     // Check if we have a token in the URL
     const searchParams = new URLSearchParams(location.search);
     const token = searchParams.get('token');
+    const type = searchParams.get('type');
+    
+    // Log the URL parameters for debugging
+    console.log('ResetPassword: URL parameters:', {
+      token: token ? 'present' : 'missing',
+      type: type || 'not specified'
+    });
     
     if (!token) {
       console.error('No token found in URL');
       setError('Invalid or expired reset link');
       toast.error('Invalid or expired reset link');
       navigate('/auth');
+      return;
+    }
+
+    // If this is a recovery link from Supabase
+    if (type === 'recovery') {
+      console.log('ResetPassword: Processing Supabase recovery link');
+      // The token is already in the correct format, no need to modify it
     }
   }, [location, navigate]);
 
@@ -49,18 +63,25 @@ const ResetPassword = () => {
     try {
       const searchParams = new URLSearchParams(location.search);
       const token = searchParams.get('token');
+      const type = searchParams.get('type');
 
       if (!token) {
         throw new Error('No token found in URL');
       }
+
+      console.log('ResetPassword: Updating password with token type:', type || 'unknown');
 
       // Update the password
       const { error: updateError } = await supabase.auth.updateUser({
         password: password
       });
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('ResetPassword: Error updating password:', updateError);
+        throw updateError;
+      }
 
+      console.log('ResetPassword: Password updated successfully');
       toast.success('Password updated successfully');
       navigate('/auth', { 
         replace: true,
