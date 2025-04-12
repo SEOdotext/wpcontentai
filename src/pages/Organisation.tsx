@@ -62,11 +62,11 @@ const Organisation = () => {
       if (error) throw error;
       if (!data?.url) throw new Error('No portal URL returned');
       
-      window.location.href = data.url;
+      setIsLoadingPortal(false);
+      window.open(data.url, '_blank');
     } catch (error) {
       console.error('Error accessing billing portal:', error);
       toast.error('Failed to access billing portal');
-    } finally {
       setIsLoadingPortal(false);
     }
   };

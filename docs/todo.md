@@ -1,12 +1,6 @@
-Onboarding
-On onboarding the creating post takes around 15 seconds turn around
-the loader gets to 95 in 7. Make the loading approx. 15.
-
----
-
-Finish the onboarding
-- Add integration with WordPress
+Finish the onboarding / Dash
 - Add payment (w. 14 day free trial and 10 credits) - cc required?
+- Add integration with WordPress
 - Adjust the onboarding first step to have a nice loading bar
 
 -
