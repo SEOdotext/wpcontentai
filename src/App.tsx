@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { AdminProvider } from '@/context/AdminContext';
 import Auth from '@/pages/Auth';
 import AuthCallback from '@/pages/AuthCallback';
+import ResetPassword from '@/pages/ResetPassword';
 import Index from '@/pages/Index';
 import OrganisationSetup from '@/pages/OrganisationSetup';
 import Settings from '@/pages/Settings';
@@ -253,6 +254,7 @@ function App() {
             <Routes>
               <Route path="/auth" element={<AuthRedirector><Auth /></AuthRedirector>} />
               <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/reset-password" element={<ResetPassword />} />
               <Route path="/" element={<AuthWrapper><LandingPage /></AuthWrapper>} />
               <Route path="/setup" element={<AuthWrapper><OrganisationSetup /></AuthWrapper>} />
               <Route path="/onboarding" element={<AuthWrapper><Onboarding /></AuthWrapper>} />

@@ -146,7 +146,7 @@ const Auth = () => {
       console.log(`Attempting password reset for: ${email}`);
       
       // Use the current origin for the redirect URL
-      const redirectUrl = `${window.location.origin}/auth/callback`;
+      const redirectUrl = `${window.location.origin}/auth/reset-password`;
       console.log(`Using redirect URL: ${redirectUrl}`);
       
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
