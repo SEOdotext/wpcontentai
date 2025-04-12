@@ -48,8 +48,6 @@ import { Helmet } from 'react-helmet-async';
 import { Separator } from '@/components/ui/separator';
 import { toast as sonnerToast } from 'sonner';
 import Header from '@/components/Header';
-import AppSidebar from '@/components/Sidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
 import { useOrganisation } from '@/context/OrganisationContext';
 import { useWebsites } from '@/context/WebsitesContext';
 import { Toggle } from "@/components/ui/toggle";
@@ -2078,7 +2076,7 @@ const Onboarding = () => {
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl">
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <AnimatePresence>
           {/* Setup 1: Website Onboarding */}
           {state.step === 1 && (

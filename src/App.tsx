@@ -219,7 +219,7 @@ const AuthRedirector = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Application contexts wrapper
-const AppContexts = ({ children }: { children: React.ReactNode }) => {
+const AppContexts = ({ children, withSidebar = true }: { children: React.ReactNode, withSidebar?: boolean }) => {
   return (
     <AuthProvider>
       <AdminProvider>
@@ -228,12 +228,19 @@ const AppContexts = ({ children }: { children: React.ReactNode }) => {
             <SettingsProvider>
               <PostThemesProvider>
                 <WebsiteContentProvider>
-                  <SidebarProvider>
+                  {withSidebar ? (
+                    <SidebarProvider>
+                      <TooltipProvider>
+                        <Toaster />
+                        {children}
+                      </TooltipProvider>
+                    </SidebarProvider>
+                  ) : (
                     <TooltipProvider>
                       <Toaster />
                       {children}
                     </TooltipProvider>
-                  </SidebarProvider>
+                  )}
                 </WebsiteContentProvider>
               </PostThemesProvider>
             </SettingsProvider>
@@ -250,95 +257,109 @@ function App() {
       <HelmetProvider>
         <GoogleTagManager />
         <Router basename="/">
-          <AppContexts>
-            <Routes>
-              <Route path="/auth" element={<AuthRedirector><Auth /></AuthRedirector>} />
-              <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/auth/reset-password" element={<ResetPassword />} />
-              <Route path="/" element={<AuthWrapper><LandingPage /></AuthWrapper>} />
-              <Route path="/setup" element={<AuthWrapper><OrganisationSetup /></AuthWrapper>} />
-              <Route path="/onboarding" element={<AuthWrapper><Onboarding /></AuthWrapper>} />
-              <Route path="/admin/*" element={<AuthWrapper><Admin /></AuthWrapper>} />
-              <Route path="/dashboard" element={
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <Index />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              } />
-              <Route path="/calendar" element={
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <ContentCalendar />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              } />
-              <Route path="/create" element={
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <ContentCreation />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              } />
-              <Route path="/settings" element={
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              } />
-              <Route path="/organisation" element={
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <Organisation />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              } />
-              <Route path="/team" element={
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <TeamManagement />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              } />
-              <Route path="/team-management" element={
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <TeamManagement />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              } />
-              <Route path="/websites" element={
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <WebsiteManager />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              } />
-              <Route path="/sitemap" element={
-                <AuthWrapper>
-                  <ProtectedRoute>
-                    <WebsiteSitemap />
-                  </ProtectedRoute>
-                </AuthWrapper>
-              } />
-              
-              {/* Support for /app/* routes to handle redirects from old URLs */}
-              <Route path="/app/dashboard" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/app/calendar" element={<Navigate to="/calendar" replace />} />
-              <Route path="/app/create" element={<Navigate to="/create" replace />} />
-              <Route path="/app/settings" element={<Navigate to="/settings" replace />} />
-              <Route path="/app/organisation" element={<Navigate to="/organisation" replace />} />
-              <Route path="/app/setup" element={<Navigate to="/setup" replace />} />
-              <Route path="/app/team" element={<Navigate to="/team" replace />} />
-              <Route path="/app/team-management" element={<Navigate to="/team-management" replace />} />
-              <Route path="/app/websites" element={<Navigate to="/websites" replace />} />
-              <Route path="/app/sitemap" element={<Navigate to="/sitemap" replace />} />
-              
-              {/* Catch-all route */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AppContexts>
+          <Routes>
+            <Route path="/auth" element={<AuthRedirector><Auth /></AuthRedirector>} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="/auth/reset-password" element={<ResetPassword />} />
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/setup" element={<AuthWrapper><OrganisationSetup /></AuthWrapper>} />
+            <Route 
+              path="/onboarding" 
+              element={
+                <AppContexts withSidebar={false}>
+                  <Onboarding />
+                </AppContexts>
+              } 
+            />
+            <Route 
+              path="/*" 
+              element={
+                <AppContexts withSidebar={true}>
+                  <Routes>
+                    <Route path="/admin/*" element={<AuthWrapper><Admin /></AuthWrapper>} />
+                    <Route path="/dashboard" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <Index />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    <Route path="/calendar" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <ContentCalendar />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    <Route path="/create" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <ContentCreation />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    <Route path="/settings" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <Settings />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    <Route path="/organisation" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <Organisation />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    <Route path="/team" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <TeamManagement />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    <Route path="/team-management" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <TeamManagement />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    <Route path="/websites" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <WebsiteManager />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    <Route path="/sitemap" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <WebsiteSitemap />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    
+                    {/* Support for /app/* routes to handle redirects from old URLs */}
+                    <Route path="/app/dashboard" element={<Navigate to="/dashboard" replace />} />
+                    <Route path="/app/calendar" element={<Navigate to="/calendar" replace />} />
+                    <Route path="/app/create" element={<Navigate to="/create" replace />} />
+                    <Route path="/app/settings" element={<Navigate to="/settings" replace />} />
+                    <Route path="/app/organisation" element={<Navigate to="/organisation" replace />} />
+                    <Route path="/app/setup" element={<Navigate to="/setup" replace />} />
+                    <Route path="/app/team" element={<Navigate to="/team" replace />} />
+                    <Route path="/app/team-management" element={<Navigate to="/team-management" replace />} />
+                    <Route path="/app/websites" element={<Navigate to="/websites" replace />} />
+                    <Route path="/app/sitemap" element={<Navigate to="/sitemap" replace />} />
+                    
+                    {/* Catch-all route */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </AppContexts>
+              }
+            />
+          </Routes>
         </Router>
         <GDPRConsentBanner />
       </HelmetProvider>
