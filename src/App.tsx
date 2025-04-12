@@ -257,23 +257,17 @@ function App() {
       <HelmetProvider>
         <GoogleTagManager />
         <Router basename="/">
-          <Routes>
-            <Route path="/auth" element={<AuthRedirector><Auth /></AuthRedirector>} />
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/auth/reset-password" element={<ResetPassword />} />
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/setup" element={<AuthWrapper><OrganisationSetup /></AuthWrapper>} />
-            <Route 
-              path="/onboarding" 
-              element={
-                <AppContexts withSidebar={false}>
-                  <Onboarding />
-                </AppContexts>
-              } 
-            />
-            <Route 
-              path="/*" 
-              element={
+          <AppContexts withSidebar={false}>
+            <Routes>
+              <Route path="/auth" element={<AuthRedirector><Auth /></AuthRedirector>} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/reset-password" element={<ResetPassword />} />
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/setup" element={<AuthWrapper><OrganisationSetup /></AuthWrapper>} />
+              <Route path="/onboarding" element={<Onboarding />} />
+              
+              {/* Routes with sidebar */}
+              <Route path="/*" element={
                 <AppContexts withSidebar={true}>
                   <Routes>
                     <Route path="/admin/*" element={<AuthWrapper><Admin /></AuthWrapper>} />
@@ -357,9 +351,9 @@ function App() {
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </AppContexts>
-              }
-            />
-          </Routes>
+              } />
+            </Routes>
+          </AppContexts>
         </Router>
         <GDPRConsentBanner />
       </HelmetProvider>

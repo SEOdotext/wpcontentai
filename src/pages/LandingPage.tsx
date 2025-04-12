@@ -242,7 +242,7 @@ const LandingPage = () => {
                 <p className="text-sm text-muted-foreground italic mb-1">
                   "The AI somehow understands our brand voice perfectly. It generates massive traffic for our site."
                 </p>
-                <p className="text-xs font-semibold">Lasse Schou, PageVitals</p>
+                <p className="text-xs font-semibold">Lasse Schou, <a href="https://pagevitals.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary">PageVitals</a></p>
               </div>
             </div>
 
@@ -255,20 +255,20 @@ const LandingPage = () => {
                 <p className="text-sm text-muted-foreground italic mb-1">
                   "In just 1 week our primary keywords are hitting first page. The content matches our site perfectly."
                 </p>
-                <p className="text-xs font-semibold">Theis Hofdal, WorkForceEU</p>
+                <p className="text-xs font-semibold">Theis Hofdal, <a href="https://workforceeu.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary">WorkForceEU</a></p>
               </div>
             </div>
 
-            {/* Testimonial 3 - Thomas from denimhunters */}
+            {/* Testimonial 3 - Philip from PredictHire */}
             <div className="flex">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex-shrink-0 flex items-center justify-center mr-3">
-                <span className="text-primary font-medium">TS</span>
+                <span className="text-primary font-medium">PL</span>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground italic mb-1">
-                  "It's like the AI reads our entire site. The content understanding is truly incredible."
+                  "The seamless WordPress integration and smart scheduling have completely transformed our content workflow. It's like having an extra team member."
                 </p>
-                <p className="text-xs font-semibold">Thomas Stege, DenimHunters</p>
+                <p className="text-xs font-semibold">Philip Leth, <a href="https://predicthire.com" target="_blank" rel="noopener noreferrer" className="hover:text-primary">PredictHire</a></p>
               </div>
             </div>
           </motion.div>
