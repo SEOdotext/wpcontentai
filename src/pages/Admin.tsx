@@ -1,12 +1,17 @@
 import React from 'react';
 import { useAdmin } from '@/context/AdminContext';
-import { Navigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Navigate, Routes, Route, useLocation } from 'react-router-dom';
+import { AdminStats } from '@/components/admin/AdminStats';
+import { OrganisationsList } from '@/components/admin/OrganisationsList';
 import { Loader2 } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useNavigate } from 'react-router-dom';
 
-const Admin = () => {
+const AdminLayout = () => {
   const { isAdmin, isLoading } = useAdmin();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentPath = location.pathname.split('/').pop() || 'dashboard';
 
   if (isLoading) {
     return (
@@ -24,42 +29,24 @@ const Admin = () => {
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
-      
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>User Management</CardTitle>
-            <CardDescription>Manage user accounts and permissions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full">View Users</Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>System Settings</CardTitle>
-            <CardDescription>Configure system-wide settings</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full">Manage Settings</Button>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Analytics</CardTitle>
-            <CardDescription>View system-wide analytics and metrics</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="w-full">View Analytics</Button>
-          </CardContent>
-        </Card>
+    <div className="container mx-auto py-8 space-y-8">
+      <div className="flex flex-col space-y-4">
+        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <Tabs value={currentPath} onValueChange={(value) => navigate(`/admin/${value}`)}>
+          <TabsList>
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="organisations">Organisations</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
+
+      <Routes>
+        <Route path="/" element={<AdminStats />} />
+        <Route path="/dashboard" element={<AdminStats />} />
+        <Route path="/organisations" element={<OrganisationsList />} />
+      </Routes>
     </div>
   );
 };
 
-export default Admin; 
+export default AdminLayout; 

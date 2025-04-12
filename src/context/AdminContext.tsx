@@ -8,7 +8,7 @@ interface AdminContextType {
 
 const AdminContext = createContext<AdminContextType | undefined>(undefined);
 
-const ADMIN_EMAILS = ['philipleth@gmail.com', 'philip@openocean.dk'];
+const ADMIN_EMAILS = ['philipleth@gmail.com', 'philip@openocean.dk', 'philipleth+admin@gmail.com'];
 
 export const AdminProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);

@@ -256,7 +256,7 @@ function App() {
               <Route path="/" element={<AuthWrapper><LandingPage /></AuthWrapper>} />
               <Route path="/setup" element={<AuthWrapper><OrganisationSetup /></AuthWrapper>} />
               <Route path="/onboarding" element={<AuthWrapper><Onboarding /></AuthWrapper>} />
-              <Route path="/admin" element={<AuthWrapper><Admin /></AuthWrapper>} />
+              <Route path="/admin/*" element={<AuthWrapper><Admin /></AuthWrapper>} />
               <Route path="/dashboard" element={
                 <AuthWrapper>
                   <ProtectedRoute>
