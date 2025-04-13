@@ -26,6 +26,9 @@ import WebsiteSitemap from './pages/WebsiteSitemap';
 import Organisation from './pages/Organisation';
 import NotFound from './pages/NotFound';
 import Admin from './pages/Admin';
+import Pricing from './pages/Pricing';
+import PrivacyPolicy from '@/pages/PrivacyPolicy';
+import TermsOfService from '@/pages/TermsOfService';
 import { supabase } from '@/integrations/supabase/client';
 import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -263,6 +266,9 @@ function App() {
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth/reset-password" element={<ResetPassword />} />
               <Route path="/" element={<LandingPage />} />
+              <Route path="/pricing" element={<Pricing />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="/terms-of-service" element={<TermsOfService />} />
               <Route path="/setup" element={<AuthWrapper><OrganisationSetup /></AuthWrapper>} />
               <Route path="/onboarding" element={<Onboarding />} />
               

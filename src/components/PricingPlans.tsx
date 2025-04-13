@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
-import { Loader2, CreditCard } from 'lucide-react';
+import { Loader2, CreditCard, Sparkles } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
 
 interface PricingPlansProps {
   currentPlan?: string;
   credits?: number;
   nextPaymentDate?: string;
+  isPricingPage?: boolean;
 }
 
 const PricingPlans: React.FC<PricingPlansProps> = ({ 
   currentPlan = 'No active plan', 
   credits = 0, 
-  nextPaymentDate 
+  nextPaymentDate,
+  isPricingPage = false
 }) => {
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
 
@@ -46,45 +49,47 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
   };
 
   return (
-    <Card>
+    <Card className="border-primary/10">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <CreditCard className="h-5 w-5" />
-          <CardTitle>Subscription & Billing</CardTitle>
+          <Sparkles className="h-5 w-5 text-primary" />
+          <CardTitle>Choose your content garden</CardTitle>
         </div>
         <CardDescription>
-          Choose a plan that fits your needs
+          Pick the plan that grows with you
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Current Plan Info */}
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">Current Plan</label>
-            <p className="text-2xl font-semibold mt-1.5 capitalize">
-              {currentPlan}
-            </p>
-          </div>
-          <div>
-            <label className="text-sm font-medium">Available Credits</label>
-            <p className="text-2xl font-semibold mt-1.5">
-              {credits} credits
-            </p>
-          </div>
-          {nextPaymentDate && (
+        {currentPlan !== 'No active plan' && (
+          <div className="space-y-4 p-4 bg-primary/5 rounded-lg border border-primary/10">
             <div>
-              <label className="text-sm font-medium">Next Payment</label>
-              <p className="text-muted-foreground mt-1.5">
-                {new Date(nextPaymentDate).toLocaleDateString()}
+              <label className="text-sm font-medium">Your current garden</label>
+              <p className="text-2xl font-semibold mt-1.5 capitalize">
+                {currentPlan}
               </p>
             </div>
-          )}
-        </div>
+            <div>
+              <label className="text-sm font-medium">Seeds in your pocket</label>
+              <p className="text-2xl font-semibold mt-1.5">
+                {credits} credits
+              </p>
+            </div>
+            {nextPaymentDate && (
+              <div>
+                <label className="text-sm font-medium">Next harvest</label>
+                <p className="text-muted-foreground mt-1.5">
+                  {new Date(nextPaymentDate).toLocaleDateString()}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Pricing Plans Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Hobby Plan */}
-          <div className="border rounded-lg p-6 space-y-4 hover:border-primary/50 transition-colors">
+          <div className="border rounded-lg p-6 space-y-4 hover:border-primary/50 transition-colors hover:shadow-md">
             <div className="space-y-2">
               <h3 className="text-xl font-semibold flex items-center gap-2">
                 <span>🌱</span>
@@ -94,6 +99,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
                 <span className="text-3xl font-bold">€15</span>
                 <span className="text-muted-foreground">/month</span>
               </div>
+              <p className="text-sm text-muted-foreground">Perfect for small gardens</p>
             </div>
             <div className="space-y-2">
               <p className="flex items-center gap-2">
@@ -113,25 +119,38 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
                 <span>Standard AI Models</span>
               </p>
             </div>
-            <Button
-              onClick={() => handleBillingPortal('subscription', 'hobby')}
-              disabled={isLoadingPortal}
-              variant="outline"
-              className="w-full mt-4"
-            >
-              {isLoadingPortal ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                'Select Hobby'
-              )}
-            </Button>
+            {isPricingPage ? (
+              <Button asChild variant="outline" className="w-full mt-4">
+                <Link to="/">
+                  Plant with Hobby
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => handleBillingPortal('subscription', 'hobby')}
+                disabled={isLoadingPortal}
+                variant="outline"
+                className="w-full mt-4"
+              >
+                {isLoadingPortal ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Plant with Hobby'
+                )}
+              </Button>
+            )}
           </div>
 
           {/* Pro Plan */}
-          <div className="border rounded-lg p-6 space-y-4 hover:border-primary/50 transition-colors">
+          <div className="border rounded-lg p-6 space-y-4 hover:border-primary/50 transition-colors hover:shadow-md relative">
+            <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+              <div className="bg-primary text-primary-foreground text-xs font-medium px-3 py-1 rounded-full">
+                Most Popular
+              </div>
+            </div>
             <div className="space-y-2">
               <h3 className="text-xl font-semibold flex items-center gap-2">
                 <span>🌿</span>
@@ -141,6 +160,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
                 <span className="text-3xl font-bold">€49</span>
                 <span className="text-muted-foreground">/month</span>
               </div>
+              <p className="text-sm text-muted-foreground">For growing content gardens</p>
             </div>
             <div className="space-y-2">
               <p className="flex items-center gap-2">
@@ -164,25 +184,32 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
                 <span>Buy Extra Articles: 10 for €20</span>
               </p>
             </div>
-            <Button
-              onClick={() => handleBillingPortal('subscription', 'pro')}
-              disabled={isLoadingPortal}
-              variant="outline"
-              className="w-full mt-4"
-            >
-              {isLoadingPortal ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                'Select Pro'
-              )}
-            </Button>
+            {isPricingPage ? (
+              <Button asChild className="w-full mt-4">
+                <Link to="/">
+                  Grow with Pro
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => handleBillingPortal('subscription', 'pro')}
+                disabled={isLoadingPortal}
+                className="w-full mt-4"
+              >
+                {isLoadingPortal ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Grow with Pro'
+                )}
+              </Button>
+            )}
           </div>
 
           {/* Agency/Enterprise Plan */}
-          <div className="border rounded-lg p-6 space-y-4 bg-primary/5 hover:border-primary/50 transition-colors">
+          <div className="border rounded-lg p-6 space-y-4 bg-primary/5 hover:border-primary/50 transition-colors hover:shadow-md">
             <div className="space-y-2">
               <h3 className="text-xl font-semibold flex items-center gap-2">
                 <span>🌳</span>
@@ -192,6 +219,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
                 <span className="text-3xl font-bold">€149</span>
                 <span className="text-muted-foreground">/month</span>
               </div>
+              <p className="text-sm text-muted-foreground">For content forests</p>
             </div>
             <div className="space-y-2">
               <p className="flex items-center gap-2">
@@ -215,10 +243,40 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
                 <span>Buy Extra Articles: 50 for €100</span>
               </p>
             </div>
-            <Button
-              onClick={() => handleBillingPortal('subscription', 'agency')}
+            {isPricingPage ? (
+              <Button asChild variant="outline" className="w-full mt-4">
+                <Link to="/">
+                  Scale with Agency
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => handleBillingPortal('subscription', 'agency')}
+                disabled={isLoadingPortal}
+                variant="outline"
+                className="w-full mt-4"
+              >
+                {isLoadingPortal ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  'Scale with Agency'
+                )}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Payment Methods */}
+        {!isPricingPage && (
+          <div className="pt-4">
+            <Button 
+              variant="outline"
+              className="w-full"
+              onClick={() => handleBillingPortal('payment')}
               disabled={isLoadingPortal}
-              className="w-full mt-4"
             >
               {isLoadingPortal ? (
                 <>
@@ -226,30 +284,11 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
                   Loading...
                 </>
               ) : (
-                'Select Agency'
+                'Manage Payment Methods'
               )}
             </Button>
           </div>
-        </div>
-
-        {/* Payment Methods */}
-        <div className="pt-4">
-          <Button 
-            variant="outline"
-            className="w-full"
-            onClick={() => handleBillingPortal('payment')}
-            disabled={isLoadingPortal}
-          >
-            {isLoadingPortal ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Loading...
-              </>
-            ) : (
-              'Manage Payment Methods'
-            )}
-          </Button>
-        </div>
+        )}
       </CardContent>
     </Card>
   );

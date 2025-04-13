@@ -119,6 +119,9 @@ const LandingPage = () => {
             <Logo className="scale-110" />
           </div>
           <div className="flex items-center gap-4">
+            <Link to="/pricing">
+              <Button variant="ghost" className="font-medium">Pricing</Button>
+            </Link>
             <Link to="/auth">
               <Button variant="ghost" className="font-medium">Login</Button>
             </Link>
@@ -178,8 +181,8 @@ const LandingPage = () => {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.6 }}
-              className="w-full max-w-md mx-auto"
+              transition={{ duration: 0.5, delay: 0.7 }}
+              className="mt-12"
             >
               <p className="text-lg font-medium mb-3">Plant your URL. Content grows.</p>
               <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
@@ -199,19 +202,8 @@ const LandingPage = () => {
                     <p className="text-sm text-red-500 mt-1">{error}</p>
                   )}
                 </div>
-                <Button 
-                  type="submit" 
-                  size="lg" 
-                  className="h-14 px-8 text-base font-medium"
-                  disabled={!!error}
-                >
-                  Get Started <ArrowRight className="ml-2 h-5 w-5" />
-                </Button>
               </form>
               <div className="mt-6 flex flex-col items-center gap-4">
-                <p className="text-sm text-muted-foreground text-center">
-                  Free to try. Fun to use • We grow the words. You own the tone.
-                </p>
                 <div className="flex items-center justify-center gap-3">
                   <div className="flex items-center gap-1 text-primary/70">
                     <SiWordpress className="h-4 w-4" />
@@ -283,8 +275,8 @@ const LandingPage = () => {
               © {new Date().getFullYear()} ContentGardener.ai. All rights reserved.
             </p>
             <div className="flex gap-6">
-              <a href="#" className="text-xs text-muted-foreground hover:text-foreground">Privacy Policy</a>
-              <a href="#" className="text-xs text-muted-foreground hover:text-foreground">Terms of Service</a>
+              <Link to="/privacy-policy" className="text-xs text-muted-foreground hover:text-foreground">Privacy Policy</Link>
+              <Link to="/terms-of-service" className="text-xs text-muted-foreground hover:text-foreground">Terms of Service</Link>
             </div>
           </div>
         </div>
