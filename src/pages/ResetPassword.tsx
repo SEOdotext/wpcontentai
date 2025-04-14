@@ -71,7 +71,18 @@ const ResetPassword = () => {
 
       console.log('ResetPassword: Updating password with token type:', type || 'unknown');
 
-      // Update the password
+      // First, set the session using the token
+      const { error: sessionError } = await supabase.auth.verifyOtp({
+        token_hash: token,
+        type: 'recovery'
+      });
+
+      if (sessionError) {
+        console.error('ResetPassword: Error setting session:', sessionError);
+        throw sessionError;
+      }
+
+      // Now update the password
       const { error: updateError } = await supabase.auth.updateUser({
         password: password
       });
