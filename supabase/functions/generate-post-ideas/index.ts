@@ -234,11 +234,17 @@ serve(async (req) => {
           .from('publication_settings')
           .select('writing_style, subject_matters, image_prompt')
           .eq('website_id', effectiveWebsiteId)
+          .limit(1)
           .single();
 
         if (error) {
           console.error('Error fetching publication settings:', error);
-          throw new Error('Failed to fetch publication settings');
+          // Use default settings if no settings found
+          pubSettings = {
+            writing_style: writing_style || 'professional',
+            subject_matters: subject_matters.length ? subject_matters : ['general'],
+            image_prompt: 'Create a professional blog image'
+          };
         } else {
           pubSettings = data;
         }

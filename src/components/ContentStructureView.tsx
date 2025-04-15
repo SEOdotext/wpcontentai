@@ -292,8 +292,26 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       // Get current session for authentication
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData?.session?.access_token) {
-        throw new Error('No access token found');
+        console.error('No access token found');
+        toast.error('Please log in to generate content');
+        return;
       }
+
+      // Prepare keywords from input
+      const keywords = inputValue.split(',').map(k => k.trim()).filter(Boolean);
+      if (keywords.length === 0 && inputValue.trim() !== '') {
+        console.error('Invalid keywords format');
+        toast.error('Please enter valid keywords separated by commas');
+        return;
+      }
+
+      console.log('Generating title suggestions with:', {
+        websiteId: currentWebsite.id,
+        keywords,
+        writingStyle: writingStyle || 'default',
+        subjectMatters: subjectMatters || [],
+        language: currentWebsite.language || 'en'
+      });
 
       // Call the edge function
       const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-post-ideas', {
@@ -304,30 +322,32 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         },
         body: JSON.stringify({
           website_id: currentWebsite.id,
-          keywords: inputValue.split(',').map(k => k.trim()).filter(Boolean),
-          writing_style: writingStyle,
-          subject_matters: subjectMatters,
+          keywords,
+          writing_style: writingStyle || 'default',
+          subject_matters: subjectMatters || [],
           language: currentWebsite.language || 'en'
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Error response from generate-post-ideas:', errorData);
         throw new Error(errorData.error || 'Failed to generate title suggestions');
       }
 
       const result = await response.json();
       if (!result.success) {
+        console.error('Unsuccessful result from generate-post-ideas:', result);
         throw new Error(result.error || 'Failed to generate title suggestions');
       }
 
       // Store categories by title
       setCategoriesByTitle(result.categoriesByTitle || {});
-      console.log('API response:', result); // Add for debugging
+      console.log('API response:', result);
 
       // Validate baseDate using getNextPublicationDate
       const minValidTimestamp = new Date('2020-01-01').getTime();
-      let baseDate = getNextPublicationDate();
+      let baseDate = await getNextPublicationDate();
       const timestamp = baseDate.getTime();
       
       // If baseDate is invalid or too old, use today instead
@@ -348,8 +368,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
         return;
       }
 
-      // Legacy fallback - Create post themes for each title
-      const creationPromises = result.titles.map((title) => {
+      // Create post themes for each title
+      const creationPromises = result.titles.map(title => {
         // Ensure we have valid arrays for keywords
         let safeKeywords: string[] = [];
         if (result.keywordsByTitle && result.keywordsByTitle[title]) {
@@ -401,7 +421,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       toast.success(`Generated ${result.titles.length} content suggestions for you`);
     } catch (error) {
       console.error('Error generating title suggestions:', error);
-      toast.error('Failed to generate title suggestions');
+      toast.error(error instanceof Error ? error.message : 'Failed to generate title suggestions');
     } finally {
       setIsGenerating(false);
     }

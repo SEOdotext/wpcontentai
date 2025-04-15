@@ -141,117 +141,77 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       try {
         setIsLoading(true);
+        console.log("Fetching settings for website:", currentWebsite.id);
         
         // Check if user is authenticated
         const { data: sessionData } = await supabase.auth.getSession();
         const session = sessionData.session;
         
         if (!session) {
-          console.log("User not authenticated, using default settings");
+          console.error("User not authenticated, cannot fetch settings");
+          toast.error("Please log in to access settings");
           return;
         }
-        
-        console.log("Fetching settings for website:", currentWebsite.id);
         
         // Filter settings by the current website's ID
         const { data, error } = await supabase
           .from('publication_settings')
           .select('*')
           .eq('website_id', currentWebsite.id)
+          .order('created_at', { ascending: false })
           .limit(1);
           
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching settings:", error);
+          toast.error("Failed to load settings");
+          throw error;
+        }
         
         if (data && data.length > 0) {
           console.log("Found existing settings:", data[0]);
-          const settings = data[0] as PublicationSettings; // Cast to our interface type
+          const settings = data[0] as PublicationSettings;
           setSettingsId(settings.id);
           setPostingFrequency(settings.posting_frequency);
           setWritingStyle(settings.writing_style);
           
           // Set WordPress template if it exists
           if (settings.wordpress_template) {
-            console.log("Found WordPress template:", settings.wordpress_template);
             setWordpressTemplate(settings.wordpress_template);
-          } else {
-            console.log("No WordPress template found, using default");
-            setWordpressTemplate(defaultSettings.wordpressTemplate);
           }
           
           // Set image prompt if it exists
           if (settings.image_prompt) {
-            console.log("Found image prompt:", settings.image_prompt);
             setImagePrompt(settings.image_prompt);
           } else if (currentWebsite.image_prompt) {
-            // Fallback to website settings if publication settings don't have it
-            console.log("Using image prompt from website settings:", currentWebsite.image_prompt);
             setImagePrompt(currentWebsite.image_prompt);
-          } else {
-            console.log("No image prompt found, using default");
-            setImagePrompt(defaultSettings.imagePrompt);
           }
           
           // Set image model if it exists
           if (settings.image_model) {
-            console.log("Found image model:", settings.image_model);
             setImageModel(settings.image_model);
-          } else {
-            console.log("No image model found, using default");
-            setImageModel(defaultSettings.imageModel);
           }
           
           // Set negative prompt if it exists
           if (settings.negative_prompt) {
-            console.log("Found negative prompt:", settings.negative_prompt);
             setNegativePrompt(settings.negative_prompt);
-          } else {
-            console.log("No negative prompt found, using default");
-            setNegativePrompt(defaultSettings.negativePrompt);
           }
           
-          // Convert subject_matters to string[] ensuring type safety
-          if (settings.subject_matters) {
-            console.log("Retrieved subject_matters:", settings.subject_matters, "Type:", typeof settings.subject_matters);
-            
-            try {
-              // Handle different possible formats of subject_matters from the database
-              let subjectsArray: string[] = [];
-              
-              if (Array.isArray(settings.subject_matters)) {
-                // If it's already an array, map to strings
-                subjectsArray = settings.subject_matters.map(item => 
-                  typeof item === 'string' ? item : String(item)
-                );
-              } else if (typeof settings.subject_matters === 'string') {
-                // If it's a JSON string, parse it
-                try {
-                  const parsed = JSON.parse(settings.subject_matters);
-                  subjectsArray = Array.isArray(parsed) ? 
-                    parsed.map(item => typeof item === 'string' ? item : String(item)) : 
-                    [settings.subject_matters];
-                } catch {
-                  // If not valid JSON, treat as a single string
-                  subjectsArray = [settings.subject_matters];
-                }
-              } else if (typeof settings.subject_matters === 'object') {
-                // If it's an object but not an array, get values
-                subjectsArray = Object.values(settings.subject_matters)
-                  .map(item => typeof item === 'string' ? item : String(item));
-              }
-              
-              console.log("Parsed subject matters:", subjectsArray);
-              setSubjectMatters(subjectsArray);
-            } catch (error) {
-              console.error("Error parsing subject_matters:", error);
-              setSubjectMatters(defaultSettings.subjectMatters);
-            }
-          } else {
-            console.log("No subject_matters found, using defaults");
+          // Parse and set subject matters
+          try {
+            const subjectsArray = Array.isArray(settings.subject_matters) 
+              ? settings.subject_matters 
+              : typeof settings.subject_matters === 'string' 
+                ? JSON.parse(settings.subject_matters)
+                : [];
+            console.log("Parsed subject matters:", subjectsArray);
+            setSubjectMatters(subjectsArray);
+          } catch (error) {
+            console.error("Error parsing subject_matters:", error);
             setSubjectMatters(defaultSettings.subjectMatters);
           }
         } else {
-          console.log("Creating default settings for website:", currentWebsite.id);
-          // If no settings exist for this website, create default settings
+          console.log("No settings found, creating default settings");
+          // Create default settings
           const { data: newSettings, error: insertError } = await supabase
             .from('publication_settings')
             .insert({
@@ -259,7 +219,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               writing_style: defaultSettings.writingStyle,
               subject_matters: defaultSettings.subjectMatters,
               wordpress_template: defaultSettings.wordpressTemplate,
-              image_prompt: currentWebsite.image_prompt || defaultSettings.imagePrompt, // Use website's image prompt if available
+              image_prompt: currentWebsite.image_prompt || defaultSettings.imagePrompt,
               image_model: defaultSettings.imageModel,
               negative_prompt: defaultSettings.negativePrompt,
               website_id: currentWebsite.id,
@@ -270,6 +230,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             
           if (insertError) {
             console.error("Error creating default settings:", insertError);
+            toast.error("Failed to create default settings");
             throw insertError;
           }
           
@@ -280,26 +241,19 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setWritingStyle(defaultSettings.writingStyle);
             setSubjectMatters(defaultSettings.subjectMatters);
             setWordpressTemplate(defaultSettings.wordpressTemplate);
-            setImagePrompt(defaultSettings.imagePrompt);
+            setImagePrompt(currentWebsite.image_prompt || defaultSettings.imagePrompt);
             setImageModel(defaultSettings.imageModel);
             setNegativePrompt(defaultSettings.negativePrompt);
           }
         }
       } catch (error) {
-        console.error('Error fetching settings:', error);
-        toast.error('Failed to load settings from database, using defaults instead.');
-        setPostingFrequency(defaultSettings.postingFrequency);
-        setWritingStyle(defaultSettings.writingStyle);
-        setSubjectMatters(defaultSettings.subjectMatters);
-        setWordpressTemplate(defaultSettings.wordpressTemplate);
-        setImagePrompt(defaultSettings.imagePrompt);
-        setImageModel(defaultSettings.imageModel);
-        setNegativePrompt(defaultSettings.negativePrompt);
+        console.error("Error in fetchSettings:", error);
+        toast.error("Failed to load settings");
       } finally {
         setIsLoading(false);
       }
     };
-    
+
     fetchSettings();
   }, [currentWebsite]);
 
