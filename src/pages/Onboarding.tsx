@@ -2076,7 +2076,7 @@ const Onboarding = () => {
         </div>
       </header>
 
-      <main className="flex-1 container mx-auto px-4 py-8 max-w-5xl flex items-center justify-center min-h-[calc(100vh-4rem)]">
+      <main className="flex-1 container mx-auto px-4 py-8 max-w-3xl min-h-[calc(100vh-4rem)]">
         <AnimatePresence>
           {/* Setup 1: Website Onboarding */}
           {state.step === 1 && (
@@ -2090,7 +2090,7 @@ const Onboarding = () => {
                 ease: "easeInOut",
                 opacity: { duration: 0.3 }
               }}
-              className="flex flex-col items-center justify-center py-8"
+              className="w-full py-4"
             >
               <div className="w-full max-w-3xl">
                 <div className="space-y-4">
@@ -2304,9 +2304,9 @@ const Onboarding = () => {
                 ease: "easeInOut",
                 opacity: { duration: 0.3 }
               }}
-              className="py-6"
+              className="w-full py-4"
             >
-              <div className="w-full max-w-3xl mx-auto">
+              <div className="w-full mx-auto">
                 <h2 className="text-2xl font-semibold mb-6">
                   🌱✨ Choose your content seeds 🪴
                 </h2>
@@ -2461,17 +2461,27 @@ const Onboarding = () => {
                 ease: "easeInOut",
                 opacity: { duration: 0.3 }
               }}
-              className="flex flex-col items-center justify-center py-8"
+              className="w-full py-4"
             >
-              <div className="w-full max-w-3xl mx-auto">
-                <motion.h2 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.4 }}
-                  className="text-2xl font-bold mb-8 text-center"
-                >
-                  📝 Generating your first piece of content
-                </motion.h2>
+              <div className="w-full mx-auto">
+                <motion.div className="text-center space-y-3 mb-8">
+                  <motion.h2 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2, duration: 0.4 }}
+                    className="text-3xl font-bold"
+                  >
+                    Look what's sprouting! 🌱
+                  </motion.h2>
+                  <motion.p
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3, duration: 0.4 }}
+                    className="text-muted-foreground text-lg max-w-xl mx-auto"
+                  >
+                    Here's your first seedling - a quick draft in your voice. Like any young plant, it might need some pruning and care, but the roots are there! 
+                  </motion.p>
+                </motion.div>
                 
                 {!state.contentGenerated ? (
                   <motion.div 
@@ -2542,7 +2552,26 @@ const Onboarding = () => {
                       transition={{ delay: 0.2, duration: 0.4 }}
                       className="bg-card rounded-lg p-6 border border-border/50"
                     >
-                      <h3 className="text-xl font-medium mb-4">{state.generatedContentTitle}</h3>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-medium">{state.generatedContentTitle}</h3>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={() => setState(prev => ({ ...prev, showRawContent: !prev.showRawContent }))}
+                              >
+                                {state.showRawContent ? <Eye className="h-4 w-4" /> : <Code className="h-4 w-4" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{state.showRawContent ? 'Show formatted' : 'Show raw'}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                       <div className="prose prose-sm max-w-none">
                         {state.showRawContent ? (
                           <pre className="whitespace-pre-wrap text-sm">{state.generatedContentPreview}</pre>
@@ -2561,12 +2590,6 @@ const Onboarding = () => {
                       transition={{ delay: 0.4, duration: 0.4 }}
                       className="flex justify-end gap-3"
                     >
-                      <Button
-                        variant="outline"
-                        onClick={() => setState(prev => ({ ...prev, showRawContent: !prev.showRawContent }))}
-                      >
-                        {state.showRawContent ? 'Show Formatted' : 'Show Raw'}
-                      </Button>
                       <Button onClick={handleContinueToScheduling}>
                         Continue to Scheduling
                         <ArrowRight className="ml-2 h-4 w-4" />
@@ -2590,9 +2613,9 @@ const Onboarding = () => {
                 ease: "easeInOut",
                 opacity: { duration: 0.3 }
               }}
-              className="flex flex-col items-center justify-center py-8"
+              className="w-full py-4"
             >
-              <div className="w-full max-w-3xl mx-auto">
+              <div className="w-full mx-auto">
                 <h2 className="text-2xl font-bold mb-4 text-center">
                   📅 Schedule Your Content
                 </h2>
@@ -2773,7 +2796,7 @@ const Onboarding = () => {
                 ease: "easeInOut",
                 opacity: { duration: 0.3 }
               }}
-              className="flex flex-col items-center justify-center py-8"
+              className="w-full py-4"
             >
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
@@ -2812,7 +2835,7 @@ const Onboarding = () => {
                 ease: "easeInOut",
                 opacity: { duration: 0.3 }
               }}
-              className="flex flex-col items-center justify-center min-h-[70vh] text-center"
+              className="w-full py-4"
             >
               <motion.div
                 initial={{ scale: 0.8, opacity: 0 }}
@@ -2859,9 +2882,9 @@ const Onboarding = () => {
                 ease: "easeInOut",
                 opacity: { duration: 0.3 }
               }}
-              className="flex flex-col items-center justify-center py-8 text-center"
+              className="w-full py-4"
             >
-              <div className="w-full max-w-md">
+              <div className="w-full mx-auto">
                 <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
                   <Mail className="h-10 w-10 text-primary" />
                 </div>

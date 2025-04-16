@@ -185,12 +185,12 @@ const LandingPage = () => {
               className="mt-12"
             >
               <p className="text-lg font-medium mb-3">Plant your URL. Content grows.</p>
-              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1">
+              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row w-full max-w-2xl mx-auto">
+                <div className="grow">
                   <Input
                     type="text"
                     placeholder="yourdomain.com"
-                    className={`h-14 text-lg flex-1 ${error ? 'border-red-500' : ''}`}
+                    className={`w-full h-14 text-lg rounded-r-none border-r-0 ${error ? 'border-red-500' : ''}`}
                     value={website}
                     onChange={(e) => {
                       setWebsite(e.target.value);
@@ -202,6 +202,9 @@ const LandingPage = () => {
                     <p className="text-sm text-red-500 mt-1">{error}</p>
                   )}
                 </div>
+                <Button type="submit" size="lg" className="h-14 px-6 rounded-l-none whitespace-nowrap shrink-0 bg-[#4CAF50] hover:bg-[#45a049]">
+                  Start Growing <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
               </form>
               <div className="mt-6 flex flex-col items-center gap-4">
                 <div className="flex items-center justify-center gap-3">
