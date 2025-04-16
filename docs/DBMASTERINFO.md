@@ -451,6 +451,16 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "publication_settings.posting_platform",
+    "detail_1": "text",
+    "detail_2": "((posting_platform = ANY (ARRAY['wordpress'::text, 'docx'::text",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "organisations.id",
     "detail_1": "uuid",
     "detail_2": null,
@@ -4221,9 +4231,9 @@
   },
   {
     "section": "routines",
-    "identifier": "graphql.increment_schema_version",
+    "identifier": "graphql.get_schema_version",
     "detail_1": "FUNCTION",
-    "detail_2": "event_trigger",
+    "detail_2": "integer",
     "detail_3": null,
     "detail_4": null,
     "detail_5": null,
@@ -4231,9 +4241,9 @@
   },
   {
     "section": "routines",
-    "identifier": "graphql.get_schema_version",
+    "identifier": "graphql.increment_schema_version",
     "detail_1": "FUNCTION",
-    "detail_2": "integer",
+    "detail_2": "event_trigger",
     "detail_3": null,
     "detail_4": null,
     "detail_5": null,
@@ -4494,6 +4504,16 @@
     "identifier": "cron.alter_job",
     "detail_1": "FUNCTION",
     "detail_2": "void",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "routines",
+    "identifier": "public.set_default_credits",
+    "detail_1": "FUNCTION",
+    "detail_2": "trigger",
     "detail_3": null,
     "detail_4": null,
     "detail_5": null,
@@ -4927,6 +4947,16 @@
     "detail_3": "publication_settings",
     "detail_4": "id",
     "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "constraints",
+    "identifier": null,
+    "detail_1": "CHECK",
+    "detail_2": "publication_settings_posting_platform_check",
+    "detail_3": "publication_settings",
+    "detail_4": "posting_platform",
+    "detail_5": "((posting_platform = ANY (ARRAY['wordpress'::text, 'docx'::text, 'wix'::text, 'shopify'::text, 'squarespace'::text])))",
     "detail_6": null
   },
   {

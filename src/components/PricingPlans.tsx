@@ -13,6 +13,20 @@ interface PricingPlansProps {
   isPricingPage?: boolean;
 }
 
+// Credit package options
+const CREDIT_PACKAGES = {
+  pro: {
+    priceId: 'price_1RBVpYRGhl9iFwDNYmIXpeix',  // 10 Article Package €20
+    credits: 10,
+    price: 20
+  },
+  agency: {
+    priceId: 'price_1RBVd3RGhl9iFwDNCuJUImV7',  // 50 Article Package €100
+    credits: 50,
+    price: 100
+  }
+};
+
 const PricingPlans: React.FC<PricingPlansProps> = ({ 
   currentPlan = 'No active plan', 
   credits = 0, 
@@ -21,7 +35,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
 }) => {
   const [isLoadingPortal, setIsLoadingPortal] = useState(false);
 
-  const handleBillingPortal = async (type: 'subscription' | 'payment', plan?: 'hobby' | 'pro' | 'agency') => {
+  const handleBillingPortal = async (type: 'subscription' | 'payment', plan?: 'hobby' | 'pro' | 'agency', includeCredits: boolean = false) => {
     setIsLoadingPortal(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -29,8 +43,21 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
         throw new Error('Not authenticated');
       }
 
+      // Hardcode the credit package IDs for each plan
+      let creditPackageId;
+      if (plan === 'pro') {
+        creditPackageId = 'price_1RBVpYRGhl9iFwDNYmIXpeix'; // 10 Article Package €20
+      } else if (plan === 'agency') {
+        creditPackageId = 'price_1RBVd3RGhl9iFwDNCuJUImV7'; // 50 Article Package €100
+      }
+
       const { data, error } = await supabase.functions.invoke('stripe-portal', {
-        body: { type, plan },
+        body: { 
+          type, 
+          plan,
+          includeCredits,
+          creditPackageId: includeCredits ? creditPackageId : undefined
+        },
         headers: {
           Authorization: `Bearer ${session.access_token}`
         }
@@ -181,7 +208,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
               </p>
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>→</span>
-                <span>Buy Extra Articles: 10 for €20</span>
+                <span>Add 10 extra articles for €20</span>
               </p>
             </div>
             {isPricingPage ? (
@@ -192,7 +219,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
               </Button>
             ) : (
               <Button
-                onClick={() => handleBillingPortal('subscription', 'pro')}
+                onClick={() => handleBillingPortal('subscription', 'pro', true)}
                 disabled={isLoadingPortal}
                 className="w-full mt-4"
               >
@@ -240,7 +267,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
               </p>
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>→</span>
-                <span>Buy Extra Articles: 50 for €100</span>
+                <span>Add 50 extra articles for €100</span>
               </p>
             </div>
             {isPricingPage ? (
@@ -251,9 +278,8 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
               </Button>
             ) : (
               <Button
-                onClick={() => handleBillingPortal('subscription', 'agency')}
+                onClick={() => handleBillingPortal('subscription', 'agency', true)}
                 disabled={isLoadingPortal}
-                variant="outline"
                 className="w-full mt-4"
               >
                 {isLoadingPortal ? (

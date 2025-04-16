@@ -1,7 +1,24 @@
 Finish the onboarding / Dash
-- Add payment (w. 14 day free trial and 10 credits) - cc required?
+- Add payment (w. 14 day free trial and 5 credits) - cc required?
 - Add integration with WordPress
 - Adjust the onboarding first step to have a nice loading bar
+
+
+- when user clicks, open it so user can also set a coupon and has a default 0 extra articles (but they can add the packages) 
+10 extra for Pro and 50 for Agency
+
+---
+
+Add http and https support for the input on the front page, so when a user has a url with http or https it will still be accepted...
+
+
+---
+
+Export til docx
+Evt. Squarespace integration
+
+Integrations:
+wordpress, docx, wix, shopify, squarespace
 
 -
 
@@ -63,3 +80,46 @@ Free plan ?
 1 Article per month
 
 ---
+
+Competitors
+blaze.ai
+seo.ai
+textbuilder.ai
+
+---
+
+Keywords
+Campaign
+AI SEO
+SEO optimering med AI (100kr ,-)
+
+Hjælp til SEO / SEO hjælp
+
+Content creation (16,-)
+
+Wordpress Copywriting
+Content writer
+Tekstforfatter
+
+ai content creator
+marketing with ai
+ai for content creation
+
+ai for marketing
+
+tekstforfatter hjemmeside
+
+wordpress seo
+seo optimering wordpress
+
+
+---
+
+
+https://contentgardener.ai/organisation?canceled=true
+
+
+On the callback from the Stripe integration, update the credit package 
+Your current garden
+Seeds in your pocket
+5 credits

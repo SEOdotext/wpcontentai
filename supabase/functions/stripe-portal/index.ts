@@ -21,6 +21,9 @@ const supabaseClient = createClient(
 interface RequestBody {
   type: 'payment' | 'subscription';
   plan?: 'hobby' | 'pro' | 'agency';
+  includeCredits?: boolean;
+  creditPackageId?: string;
+  creditPackageQty?: number;
 }
 
 serve(async (req) => {
@@ -36,7 +39,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token)
     if (userError || !user) throw new Error('Invalid user token')
 
-    const { type, plan } = await req.json()
+    const { type, plan, includeCredits, creditPackageId, creditPackageQty } = await req.json()
 
     const { data: membership } = await supabaseClient
       .from('organisation_memberships')
@@ -72,26 +75,68 @@ serve(async (req) => {
 
     if (type === 'subscription') {
       const priceIds = {
-        hobby: 'price_1RBEJwRGhl9iFwDNmsBsnVX5',
-        pro: 'price_1RBEPdRGhl9iFwDNsMnaYvh5',
-        agency: 'price_1RBMVnRGhl9iFwDNYi4upwcm'
+        hobby: 'price_1RBEJwRGhl9iFwDNmsBsnVX5',  // Seed €15/month
+        pro: 'price_1RBEPdRGhl9iFwDNsMnaYvh5',    // Professional €49/month
+        agency: 'price_1RBMVnRGhl9iFwDNYi4upwcm'   // Agency/Enterprise €149/month
       }
 
       const priceId = priceIds[plan || 'agency']
       if (!priceId) throw new Error(`Invalid plan: ${plan}`)
 
+      // Create line items array with subscription
+      const lineItems = [{
+        price: priceId,
+        quantity: 1
+      }]
+
+      // Add credit package if requested
+      if (includeCredits && creditPackageId) {
+        // Validate credit package ID matches our known IDs
+        const validCreditPackageIds = [
+          'price_1RBVpYRGhl9iFwDNYmIXpeix',  // 10 Article Package €20
+          'price_1RBVd3RGhl9iFwDNCuJUImV7'   // 50 Article Package €100
+        ]
+        if (!validCreditPackageIds.includes(creditPackageId)) {
+          throw new Error('Invalid credit package ID')
+        }
+        
+        // Add credit package with adjustable quantity in checkout
+        // Stripe requires a minimum quantity of 1, but we'll make it adjustable in the checkout
+        const creditLineItem = {
+          price: creditPackageId,
+          quantity: 1,
+          adjustable_quantity: {
+            enabled: true,
+            minimum: 0,
+            maximum: 10
+          }
+        };
+        
+        // Add to line items
+        lineItems.push(creditLineItem);
+      }
+
       const session = await stripe.checkout.sessions.create({
         customer: stripeCustomerId,
         mode: 'subscription',
         payment_method_types: ['card'],
-        line_items: [{
-          price: priceId,
-          quantity: 1
-        }],
+        line_items: lineItems,
         allow_promotion_codes: true,
         billing_address_collection: 'required',
-        success_url: 'https://contentgardener.ai/organization?success=true',
-        cancel_url: 'https://contentgardener.ai/organization?canceled=true'
+        success_url: 'https://contentgardener.ai/organisation?success=true',
+        cancel_url: 'https://contentgardener.ai/organisation?canceled=true',
+        metadata: {
+          organisation_id: org.id,
+          plan: plan || 'agency',
+          includes_credits: includeCredits ? 'true' : 'false'
+        },
+        subscription_data: {
+          metadata: {
+            organisation_id: org.id,
+            plan: plan || 'agency',
+            includes_credits: includeCredits ? 'true' : 'false'
+          }
+        }
       })
 
       return new Response(
@@ -101,7 +146,7 @@ serve(async (req) => {
     } else if (type === 'payment') {
       const session = await stripe.billingPortal.sessions.create({
         customer: stripeCustomerId,
-        return_url: 'https://contentgardener.ai/organization'
+        return_url: 'https://contentgardener.ai/organisation'
       })
 
       return new Response(
