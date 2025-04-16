@@ -2617,11 +2617,11 @@ const Onboarding = () => {
             >
               <div className="w-full mx-auto">
                 <h2 className="text-2xl font-bold mb-4 text-center">
-                  📅 Schedule Your Content
+                  Plan your garden's growth 🌱
                 </h2>
                 
                 <p className="text-muted-foreground text-center mb-8">
-                  Let's set up your content publishing schedule
+                  How often would you like us to help nurture your content garden?
                 </p>
 
                 <Card className="mb-8">
