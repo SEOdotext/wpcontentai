@@ -1,17 +1,16 @@
+
+
+
+
 Finish the onboarding / Dash
 - Add payment (w. 14 day free trial and 5 credits) - cc required?
 - Add integration with WordPress
 - Adjust the onboarding first step to have a nice loading bar
 
+Direct login after signup (there is no longer a requirement for email verification, so now allow the user just to login)..
 
 - when user clicks, open it so user can also set a coupon and has a default 0 extra articles (but they can add the packages) 
 10 extra for Pro and 50 for Agency
-
----
-
-Add http and https support for the input on the front page, so when a user has a url with http or https it will still be accepted...
-
-Front page input should accept all types of input for the url, www., https, http etc. Validation should only stop the user if they try to add strange signs like @ or has no .xx for example
 
 ---
 

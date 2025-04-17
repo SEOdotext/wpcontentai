@@ -5,7 +5,7 @@ export const transferDataToDatabase = async (userId: string) => {
   try {
     // Get required data from localStorage
     const websiteInfo = JSON.parse(localStorage.getItem('website_info') || '{}');
-    const organizationInfo = JSON.parse(localStorage.getItem('organization_info') || '{}');
+    const organisationInfo = JSON.parse(localStorage.getItem('organisation_info') || '{}');
     const publicationSettings = JSON.parse(localStorage.getItem('publication_settings') || '{}');
     const websiteContent = JSON.parse(localStorage.getItem('website_content') || '[]');
     const keyContentPages = JSON.parse(localStorage.getItem('key_content_pages') || '[]');
@@ -24,32 +24,34 @@ export const transferDataToDatabase = async (userId: string) => {
       throw new Error('No active session found');
     }
 
-    // Check for existing organization
+    // Check for existing organisation
     const { data: existingOrgs } = await supabase
       .from('organisation_memberships')
-      .select(`
-        organisation_id,
-        organisations (
-          name
-        )
-      `)
+      .select('organisation_id')
       .eq('member_id', userId)
       .single();
-
-    if (existingOrgs?.organisation_id && existingOrgs?.organisations) {
-      // Use existing organization instead of creating new one
-      organizationInfo.id = existingOrgs.organisation_id;
-      // @ts-ignore - we know organisations.name exists from the query
-      organizationInfo.name = existingOrgs.organisations.name;
       
-      // Update website info to link to existing org
-      websiteInfo.organization_id = existingOrgs.organisation_id;
-      
-      toast.info(
-        "Adding to existing organization",
-        // @ts-ignore - we know organisations.name exists from the query
-        { description: `Website will be added to your organization: ${existingOrgs.organisations.name}` }
-      );
+    if (existingOrgs?.organisation_id) {
+      // Get organisation name
+      const { data: orgData } = await supabase
+        .from('organisations')
+        .select('name')
+        .eq('id', existingOrgs.organisation_id)
+        .single();
+        
+      if (orgData) {
+        // Use existing organisation instead of creating new one
+        organisationInfo.id = existingOrgs.organisation_id;
+        organisationInfo.name = orgData.name;
+        
+        // Update website info to link to existing org
+        websiteInfo.organisation_id = existingOrgs.organisation_id;
+        
+        toast.info(
+          "Adding to existing organisation",
+          { description: `Website will be added to your organisation: ${orgData.name}` }
+        );
+      }
     }
 
     // Format data according to edge function requirements
@@ -57,15 +59,17 @@ export const transferDataToDatabase = async (userId: string) => {
       userId,
       websiteInfo: {
         url: websiteInfo.url || websiteUrl, // Ensure URL is always present
-        name: websiteInfo.name || organizationInfo.name || 'Default Website',
-        organization_id: organizationInfo.id || null,
+        name: websiteInfo.name || organisationInfo.name || 'Default Website',
+        organisation_id: organisationInfo.id || null,
         created_at: websiteInfo.created_at || new Date().toISOString(),
         id: websiteInfo.id
       },
       organizationInfo: {
-        id: organizationInfo.id,
-        name: organizationInfo.name || websiteInfo.name || 'Default Organization',
-        created_at: organizationInfo.created_at || new Date().toISOString()
+        id: organisationInfo.id || null,
+        name: organisationInfo.name || websiteInfo.name || 'Default Organisation',
+        created_at: organisationInfo.created_at || new Date().toISOString(),
+        owner_id: userId,
+        status: 'active'
       },
       publicationSettings: {
         ...publicationSettings,
@@ -175,6 +179,8 @@ export const transferDataToDatabase = async (userId: string) => {
     }
 
     // Call the edge function
+    console.log('Sending data to edge function:', JSON.stringify(data, null, 2));
+    
     const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/handle-user-onboarding`, {
       method: 'POST',
       headers: {
@@ -186,9 +192,22 @@ export const transferDataToDatabase = async (userId: string) => {
     });
 
     const result = await response.json();
+    console.log('Edge function response:', result);
 
     if (!result.success) {
       throw new Error(result.message || 'Transfer failed');
+    }
+
+    // Store the organization ID in localStorage for proper initialization
+    if (result.data?.organisation_id) {
+      console.log('Storing organization ID in localStorage:', result.data.organisation_id);
+      localStorage.setItem('current_organisation_id', result.data.organisation_id);
+      
+      // Also store the website ID if available
+      if (result.data.website_id) {
+        console.log('Storing website ID in localStorage:', result.data.website_id);
+        localStorage.setItem('currentWebsiteId', result.data.website_id);
+      }
     }
 
     // Clear onboarding data from localStorage
@@ -203,9 +222,7 @@ export const transferDataToDatabase = async (userId: string) => {
     
     toast.success('Data transfer completed successfully');
     
-    // Always reload to ensure contexts are initialized with new data
-    window.location.reload();
-    
+    // Return result without reloading the page
     return result;
   } catch (error) {
     console.error('Data transfer error:', error);

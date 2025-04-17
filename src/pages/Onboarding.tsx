@@ -1810,9 +1810,27 @@ const Onboarding = () => {
   };
 
   // Handle signup
-  const handleSignup = async (email: string, password: string) => {
+  const handleSignup = async (email: string, password: string): Promise<void> => {
     try {
       console.log('Starting signup process...');
+      
+      // Generate organisation ID if not exists
+      const organisationId = localStorage.getItem('organisation_id') || uuidv4();
+      const websiteUrl = state.websiteUrl;
+      const urlWithoutProtocol = websiteUrl.replace(/^https?:\/\//, '');
+      const domainParts = urlWithoutProtocol.split('.');
+      const organisationName = domainParts.length > 1 ? domainParts[domainParts.length - 2] : urlWithoutProtocol;
+      
+      // Store organisation info
+      const organisationInfo = {
+        id: organisationId,
+        name: organisationName.charAt(0).toUpperCase() + organisationName.slice(1),
+        created_at: new Date().toISOString()
+      };
+      
+      console.log('Storing organisation info:', organisationInfo);
+      localStorage.setItem('organisation_id', organisationId);
+      localStorage.setItem('organisation_info', JSON.stringify(organisationInfo));
       
       // Use hardcoded URL for production
       const redirectUrl = 'https://contentgardener.ai/dashboard?onboarding=complete&transfer=true';
@@ -1824,8 +1842,8 @@ const Onboarding = () => {
         password,
         options: {
           data: {
-            website_url: state.websiteUrl,
-            organization_name: state.websiteUrl.replace(/^https?:\/\/(www\.)?/, '').split('.')[0],
+            website_url: websiteUrl,
+            organisation_name: organisationName,
           },
           emailRedirectTo: redirectUrl
         }
@@ -1846,28 +1864,102 @@ const Onboarding = () => {
       localStorage.setItem('pending_user_id', signUpData.user.id);
       localStorage.setItem('signup_email', email);
 
-      // Close signup modal and show email verification view
-      setState(prev => ({ 
-        ...prev, 
-        showSignupModal: false,
-        step: 'email-verification',
-        verificationEmail: email
-      }));
-
-      sonnerToast.info(
-        "Please verify your email",
-        {
-          description: "We've sent you a verification link. Please check your email and click the link to continue.",
-          duration: 10000
-        }
-      );
-
       // Store signup data for later
       localStorage.setItem('pending_signup', JSON.stringify({
         userId: signUpData.user.id,
         email,
         timestamp: new Date().toISOString()
       }));
+
+      // Sign in the user immediately
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (signInError) {
+        console.error('Sign in error:', signInError);
+        throw signInError;
+      }
+
+      if (!signInData.user) {
+        throw new Error('Failed to sign in after signup');
+      }
+
+      console.log('User signed in successfully:', signInData.user.id);
+
+      // Create organisation first
+      console.log('Creating organisation with data:', organisationInfo);
+
+      // First, verify the organisation doesn't already exist
+      const { data: existingOrg, error: checkError } = await supabase
+        .from('organisations')
+        .select('id')
+        .eq('id', organisationId)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error checking existing organisation:', checkError);
+        throw new Error('Failed to check existing organisation');
+      }
+
+      if (!existingOrg) {
+        console.log('Organisation does not exist, creating new one...');
+        const { error: orgError } = await supabase
+          .from('organisations')
+          .insert([organisationInfo]);
+
+        if (orgError) {
+          console.error('Organisation creation error:', orgError);
+          throw new Error('Failed to create organisation');
+        }
+
+        // Add a small delay to ensure database consistency
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Verify organisation was created
+        const { data: verifyOrg, error: verifyError } = await supabase
+          .from('organisations')
+          .select('id')
+          .eq('id', organisationId)
+          .single();
+
+        if (verifyError || !verifyOrg) {
+          console.error('Organisation verification error:', verifyError);
+          throw new Error('Failed to verify organisation creation');
+        }
+
+        console.log('Organisation created and verified successfully');
+      } else {
+        console.log('Organisation already exists, skipping creation');
+      }
+
+      // Double check organisation exists before proceeding
+      const { data: finalCheck, error: finalCheckError } = await supabase
+        .from('organisations')
+        .select('id')
+        .eq('id', organisationId)
+        .single();
+
+      if (finalCheckError || !finalCheck) {
+        console.error('Final organisation check failed:', finalCheckError);
+        throw new Error('Organisation not found after creation');
+      }
+
+      console.log('Organisation setup complete, proceeding with data transfer');
+
+      // Now transfer data which will create membership and other data
+      await transferDataToDatabase(signInData.user.id);
+      
+      sonnerToast.success("Welcome to Content Gardener!", {
+        description: "Your account has been created and you're ready to start creating content."
+      });
+
+      // Add a small delay to ensure data is properly stored before navigation
+      setTimeout(() => {
+        console.log('Navigating to dashboard after successful signup');
+        navigate('/dashboard');
+      }, 500);
 
     } catch (error) {
       console.error('Signup error:', error);
@@ -1926,143 +2018,6 @@ const Onboarding = () => {
     
     // Show signup modal
     setState(prev => ({ ...prev, showSignupModal: true }));
-  };
-
-  // Transfer data to database after successful auth
-  const transferDataToDatabase = async (userId: string) => {
-    try {
-      console.log('Starting data transfer to database for user:', userId);
-
-      // Get website URL and generate organization name
-      const websiteUrl = localStorage.getItem('onboardingWebsite');
-      if (!websiteUrl) {
-        throw new Error('Website URL not found in localStorage');
-      }
-      console.log('Retrieved website URL:', websiteUrl);
-
-      const urlWithoutProtocol = websiteUrl.replace(/^https?:\/\/(www\.)?/, '');
-      const organizationName = urlWithoutProtocol
-        .split('.')[0]
-        .split(/[-_]/)
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
-      console.log('Generated organization name:', organizationName);
-
-      // Get publication settings with validation
-      const publicationSettings = JSON.parse(localStorage.getItem('publication_settings') || '{}');
-      if (!publicationSettings.posting_frequency || !publicationSettings.posting_days) {
-        console.warn('Missing required publication settings');
-      }
-      console.log('Publication settings:', publicationSettings);
-
-      // Get post ideas and generated content with today's date
-      const today = new Date().toISOString();
-      const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]')
-        .filter((idea: any) => idea.liked)
-        .map((idea: any) => ({
-          title: idea.title || '',
-          description: idea.description || '',
-          created_at: today
-        }));
-      console.log(`Found ${postIdeas.length} liked post ideas`);
-
-      const generatedContent = state.contentGenerated ? {
-        title: state.generatedContentTitle || '',
-        content: state.generatedContentPreview || '',
-        created_at: today,
-        scheduled_for: today,
-        status: 'generatedtext' // Generated content has status generatedtext
-      } : undefined;
-
-      if (generatedContent) {
-        console.log('Generated content:', generatedContent);
-      }
-
-      // Format data according to OnboardingData interface
-      const data = {
-        userId,
-        websiteInfo: {
-          url: websiteUrl,
-          name: organizationName
-        },
-        organizationInfo: {
-          name: organizationName,
-          website_id: null // Will be set by the backend
-        },
-        publicationSettings: {
-          ...publicationSettings,
-          posting_frequency: publicationSettings.posting_frequency || 'weekly',
-          posting_days: publicationSettings.posting_days || ['Monday'],
-          writing_style: publicationSettings.writing_style || 'professional'
-        },
-        contentData: {
-          postIdeas,
-          generatedContent: state.contentGenerated ? {
-            content: state.generatedContent,
-            created_at: today
-          } : null,
-          websiteContent: state.websiteContent || []
-        }
-      };
-
-      console.log('Formatted data for API request:', data);
-
-      // Make request to Edge Function
-      const response = await fetch(`${supabaseUrl}/functions/v1/handle-user-onboarding`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabaseAnonKey,
-          'Authorization': `Bearer ${supabaseAnonKey}`
-        },
-        body: JSON.stringify(data)
-      });
-
-      // Log the response status
-      console.log('Edge function response status:', response.status);
-
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('Edge function error:', error);
-        throw new Error(error.message || 'Failed to complete onboarding');
-      }
-
-      const responseData = await response.json();
-      console.log('Edge function response:', responseData);
-
-      if (!responseData.success) {
-        throw new Error(responseData.message || 'Failed to complete onboarding');
-      }
-
-      // Store the returned IDs
-      const websiteInfo = {
-        id: responseData.data.website_id,
-        name: organizationName,
-        url: websiteUrl
-      };
-      localStorage.setItem('website_info', JSON.stringify(websiteInfo));
-
-      const organizationInfo = {
-        id: responseData.data.organisation_id,
-        name: organizationName
-      };
-      localStorage.setItem('organization_info', JSON.stringify(organizationInfo));
-
-      // Clear onboarding data from localStorage
-      localStorage.removeItem('post_ideas');
-      localStorage.removeItem('publication_settings');
-      localStorage.removeItem('onboardingWebsite');
-      localStorage.removeItem('key_content_pages');
-      localStorage.removeItem('scraped_content');
-      localStorage.removeItem('website_content');
-
-      sonnerToast.success('Setup completed successfully!');
-      navigate('/dashboard');
-    } catch (error) {
-      console.error('Error transferring data:', error);
-      sonnerToast.error(error.message || 'Failed to complete setup');
-      throw error;
-    }
   };
 
   return (
