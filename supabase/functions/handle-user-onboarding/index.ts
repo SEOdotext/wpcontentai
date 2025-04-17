@@ -9,7 +9,7 @@ interface OnboardingData {
     url: string
     language?: string
   }
-  organizationInfo: {
+  organisationInfo: {
     name: string
   }
   publicationSettings: {
@@ -70,9 +70,9 @@ function validateOnboardingData(data: any): { isValid: boolean; error?: string }
     return { isValid: false, error: 'Invalid websiteInfo structure' }
   }
 
-  // Validate organizationInfo
-  if (!data.organizationInfo?.name) {
-    return { isValid: false, error: 'Invalid organizationInfo structure' }
+  // Validate organisationInfo
+  if (!data.organisationInfo?.name) {
+    return { isValid: false, error: 'Invalid organisationInfo structure' }
   }
 
   // Validate publicationSettings
@@ -191,7 +191,7 @@ serve(async (req) => {
       )
     }
 
-    const { userId, websiteInfo, organizationInfo, publicationSettings, contentData } = requestData
+    const { userId, websiteInfo, organisationInfo, publicationSettings, contentData } = requestData
 
     // Skip user verification since they just signed up
     console.log('Proceeding with onboarding for user:', userId)
@@ -199,13 +199,13 @@ serve(async (req) => {
     let orgData;
     
     // Only create organization if no ID is provided
-    if (!organizationInfo.id) {
+    if (!organisationInfo.id) {
       // Create organization
       const { data: newOrgData, error: orgError } = await supabaseClient
         .from('organisations')
         .insert({
-          name: organizationInfo.name,
-          created_at: organizationInfo.created_at || timestamp
+          name: organisationInfo.name,
+          created_at: organisationInfo.created_at || timestamp
         })
         .select()
         .single()
@@ -217,7 +217,7 @@ serve(async (req) => {
             success: false, 
             message: 'Failed to create organization',
             error: orgError.message,
-            details: { organizationInfo }
+            details: { organisationInfo }
           }),
           { 
             status: 500, 
@@ -232,11 +232,11 @@ serve(async (req) => {
       orgData = newOrgData;
       console.log('Created new organization:', { 
         id: orgData.id, 
-        name: organizationInfo.name
+        name: organisationInfo.name
       });
     } else {
       // Use existing organization
-      orgData = { id: organizationInfo.id };
+      orgData = { id: organisationInfo.id };
       console.log('Using existing organization:', orgData.id);
     }
 

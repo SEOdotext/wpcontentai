@@ -122,7 +122,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       // Parse stored data
       const parsedWebsiteInfo = websiteInfo ? JSON.parse(websiteInfo) : null;
-      const parsedOrgInfo = localStorage.getItem('organization_info') ? JSON.parse(localStorage.getItem('organization_info')!) : null;
+      const parsedOrgInfo = localStorage.getItem('organisation_info') ? JSON.parse(localStorage.getItem('organisation_info')!) : null;
       const parsedPendingSignup = pendingSignup ? JSON.parse(pendingSignup) : null;
       const parsedPublicationSettings = localStorage.getItem('publication_settings') ? JSON.parse(localStorage.getItem('publication_settings')!) : {
         posting_frequency: 3,
@@ -148,8 +148,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         body: JSON.stringify({
           userId: user.id,
           websiteInfo: parsedWebsiteInfo,
-          organizationInfo: parsedOrgInfo || {
-            name: parsedWebsiteInfo?.name || 'My Organization',
+          organisationInfo: parsedOrgInfo || {
+            name: parsedWebsiteInfo?.name || 'My Organisation',
             website_id: parsedWebsiteInfo?.id
           },
           publicationSettings: parsedPublicationSettings,
@@ -179,7 +179,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       localStorage.removeItem('key_content_pages');
       localStorage.removeItem('scraped_content');
       localStorage.removeItem('publication_settings');
-      localStorage.removeItem('organization_info');
+      localStorage.removeItem('organisation_info');
       
       // Update onboarding state
       setIsOnboarding(false);

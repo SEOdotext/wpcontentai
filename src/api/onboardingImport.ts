@@ -60,7 +60,7 @@ export const transferDataToDatabase = async (userId: string) => {
       websiteInfo: {
         url: websiteInfo.url || websiteUrl, // Ensure URL is always present
         name: websiteInfo.name || organisationInfo.name || 'Default Website',
-        organisation_id: organisationInfo.id || null,
+        organization_id: organisationInfo.id || null,
         created_at: websiteInfo.created_at || new Date().toISOString(),
         id: websiteInfo.id
       },
@@ -199,9 +199,18 @@ export const transferDataToDatabase = async (userId: string) => {
     }
 
     // Store the organization ID in localStorage for proper initialization
-    if (result.data?.organisation_id) {
-      console.log('Storing organization ID in localStorage:', result.data.organisation_id);
-      localStorage.setItem('current_organisation_id', result.data.organisation_id);
+    if (result.data?.organization_id) {
+      console.log('Storing organization ID in localStorage:', result.data.organization_id);
+      localStorage.setItem('current_organisation_id', result.data.organization_id);
+      
+      // Also store the full organization object for the OrganisationContext
+      const organisationData = {
+        id: result.data.organization_id,
+        name: result.data.organization_name || organisationInfo.name || 'Default Organisation',
+        created_at: new Date().toISOString()
+      };
+      console.log('Storing full organization data in localStorage:', organisationData);
+      localStorage.setItem('currentOrganisation', JSON.stringify(organisationData));
       
       // Also store the website ID if available
       if (result.data.website_id) {

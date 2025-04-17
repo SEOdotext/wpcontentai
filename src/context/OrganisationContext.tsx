@@ -151,6 +151,16 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
           return;
         }
 
+      // Check if we have a stored organization in localStorage
+      const storedOrg = getStoredOrganisation();
+      if (storedOrg) {
+        console.log('OrganisationContext: Found stored organization in localStorage:', storedOrg.name);
+        setOrganization(storedOrg);
+        setHasOrganisation(true);
+        setIsLoading(false);
+        setIsInitialized(true);
+      }
+
       // Fetch organizations from the database
       const { data, error } = await supabase
         .from('organisation_memberships')

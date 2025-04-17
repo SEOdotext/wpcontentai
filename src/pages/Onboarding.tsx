@@ -651,34 +651,38 @@ const Onboarding = () => {
     
     // Create website and organization IDs with uuid
     const websiteId = localStorage.getItem('website_id') || uuidv4();
-    const organizationId = localStorage.getItem('organization_id') || uuidv4();
+    const organisationId = localStorage.getItem('organisation_id') || uuidv4();
     
     // Store IDs in localStorage
     localStorage.setItem('website_id', websiteId);
-    localStorage.setItem('organization_id', organizationId);
+    localStorage.setItem('organisation_id', organisationId);
     
-    // Create organization name from URL
+    // Create organisation name from URL
     const urlWithoutProtocol = state.websiteUrl.replace(/^https?:\/\//, '');
     const domainParts = urlWithoutProtocol.split('.');
-    const organizationName = domainParts.length > 1 ? domainParts[domainParts.length - 2] : urlWithoutProtocol;
+    const organisationName = domainParts.length > 1 ? domainParts[domainParts.length - 2] : urlWithoutProtocol;
     
     // Store website info
     const websiteInfo = {
       id: websiteId,
       url: state.websiteUrl,
-      name: organizationName,
-      organization_id: organizationId,
+      name: organisationName,
+      organisation_id: organisationId,
       created_at: new Date().toISOString()
     };
     localStorage.setItem('website_info', JSON.stringify(websiteInfo));
     
-    // Store organization info
-    const organizationInfo = {
-      id: organizationId,
-      name: organizationName.charAt(0).toUpperCase() + organizationName.slice(1),
+    // Store organisation info
+    const organisationInfo = {
+      id: organisationId,
+      name: organisationName.charAt(0).toUpperCase() + organisationName.slice(1),
       created_at: new Date().toISOString()
     };
-    localStorage.setItem('organization_info', JSON.stringify(organizationInfo));
+    localStorage.setItem('organisation_info', JSON.stringify(organisationInfo));
+    
+    // Also store the full organisation object for the OrganisationContext
+    console.log('Storing full organisation data in localStorage for OrganisationContext');
+    localStorage.setItem('currentOrganisation', JSON.stringify(organisationInfo));
     
     // Setup 1 steps - these will all run without authentication
     const setup1Steps = [
@@ -1832,6 +1836,10 @@ const Onboarding = () => {
       localStorage.setItem('organisation_id', organisationId);
       localStorage.setItem('organisation_info', JSON.stringify(organisationInfo));
       
+      // Also store the full organisation object for the OrganisationContext
+      console.log('Storing full organisation data in localStorage for OrganisationContext');
+      localStorage.setItem('currentOrganisation', JSON.stringify(organisationInfo));
+      
       // Use hardcoded URL for production
       const redirectUrl = 'https://contentgardener.ai/dashboard?onboarding=complete&transfer=true';
       console.log('Using redirect URL:', redirectUrl);
@@ -1958,8 +1966,9 @@ const Onboarding = () => {
       // Add a small delay to ensure data is properly stored before navigation
       setTimeout(() => {
         console.log('Navigating to dashboard after successful signup');
-        navigate('/dashboard');
-      }, 500);
+        // Force a reload of the page to ensure the organisation data is properly loaded
+        window.location.href = '/dashboard';
+      }, 1000);
 
     } catch (error) {
       console.error('Signup error:', error);
