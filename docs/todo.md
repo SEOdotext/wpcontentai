@@ -11,6 +11,7 @@ Finish the onboarding / Dash
 
 Add http and https support for the input on the front page, so when a user has a url with http or https it will still be accepted...
 
+Front page input should accept all types of input for the url, www., https, http etc. Validation should only stop the user if they try to add strange signs like @ or has no .xx for example
 
 ---
 

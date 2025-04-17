@@ -49,9 +49,17 @@ const LandingPage = () => {
     // Remove http:// or https:// if present for validation
     const cleanDomain = domain.replace(/^https?:\/\//i, '');
     
-    // Basic domain validation regex
-    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
-    return domainRegex.test(cleanDomain);
+    // Remove www. if present
+    const domainWithoutWWW = cleanDomain.replace(/^www\./i, '');
+    
+    // Basic domain validation regex - more permissive
+    // Allows for subdomains, various TLDs, and common domain patterns
+    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-_.]*[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
+    
+    // Check for invalid characters
+    const hasInvalidChars = /[<>{}[\]|\\^~`@#$%&*+=]/.test(domainWithoutWWW);
+    
+    return domainRegex.test(domainWithoutWWW) && !hasInvalidChars;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -203,7 +211,7 @@ const LandingPage = () => {
                   )}
                 </div>
                 <Button type="submit" size="lg" className="h-14 px-6 rounded-l-none whitespace-nowrap shrink-0 bg-[#4CAF50] hover:bg-[#45a049]">
-                  Start Growing <ArrowRight className="ml-2 h-4 w-4" />
+                  Start growing <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </form>
               <div className="mt-6 flex flex-col items-center gap-4">
