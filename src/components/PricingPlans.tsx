@@ -43,6 +43,54 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
         throw new Error('Not authenticated');
       }
 
+      // Track subscription selection in data layer
+      if (window.dataLayer) {
+        // Track subscription selection
+        window.dataLayer.push({
+          event: 'select_item',
+          item_list_id: 'subscription_plans',
+          item_list_name: 'Subscription Plans',
+          items: [{
+            item_id: plan,
+            item_name: `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`,
+            price: plan === 'hobby' ? 15 : plan === 'pro' ? 49 : 149,
+            item_category: 'Subscription',
+            quantity: 1
+          }]
+        });
+
+        // Track redirect to checkout
+        window.dataLayer.push({
+          event: 'redirect_to_checkout',
+          currency: 'EUR',
+          value: plan === 'hobby' ? 15 : plan === 'pro' ? 49 : 149,
+          items: [{
+            item_id: plan,
+            item_name: `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`,
+            price: plan === 'hobby' ? 15 : plan === 'pro' ? 49 : 149,
+            item_category: 'Subscription',
+            quantity: 1
+          }]
+        });
+
+        // If credits are included, track them as part of the selection
+        if (includeCredits) {
+          const creditPackage = plan === 'pro' ? CREDIT_PACKAGES.pro : CREDIT_PACKAGES.agency;
+          window.dataLayer.push({
+            event: 'select_item',
+            item_list_id: 'credit_packages',
+            item_list_name: 'Credit Packages',
+            items: [{
+              item_id: creditPackage.priceId,
+              item_name: `${creditPackage.credits} Article Package`,
+              price: creditPackage.price,
+              item_category: 'Credits',
+              quantity: 1
+            }]
+          });
+        }
+      }
+
       // Hardcode the credit package IDs for each plan
       let creditPackageId;
       if (plan === 'pro') {

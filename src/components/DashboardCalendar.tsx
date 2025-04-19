@@ -120,7 +120,7 @@ const DashboardCalendar: React.FC = () => {
         <div className="grid grid-cols-7 gap-1">
           {/* Empty cells for days before the first day of the month */}
           {emptyCells.map((_, index) => (
-            <div key={`empty-${index}`} className="h-20 border rounded-md bg-gray-50"></div>
+            <div key={`empty-${index}`} className="h-16 border rounded-md bg-gray-50"></div>
           ))}
           
           {/* Days of the month */}
@@ -135,7 +135,7 @@ const DashboardCalendar: React.FC = () => {
                   <TooltipTrigger asChild>
                     <div 
                       className={cn(
-                        "h-20 border rounded-md p-1 overflow-hidden",
+                        "h-16 border rounded-md p-1 overflow-hidden",
                         isToday ? "bg-blue-50 border-blue-200" : "bg-white",
                         dayPosts.length > 0 ? "cursor-pointer" : ""
                       )}
