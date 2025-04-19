@@ -171,6 +171,16 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [postingDays, setPostingDays] = useState<string[]>([]);
   const [postingFrequency, setPostingFrequency] = useState(3);
+  const [weeklyPlanningDay, setWeeklyPlanningDay] = useState<string>('friday');
+  const { 
+    postingFrequency: contextPostingFrequency, 
+    setPostingFrequency: setContextPostingFrequency,
+    writingStyle: contextWritingStyle,
+    subjectMatters: contextSubjectMatters,
+    weeklyPlanningDay: contextWeeklyPlanningDay,
+    setWeeklyPlanningDay: setContextWeeklyPlanningDay,
+    updateSettingsInDatabase 
+  } = useSettings();
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -515,10 +525,16 @@ const Settings = () => {
             setSubjectMatters(currentSettings.subject_matters);
             setSubjects(currentSettings.subject_matters);
           }
+          if (currentSettings.weekly_planning_day) {
+            setWeeklyPlanningDay(currentSettings.weekly_planning_day);
+            setContextWeeklyPlanningDay(currentSettings.weekly_planning_day);
+          }
         } else {
           console.log('No existing publication settings, using defaults');
           setPostingDays(['monday', 'wednesday', 'friday']);
           setPostingFrequency(3);
+          setWeeklyPlanningDay('friday');
+          setContextWeeklyPlanningDay('friday');
         }
       } catch (error) {
         console.error('Error loading publication settings:', error);
@@ -529,7 +545,7 @@ const Settings = () => {
   }, [currentWebsite]);
 
   // Update the publication settings save handler
-  const handleSavePublicationSettings = async (settings: { postingDays: string[] }) => {
+  const handleSavePublicationSettings = async (settings: { postingDays: string[], weeklyPlanningDay: string }) => {
     if (!currentWebsite) {
       toast.error("Please select a website first");
       return;
@@ -553,7 +569,8 @@ const Settings = () => {
         posting_frequency: settings.postingDays.length,
         posting_days: formattedPostingDays,
         writing_style: writingStyle,
-        subject_matters: subjects
+        subject_matters: subjects,
+        weekly_planning_day: settings.weeklyPlanningDay
       });
 
       // Get the most recent settings
@@ -573,6 +590,7 @@ const Settings = () => {
             posting_days: formattedPostingDays,
             writing_style: writingStyle || '',
             subject_matters: subjects || [],
+            weekly_planning_day: settings.weeklyPlanningDay,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingSettings[0].id);
@@ -588,6 +606,7 @@ const Settings = () => {
             posting_days: formattedPostingDays,
             writing_style: writingStyle || '',
             subject_matters: subjects || [],
+            weekly_planning_day: settings.weeklyPlanningDay,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           });
@@ -598,6 +617,7 @@ const Settings = () => {
       // Update local state
       setPostingDays(settings.postingDays);
       setPostingFrequency(settings.postingDays.length);
+      setContextWeeklyPlanningDay(settings.weeklyPlanningDay);
 
       toast.success("Publication settings saved successfully");
     } catch (error) {
@@ -2235,12 +2255,25 @@ const Settings = () => {
                   </CardContent>
                 </Card>
 
-                <PublicationSettings
-                  initialPostingDays={postingDays}
-                  initialFrequency={postingFrequency}
-                  onSave={handleSavePublicationSettings}
-                  disabled={!currentWebsite}
-                />
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Publication Settings</CardTitle>
+                    <CardDescription>
+                      Configure your content publication schedule and planning preferences.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      <PublicationSettings
+                        initialPostingDays={postingDays}
+                        initialFrequency={postingFrequency}
+                        initialWeeklyPlanningDay={weeklyPlanningDay}
+                        onSave={handleSavePublicationSettings}
+                        disabled={!currentWebsite}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
 
                 <Card>
                   <CardHeader>

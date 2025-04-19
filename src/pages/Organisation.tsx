@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useOrganisation } from '@/context/OrganisationContext';
 import { Helmet } from 'react-helmet-async';
@@ -19,65 +19,6 @@ const Organisation = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState(organisation?.name || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Add data layer tracking
-  useEffect(() => {
-    // Push organization data to data layer
-    if (window.dataLayer && organisation) {
-      window.dataLayer.push({
-        event: 'organisation_page_view',
-        organisation_id: organisation.id,
-        organisation_name: organisation.name,
-        current_plan: organisation.current_plan,
-        credits: organisation.credits,
-        next_payment_date: organisation.next_payment_date
-      });
-    }
-  }, [organisation]);
-
-  // Track Stripe conversion success/failure
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const success = params.get('success');
-    const canceled = params.get('canceled');
-
-    if (window.dataLayer) {
-      if (success === 'true') {
-        // Track successful subscription using GA4 format
-        window.dataLayer.push({
-          event: 'purchase',
-          transaction_id: `T_${organisation?.id}_${Date.now()}`,
-          value: organisation?.current_plan === 'hobby' ? 15 : 
-                 organisation?.current_plan === 'pro' ? 49 : 149,
-          currency: 'EUR',
-          tax: 0,
-          shipping: 0,
-          items: [{
-            item_id: organisation?.current_plan,
-            item_name: `${organisation?.current_plan?.charAt(0).toUpperCase()}${organisation?.current_plan?.slice(1)} Plan`,
-            price: organisation?.current_plan === 'hobby' ? 15 : 
-                   organisation?.current_plan === 'pro' ? 49 : 149,
-            quantity: 1,
-            item_category: 'Subscription'
-          }]
-        });
-      } else if (canceled === 'true') {
-        // Track subscription abandonment
-        window.dataLayer.push({
-          event: 'subscription_abandoned',
-          currency: 'EUR',
-          value: 0,
-          items: [{
-            item_id: 'subscription',
-            item_name: 'Subscription Plan',
-            price: 0,
-            quantity: 1,
-            item_category: 'Subscription'
-          }]
-        });
-      }
-    }
-  }, [organisation]);
 
   const handleUpdateName = async () => {
     if (!organisation?.id || !newName.trim() || newName === organisation.name) {

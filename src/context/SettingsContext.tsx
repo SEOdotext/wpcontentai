@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useWebsites } from '@/context/WebsitesContext';
+import { useToast } from '@/components/ui/use-toast';
 
 // Define Json type since @/schema is not found
 type Json = string[] | number[] | boolean[] | {[key: string]: any} | string | number | boolean | null;
@@ -20,6 +21,7 @@ interface PublicationSettings {
   image_prompt?: string;
   image_model?: string;
   negative_prompt?: string;
+  weekly_planning_day?: string;
 }
 
 interface SettingsContextType {
@@ -38,6 +40,8 @@ interface SettingsContextType {
   setImageModel: (model: string) => void;
   negativePrompt: string;
   setNegativePrompt: (prompt: string) => void;
+  weeklyPlanningDay: string;
+  setWeeklyPlanningDay: (day: string) => void;
   isLoading: boolean;
   updateSettingsInDatabase: (
     frequency: number,
@@ -46,7 +50,8 @@ interface SettingsContextType {
     template?: string,
     prompt?: string,
     model?: string,
-    negPrompt?: string
+    negPrompt?: string,
+    weeklyPlanningDay?: string
   ) => Promise<void>;
 }
 
@@ -105,6 +110,7 @@ const SettingsContext = createContext<SettingsContextType>({
   setImagePrompt: () => {},
   setImageModel: () => {},
   setNegativePrompt: () => {},
+  setWeeklyPlanningDay: () => {},
   isLoading: false,
   updateSettingsInDatabase: async () => {},
 });
@@ -112,16 +118,18 @@ const SettingsContext = createContext<SettingsContextType>({
 export const useSettings = () => useContext(SettingsContext);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [postingFrequency, setPostingFrequency] = useState<number>(defaultSettings.postingFrequency);
-  const [writingStyle, setWritingStyle] = useState<string>(defaultSettings.writingStyle);
-  const [subjectMatters, setSubjectMatters] = useState<string[]>(defaultSettings.subjectMatters);
-  const [wordpressTemplate, setWordpressTemplate] = useState<string>(defaultSettings.wordpressTemplate);
-  const [imagePrompt, setImagePrompt] = useState<string>(defaultSettings.imagePrompt);
-  const [imageModel, setImageModel] = useState<string>(defaultSettings.imageModel);
-  const [negativePrompt, setNegativePrompt] = useState<string>(defaultSettings.negativePrompt);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [postingFrequency, setPostingFrequency] = useState<number>(3);
+  const [writingStyle, setWritingStyle] = useState<string>('');
+  const [subjectMatters, setSubjectMatters] = useState<string[]>([]);
+  const [wordpressTemplate, setWordpressTemplate] = useState<string>('');
+  const [imagePrompt, setImagePrompt] = useState<string>('');
+  const [imageModel, setImageModel] = useState<string>('');
+  const [negativePrompt, setNegativePrompt] = useState<string>('');
+  const [weeklyPlanningDay, setWeeklyPlanningDay] = useState<string>('friday');
+  const [isLoading, setIsLoading] = useState(true);
   const { currentWebsite } = useWebsites();
+  const { toast } = useToast();
 
   // Fetch settings from Supabase whenever the current website changes
   useEffect(() => {
@@ -135,6 +143,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setImagePrompt(defaultSettings.imagePrompt);
         setImageModel(defaultSettings.imageModel);
         setNegativePrompt(defaultSettings.negativePrompt);
+        setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay || 'friday');
         setIsLoading(false);
         return;
       }
@@ -209,6 +218,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             console.error("Error parsing subject_matters:", error);
             setSubjectMatters(defaultSettings.subjectMatters);
           }
+          
+          // Set weekly planning day if it exists
+          if (settings.weekly_planning_day) {
+            setWeeklyPlanningDay(settings.weekly_planning_day);
+          }
         } else {
           console.log("No settings found, creating default settings");
           // Create default settings
@@ -222,6 +236,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               image_prompt: currentWebsite.image_prompt || defaultSettings.imagePrompt,
               image_model: defaultSettings.imageModel,
               negative_prompt: defaultSettings.negativePrompt,
+              weekly_planning_day: defaultSettings.weeklyPlanningDay,
               website_id: currentWebsite.id,
               organisation_id: currentWebsite.organisation_id
             })
@@ -244,6 +259,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setImagePrompt(currentWebsite.image_prompt || defaultSettings.imagePrompt);
             setImageModel(defaultSettings.imageModel);
             setNegativePrompt(defaultSettings.negativePrompt);
+            setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay || 'friday');
           }
         }
       } catch (error) {
@@ -265,7 +281,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     template?: string,
     prompt?: string,
     model?: string,
-    negPrompt?: string
+    negPrompt?: string,
+    weeklyPlanningDay?: string
   ) => {
     if (!currentWebsite) return;
     
@@ -309,6 +326,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             image_prompt: promptToUpdate,
             image_model: modelToUpdate,
             negative_prompt: negPromptToUpdate,
+            weekly_planning_day: weeklyPlanningDay,
             website_id: currentWebsite.id,
             organisation_id: currentWebsite.organisation_id
           })
@@ -338,6 +356,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             image_prompt: promptToUpdate,
             image_model: modelToUpdate,
             negative_prompt: negPromptToUpdate,
+            weekly_planning_day: weeklyPlanningDay,
             updated_at: new Date().toISOString()
           })
           .eq('id', settingsId);
@@ -354,18 +373,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Error saving settings:', error);
       toast.error('Failed to save settings. Please try again.');
     }
-  }, [currentWebsite, settingsId, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt]);
+  }, [currentWebsite, settingsId, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay]);
 
   // Handle publication frequency changes
   const handleSetPostingFrequency = (days: number) => {
     setPostingFrequency(days);
-    updateSettingsInDatabase(days, writingStyle, subjectMatters);
+    updateSettingsInDatabase(days, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Handle writing style changes
   const handleSetWritingStyle = (style: string) => {
     setWritingStyle(style);
-    updateSettingsInDatabase(postingFrequency, style, subjectMatters);
+    updateSettingsInDatabase(postingFrequency, style, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Handle subject matters changes
@@ -375,43 +394,50 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Add a small delay to ensure state is updated before saving to database
     setTimeout(() => {
       console.log("Updating database with subject matters:", subjects);
-      updateSettingsInDatabase(postingFrequency, writingStyle, subjects);
+      updateSettingsInDatabase(postingFrequency, writingStyle, subjects, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
     }, 100);
   };
 
   // Add handler for WordPress template
   const handleSetWordpressTemplate = (template: string) => {
     setWordpressTemplate(template);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, template);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, template, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Add handler for image prompt
   const handleSetImagePrompt = (prompt: string) => {
     setImagePrompt(prompt);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, prompt);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, prompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Add handler for image model
   const handleSetImageModel = (model: string) => {
     setImageModel(model);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, model);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, model, negativePrompt, weeklyPlanningDay);
   };
 
   // Add handler for negative prompt
   const handleSetNegativePrompt = (prompt: string) => {
     setNegativePrompt(prompt);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, prompt);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, prompt, weeklyPlanningDay);
+  };
+
+  // Add handler for weekly planning day
+  const handleSetWeeklyPlanningDay = (day: string) => {
+    setWeeklyPlanningDay(day);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, day);
   };
 
   // Add handler for restoring default writing style
   const handleRestoreDefaultWritingStyle = () => {
     setWritingStyle(defaultSettings.writingStyle);
-    updateSettingsInDatabase(postingFrequency, defaultSettings.writingStyle, subjectMatters);
+    updateSettingsInDatabase(postingFrequency, defaultSettings.writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   return (
     <SettingsContext.Provider 
       value={{ 
+        settingsId,
         postingFrequency, 
         setPostingFrequency: handleSetPostingFrequency, 
         writingStyle, 
@@ -427,6 +453,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setImageModel: handleSetImageModel,
         negativePrompt,
         setNegativePrompt: handleSetNegativePrompt,
+        weeklyPlanningDay,
+        setWeeklyPlanningDay: handleSetWeeklyPlanningDay,
         isLoading,
         updateSettingsInDatabase
       }}

@@ -6,12 +6,16 @@ import { Toggle } from "@/components/ui/toggle";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
 import { useSettings } from '../context/SettingsContext';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 
 interface PublicationSettingsProps {
   initialFrequency?: number;
   initialPostingDays?: string[];
+  initialWeeklyPlanningDay?: string;
   onSave?: (settings: {
     postingDays: string[];
+    weeklyPlanningDay: string;
   }) => Promise<void>;
   showSaveButton?: boolean;
   disabled?: boolean;
@@ -20,6 +24,7 @@ interface PublicationSettingsProps {
 export function PublicationSettings({
   initialFrequency = 3,
   initialPostingDays = ['monday', 'wednesday', 'friday'],
+  initialWeeklyPlanningDay = 'friday',
   onSave,
   showSaveButton = true,
   disabled = false
@@ -29,19 +34,23 @@ export function PublicationSettings({
     setPostingFrequency,
     writingStyle,
     subjectMatters,
+    weeklyPlanningDay,
+    setWeeklyPlanningDay,
     updateSettingsInDatabase 
   } = useSettings();
   const [postingDays, setPostingDays] = useState<string[]>(initialPostingDays);
   const [isSaving, setIsSaving] = useState(false);
   const [showWeekends, setShowWeekends] = useState(false);
+  const [localWeeklyPlanningDay, setLocalWeeklyPlanningDay] = useState(initialWeeklyPlanningDay);
   const { toast } = useToast();
 
   // Update state when props change
   useEffect(() => {
-    console.log('Publication settings props updated:', { initialFrequency, initialPostingDays });
+    console.log('Publication settings props updated:', { initialFrequency, initialPostingDays, initialWeeklyPlanningDay });
     setPostingFrequency(initialFrequency);
     setPostingDays(initialPostingDays || ['monday', 'wednesday', 'friday']);
-  }, [initialFrequency, initialPostingDays]);
+    setLocalWeeklyPlanningDay(initialWeeklyPlanningDay || 'friday');
+  }, [initialFrequency, initialPostingDays, initialWeeklyPlanningDay]);
 
   // Get default posting days based on frequency
   const getDefaultPostingDays = (frequency: number): string[] => {
@@ -216,7 +225,8 @@ export function PublicationSettings({
       setIsSaving(true);
       try {
         await onSave({
-          postingDays
+          postingDays,
+          weeklyPlanningDay: localWeeklyPlanningDay
         });
         toast({
           title: "Success",
@@ -240,11 +250,42 @@ export function PublicationSettings({
       <CardHeader>
         <CardTitle>Publication Settings</CardTitle>
         <CardDescription>
-          Configure how often you want to publish content and on which days.
+          Configure your content publication schedule and planning preferences.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-6">
+          {/* Weekly Planning Day Selection */}
+          <div className="space-y-4">
+            <Label>Weekly Planning Day</Label>
+            <Select
+              value={localWeeklyPlanningDay}
+              onValueChange={(value) => {
+                setLocalWeeklyPlanningDay(value);
+                setWeeklyPlanningDay(value);
+              }}
+              disabled={disabled}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select planning day" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="monday">Monday</SelectItem>
+                <SelectItem value="tuesday">Tuesday</SelectItem>
+                <SelectItem value="wednesday">Wednesday</SelectItem>
+                <SelectItem value="thursday">Thursday</SelectItem>
+                <SelectItem value="friday">Friday</SelectItem>
+                <SelectItem value="saturday">Saturday</SelectItem>
+                <SelectItem value="sunday">Sunday</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-sm text-muted-foreground">
+              On this day each week, we'll automatically plan and generate your content. You'll receive an email with the planned content for your review.
+            </p>
+          </div>
+
+          <Separator />
+
           {/* Frequency Input */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -292,6 +333,8 @@ export function PublicationSettings({
                'Maximum impact and authority building'}
             </div>
           </div>
+
+          <Separator className="my-6" />
 
           {/* Posting Days */}
           <div className="space-y-4">

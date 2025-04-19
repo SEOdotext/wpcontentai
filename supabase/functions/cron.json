@@ -1,0 +1,6 @@
+{
+  "weekly_content_planning": {
+    "schedule": "0 6 * * *",
+    "function": "weekly-content-planning"
+  }
+} 
