@@ -32,18 +32,15 @@ serve(async (req) => {
         subject_matters,
         organisation_id,
         weekly_planning_day,
+        is_active,
         websites (
           id,
           name,
           url
-        ),
-        organisations (
-          id,
-          name
         )
       `)
       .eq('weekly_planning_day', today)
-      .eq('is_active', true) // Only process active settings
+      .eq('is_active', true)
 
     if (settingsError) {
       throw settingsError
@@ -54,7 +51,19 @@ serve(async (req) => {
     // Process each website's content planning
     const results = await Promise.all((settings || []).map(async (setting) => {
       try {
-        // Generate post ideas based on posting_frequency
+        // Get organisation details separately to avoid relationship issues
+        const { data: orgData, error: orgError } = await supabaseClient
+          .from('organisations')
+          .select('id, name')
+          .eq('id', setting.organisation_id)
+          .single()
+        
+        if (orgError) {
+          console.error(`Error fetching organisation for website ${setting.website_id}:`, orgError)
+          // Continue processing even if org fetch fails
+        }
+        
+        // Generate post ideas using the generate-post-ideas function
         const postIdeas = await generatePostIdeas(setting)
 
         // Insert into content calendar
@@ -68,7 +77,7 @@ serve(async (req) => {
         }
 
         // Send email notification
-        await sendPlanningEmail(setting, calendarEntries)
+        await sendPlanningEmail(setting, calendarEntries, orgData)
 
         return {
           website_id: setting.website_id,
@@ -114,31 +123,39 @@ serve(async (req) => {
 // Helper function to generate post ideas
 async function generatePostIdeas(setting: any) {
   try {
-    // Import the AI service endpoints
-    const { fetchWebsiteContent } = await import('@/api/aiEndpoints')
-    const { generateTitleSuggestions } = await import('@/services/aiService')
-    
-    // Fetch website content for context
-    const content = await fetchWebsiteContent(setting.websites.url, setting.website_id)
-    console.log(`Fetched website content for ${setting.websites.url} (${content.length} characters)`)
-    
-    // Generate title suggestions using AI
-    const result = await generateTitleSuggestions(
-      content,
-      setting.subject_matters, // Use configured subject matters as keywords
-      setting.writing_style,   // Use configured writing style
-      setting.subject_matters, // Focus on configured subjects
-      setting.website_id
-    )
+    // Call the generate-post-ideas function directly
+    const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-post-ideas`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        website_id: setting.website_id,
+        website_url: setting.websites.url,
+        keywords: setting.subject_matters || [],
+        writing_style: setting.writing_style || 'professional',
+        subject_matters: setting.subject_matters || []
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Error calling generate-post-ideas:', errorText)
+      throw new Error(`Failed to generate post ideas: ${errorText}`)
+    }
+
+    const result = await response.json()
+    console.log(`Generated ${result.titles?.length || 0} post ideas for website ${setting.website_id}`)
     
     // Map the suggestions to post themes
-    return result.titles.map((title, index) => ({
+    return result.titles.map((title: string, index: number) => ({
       website_id: setting.website_id,
       subject_matter: title,
       status: 'pending',
       scheduled_date: getNextPostDate(index),
       keywords: result.keywordsByTitle?.[title] || result.keywords || setting.subject_matters,
-      categories: (result.categoriesByTitle?.[title] || result.categories || []).map(cat => ({
+      categories: (result.categoriesByTitle?.[title] || result.categories || []).map((cat: string) => ({
         id: `temp-${Math.random()}`,
         name: cat,
         slug: cat.toLowerCase().replace(/[^a-z0-9]+/g, '-')
@@ -158,7 +175,7 @@ function getNextPostDate(daysToAdd: number) {
 }
 
 // Helper function to send email notification
-async function sendPlanningEmail(setting: any, posts: any[]) {
+async function sendPlanningEmail(setting: any, posts: any[], orgData: any) {
   try {
     // Get admin users for the organization
     const { data: adminUsers, error: usersError } = await supabaseClient
