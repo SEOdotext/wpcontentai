@@ -2034,7 +2034,7 @@ const Onboarding = () => {
     <div className="min-h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="w-full py-4 px-6 border-b border-border/10 bg-background/98 backdrop-blur-lg">
-        <div className="container mx-auto flex justify-between items-center">
+        <div className="container mx-auto flex justify-center sm:justify-between items-center">
           <div className="flex items-center gap-3">
             <Logo className="scale-110" />
           </div>

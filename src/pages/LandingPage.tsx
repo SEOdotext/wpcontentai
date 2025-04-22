@@ -196,7 +196,7 @@ const LandingPage = () => {
                   <Input
                     type="text"
                     placeholder="yourdomain.com"
-                    className={`w-full h-12 sm:h-14 text-base sm:text-lg rounded-r-none sm:rounded-r-none border-r-0 min-w-0 sm:min-w-[300px] ${error ? 'border-red-500' : ''}`}
+                    className={`w-full h-12 sm:h-14 text-base sm:text-lg rounded-lg sm:rounded-r-none border-r-0 min-w-0 sm:min-w-[300px] ${error ? 'border-red-500' : ''}`}
                     value={website}
                     onChange={(e) => {
                       setWebsite(e.target.value);
@@ -208,7 +208,7 @@ const LandingPage = () => {
                     <p className="text-sm text-red-500 mt-1">{error}</p>
                   )}
                 </div>
-                <Button type="submit" size="lg" className="h-12 sm:h-14 px-4 sm:px-6 rounded-l-none sm:rounded-l-none whitespace-nowrap shrink-0 bg-[#4CAF50] hover:bg-[#45a049] mt-2 sm:mt-0">
+                <Button type="submit" size="lg" className="h-12 sm:h-14 px-4 sm:px-6 rounded-lg sm:rounded-l-none whitespace-nowrap shrink-0 bg-[#4CAF50] hover:bg-[#45a049] mt-2 sm:mt-0">
                   Start growing <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </form>
