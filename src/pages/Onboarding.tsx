@@ -2643,13 +2643,13 @@ const Onboarding = () => {
                   </CardHeader>
                   <CardContent>
                   <div className="space-y-4">
-                      <div className="grid grid-cols-5 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
                         {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
                           <div key={day} className="flex flex-col items-center gap-2">
                             <Toggle
                               pressed={state.postingDays.includes(day)}
                               onPressedChange={() => handleDayToggle(day)}
-                              className="capitalize w-full"
+                              className="capitalize w-full text-sm"
                             >
                               {day}
                             </Toggle>
@@ -2704,7 +2704,7 @@ const Onboarding = () => {
                             {Array.from(new Set(state.postingDays)).map((day) => {
                               const postsOnDay = state.postingDays.filter(d => d === day).length;
                               return (
-                                <div key={day} className="flex items-center gap-2">
+                                <div key={day} className="flex flex-col sm:flex-row sm:items-center gap-2">
                                   <span className="capitalize font-medium min-w-[100px]">{day}:</span>
                                   <div className="flex gap-1">
                                     {Array.from({ length: postsOnDay }).map((_, i) => (
@@ -2713,8 +2713,8 @@ const Onboarding = () => {
                                         className="w-2 h-2 rounded-full bg-primary"
                                       />
                                     ))}
-                    </div>
-                                  <span className="ml-2">{postsOnDay} post{postsOnDay !== 1 ? 's' : ''}</span>
+                                  </div>
+                                  <span className="sm:ml-2">{postsOnDay} post{postsOnDay !== 1 ? 's' : ''}</span>
                                 </div>
                               );
                             })}
@@ -2722,8 +2722,8 @@ const Onboarding = () => {
                           <p className="mt-3 text-xs">
                             Total: {state.postingDays.length} post{state.postingDays.length !== 1 ? 's' : ''} per week
                           </p>
-                      </div>
-                    )}
+                        </div>
+                      )}
                   </div>
                   </CardContent>
                 </Card>

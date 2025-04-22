@@ -64,7 +64,7 @@ export const transferDataToDatabase = async (userId: string) => {
         created_at: websiteInfo.created_at || new Date().toISOString(),
         id: websiteInfo.id
       },
-      organizationInfo: {
+      organisationInfo: {
         id: organisationInfo.id || null,
         name: organisationInfo.name || websiteInfo.name || 'Default Organisation',
         created_at: organisationInfo.created_at || new Date().toISOString(),

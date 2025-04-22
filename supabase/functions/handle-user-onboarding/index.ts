@@ -71,8 +71,14 @@ function validateOnboardingData(data: any): { isValid: boolean; error?: string }
   }
 
   // Validate organisationInfo
-  if (!data.organisationInfo?.name) {
+  if (!data.organisationInfo?.name && !data.organizationInfo?.name) {
     return { isValid: false, error: 'Invalid organisationInfo structure' }
+  }
+
+  // Normalize the organization info to use consistent spelling
+  const normalizedOrgInfo = data.organisationInfo || data.organizationInfo;
+  if (!normalizedOrgInfo) {
+    return { isValid: false, error: 'Missing organization information' }
   }
 
   // Validate publicationSettings
