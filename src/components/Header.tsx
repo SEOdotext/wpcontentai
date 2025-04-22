@@ -119,7 +119,7 @@ const Header: React.FC = () => {
                   <div className={`w-8 h-8 rounded-full ${getAvatarClass()} flex items-center justify-center text-primary-foreground`}>
                     <span className="text-sm font-medium">{getUserInitials()}</span>
                   </div>
-                  <span className="hidden md:inline-block font-medium truncate max-w-[150px]">
+                  <span className="hidden md:inline-block font-medium truncate max-w-[250px]">
                     {user.email}
                   </span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
