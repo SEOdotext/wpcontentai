@@ -218,7 +218,8 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
             website_id: currentWebsite.id,
             keywords: topics,
             writing_style: writingStyle,
-            subject_matters: topics
+            subject_matters: topics,
+            count: 3 // Generate 3 initial posts
           })
         });
 

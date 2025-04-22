@@ -57,6 +57,7 @@ interface GeneratePostIdeasRequest {
   subject_matters?: string[];
   language?: string;
   scraped_content?: { title: string; digest: string }[];
+  count?: number; // Optional parameter for number of posts to generate
 }
 
 interface PostIdea {
@@ -385,12 +386,12 @@ serve(async (req) => {
     const isDanish = language === 'da';
     
     let promptText = isOnboarding 
-      ? `Generate 5 unique blog post ideas for a website based on its existing content.
+      ? `Generate ${requestBody.count || 5} unique blog post ideas for a website based on its existing content.
 
 Additional context:
 Current year: 2025
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
-Subject matters: ${subject_matters.join(', ') || pubSettings?.subject_matters?.join(', ') || 'general'}
+Subject matters: ${subject_matters.join(',') || pubSettings?.subject_matters?.join(',') || 'general'}
 Language: ${isDanish ? 'Danish (da)' : 'English (en)'}
 
 Existing cornerstone content (use these as a reference for your suggestions):
@@ -409,8 +410,8 @@ Important rules:
 5. DO create post ideas that align with the themes in the cornerstone content but offer new perspectives
 6. DO NOT use colons in any keywords
 7. BE CONCISE - keep descriptions short and simple (max 50 words)`
-      : `Generate 5 unique blog post ideas for a website, with each post focusing on the following primary keywords:
-${keywords.join(', ')}
+      : `Generate ${requestBody.count || 5} unique blog post ideas for a website based on these keywords:
+${keywords.join(',')}
 
 Each post should:
 1. Be centered around these keywords and the keywords should be included in the title
@@ -420,7 +421,7 @@ Each post should:
 Additional context:
 Current year: 2025
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
-Subject matters: ${subject_matters.join(', ') || pubSettings?.subject_matters?.join(', ') || 'general'}
+Subject matters: ${subject_matters.join(',') || pubSettings?.subject_matters?.join(',') || 'general'}
 Language: ${isDanish ? 'Danish (da)' : 'English (en)'}
 
 Available categories (use category IDs):

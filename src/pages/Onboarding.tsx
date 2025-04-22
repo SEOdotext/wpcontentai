@@ -1360,7 +1360,8 @@ const Onboarding = () => {
       const requestParams = {
         website_id,
         website_url: state.websiteUrl,
-        language: language
+        language: language,
+        count: 5 // Generate 5 new ideas
       };
       
       console.log(`Calling generate-post-ideas with params:`, requestParams);
