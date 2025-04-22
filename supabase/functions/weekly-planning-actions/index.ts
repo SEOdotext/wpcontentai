@@ -162,7 +162,12 @@ serve(async (req) => {
           throw new Error('Posts were generated but failed to be inserted into calendar')
         }
 
-        console.log(`Generated and inserted ${calendarEntries.length} posts for website ${setting.website_id} (${setting.websites?.name || 'Unknown'})`)
+        console.log(`Inserted posts:`, calendarEntries.map(p => ({
+          id: p.id,
+          subject: p.subject_matter,
+          date: p.scheduled_date,
+          website: p.website_id
+        })))
 
         // Finally send the email with the confirmed posts
         try {
@@ -390,6 +395,11 @@ async function generatePostIdeas(setting: any, supabaseClient: any) {
       return []
     }
 
+    console.log(`Raw ideas generated from API:`, result.ideas.map((idea: any) => ({
+      title: idea.title,
+      keywords: idea.keywords
+    })))
+
     // Create new posts with proper date distribution
     const newPosts = result.ideas.map((idea: any, index: number) => {
       const scheduledDate = availableDates[index];
@@ -402,7 +412,11 @@ async function generatePostIdeas(setting: any, supabaseClient: any) {
       };
     });
 
-    console.log(`Generated ${newPosts.length} new posts for website ${setting.website_id} with dates: ${newPosts.map(p => p.scheduled_date).join(', ')}`);
+    console.log(`Mapped posts before insertion:`, newPosts.map(p => ({
+      subject: p.subject_matter,
+      date: p.scheduled_date,
+      website: p.website_id
+    })));
     return newPosts;
   } catch (error) {
     throw error
@@ -458,12 +472,12 @@ async function sendPlanningEmail(setting: any, posts: any[], orgData: any, supab
     const emailContent = `
       <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #2D3748; margin: 0;">🌱 Your Weekly Garden Plan</h1>
+          <h1 style="color: #2D3748; margin: 0;">🌱 Your Weekly Garden Plan for ${setting.websites.name}</h1>
           <p style="color: #718096; margin-top: 10px;">Fresh content seeds ready to be planted</p>
         </div>
 
         <div style="background: #F7FAFC; border-radius: 8px; padding: 20px; margin-bottom: 30px;">
-          <h2 style="color: #2D3748; margin: 0 0 15px 0;">Content Seeds for Next Week</h2>
+          <h2 style="color: #2D3748; margin: 0 0 15px 0;">Content seeds for next week</h2>
           <p style="color: #4A5568; margin-bottom: 20px;">Here are your carefully selected content ideas, ready to grow into engaging posts:</p>
           
           ${posts.map((post, index) => `
