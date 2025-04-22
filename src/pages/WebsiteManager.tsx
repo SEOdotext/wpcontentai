@@ -53,9 +53,12 @@ const WebsiteManager = () => {
     // Remove http:// or https:// if present for validation
     const cleanDomain = domain.replace(/^https?:\/\//i, '');
     
-    // Basic domain validation regex
-    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
-    return domainRegex.test(cleanDomain);
+    // Allow any non-empty string that doesn't contain invalid characters
+    // Only block characters that could be used for injection attacks
+    const hasInvalidChars = /[<>{}[\]|\\^~`@#$%&*+=]/.test(cleanDomain);
+    
+    // Allow any non-empty string without invalid characters
+    return cleanDomain.length > 0 && !hasInvalidChars;
   };
 
   const handleAddWebsite = async (e: React.FormEvent) => {

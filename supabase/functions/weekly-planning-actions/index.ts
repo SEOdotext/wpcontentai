@@ -2,6 +2,23 @@
 // https://deno.land/manual/getting_started/setup_your_environment
 // This enables autocomplete, go to definition, etc.
 
+/**
+ * SCHEDULING INSTRUCTIONS:
+ * 
+ * To ensure this function runs daily, set up a cron job in your Supabase project:
+ * 
+ * 1. Go to your Supabase dashboard
+ * 2. Navigate to Database > Functions > Hooks
+ * 3. Create a new cron job with the following settings:
+ *    - Name: daily-weekly-planning
+ *    - Schedule: 0 0 * * * (runs at midnight every day)
+ *    - Function: weekly-planning-actions
+ *    - HTTP Method: POST
+ *    - Body: {} (empty JSON object)
+ * 
+ * This will trigger the function daily, and it will process websites scheduled for the current day.
+ */
+
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 

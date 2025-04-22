@@ -52,14 +52,12 @@ const LandingPage = () => {
     // Remove www. if present
     const domainWithoutWWW = cleanDomain.replace(/^www\./i, '');
     
-    // Basic domain validation regex - more permissive
-    // Allows for subdomains, various TLDs, and common domain patterns
-    const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-_.]*[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$/;
-    
-    // Check for invalid characters
+    // Allow any non-empty string that doesn't contain invalid characters
+    // Only block characters that could be used for injection attacks
     const hasInvalidChars = /[<>{}[\]|\\^~`@#$%&*+=]/.test(domainWithoutWWW);
     
-    return domainRegex.test(domainWithoutWWW) && !hasInvalidChars;
+    // Allow any non-empty string without invalid characters
+    return domainWithoutWWW.length > 0 && !hasInvalidChars;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
