@@ -472,7 +472,7 @@ async function sendPlanningEmail(setting: any, posts: any[], orgData: any, supab
     const emailContent = `
       <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="color: #2D3748; margin: 0;">🌱 Your Weekly Garden Plan for ${setting.websites.name}</h1>
+          <h1 style="color: #2D3748; margin: 0;">🌱 Weekly content plan for ${setting.websites.name}</h1>
           <p style="color: #718096; margin-top: 10px;">Fresh content seeds ready to be planted</p>
         </div>
 
@@ -529,7 +529,7 @@ async function sendPlanningEmail(setting: any, posts: any[], orgData: any, supab
             email: 'planning@contentgardener.ai',
             name: 'ContentGardener.ai'
           },
-          subject: `Weekly Content Plan for ${setting.websites.name}`,
+          subject: `Weekly content plan for ${setting.websites.name}`,
           content: [{
             type: 'text/html',
             value: emailContent
