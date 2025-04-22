@@ -70,7 +70,7 @@ export function AppSidebar() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <SidebarMenu>
+        <SidebarMenu className="px-3">
           <SidebarMenuItem>
             <SidebarMenuButton 
               className="gap-2" 
