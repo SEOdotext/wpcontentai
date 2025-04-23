@@ -17,52 +17,53 @@ const ResetPassword = () => {
   const location = useLocation();
 
   useEffect(() => {
-    // Check if we have a token in the URL
-    const searchParams = new URLSearchParams(location.search);
-    const token = searchParams.get('token');
-    const type = searchParams.get('type');
-    
-    // Log the URL parameters for debugging
-    console.log('ResetPassword: URL parameters:', {
-      token: token ? `present (length: ${token.length})` : 'missing',
-      type: type || 'not specified',
-      fullUrl: window.location.href,
-      searchParams: Object.fromEntries(searchParams.entries())
-    });
-    
-    // Check for token in hash as well (Supabase might use hash-based routing)
-    const hashParams = new URLSearchParams(window.location.hash.slice(1));
-    const hashToken = hashParams.get('token');
-    const hashType = hashParams.get('type');
-    
-    if (hashToken) {
-      console.log('ResetPassword: Found token in hash:', {
-        tokenLength: hashToken.length,
-        type: hashType
-      });
-    }
-    
-    // Use either the search param token or hash token
-    const finalToken = token || hashToken;
-    const finalType = type || hashType;
-    
-    if (!finalToken) {
-      console.error('No token found in URL or hash');
-      setError('Invalid or expired reset link');
-      toast.error('Invalid or expired reset link');
-      navigate('/auth');
-      return;
-    }
+    const handleVerification = async () => {
+      try {
+        // Check if we're coming from Supabase verification
+        const searchParams = new URLSearchParams(location.search);
+        const token = searchParams.get('token');
+        const type = searchParams.get('type');
+        
+        console.log('ResetPassword: Processing verification:', {
+          hasToken: !!token,
+          type: type || 'not specified',
+          fullUrl: window.location.href
+        });
 
-    // If this is a recovery link from Supabase
-    if (finalType === 'recovery') {
-      console.log('ResetPassword: Processing Supabase recovery link', {
-        tokenLength: finalToken.length,
-        tokenFormat: finalToken.match(/^[0-9]+$/) ? 'numeric' : 'mixed',
-        isExpectedLength: finalToken.length > 20,
-        source: token ? 'searchParams' : 'hash'
-      });
-    }
+        if (token && type === 'recovery') {
+          // Verify the token with Supabase
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'recovery'
+          });
+
+          if (verifyError) {
+            console.error('ResetPassword: Verification failed:', verifyError);
+            setError('Invalid or expired reset link');
+            toast.error('Invalid or expired reset link');
+            navigate('/auth');
+            return;
+          }
+
+          console.log('ResetPassword: Token verified successfully');
+          // Token is valid, allow password reset
+          return;
+        }
+
+        // If no token or wrong type, redirect to auth
+        console.error('ResetPassword: No valid token found');
+        setError('Invalid or expired reset link');
+        toast.error('Invalid or expired reset link');
+        navigate('/auth');
+      } catch (err) {
+        console.error('ResetPassword: Error during verification:', err);
+        setError('An error occurred during verification');
+        toast.error('An error occurred during verification');
+        navigate('/auth');
+      }
+    };
+
+    handleVerification();
   }, [location, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,34 +84,7 @@ const ResetPassword = () => {
     }
 
     try {
-      const searchParams = new URLSearchParams(location.search);
-      const hashParams = new URLSearchParams(window.location.hash.slice(1));
-      
-      // Get token from either search params or hash
-      const token = searchParams.get('token') || hashParams.get('token');
-      const type = searchParams.get('type') || hashParams.get('type');
-
-      if (!token) {
-        throw new Error('No token found in URL');
-      }
-
-      console.log('ResetPassword: Updating password with token type:', type || 'unknown', {
-        tokenLength: token.length,
-        source: searchParams.get('token') ? 'searchParams' : 'hash'
-      });
-
-      // First, set the session using the token
-      const { error: sessionError } = await supabase.auth.verifyOtp({
-        token_hash: token,
-        type: 'recovery'
-      });
-
-      if (sessionError) {
-        console.error('ResetPassword: Error setting session:', sessionError);
-        throw sessionError;
-      }
-
-      // Now update the password
+      // Update the password
       const { error: updateError } = await supabase.auth.updateUser({
         password: password
       });
