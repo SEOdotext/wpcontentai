@@ -146,41 +146,44 @@ async function handleCheckoutSessionCompleted(session) {
       }
     }
 
-    if (additionalCredits > 0) {
+    // Check if we need to update the plan and add credits
+    const plan = session.metadata?.plan
+    if (plan) {
+      console.log('Found plan in metadata:', plan)
+      
+      // Map plan name to price ID for credits lookup
+      let planPriceId: string | null = null
+      let planName: string = 'No active plan'
+      
+      switch(plan) {
+        case 'hobby':
+          planPriceId = 'price_1RBEJwRGhl9iFwDNmsBsnVX5'
+          planName = 'Hobby'
+          break
+        case 'pro':
+          planPriceId = 'price_1RBEPdRGhl9iFwDNsMnaYvh5'
+          planName = 'Professional'
+          break
+        case 'agency':
+          planPriceId = 'price_1RBMVnRGhl9iFwDNYi4upwcm'
+          planName = 'Agency/Enterprise'
+          break
+      }
+      
+      if (planPriceId && PLAN_CREDITS[planPriceId]) {
+        const planCredits = PLAN_CREDITS[planPriceId]
+        console.log('Adding plan credits for new subscription:', planCredits)
+        // Add plan credits and update the current plan name
+        await updateOrganizationPlan(organisationId, planCredits, planName)
+      } else {
+        console.log('No matching plan credit key found')
+      }
+    } else if (additionalCredits > 0) {
+      // Only add credits from packages without updating plan
       console.log('Updating organisation with additional credits:', additionalCredits)
-      // Update organization credits in the database
       await updateOrganizationCredits(organisationId, additionalCredits)
     } else {
-      console.log('No additional credits to add from packages')
-      
-      // Check if we need to add plan credits instead
-      const plan = session.metadata?.plan
-      if (plan) {
-        console.log('Checking for plan credits for plan:', plan)
-        let planCreditKey: string | null = null
-        
-        switch(plan) {
-          case 'hobby':
-            planCreditKey = 'price_1RBEJwRGhl9iFwDNmsBsnVX5'
-            break
-          case 'pro':
-            planCreditKey = 'price_1RBEPdRGhl9iFwDNsMnaYvh5'
-            break
-          case 'agency':
-            planCreditKey = 'price_1RBMVnRGhl9iFwDNYi4upwcm'
-            break
-        }
-        
-        if (planCreditKey && PLAN_CREDITS[planCreditKey]) {
-          const planCredits = PLAN_CREDITS[planCreditKey]
-          console.log('Adding plan credits for new subscription:', planCredits)
-          await updateOrganizationCredits(organisationId, planCredits)
-        } else {
-          console.log('No matching plan credit key found')
-        }
-      } else {
-        console.log('No plan found in metadata')
-      }
+      console.log('No plan found in metadata and no additional credits to add')
     }
   } catch (error) {
     console.error('Error processing line items:', error.message)
@@ -216,29 +219,48 @@ async function handleInvoicePaid(invoice) {
   // Get line items from the invoice
   const lines = invoice.lines.data
   
-  // Process subscription plan credits first (monthly allocation)
+  // Process subscription plan credits and update plan info
+  let planUpdated = false
   for (const line of lines) {
     const priceId = line.price.id
     if (PLAN_CREDITS[priceId]) {
       const planCredits = PLAN_CREDITS[priceId]
+      let planName = 'Starter'
       
-      // Update organization with the monthly credit allocation
-      // Note: For monthly renewals, we're adding the credits to the existing balance
-      await updateOrganizationCredits(organisation.id, planCredits)
-      console.log(`Added ${planCredits} monthly credits for plan ${priceId}`)
+      // Determine plan name based on price ID
+      if (priceId === 'price_1RBEJwRGhl9iFwDNmsBsnVX5') {
+        planName = 'Hobby'
+      } else if (priceId === 'price_1RBEPdRGhl9iFwDNsMnaYvh5') {
+        planName = 'Professional'
+      } else if (priceId === 'price_1RBMVnRGhl9iFwDNYi4upwcm') {
+        planName = 'Agency/Enterprise'
+      }
+      
+      // Update organization plan, credits, and next payment date
+      await updateOrganizationPlan(organisation.id, planCredits, planName)
+      console.log(`Updated plan to ${planName} and added ${planCredits} monthly credits for plan ${priceId}`)
+      planUpdated = true
+      break // Only need to process one subscription plan
     }
   }
   
   // Process any credit packages as one-time purchases
-  for (const line of lines) {
-    const priceId = line.price.id
-    if (CREDIT_PACKAGES[priceId]) {
-      const packageCredits = CREDIT_PACKAGES[priceId].credits
-      const additionalCredits = packageCredits * line.quantity
-      
+  if (!planUpdated) {
+    let totalAdditionalCredits = 0
+    for (const line of lines) {
+      const priceId = line.price.id
+      if (CREDIT_PACKAGES[priceId]) {
+        const packageCredits = CREDIT_PACKAGES[priceId].credits
+        const additionalCredits = packageCredits * line.quantity
+        totalAdditionalCredits += additionalCredits
+        console.log(`Adding ${additionalCredits} credits from package ${priceId}`)
+      }
+    }
+    
+    if (totalAdditionalCredits > 0) {
       // Update organization with additional credits from packages
-      await updateOrganizationCredits(organisation.id, additionalCredits)
-      console.log(`Added ${additionalCredits} credits from package ${priceId}`)
+      await updateOrganizationCredits(organisation.id, totalAdditionalCredits)
+      console.log(`Added ${totalAdditionalCredits} total credits from packages`)
     }
   }
 }
@@ -297,5 +319,68 @@ async function updateOrganizationCredits(organisationId, additionalCredits) {
   } catch (error) {
     console.error(`⭐ UPDATING CREDITS - Unexpected error:`, error)
     console.error(`⭐ ERROR STACK:`, error.stack)
+  }
+}
+
+/**
+ * Update an organization's plan and credits in the database
+ */
+async function updateOrganizationPlan(organisationId, additionalCredits, planName) {
+  console.log(`⭐ UPDATING PLAN - Starting update for org ${organisationId} with plan ${planName} and ${additionalCredits} credits`)
+  
+  // First get current credits
+  try {
+    console.log(`⭐ UPDATING PLAN - Fetching current organization data from database`)
+    const { data: organisation, error: fetchError } = await supabaseClient
+      .from('organisations')
+      .select('credits, name, current_plan')
+      .eq('id', organisationId)
+      .single()
+    
+    if (fetchError) {
+      console.error(`Error fetching organisation: ${fetchError.message}`, fetchError)
+      console.error(`⭐ FETCH ERROR DETAILS:`, JSON.stringify(fetchError))
+      return
+    }
+    
+    if (!organisation) {
+      console.error(`⭐ UPDATING PLAN - Organisation not found in database: ${organisationId}`)
+      return
+    }
+    
+    console.log(`⭐ UPDATING PLAN - Found organisation: ${organisation.name}`)
+    console.log(`⭐ UPDATING PLAN - Current plan: ${organisation.current_plan || 'No active plan'}`)
+    console.log(`⭐ UPDATING PLAN - Current credits: ${organisation.credits || 0}`)
+    
+    // Calculate new credits total
+    const currentCredits = organisation.credits || 0
+    const newCredits = currentCredits + additionalCredits
+    
+    // Calculate next payment date (1 month from now)
+    const nextPaymentDate = new Date()
+    nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1)
+    
+    console.log(`⭐ UPDATING PLAN - Will update credits: ${currentCredits} + ${additionalCredits} = ${newCredits}`)
+    console.log(`⭐ UPDATING PLAN - Will update plan to: ${planName}`)
+    console.log(`⭐ UPDATING PLAN - Will set next payment date to: ${nextPaymentDate.toISOString()}`)
+    
+    // Update the organization with new plan and credits
+    console.log(`⭐ UPDATING PLAN - Running database update`)
+    const updateResult = await supabaseClient
+      .from('organisations')
+      .update({ 
+        credits: newCredits,
+        current_plan: planName,
+        next_payment_date: nextPaymentDate.toISOString()
+      })
+      .eq('id', organisationId)
+    
+    console.log(`⭐ UPDATING PLAN - Update completed`, updateResult)
+    
+    if (updateResult.error) {
+      console.error(`⭐ UPDATING PLAN - Error updating organisation:`, updateResult.error)
+    }
+  } catch (error) {
+    console.error(`⭐ UPDATING PLAN - Error in update:`, error)
   }
 } 

@@ -28,7 +28,7 @@ const CREDIT_PACKAGES = {
 };
 
 const PricingPlans: React.FC<PricingPlansProps> = ({ 
-  currentPlan = 'No active plan', 
+  currentPlan = 'Starter', 
   credits = 0, 
   nextPaymentDate,
   isPricingPage = false
@@ -88,30 +88,28 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Current Plan Info */}
-        {currentPlan !== 'No active plan' && (
-          <div className="space-y-4 p-4 bg-primary/5 rounded-lg border border-primary/10">
-            <div>
-              <label className="text-sm font-medium">Your current garden</label>
-              <p className="text-2xl font-semibold mt-1.5 capitalize">
-                {currentPlan}
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium">Seeds in your pocket</label>
-              <p className="text-2xl font-semibold mt-1.5">
-                {credits} credits
-              </p>
-            </div>
-            {nextPaymentDate && (
-              <div>
-                <label className="text-sm font-medium">Next harvest</label>
-                <p className="text-muted-foreground mt-1.5">
-                  {new Date(nextPaymentDate).toLocaleDateString()}
-                </p>
-              </div>
-            )}
+        <div className="space-y-4 p-4 bg-primary/5 rounded-lg border border-primary/10">
+          <div>
+            <label className="text-sm font-medium">Your current garden</label>
+            <p className="text-2xl font-semibold mt-1.5 capitalize">
+              {currentPlan}
+            </p>
           </div>
-        )}
+          <div>
+            <label className="text-sm font-medium">Seeds in your pocket</label>
+            <p className="text-2xl font-semibold mt-1.5">
+              {credits} credits
+            </p>
+          </div>
+          {nextPaymentDate && (
+            <div>
+              <label className="text-sm font-medium">Next harvest</label>
+              <p className="text-muted-foreground mt-1.5">
+                {new Date(nextPaymentDate).toLocaleDateString()}
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Pricing Plans Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
