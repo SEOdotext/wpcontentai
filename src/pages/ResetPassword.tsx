@@ -24,12 +24,30 @@ const ResetPassword = () => {
     
     // Log the URL parameters for debugging
     console.log('ResetPassword: URL parameters:', {
-      token: token ? 'present' : 'missing',
-      type: type || 'not specified'
+      token: token ? `present (length: ${token.length})` : 'missing',
+      type: type || 'not specified',
+      fullUrl: window.location.href,
+      searchParams: Object.fromEntries(searchParams.entries())
     });
     
-    if (!token) {
-      console.error('No token found in URL');
+    // Check for token in hash as well (Supabase might use hash-based routing)
+    const hashParams = new URLSearchParams(window.location.hash.slice(1));
+    const hashToken = hashParams.get('token');
+    const hashType = hashParams.get('type');
+    
+    if (hashToken) {
+      console.log('ResetPassword: Found token in hash:', {
+        tokenLength: hashToken.length,
+        type: hashType
+      });
+    }
+    
+    // Use either the search param token or hash token
+    const finalToken = token || hashToken;
+    const finalType = type || hashType;
+    
+    if (!finalToken) {
+      console.error('No token found in URL or hash');
       setError('Invalid or expired reset link');
       toast.error('Invalid or expired reset link');
       navigate('/auth');
@@ -37,9 +55,13 @@ const ResetPassword = () => {
     }
 
     // If this is a recovery link from Supabase
-    if (type === 'recovery') {
-      console.log('ResetPassword: Processing Supabase recovery link');
-      // The token is already in the correct format, no need to modify it
+    if (finalType === 'recovery') {
+      console.log('ResetPassword: Processing Supabase recovery link', {
+        tokenLength: finalToken.length,
+        tokenFormat: finalToken.match(/^[0-9]+$/) ? 'numeric' : 'mixed',
+        isExpectedLength: finalToken.length > 20,
+        source: token ? 'searchParams' : 'hash'
+      });
     }
   }, [location, navigate]);
 
@@ -62,14 +84,20 @@ const ResetPassword = () => {
 
     try {
       const searchParams = new URLSearchParams(location.search);
-      const token = searchParams.get('token');
-      const type = searchParams.get('type');
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      
+      // Get token from either search params or hash
+      const token = searchParams.get('token') || hashParams.get('token');
+      const type = searchParams.get('type') || hashParams.get('type');
 
       if (!token) {
         throw new Error('No token found in URL');
       }
 
-      console.log('ResetPassword: Updating password with token type:', type || 'unknown');
+      console.log('ResetPassword: Updating password with token type:', type || 'unknown', {
+        tokenLength: token.length,
+        source: searchParams.get('token') ? 'searchParams' : 'hash'
+      });
 
       // First, set the session using the token
       const { error: sessionError } = await supabase.auth.verifyOtp({

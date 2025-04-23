@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle, Sparkles, ArrowRight, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import WeeklyPlanningButton from './WeeklyPlanningButton';
 
 const DashboardRecommendations: React.FC = () => {
   const navigate = useNavigate();
@@ -42,6 +43,7 @@ const DashboardRecommendations: React.FC = () => {
               <Sparkles className="mr-2 h-4 w-4 text-primary" />
               Generate New Article Ideas
             </Button>
+            <WeeklyPlanningButton />
           </div>
         </div>
         
