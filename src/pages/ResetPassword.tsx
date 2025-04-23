@@ -21,32 +21,49 @@ const ResetPassword = () => {
   useEffect(() => {
     const verifyToken = async () => {
       try {
+        console.log('ResetPassword: Starting token verification');
+        console.log('ResetPassword: Current URL:', window.location.href);
+        
         // First try to get token from query parameters
         const searchParams = new URLSearchParams(location.search);
         let token = searchParams.get('token');
         let type = searchParams.get('type');
         
+        console.log('ResetPassword: Query params:', { 
+          token: token ? 'present' : 'missing', 
+          type: type ? 'present' : 'missing' 
+        });
+        
         // If not in query params, try hash fragment
         if (!token || !type) {
           const hash = window.location.hash;
-          console.log('ResetPassword: Processing hash fragment:', hash);
+          console.log('ResetPassword: Hash fragment:', hash);
           
           if (hash) {
             const hashParams = new URLSearchParams(hash.substring(1));
-            token = hashParams.get('access_token');
+            token = hashParams.get('access_token') || hashParams.get('token');
             type = hashParams.get('type');
+            
+            console.log('ResetPassword: Hash params:', { 
+              token: token ? 'present' : 'missing', 
+              type: type ? 'present' : 'missing' 
+            });
           }
         }
         
-        console.log('ResetPassword: Extracted params:', { token, type });
-        
-        if (!token || type !== 'recovery') {
-          console.error('ResetPassword: Missing or invalid token/type:', { token, type });
+        if (!token || !type) {
+          console.error('ResetPassword: No token or type found in URL');
           navigate('/auth?error=invalid_reset_link');
           return;
         }
-
-        // Exchange the token for a session
+        
+        if (type !== 'recovery') {
+          console.error('ResetPassword: Invalid type:', type);
+          navigate('/auth?error=invalid_reset_link');
+          return;
+        }
+        
+        console.log('ResetPassword: Attempting token exchange');
         const { error } = await supabase.auth.exchangeCodeForSession(token);
         
         if (error) {
