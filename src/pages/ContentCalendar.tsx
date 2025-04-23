@@ -655,11 +655,16 @@ const ContentCalendar = () => {
 
   const handleGenerateAndPublish = async (postThemeId: string) => {
     try {
+      if (!currentWebsite?.id) {
+        toast.error('No website selected');
+        return;
+      }
+
       // Add this contentId to the set of generating and publishing
       setGeneratingAndPublishingIds(prev => new Set(prev).add(postThemeId));
       
       // Start the generation process
-      const response = await generateAndPublishContent(postThemeId);
+      const response = await generateAndPublishContent(postThemeId, currentWebsite.id);
       console.log('Content generation queued:', response);
       
       if (response.queueJob && response.queueJob.id) {
