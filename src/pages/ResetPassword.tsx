@@ -13,6 +13,7 @@ const ResetPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -39,25 +40,28 @@ const ResetPassword = () => {
           return;
         }
 
-        // Verify the token with Supabase
-        console.log('ResetPassword: Verifying token with Supabase...');
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: token,
-          type: 'recovery',
-          token: token // Add the token parameter for PKCE flow
+        // Store the token in session storage
+        sessionStorage.setItem('resetPasswordToken', token);
+        
+        // Set up auth state change listener
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          console.log('ResetPassword: Auth state changed:', event);
+          
+          if (event === 'PASSWORD_RECOVERY') {
+            setIsVerifying(false);
+            return;
+          }
+          
+          if (event === 'SIGNED_IN') {
+            // User is signed in, we can proceed with password reset
+            setIsVerifying(false);
+            return;
+          }
         });
 
-        if (verifyError) {
-          console.error('ResetPassword: Verification failed:', verifyError);
-          setError('Invalid or expired reset link');
-          toast.error('Invalid or expired reset link');
-          navigate('/auth');
-          return;
-        }
-
-        console.log('ResetPassword: Token verified successfully');
-        // Token is valid, allow password reset
-        return;
+        return () => {
+          subscription.unsubscribe();
+        };
       } catch (err) {
         console.error('ResetPassword: Error during verification:', err);
         setError('An error occurred during verification');
@@ -111,6 +115,24 @@ const ResetPassword = () => {
       setIsLoading(false);
     }
   };
+
+  if (isVerifying) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold">Verifying Reset Link</CardTitle>
+            <CardDescription className="text-center">
+              Please wait while we verify your reset link...
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
