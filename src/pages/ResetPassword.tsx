@@ -19,12 +19,28 @@ const ResetPassword = () => {
   useEffect(() => {
     console.log('ResetPassword: Setting up auth state change listener');
     
-    // Set up auth state change listener for PASSWORD_RECOVERY event
+    // Check current session first
+    const checkSession = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      console.log('ResetPassword: Current session:', { session: !!session, error });
+      
+      if (session) {
+        console.log('ResetPassword: User is already signed in, showing form');
+        setShowForm(true);
+      }
+    };
+    
+    checkSession();
+    
+    // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('ResetPassword: Auth state changed:', event);
+      console.log('ResetPassword: Auth state changed:', { event, hasSession: !!session });
       
       if (event === 'PASSWORD_RECOVERY') {
         console.log('ResetPassword: Password recovery event received');
+        setShowForm(true);
+      } else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        console.log('ResetPassword: User signed in, showing form');
         setShowForm(true);
       }
     });
