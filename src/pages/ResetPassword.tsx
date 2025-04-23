@@ -40,19 +40,22 @@ const ResetPassword = () => {
           return;
         }
 
-        // Exchange the code for a session
-        console.log('ResetPassword: Exchanging code for session...');
-        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(token);
+        // Verify the token with Supabase
+        console.log('ResetPassword: Verifying token with Supabase...');
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: token,
+          type: 'recovery'
+        });
 
-        if (exchangeError) {
-          console.error('ResetPassword: Exchange failed:', exchangeError);
+        if (verifyError) {
+          console.error('ResetPassword: Verification failed:', verifyError);
           setError('Invalid or expired reset link');
           toast.error('Invalid or expired reset link');
           navigate('/auth');
           return;
         }
 
-        console.log('ResetPassword: Exchange successful:', data);
+        console.log('ResetPassword: Token verified successfully');
         setIsVerifying(false);
       } catch (err) {
         console.error('ResetPassword: Error during verification:', err);
