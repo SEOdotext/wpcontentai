@@ -18,55 +18,20 @@ const ResetPassword = () => {
   const location = useLocation();
 
   useEffect(() => {
-    const handleVerification = async () => {
-      try {
-        // Check if we're coming from Supabase verification
-        const searchParams = new URLSearchParams(location.search);
-        const token = searchParams.get('token');
-        const type = searchParams.get('type');
-        
-        console.log('ResetPassword: Processing verification:', {
-          hasToken: !!token,
-          type: type || 'not specified',
-          fullUrl: window.location.href,
-          searchParams: Object.fromEntries(searchParams.entries())
-        });
-
-        if (!token || type !== 'recovery') {
-          console.error('ResetPassword: Missing or invalid token/type:', { token, type });
-          setError('Invalid or expired reset link');
-          toast.error('Invalid or expired reset link');
-          navigate('/auth');
-          return;
-        }
-
-        // Verify the token with Supabase
-        console.log('ResetPassword: Verifying token with Supabase...');
-        const { error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: token,
-          type: 'recovery'
-        });
-
-        if (verifyError) {
-          console.error('ResetPassword: Verification failed:', verifyError);
-          setError('Invalid or expired reset link');
-          toast.error('Invalid or expired reset link');
-          navigate('/auth');
-          return;
-        }
-
-        console.log('ResetPassword: Token verified successfully');
+    // Set up auth state change listener for PASSWORD_RECOVERY event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('ResetPassword: Auth state changed:', event);
+      
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('ResetPassword: Password recovery event received');
         setIsVerifying(false);
-      } catch (err) {
-        console.error('ResetPassword: Error during verification:', err);
-        setError('An error occurred during verification');
-        toast.error('An error occurred during verification');
-        navigate('/auth');
       }
-    };
+    });
 
-    handleVerification();
-  }, [location, navigate]);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
