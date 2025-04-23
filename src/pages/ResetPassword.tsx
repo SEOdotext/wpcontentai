@@ -27,34 +27,37 @@ const ResetPassword = () => {
         console.log('ResetPassword: Processing verification:', {
           hasToken: !!token,
           type: type || 'not specified',
-          fullUrl: window.location.href
+          fullUrl: window.location.href,
+          searchParams: Object.fromEntries(searchParams.entries())
         });
 
-        if (token && type === 'recovery') {
-          // Verify the token with Supabase
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'recovery'
-          });
-
-          if (verifyError) {
-            console.error('ResetPassword: Verification failed:', verifyError);
-            setError('Invalid or expired reset link');
-            toast.error('Invalid or expired reset link');
-            navigate('/auth');
-            return;
-          }
-
-          console.log('ResetPassword: Token verified successfully');
-          // Token is valid, allow password reset
+        if (!token || type !== 'recovery') {
+          console.error('ResetPassword: Missing or invalid token/type:', { token, type });
+          setError('Invalid or expired reset link');
+          toast.error('Invalid or expired reset link');
+          navigate('/auth');
           return;
         }
 
-        // If no token or wrong type, redirect to auth
-        console.error('ResetPassword: No valid token found');
-        setError('Invalid or expired reset link');
-        toast.error('Invalid or expired reset link');
-        navigate('/auth');
+        // Verify the token with Supabase
+        console.log('ResetPassword: Verifying token with Supabase...');
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: token,
+          type: 'recovery',
+          token: token // Add the token parameter for PKCE flow
+        });
+
+        if (verifyError) {
+          console.error('ResetPassword: Verification failed:', verifyError);
+          setError('Invalid or expired reset link');
+          toast.error('Invalid or expired reset link');
+          navigate('/auth');
+          return;
+        }
+
+        console.log('ResetPassword: Token verified successfully');
+        // Token is valid, allow password reset
+        return;
       } catch (err) {
         console.error('ResetPassword: Error during verification:', err);
         setError('An error occurred during verification');
