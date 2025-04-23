@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
-import { useWebsiteContext } from '@/context/website-context';
-import { useSupabase } from '@/context/auth-context';
+import { useWebsites } from '@/context/WebsitesContext';
 import { format } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,8 @@ import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { supabase } from '@/lib/supabaseClient';
+import { supabase } from '@/integrations/supabase/client';
+import { generateAndPublishContent } from '@/api/aiEndpoints';
 
 interface Post {
   id: string;
@@ -26,22 +26,21 @@ interface Website {
 
 export function ContentCalendar() {
   const { toast } = useToast();
-  const { supabase } = useSupabase();
-  const { selectedWebsite } = useWebsiteContext();
+  const { currentWebsite } = useWebsites();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
   const fetchPosts = useCallback(async () => {
-    if (!selectedWebsite.id) return;
+    if (!currentWebsite?.id) return;
     
     setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from('posts')
         .select('*')
-        .eq('website_id', selectedWebsite.id)
+        .eq('website_id', currentWebsite.id)
         .order('scheduled_date', { ascending: true });
 
       if (error) throw error;
@@ -56,11 +55,56 @@ export function ContentCalendar() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedWebsite.id, toast]);
+  }, [currentWebsite?.id, toast]);
 
   useEffect(() => {
     fetchPosts();
   }, [fetchPosts]);
+
+  const handleGenerateAndPublish = async (postThemeId: string) => {
+    try {
+      if (!currentWebsite?.id) {
+        toast({
+          title: 'Error',
+          description: 'Please select a website first',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Prevent multiple generations for the same post theme
+      if (isGenerating) {
+        toast({
+          title: 'Warning',
+          description: 'Content generation already in progress',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      setIsGenerating(true);
+      const response = await generateAndPublishContent(postThemeId, currentWebsite.id);
+      
+      if (response.success) {
+        toast({
+          title: 'Success',
+          description: 'Content generated and published successfully'
+        });
+        await fetchPosts();
+      } else {
+        throw new Error('Failed to generate and publish content');
+      }
+    } catch (error) {
+      console.error('Error generating and publishing content:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to generate and publish content',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -129,33 +173,4 @@ export function ContentCalendar() {
       </div>
     </div>
   );
-}
-
-const handleGenerateAndPublish = async (postThemeId: string) => {
-  try {
-    if (!currentWebsite) {
-      toast.error("Please select a website first");
-      return;
-    }
-    setGeneratingAndPublishingIds(prev => new Set(prev).add(postThemeId));
-    const response = await generateAndPublishContent(postThemeId, currentWebsite.id);
-    if (response.success) {
-      toast.success('Content generated and published successfully');
-      await fetchPostThemes();
-    } else {
-      throw new Error('Failed to generate and publish content');
-    }
-  } catch (error) {
-    console.error('Error generating and publishing content:', error);
-    toast.error('Failed to generate and publish content');
-  } finally {
-    setGeneratingAndPublishingIds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(postThemeId);
-      return newSet;
-    });
-  }
-};
-
-// ... existing code ...
 } 
