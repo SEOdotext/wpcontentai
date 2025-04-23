@@ -9,7 +9,7 @@ export const checkWebsiteImageGenerationEnabled = checkImageEnabled;
 
 // Free fetch proxy service URL - Keep for website content fetching
 // Will be replaced with scrape-content function in a future update
-const FREE_FETCH_PROXY = process.env.FREE_FETCH_PROXY_URL || 'https://api.example.com/fetch';
+const FREE_FETCH_PROXY = 'https://predicthire-free-fetch.philip-d02.workers.dev/';
 
 /**
  * Interface for the OpenAI API request payload
