@@ -127,23 +127,6 @@ const generateFocusedKeywords = (title: string, userKeywords: string[], subjectM
     }
   }
   
-  // 2. Add domain-specific terms if they're relevant to the title
-  const domainTerms = [
-    "personale udlejning", 
-    "udenlandsk arbejdskraft", 
-    "rekruttering", 
-    "vikarbureau",
-    "arbejdsmarked"
-  ];
-  
-  const relevantDomainTerms = domainTerms
-    .filter(term => lowerTitle.includes(term.toLowerCase()))
-    .slice(0, 2);
-  
-  if (relevantDomainTerms.length > 0) {
-    result.push(...relevantDomainTerms);
-  }
-  
   // 3. Extract key phrases from the title (2-3 word phrases)
   const titleWords = lowerTitle.split(/\s+/).filter(w => w.length > 3 && !isCommonWord(w));
   
@@ -814,7 +797,7 @@ export const generatePostContent = async (
         messages: [
           {
             role: 'system',
-            content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself. When writing in Danish, follow Danish language rules - headers (h2, h3, etc.) should only capitalize the first word and proper nouns, not every word.'
+            content: 'You are a professional WordPress content creator who writes engaging, SEO-friendly blog posts with proper HTML formatting for our website blog. NEVER include WordPress theme elements like post titles, dates, authors, categories, or tags in your content. Focus only on the content body itself. When writing in Danish, follow Danish language rules - headers (h2, h3, etc.) should only capitalize the first word and proper nouns, not every word.'
           },
           {
             role: 'user',

@@ -9,7 +9,7 @@ export const checkWebsiteImageGenerationEnabled = checkImageEnabled;
 
 // Free fetch proxy service URL - Keep for website content fetching
 // Will be replaced with scrape-content function in a future update
-const FREE_FETCH_PROXY = 'https://predicthire-free-fetch.philip-d02.workers.dev/';
+const FREE_FETCH_PROXY = process.env.FREE_FETCH_PROXY_URL || 'https://api.example.com/fetch';
 
 /**
  * Interface for the OpenAI API request payload
@@ -51,63 +51,6 @@ export const callOpenAI = async (endpoint: string, payload: OpenAIRequestPayload
 };
 
 /**
- * Generates WordPress content using OpenAI
- * 
- * @param title The title of the content
- * @param keywords The keywords to include
- * @param writingStyle The writing style to use
- * @returns The generated content
- */
-export const generateWordPressContent = async (
-  title: string,
-  keywords: string[],
-  writingStyle: string
-): Promise<string> => {
-  try {
-    const prompt = `
-      Write a high-quality WordPress blog post with the following title:
-      "${title}"
-      
-      Writing Style: ${writingStyle || 'Professional and informative'}
-      Keywords to include: ${keywords.join(', ')}
-      
-      The content should be well-structured with:
-      1. An engaging introduction
-      2. 3-5 main sections with subheadings
-      3. A conclusion
-      
-      Format the content in Markdown with proper headings, paragraphs, and bullet points where appropriate.
-      The content should be SEO-friendly and approximately 800-1200 words.
-    `;
-    
-    const response = await callOpenAI('https://api.openai.com/v1/chat/completions', {
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a professional WordPress content writer who creates engaging, well-structured blog posts.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
-    });
-    
-    if (response.choices && response.choices.length > 0) {
-      return response.choices[0].message.content;
-    } else {
-      throw new Error('No content generated');
-    }
-  } catch (error) {
-    console.error('Error generating WordPress content:', error);
-    throw new Error('Failed to generate WordPress content');
-  }
-};
-
-/**
  * Fetches website content using the free fetch proxy
  * 
  * @param url The URL to fetch content from
@@ -122,46 +65,19 @@ export const fetchWebsiteContent = async (url: string, websiteId?: string): Prom
     
     console.log(`Fetching content for ${cleanUrl}...`);
     
-    // For now, since the proxy is returning 500 errors, we'll use a domain-specific approach
-    // This is a temporary solution until the proxy service is fixed
+    // For now, since the proxy is returning 500 errors, we'll use a generic approach
     const domain = cleanUrl.replace(/https?:\/\//, '').split('.')[0].toLowerCase();
     console.log(`Extracted domain: ${domain}`);
     
-    // Generate domain-specific mock content
-    let mockContent = '';
+    // Generate generic content based on the domain
+    const mockContent = `
+      This is a website about ${domain}.
+      We provide valuable information and services in this field.
+      Our content covers best practices, industry trends, and practical advice.
+      Our goal is to help you succeed with expert guidance.
+    `;
     
-    switch (domain) {
-      case 'workforceu':
-        console.log('Using WorkForceEU specific content');
-        mockContent = `
-          WorkForceEU is a leading platform for workforce management and HR solutions in Europe.
-          We provide comprehensive services for recruitment, talent management, and workforce optimization.
-          Our expertise includes temporary staffing, permanent placement, and workforce consulting.
-          We help businesses find the right talent and manage their workforce efficiently.
-          Topics include recruitment strategies, HR management, talent acquisition, and workforce planning.
-        `;
-        break;
-      case 'predicthire':
-        console.log('Using PredictHire specific content');
-        mockContent = `
-          PredictHire is an AI-powered recruitment platform that helps businesses make better hiring decisions.
-          Our technology uses predictive analytics to identify the best candidates for your organization.
-          We offer solutions for candidate screening, assessment, and selection.
-          Our platform reduces bias in the hiring process and improves the quality of hires.
-          Topics include AI in recruitment, candidate experience, hiring efficiency, and talent analytics.
-        `;
-        break;
-      default:
-        console.log(`Using generic content for domain: ${domain}`);
-        mockContent = `
-          This is a website about ${domain} and related topics.
-          We provide valuable information, resources, and services in this field.
-          Our content covers best practices, industry trends, and practical advice.
-          Our goal is to help you succeed with expert guidance.
-        `;
-    }
-    
-    console.log(`Generated ${mockContent.length} characters of domain-specific content for ${domain}`);
+    console.log(`Generated ${mockContent.length} characters of content for ${domain}`);
     return mockContent;
     
     /* 
