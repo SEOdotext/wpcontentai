@@ -40,28 +40,20 @@ const ResetPassword = () => {
           return;
         }
 
-        // Store the token in session storage
-        sessionStorage.setItem('resetPasswordToken', token);
-        
-        // Set up auth state change listener
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          console.log('ResetPassword: Auth state changed:', event);
-          
-          if (event === 'PASSWORD_RECOVERY') {
-            setIsVerifying(false);
-            return;
-          }
-          
-          if (event === 'SIGNED_IN') {
-            // User is signed in, we can proceed with password reset
-            setIsVerifying(false);
-            return;
-          }
-        });
+        // Exchange the code for a session
+        console.log('ResetPassword: Exchanging code for session...');
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(token);
 
-        return () => {
-          subscription.unsubscribe();
-        };
+        if (exchangeError) {
+          console.error('ResetPassword: Exchange failed:', exchangeError);
+          setError('Invalid or expired reset link');
+          toast.error('Invalid or expired reset link');
+          navigate('/auth');
+          return;
+        }
+
+        console.log('ResetPassword: Exchange successful:', data);
+        setIsVerifying(false);
       } catch (err) {
         console.error('ResetPassword: Error during verification:', err);
         setError('An error occurred during verification');
