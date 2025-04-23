@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,96 +13,46 @@ const ResetPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isVerifying, setIsVerifying] = useState(true);
-  const [isVerified, setIsVerified] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
-    const verifyToken = async () => {
-      try {
-        console.log('ResetPassword: Starting token verification');
-        console.log('ResetPassword: Current URL:', window.location.href);
-        
-        // First try to get token from query parameters
-        const searchParams = new URLSearchParams(location.search);
-        let token = searchParams.get('token');
-        let type = searchParams.get('type');
-        
-        console.log('ResetPassword: Query params:', { 
-          token: token ? 'present' : 'missing', 
-          type: type ? 'present' : 'missing' 
-        });
-        
-        // If not in query params, try hash fragment
-        if (!token || !type) {
-          const hash = window.location.hash;
-          console.log('ResetPassword: Hash fragment:', hash);
-          
-          if (hash) {
-            const hashParams = new URLSearchParams(hash.substring(1));
-            token = hashParams.get('access_token') || hashParams.get('token');
-            type = hashParams.get('type');
-            
-            console.log('ResetPassword: Hash params:', { 
-              token: token ? 'present' : 'missing', 
-              type: type ? 'present' : 'missing' 
-            });
-          }
-        }
-        
-        if (!token || !type) {
-          console.error('ResetPassword: No token or type found in URL');
-          navigate('/auth?error=invalid_reset_link');
-          return;
-        }
-        
-        if (type !== 'recovery') {
-          console.error('ResetPassword: Invalid type:', type);
-          navigate('/auth?error=invalid_reset_link');
-          return;
-        }
-        
-        console.log('ResetPassword: Attempting token exchange');
-        const { error } = await supabase.auth.exchangeCodeForSession(token);
-        
-        if (error) {
-          console.error('ResetPassword: Token exchange failed:', error);
-          navigate('/auth?error=invalid_reset_link');
-          return;
-        }
-
-        console.log('ResetPassword: Token exchange successful');
-        setIsVerified(true);
-        setIsVerifying(false);
-      } catch (error) {
-        console.error('ResetPassword: Error during verification:', error);
-        navigate('/auth?error=invalid_reset_link');
+    console.log('ResetPassword: Setting up auth state change listener');
+    
+    // Set up auth state change listener for PASSWORD_RECOVERY event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('ResetPassword: Auth state changed:', event);
+      
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('ResetPassword: Password recovery event received');
+        setShowForm(true);
       }
-    };
+    });
 
-    verifyToken();
-  }, [navigate, location.search]);
+    // Cleanup subscription on unmount
+    return () => {
+      console.log('ResetPassword: Cleaning up auth state change listener');
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsLoading(true);
 
-    if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setIsLoading(false);
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      // Update the password
+      if (password !== confirmPassword) {
+        setError('Passwords do not match');
+        return;
+      }
+
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters long');
+        return;
+      }
+
+      console.log('ResetPassword: Updating password');
       const { error: updateError } = await supabase.auth.updateUser({
         password: password
       });
@@ -127,7 +77,7 @@ const ResetPassword = () => {
     }
   };
 
-  if (isVerifying) {
+  if (!showForm) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md shadow-lg">
@@ -139,24 +89,6 @@ const ResetPassword = () => {
           </CardHeader>
           <CardContent className="flex justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!isVerified) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md shadow-lg">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Invalid Reset Link</CardTitle>
-            <CardDescription className="text-center">
-              This password reset link is invalid or has expired. Please request a new one.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <Button onClick={() => navigate('/auth')}>Return to Login</Button>
           </CardContent>
         </Card>
       </div>
