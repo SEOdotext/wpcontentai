@@ -21,20 +21,22 @@ const ResetPassword = () => {
   useEffect(() => {
     const verifyToken = async () => {
       try {
-        // Get the hash fragment from the URL
-        const hash = window.location.hash;
-        console.log('ResetPassword: Processing hash fragment:', hash);
+        // First try to get token from query parameters
+        const searchParams = new URLSearchParams(location.search);
+        let token = searchParams.get('token');
+        let type = searchParams.get('type');
         
-        if (!hash) {
-          console.error('ResetPassword: No hash fragment found in URL');
-          navigate('/auth?error=invalid_reset_link');
-          return;
+        // If not in query params, try hash fragment
+        if (!token || !type) {
+          const hash = window.location.hash;
+          console.log('ResetPassword: Processing hash fragment:', hash);
+          
+          if (hash) {
+            const hashParams = new URLSearchParams(hash.substring(1));
+            token = hashParams.get('access_token');
+            type = hashParams.get('type');
+          }
         }
-
-        // Parse the hash fragment
-        const params = new URLSearchParams(hash.substring(1));
-        const token = params.get('access_token');
-        const type = params.get('type');
         
         console.log('ResetPassword: Extracted params:', { token, type });
         
@@ -55,6 +57,7 @@ const ResetPassword = () => {
 
         console.log('ResetPassword: Token exchange successful');
         setIsVerified(true);
+        setIsVerifying(false);
       } catch (error) {
         console.error('ResetPassword: Error during verification:', error);
         navigate('/auth?error=invalid_reset_link');
@@ -62,7 +65,7 @@ const ResetPassword = () => {
     };
 
     verifyToken();
-  }, [navigate]);
+  }, [navigate, location.search]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
