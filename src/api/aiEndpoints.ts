@@ -262,10 +262,10 @@ const extractTextFromHtml = (html: string): string => {
   return textContent.substring(0, 5000);
 };
 
-export const generateAndPublishContent = async (postThemeId: string): Promise<any> => {
+export const generateAndPublishContent = async (postThemeId: string, websiteId: string): Promise<any> => {
   try {
     const { data, error } = await supabase.functions.invoke('generate-and-publish', {
-      body: { postThemeId }
+      body: { postThemeId, websiteId }
     });
 
     if (error) {

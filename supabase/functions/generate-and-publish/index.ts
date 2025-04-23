@@ -157,6 +157,28 @@ async function getPostTheme(supabaseClient: any, postThemeId: string) {
 async function getWebsiteSettings(supabaseClient: any, websiteId: string) {
   console.log('Fetching website settings for ID:', websiteId);
   
+  // First verify the website exists
+  const { data: websiteExists, error: websiteCheckError } = await supabaseClient
+    .from('websites')
+    .select('id, name, organisation_id')
+    .eq('id', websiteId)
+    .single();
+  
+  if (websiteCheckError || !websiteExists) {
+    console.error('Website not found:', {
+      websiteId,
+      error: websiteCheckError,
+      exists: !!websiteExists
+    });
+    throw new Error(`Website not found with ID: ${websiteId}`);
+  }
+
+  console.log('Found website:', {
+    id: websiteExists.id,
+    name: websiteExists.name,
+    organisationId: websiteExists.organisation_id
+  });
+  
   const { data: website, error } = await supabaseClient
     .from('websites')
     .select('*')
@@ -202,8 +224,12 @@ async function getWordPressSettings(supabaseClient: any, websiteId: string) {
 /**
  * Generates content for a post
  */
-async function generateContent(postThemeId: string, token: string) {
-  console.log('Generating content for post:', postThemeId);
+async function generateContent(postThemeId: string, websiteId: string, token: string) {
+  console.log('Generating content for post:', {
+    postThemeId,
+    websiteId,
+    hasToken: !!token
+  });
   
   // Use the service role key instead of user token
   const contentResponse = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/generate-content-v3', {
@@ -214,7 +240,11 @@ async function generateContent(postThemeId: string, token: string) {
       'X-Queue-Processing': 'true',
       'X-Original-User-Token': token // Pass the original token for reference if needed
     },
-    body: JSON.stringify({ postThemeId })
+    body: JSON.stringify({ 
+      postThemeId,
+      websiteId,
+      website_id: websiteId // Add both formats to ensure compatibility
+    })
   });
   
   if (!contentResponse.ok) {
@@ -230,6 +260,7 @@ async function generateContent(postThemeId: string, token: string) {
   const contentResult = await contentResponse.json();
   console.log('Content generation successful:', {
     postThemeId,
+    websiteId,
     hasContent: !!contentResult.content,
     contentLength: contentResult.content?.length || 0
   });
@@ -446,10 +477,24 @@ serve(async (req) => {
     if (!isQueueProcessing) {
       // Add job to queue
       console.log('Adding job to publish queue...');
+      
+      // First get the post theme to ensure we have the correct website_id
+      const { data: postTheme, error: postThemeError } = await supabaseClient
+        .from('post_themes')
+        .select('website_id')
+        .eq('id', postThemeId)
+        .single();
+        
+      if (postThemeError || !postTheme) {
+        console.error('Error fetching post theme for queue:', postThemeError);
+        throw new Error(`Failed to fetch post theme for queue: ${postThemeError?.message || 'Post theme not found'}`);
+      }
+      
       const { data: queueJob, error: queueError } = await supabaseClient
         .from('publish_queue')
         .insert({
           post_theme_id: postThemeId,
+          website_id: postTheme.website_id,
           status: 'pending',
           created_at: new Date().toISOString(),
           user_token: token
@@ -496,16 +541,52 @@ serve(async (req) => {
     // This section runs when processing a job from the queue
     
     console.log('Starting processing for post theme ID:', postThemeId);
+    
+    // Get the queue job to access the stored website_id
+    const { data: queueJob, error: queueJobError } = await supabaseClient
+      .from('publish_queue')
+      .select('website_id')
+      .eq('post_theme_id', postThemeId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+      
+    if (queueJobError || !queueJob) {
+      console.error('Error fetching queue job:', queueJobError);
+      throw new Error(`Failed to fetch queue job: ${queueJobError?.message || 'Queue job not found'}`);
+    }
+    
+    const websiteId = queueJob.website_id;
+    console.log('Using website ID from queue job:', websiteId);
+    
     await logToQueue(supabaseClient, postThemeId, 'info', 'Starting content generation and publishing', {
       function: 'generate-and-publish',
-      isQueueProcessing: true
+      isQueueProcessing: true,
+      websiteId
     });
     
     // Step 1: Fetch the most recent post theme data
     const postTheme = await getPostTheme(supabaseClient, postThemeId);
+    console.log('Post theme fetched with details:', {
+      postThemeId: postTheme.id,
+      websiteId: postTheme.website_id,
+      storedWebsiteId: websiteId,
+      subject: postTheme.subject_matter
+    });
+    
+    // Verify the website_id hasn't changed
+    if (postTheme.website_id !== websiteId) {
+      console.error('Website ID mismatch:', {
+        storedWebsiteId: websiteId,
+        currentWebsiteId: postTheme.website_id
+      });
+      throw new Error('Website ID has changed since job was queued');
+    }
+    
     await logToQueue(supabaseClient, postThemeId, 'info', 'Retrieved post theme data', {
       hasContent: !!postTheme.post_content,
-      hasImage: !!postTheme.image
+      hasImage: !!postTheme.image,
+      websiteId: postTheme.website_id  // Add website ID to the log
     });
     
     // Step 2: Fetch website settings
@@ -522,7 +603,7 @@ serve(async (req) => {
     // Step 4: Generate content if not already generated
     if (!postTheme.post_content) {
       console.log('No content found - generating content first');
-      await generateContent(postThemeId, token);
+      await generateContent(postThemeId, postTheme.website_id, token);
       
       // Re-fetch post theme to get the updated content
       const contentUpdatedTheme = await getPostTheme(supabaseClient, postThemeId);
@@ -656,7 +737,8 @@ serve(async (req) => {
       hasContent: !!updatedPostTheme.post_content,
       contentLength: updatedPostTheme.post_content?.length || 0,
       hasImage: !!updatedPostTheme.image,
-      imageUrl: updatedPostTheme.image || 'none'
+      imageUrl: updatedPostTheme.image || 'none',
+      websiteId: updatedPostTheme.website_id
     });
     
     // Step 7: Send to WordPress
@@ -664,7 +746,8 @@ serve(async (req) => {
       postThemeId,
       hasImage: !!updatedPostTheme.image,
       imageUrl: updatedPostTheme.image || 'none',
-      contentLength: updatedPostTheme.post_content?.length || 0
+      contentLength: updatedPostTheme.post_content?.length || 0,
+      websiteId: updatedPostTheme.website_id
     });
     
     // Log the exact image URL being sent
@@ -673,7 +756,8 @@ serve(async (req) => {
       imageUrl: updatedPostTheme.image,
       isNull: updatedPostTheme.image === null,
       isUndefined: updatedPostTheme.image === undefined,
-      isEmpty: updatedPostTheme.image === ''
+      isEmpty: updatedPostTheme.image === '',
+      websiteId: updatedPostTheme.website_id
     });
     
     const wpResult = await sendToWordPress(postThemeId, updatedPostTheme.website_id, token, isQueueProcessing);

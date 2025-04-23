@@ -187,7 +187,7 @@ serve(async (req) => {
       }
     } else {
       // Regular flow - validate postThemeId
-      const { postThemeId } = body;
+      const { postThemeId, websiteId: passedWebsiteId } = body;
       
       if (!postThemeId) {
         throw new Error('Missing required field: postThemeId');
@@ -213,53 +213,75 @@ serve(async (req) => {
       
       postTheme = fetchedTheme;
       
+      // If websiteId was explicitly passed, use it (overriding the one from postTheme)
+      // This helps ensure we're using the correct website ID
+      const effectiveWebsiteId = passedWebsiteId || postTheme.website_id;
+      
       console.log('Found post theme:', {
         id: postTheme.id,
         subject_matter: postTheme.subject_matter,
-        keywords: postTheme.keywords
+        keywords: postTheme.keywords,
+        storedWebsiteId: postTheme.website_id,
+        passedWebsiteId,
+        effectiveWebsiteId
       });
 
       // Get publication settings (writing style, template, etc.)
       const { data: fetchedSettings, error: settingsError } = await supabaseAdmin
         .from('publication_settings')
         .select('writing_style, subject_matters, wordpress_template')
-        .eq('website_id', postTheme.website_id)
+        .eq('website_id', effectiveWebsiteId)
         .single();
 
       if (settingsError) {
         console.error('Error fetching publication settings:', settingsError);
-        throw new Error('Failed to fetch publication settings');
+        console.log('Using default publication settings instead for website ID:', effectiveWebsiteId);
+        
+        // Use default settings instead of throwing error
+        settings = {
+          writing_style: 'Professional and informative',
+          subject_matters: [],
+          wordpress_template: null
+        };
+      } else {
+        settings = fetchedSettings;
       }
-      
-      settings = fetchedSettings;
 
       // Get website content for context and cornerstone pages
       const { data: fetchedContent, error: contentError } = await supabaseAdmin
         .from('website_content')
         .select('content, title, url, is_cornerstone')
-        .eq('website_id', postTheme.website_id)
+        .eq('website_id', effectiveWebsiteId)
         .order('is_cornerstone', { ascending: false });
 
       if (contentError) {
         console.error('Error fetching website content:', contentError);
-        throw new Error('Failed to fetch website content');
+        console.log('Using empty website content array for website ID:', effectiveWebsiteId);
+        
+        // Use empty content array instead of throwing error
+        websiteContent = [];
+      } else {
+        websiteContent = fetchedContent;
       }
-      
-      websiteContent = fetchedContent;
 
       // Get website language
       const { data: fetchedWebsite, error: websiteError } = await supabaseAdmin
         .from('websites')
         .select('language')
-        .eq('id', postTheme.website_id)
+        .eq('id', effectiveWebsiteId)
         .single();
 
       if (websiteError) {
         console.error('Error fetching website:', websiteError);
-        throw new Error('Failed to fetch website settings');
+        console.log('Using default language (en) for website ID:', effectiveWebsiteId);
+        
+        // Use default website settings instead of throwing error
+        website = {
+          language: 'en'
+        };
+      } else {
+        website = fetchedWebsite;
       }
-      
-      website = fetchedWebsite;
 
       contentLanguage = website?.language || 'en';
       writingStyle = settings?.writing_style || 'Professional and informative';
