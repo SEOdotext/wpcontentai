@@ -14,24 +14,55 @@ const ResetPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(true);
+  const [isVerified, setIsVerified] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    // Set up auth state change listener for PASSWORD_RECOVERY event
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('ResetPassword: Auth state changed:', event);
-      
-      if (event === 'PASSWORD_RECOVERY') {
-        console.log('ResetPassword: Password recovery event received');
-        setIsVerifying(false);
-      }
-    });
+    const verifyToken = async () => {
+      try {
+        // Get the hash fragment from the URL
+        const hash = window.location.hash;
+        console.log('ResetPassword: Processing hash fragment:', hash);
+        
+        if (!hash) {
+          console.error('ResetPassword: No hash fragment found in URL');
+          navigate('/auth?error=invalid_reset_link');
+          return;
+        }
 
-    return () => {
-      subscription.unsubscribe();
+        // Parse the hash fragment
+        const params = new URLSearchParams(hash.substring(1));
+        const token = params.get('access_token');
+        const type = params.get('type');
+        
+        console.log('ResetPassword: Extracted params:', { token, type });
+        
+        if (!token || type !== 'recovery') {
+          console.error('ResetPassword: Missing or invalid token/type:', { token, type });
+          navigate('/auth?error=invalid_reset_link');
+          return;
+        }
+
+        // Exchange the token for a session
+        const { error } = await supabase.auth.exchangeCodeForSession(token);
+        
+        if (error) {
+          console.error('ResetPassword: Token exchange failed:', error);
+          navigate('/auth?error=invalid_reset_link');
+          return;
+        }
+
+        console.log('ResetPassword: Token exchange successful');
+        setIsVerified(true);
+      } catch (error) {
+        console.error('ResetPassword: Error during verification:', error);
+        navigate('/auth?error=invalid_reset_link');
+      }
     };
-  }, []);
+
+    verifyToken();
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +119,24 @@ const ResetPassword = () => {
           </CardHeader>
           <CardContent className="flex justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isVerified) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold">Invalid Reset Link</CardTitle>
+            <CardDescription className="text-center">
+              This password reset link is invalid or has expired. Please request a new one.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Button onClick={() => navigate('/auth')}>Return to Login</Button>
           </CardContent>
         </Card>
       </div>
