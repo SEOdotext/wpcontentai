@@ -82,6 +82,7 @@ const ContentView: React.FC<ContentViewProps> = ({
   canGenerateImage = false,
 }) => {
   const [content, setContent] = useState(fullContent || description || '');
+  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const hasContent = !!content;
   const formattedWpSentDate = wpSentDate ? new Date(wpSentDate).toLocaleString() : null;
   const shouldShowWpLink = wpSentDate && (wpPostUrl || status === 'published');
@@ -103,10 +104,16 @@ const ContentView: React.FC<ContentViewProps> = ({
     }
   }, [isGeneratingContent, hasContent]);
 
+  // Handle drawer close
+  const handleDrawerClose = () => {
+    setIsDrawerOpen(false);
+    onClose();
+  };
+
   return (
     <ContentEditorDrawer
-      isOpen={true}
-      onClose={onClose}
+      isOpen={isDrawerOpen}
+      onClose={handleDrawerClose}
       title={title}
       content={content}
       onRegenerate={onRegenerateClick || (() => {})}

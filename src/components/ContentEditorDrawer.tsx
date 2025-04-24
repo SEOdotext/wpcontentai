@@ -141,10 +141,27 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
         // Update the content
         onUpdateContent(response.content);
         
-        // Add assistant's response to chat
+        // Add assistant's response to chat with contextual message
+        const userMessage = userInput.toLowerCase();
+        let responseMessage = '';
+        
+        if (userMessage.includes('rewrite')) {
+          responseMessage = 'I\'ve rewritten the selected text to better match your requirements. The changes are now visible in the preview.';
+        } else if (userMessage.includes('add') || userMessage.includes('include')) {
+          responseMessage = 'I\'ve added the requested content to the article. You can see the additions in the preview.';
+        } else if (userMessage.includes('remove') || userMessage.includes('delete')) {
+          responseMessage = 'I\'ve removed the specified content as requested. The changes are reflected in the preview.';
+        } else if (userMessage.includes('improve') || userMessage.includes('enhance')) {
+          responseMessage = 'I\'ve enhanced the content to make it more engaging and informative. Check out the improvements in the preview.';
+        } else if (userMessage.includes('fix') || userMessage.includes('correct')) {
+          responseMessage = 'I\'ve corrected the issues you mentioned. The content should now be more accurate and polished.';
+        } else {
+          responseMessage = 'I\'ve updated the content based on your request. The changes are now visible in the preview.';
+        }
+
         addMessage({
           role: 'assistant',
-          content: 'I\'ve updated the content based on your request. The changes have been applied to the preview on the left.',
+          content: responseMessage,
         });
 
         // Show success toast
@@ -179,165 +196,174 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   };
 
   return (
-    <div
-      className={cn(
-        'fixed right-0 top-0 h-full w-[90%] max-w-4xl bg-background border-l shadow-lg transform transition-transform duration-300 ease-in-out z-50',
-        isOpen ? 'translate-x-0' : 'translate-x-full'
+    <>
+      {/* Backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/20 z-40"
+          onClick={onClose}
+        />
       )}
-    >
-      <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsEditing(!isEditing)}
-              title={isEditing ? "Preview" : "Edit"}
-            >
-              {isEditing ? <Eye className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onRegenerate}
-              disabled={isGeneratingContent}
-            >
-              {isGeneratingContent ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onSendToWordPress}
-              disabled={!canSendToWordPress || isSendingToWP}
-            >
-              {isSendingToWP ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
+      <div
+        className={cn(
+          'fixed right-0 top-0 h-full w-[95%] max-w-6xl bg-background border-l shadow-lg transform transition-transform duration-300 ease-in-out z-50',
+          isOpen ? 'translate-x-0' : 'translate-x-full'
+        )}
+      >
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b">
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsEditing(!isEditing)}
+                title={isEditing ? "Preview" : "Edit"}
+              >
+                {isEditing ? <Eye className="h-4 w-4" /> : <Edit2 className="h-4 w-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onRegenerate}
+                disabled={isGeneratingContent}
+              >
+                {isGeneratingContent ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onSendToWordPress}
+                disabled={!canSendToWordPress || isSendingToWP}
+              >
+                {isSendingToWP ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+              <Button variant="ghost" size="icon" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Content Preview/Edit */}
-          <div className="w-[70%] border-r p-4 overflow-auto">
-            {isEditing ? (
-              <div className="h-full flex flex-col">
-                <Textarea
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  className="flex-1 min-h-[500px] font-mono text-sm"
-                />
-                <div className="mt-4 flex justify-end">
-                  <Button onClick={handleSaveEdit}>Save Changes</Button>
+          {/* Main Content */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Content Preview/Edit */}
+            <div className="w-[70%] border-r p-4 overflow-auto">
+              {isEditing ? (
+                <div className="h-full flex flex-col">
+                  <Textarea
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    className="flex-1 min-h-[500px] font-mono text-sm"
+                  />
+                  <div className="mt-4 flex justify-end">
+                    <Button onClick={handleSaveEdit}>Save Changes</Button>
+                  </div>
+                </div>
+              ) : (
+                <ScrollArea className="h-full">
+                  <div
+                    ref={contentRef}
+                    className="prose max-w-none select-text"
+                    dangerouslySetInnerHTML={{ __html: content }}
+                    onMouseUp={handleTextSelection}
+                    onKeyUp={handleTextSelection}
+                  />
+                </ScrollArea>
+              )}
+            </div>
+
+            {/* Chat Interface */}
+            <div className="w-[30%] flex flex-col">
+              <div className="flex-1 overflow-hidden">
+                <div 
+                  ref={chatContainerRef} 
+                  className="h-full p-4 overflow-y-auto"
+                  style={{ scrollBehavior: 'smooth' }}
+                >
+                  {chatMessages.map((message, index) => (
+                    <div
+                      key={`${message.timestamp}-${index}`}
+                      className={cn(
+                        'mb-4 p-3 rounded-lg',
+                        message.role === 'user'
+                          ? 'bg-primary text-primary-foreground ml-auto max-w-[90%]'
+                          : message.role === 'error'
+                          ? 'bg-destructive/10 text-destructive max-w-[90%]'
+                          : 'bg-muted max-w-[90%]'
+                      )}
+                    >
+                      {message.selectedText && (
+                        <div className="mb-2 p-2 bg-primary/20 rounded text-sm">
+                          <span className="font-medium">Selected text:</span>
+                          <p className="mt-1 italic">{message.selectedText}</p>
+                        </div>
+                      )}
+                      {message.content}
+                    </div>
+                  ))}
                 </div>
               </div>
-            ) : (
-              <ScrollArea className="h-full">
-                <div
-                  ref={contentRef}
-                  className="prose max-w-none select-text"
-                  dangerouslySetInnerHTML={{ __html: content }}
-                  onMouseUp={handleTextSelection}
-                  onKeyUp={handleTextSelection}
-                />
-              </ScrollArea>
-            )}
-          </div>
 
-          {/* Chat Interface */}
-          <div className="w-[30%] flex flex-col">
-            <div className="flex-1 overflow-hidden">
-              <div 
-                ref={chatContainerRef} 
-                className="h-full p-4 overflow-y-auto"
-                style={{ scrollBehavior: 'smooth' }}
-              >
-                {chatMessages.map((message, index) => (
-                  <div
-                    key={`${message.timestamp}-${index}`}
-                    className={cn(
-                      'mb-4 p-3 rounded-lg',
-                      message.role === 'user'
-                        ? 'bg-primary text-primary-foreground ml-auto max-w-[90%]'
-                        : message.role === 'error'
-                        ? 'bg-destructive/10 text-destructive max-w-[90%]'
-                        : 'bg-muted max-w-[90%]'
-                    )}
+              {/* Chat Input */}
+              <div className="p-4 border-t">
+                <div className="flex gap-2">
+                  <Textarea
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={selectedText ? "Type your message about the selected text..." : "Type your message here..."}
+                    className="flex-1 min-h-[120px] resize-y"
+                    rows={5}
+                  />
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!userInput.trim() || isProcessing || !postThemeId}
+                    className="self-end"
                   >
-                    {message.selectedText && (
-                      <div className="mb-2 p-2 bg-primary/20 rounded text-sm">
-                        <span className="font-medium">Selected text:</span>
-                        <p className="mt-1 italic">{message.selectedText}</p>
-                      </div>
+                    {isProcessing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <MessageSquare className="h-4 w-4" />
                     )}
-                    {message.content}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Chat Input */}
-            <div className="p-4 border-t">
-              <div className="flex gap-2">
-                <Textarea
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder={selectedText ? "Type your message about the selected text..." : "Type your message here..."}
-                  className="flex-1 min-h-[120px] resize-y"
-                  rows={5}
-                />
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={!userInput.trim() || isProcessing || !postThemeId}
-                  className="self-end"
-                >
-                  {isProcessing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <MessageSquare className="h-4 w-4" />
-                  )}
-                </Button>
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t">
-          <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
-              <span
-                key={category.id}
-                className="px-2 py-1 text-xs rounded-full bg-muted"
-              >
-                {category.name}
-              </span>
-            ))}
-            {keywords.map((keyword, index) => (
-              <span
-                key={index}
-                className="px-2 py-1 text-xs rounded-full bg-muted"
-              >
-                {keyword}
-              </span>
-            ))}
+          {/* Footer */}
+          <div className="p-4 border-t">
+            <div className="flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <span
+                  key={category.id}
+                  className="px-2 py-1 text-xs rounded-full bg-muted"
+                >
+                  {category.name}
+                </span>
+              ))}
+              {keywords.map((keyword, index) => (
+                <span
+                  key={index}
+                  className="px-2 py-1 text-xs rounded-full bg-muted"
+                >
+                  {keyword}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
