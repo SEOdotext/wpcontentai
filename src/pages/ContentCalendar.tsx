@@ -25,6 +25,7 @@ import { useSettings } from '@/context/SettingsContext';
 import { supabase } from '@/integrations/supabase/client';
 import { generateImage, checkWebsiteImageGenerationEnabled, generateAndPublishContent } from '@/api/aiEndpoints';
 import { PostTheme } from '@/context/PostThemesContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface Keyword {
   text: string;
@@ -88,6 +89,10 @@ const ContentCalendar = () => {
   const [wpConfigured, setWpConfigured] = useState<boolean>(false);
   const [generatingAndPublishingIds, setGeneratingAndPublishingIds] = useState<Set<string>>(new Set());
   const [activeSubscriptions, setActiveSubscriptions] = useState<{ [key: string]: { unsubscribe: () => void } }>({});
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = new URLSearchParams(location.search);
+  const selectedContentId = searchParams.get('content');
   
   // Clean up any active subscriptions when component unmounts
   useEffect(() => {
@@ -296,8 +301,24 @@ const ContentCalendar = () => {
     );
   };
 
+  // Update selectedContent when URL changes
+  useEffect(() => {
+    if (selectedContentId) {
+      const content = allContent.find(c => c.id === selectedContentId);
+      if (content) {
+        setSelectedContent(content);
+      }
+    } else {
+      setSelectedContent(null);
+    }
+  }, [selectedContentId, allContent]);
+
   const handleContentClick = (content: CalendarContent) => {
-    setSelectedContent(content);
+    navigate(`/calendar?content=${content.id}`);
+  };
+
+  const handleCloseContent = () => {
+    navigate('/calendar');
   };
 
   const handleDeleteContent = (contentId: string) => {
@@ -1160,13 +1181,14 @@ const ContentCalendar = () => {
       
       {selectedContent && (
         <ContentView
+          postThemeId={selectedContent.id}
           title={selectedContent.title}
           description={selectedContent.description}
           keywords={selectedContent.keywords}
           categories={selectedContent.categories}
           dateCreated={selectedContent.dateCreated}
           status={selectedContent.contentStatus || 'scheduled'}
-          onClose={() => setSelectedContent(null)}
+          onClose={handleCloseContent}
           onDeleteClick={() => handleDeleteContent(selectedContent.id)}
           onRegenerateClick={() => handleRegenerateContent(selectedContent.id)}
           onGenerateImage={() => handleGenerateImage(selectedContent.id)}

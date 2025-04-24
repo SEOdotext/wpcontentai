@@ -1,0 +1,2 @@
+[functions.chat-content-update]
+verify_jwt = true 

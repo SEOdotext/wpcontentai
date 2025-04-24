@@ -102,7 +102,7 @@ export const callOpenAI = async (payload: OpenAIRequestPayload) => {
  * 
  * @param systemPrompt Instructions for the AI
  * @param userPrompt User's request
- * @param model OpenAI model to use (default: gpt-3.5-turbo)
+ * @param model OpenAI model to use (default: gpt-4o-mini)
  * @param options Additional options for the request
  * @returns Generated content from the AI
  */
