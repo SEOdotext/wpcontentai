@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useWebsites } from './WebsitesContext';
 import { useSettings } from './SettingsContext';
 import { addDays, format } from 'date-fns';
+import { createDayCountMap, createExistingPostsMap, findNextAvailableDate, formatScheduledDate } from '@/utils/dates';
 
 /**
  * IMPORTANT: Centralized Date Calculation
@@ -142,76 +143,11 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         return addDays(new Date(), 1);
       }
 
-      // Create a map of day names to their counts
-      const dayCountMap = settings[0].posting_days.reduce((acc: { [key: string]: number }, day: { day: string; count: number }) => {
-        acc[day.day.toLowerCase()] = day.count;
-        return acc;
-      }, {});
-
+      const dayCountMap = createDayCountMap(settings[0].posting_days);
       console.log('Day count map:', dayCountMap);
 
-      // Create a map of existing posts by date
-      const existingPostsByDate = new Map(
-        postThemes
-          .filter(p => p.scheduled_date && p.status !== 'declined' && p.status !== 'pending')
-          .map(p => [p.scheduled_date.split('T')[0], p])
-      );
-
-      // Start looking from today
-      let currentDate = new Date();
-      currentDate.setHours(0, 0, 0, 0);
-      let maxAttempts = 28; // 4 weeks safety limit
-
-      while (maxAttempts > 0) {
-        const dayName = format(currentDate, 'EEEE').toLowerCase();
-        const dateStr = format(currentDate, 'yyyy-MM-dd');
-
-        // Check if we already have a post for this date
-        const existingPost = existingPostsByDate.get(dateStr);
-
-        // Count posts for this specific day
-        const existingPostsForDay = postThemes.filter(p => {
-          if (!p.scheduled_date || p.status === 'declined' || p.status === 'pending') return false;
-          const postDate = new Date(p.scheduled_date);
-          return format(postDate, 'yyyy-MM-dd') === dateStr;
-        }).length;
-
-        console.log('Checking date:', {
-          date: dateStr,
-          dayName,
-          isPostingDay: !!dayCountMap[dayName],
-          hasExistingPost: !!existingPost,
-          existingPostsForDay,
-          maxPostsForDay: dayCountMap[dayName],
-          activeStatuses: postThemes
-            .filter(p => p.scheduled_date && format(new Date(p.scheduled_date), 'yyyy-MM-dd') === dateStr)
-            .map(p => p.status)
-        });
-
-        // Only add date if:
-        // 1. It's a posting day
-        // 2. We haven't reached the max posts for this day
-        // 3. We don't already have a post for this exact date
-        if (dayCountMap[dayName] && 
-            existingPostsForDay < dayCountMap[dayName] && 
-            !existingPost) {
-          console.log(`Found available slot on ${dayName}, ${dateStr}`);
-          return currentDate;
-        }
-
-        // Move to next day
-        currentDate = addDays(currentDate, 1);
-        maxAttempts--;
-      }
-
-      // If no date found after 4 weeks, use next available configured day
-      console.log('No optimal day found, using next available configured day');
-      let nextDate = new Date();
-      nextDate.setHours(0, 0, 0, 0);
-      while (!dayCountMap[format(nextDate, 'EEEE').toLowerCase()]) {
-        nextDate = addDays(nextDate, 1);
-      }
-      return nextDate;
+      const existingPostsByDate = createExistingPostsMap(postThemes);
+      return findNextAvailableDate(dayCountMap, postThemes, existingPostsByDate);
 
     } catch (error) {
       console.error('Error calculating next publication date:', error);
@@ -295,21 +231,11 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       }
 
       // Combine themes with their categories
-      const themesWithCategories = themes.map(theme => {
-        // Format the scheduled_date if it exists
-        let formattedDate = theme.scheduled_date;
-        if (formattedDate) {
-          const date = new Date(formattedDate);
-          date.setHours(0, 0, 0, 0); // Set to start of day
-          formattedDate = date.toISOString();
-        }
-
-        return {
-          ...theme,
-          categories: categoriesByTheme.get(theme.id) || [],
-          scheduled_date: formattedDate
-        };
-      });
+      const themesWithCategories = themes.map(theme => ({
+        ...theme,
+        categories: categoriesByTheme.get(theme.id) || [],
+        scheduled_date: formatScheduledDate(theme.scheduled_date)
+      }));
 
       setPostThemes(themesWithCategories);
 
