@@ -143,63 +143,88 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         targetPostsPerDay[day.day.toLowerCase()] = day.count;
       });
 
+      console.log('Target posts per day configuration:', targetPostsPerDay);
+
       // Get all scheduled dates from existing themes with valid statuses
-      const postsPerDay: { [key: string]: number } = {};
-      let latestTimestamp = 0;
+      const postsPerDay: { [key: string]: { count: number, dates: Date[] } } = {};
+      let latestTimestamp = new Date().getTime(); // Start from current time instead of 0
 
       // Get themes with valid statuses (all except pending and declined)
       const validThemes = postThemes.filter(theme => 
         theme.website_id === currentWebsite.id && 
-        !['pending', 'declined'].includes(theme.status)
+        !['pending', 'declined'].includes(theme.status) &&
+        theme.scheduled_date // Only include themes with a scheduled date
       );
 
+      // Process existing posts
       for (const theme of validThemes) {
-        if (!theme.scheduled_date) continue;
-
         try {
-          const date = new Date(theme.scheduled_date);
+          const date = new Date(theme.scheduled_date!);
           if (isNaN(date.getTime())) continue;
 
           latestTimestamp = Math.max(latestTimestamp, date.getTime());
           const day = format(date, 'EEEE').toLowerCase();
-          postsPerDay[day] = (postsPerDay[day] || 0) + 1;
+          
+          if (!postsPerDay[day]) {
+            postsPerDay[day] = { count: 0, dates: [] };
+          }
+          postsPerDay[day].count++;
+          postsPerDay[day].dates.push(date);
         } catch (e) {
           console.error('Error parsing date:', theme.scheduled_date, e);
         }
       }
 
-      // If no valid dates found, use tomorrow
-      if (latestTimestamp === 0) {
-        console.log(`No valid dates found for website ${currentWebsite.name}, using tomorrow`);
-        return addDays(new Date(), 1);
-      }
+      console.log('Current posts per day:', postsPerDay);
 
-      // Start from the latest date found
+      // Start from the latest date found or today, whichever is later
       let nextDate = new Date(latestTimestamp);
       let maxAttempts = 14; // Prevent infinite loop
+      let foundDate = false;
 
-      while (maxAttempts > 0) {
+      while (maxAttempts > 0 && !foundDate) {
         nextDate = addDays(nextDate, 1);
         const dayName = format(nextDate, 'EEEE').toLowerCase();
 
         // Skip days that don't have any target posts
         if (!targetPostsPerDay[dayName]) {
+          console.log(`Skipping ${dayName} - no posts configured for this day`);
           continue;
         }
 
         // Check if this day has room for more posts
-        const currentCount = postsPerDay[dayName] || 0;
-        if (currentCount < targetPostsPerDay[dayName]) {
-          console.log(`Found next available slot: ${dayName} (${currentCount + 1}/${targetPostsPerDay[dayName]} posts)`);
-          return nextDate;
+        const currentDayPosts = postsPerDay[dayName] || { count: 0, dates: [] };
+        
+        if (currentDayPosts.count < targetPostsPerDay[dayName]) {
+          // Check if we already have posts on this exact date
+          const hasPostOnExactDate = currentDayPosts.dates.some(date => 
+            format(date, 'yyyy-MM-dd') === format(nextDate, 'yyyy-MM-dd')
+          );
+
+          if (!hasPostOnExactDate) {
+            console.log(`Found available slot on ${dayName}, ${format(nextDate, 'yyyy-MM-dd')} (${currentDayPosts.count + 1}/${targetPostsPerDay[dayName]} posts)`);
+            foundDate = true;
+            break;
+          } else {
+            console.log(`Skipping ${dayName} - already has post on exact date ${format(nextDate, 'yyyy-MM-dd')}`);
+          }
+        } else {
+          console.log(`Skipping ${dayName} - already at max posts (${currentDayPosts.count}/${targetPostsPerDay[dayName]})`);
         }
 
         maxAttempts--;
       }
 
-      // Fallback: if no suitable day found, just add one day to latest date
-      console.log('No optimal day found, using next day after latest');
-      return addDays(new Date(latestTimestamp), 1);
+      if (!foundDate) {
+        // If no suitable day found within the next 2 weeks, log the issue and use next available configured day
+        console.log('No optimal day found within 2 weeks, using next configured day');
+        nextDate = addDays(new Date(latestTimestamp), 1);
+        while (!targetPostsPerDay[format(nextDate, 'EEEE').toLowerCase()]) {
+          nextDate = addDays(nextDate, 1);
+        }
+      }
+
+      return nextDate;
 
     } catch (error) {
       console.error('Error calculating next publication date:', error);
