@@ -5,16 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { usePostThemes } from '@/context/PostThemesContext';
-
-interface PostTheme {
-  id: string;
-  subject_matter: string;
-  post_content: string | null;
-  scheduled_date: string;
-  status: string;
-  keywords: string[];
-}
+import { usePostThemes, PostTheme } from '@/context/PostThemesContext';
 
 const DashboardCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -37,6 +28,12 @@ const DashboardCalendar: React.FC = () => {
   // Group posts by date
   const postsByDate = postThemes.reduce((acc, post) => {
     try {
+      // Skip pending posts
+      if (post.status === 'pending') return acc;
+      
+      // Skip posts without a scheduled date
+      if (!post.scheduled_date) return acc;
+      
       const date = new Date(post.scheduled_date);
       const dateKey = format(date, 'yyyy-MM-dd');
       
@@ -62,21 +59,25 @@ const DashboardCalendar: React.FC = () => {
     setCurrentDate(addMonths(currentDate, 1));
   };
   
-  // Get status color based on post status
+  // Get the days of the current month
+  const days = eachDayOfInterval({
+    start: startOfMonth(currentDate),
+    end: endOfMonth(currentDate)
+  });
+  
+  // Get the status color for a post
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'published':
         return 'bg-green-500';
-      case 'scheduled':
-        return 'bg-blue-500';
-      case 'pending':
-        return 'bg-yellow-500';
       case 'approved':
+        return 'bg-blue-500';
+      case 'generated':
         return 'bg-purple-500';
       case 'textgenerated':
-        return 'bg-indigo-500';
-      case 'generated':
-        return 'bg-pink-500';
+        return 'bg-amber-500';
+      case 'generatingidea':
+        return 'bg-orange-500';
       default:
         return 'bg-gray-500';
     }
@@ -216,10 +217,6 @@ const DashboardCalendar: React.FC = () => {
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-full bg-blue-500"></div>
             <span>Scheduled</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <span>Pending</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-full bg-purple-500"></div>

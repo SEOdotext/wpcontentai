@@ -4,6 +4,7 @@ import { Calendar } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { createClient } from '@supabase/supabase-js';
 import { useWebsites } from '@/context/WebsitesContext';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const WeeklyPlanningButton: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -31,7 +32,16 @@ const WeeklyPlanningButton: React.FC = () => {
         throw new Error('No active session');
       }
 
-      // Call the weekly planning function
+      // Get the publication settings to check posting frequency
+      const { data: settings } = await supabase
+        .from('publication_settings')
+        .select('posting_frequency')
+        .eq('website_id', currentWebsite.id)
+        .single();
+
+      const postingFrequency = settings?.posting_frequency || 3; // Default to 3 if not set
+
+      // Call the weekly planning function with required posts count
       const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/weekly-planning-actions`, {
         method: 'POST',
         headers: {
@@ -40,13 +50,19 @@ const WeeklyPlanningButton: React.FC = () => {
         },
         body: JSON.stringify({
           day: new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase(),
-          website_id: currentWebsite.id
+          website_id: currentWebsite.id,
+          required_posts: postingFrequency // Pass the required number of posts
         })
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Weekly planning error:', errorText);
         throw new Error('Failed to trigger weekly planning');
       }
+
+      const result = await response.json();
+      console.log('Weekly planning result:', result);
 
       toast({
         title: 'Weekly planning started',
@@ -65,16 +81,25 @@ const WeeklyPlanningButton: React.FC = () => {
   };
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={handleWeeklyPlanning}
-      disabled={isLoading || !currentWebsite?.id}
-      className="flex items-center gap-2"
-    >
-      <Calendar className="h-4 w-4" />
-      {isLoading ? 'Planning...' : 'Plan Weekly Content'}
-    </Button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleWeeklyPlanning}
+            disabled={isLoading || !currentWebsite?.id}
+            className="flex items-center gap-2"
+          >
+            <Calendar className="h-4 w-4" />
+            {isLoading ? 'Planning...' : 'Plan Weekly Content'}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-[300px] p-3">
+          <p>Generate and schedule content ideas for the upcoming week. You'll receive an email with the planned content for your review.</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 };
 

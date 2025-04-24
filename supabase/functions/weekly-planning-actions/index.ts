@@ -76,6 +76,18 @@ serve(async (req) => {
   }
 
   try {
+    // Parse request body
+    const { day, website_id, required_posts } = await req.json();
+    
+    // Validate required parameters
+    if (!website_id) {
+      console.error('Missing required parameter: website_id');
+      throw new Error('website_id is required');
+    }
+    
+    console.log('Starting weekly planning for website:', website_id);
+    console.log('Parameters:', { day, website_id, required_posts });
+
     // Initialize Supabase client with service role key for database operations
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -86,206 +98,66 @@ serve(async (req) => {
           autoRefreshToken: false
         }
       }
-    )
+    );
 
-    // Get the day of week from the request query or use current day
-    const { day } = await req.json();
-    const targetDay = day ? day.toLowerCase() : new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-    
-    console.log(`Starting weekly planning for ${targetDay}`)
+    // Get the website settings
+    const { data: website, error: websiteError } = await supabaseClient
+      .from('websites')
+      .select('*')
+      .eq('id', website_id)
+      .single();
 
-    // First, let's check all publication settings to see what we have
-    const { data: allSettings, error: allSettingsError } = await supabaseClient
-      .from('publication_settings')
-      .select(`
-        id,
-        website_id,
-        weekly_planning_day,
-        posting_frequency,
-        is_active,
-        websites (id, name, url, language)
-      `)
-
-    if (allSettingsError) {
-      console.error('Error fetching all settings:', allSettingsError)
-    } else {
-      console.log(`Total settings: ${allSettings?.length || 0}, Active settings for ${targetDay}: ${allSettings?.filter(s => s.weekly_planning_day?.toLowerCase() === targetDay && s.is_active).length || 0}`)
+    if (websiteError || !website) {
+      throw new Error(`Website not found with ID: ${website_id}`);
     }
 
-    // Fetch all publication settings where weekly_planning_day matches the specified day
-    const { data: settings, error: settingsError } = await supabaseClient
+    // Get publication settings
+    const { data: pubSettings, error: pubSettingsError } = await supabaseClient
       .from('publication_settings')
-      .select(`
-        id,
-        website_id,
-        organisation_id,
-        posting_frequency,
-        writing_style,
-        subject_matters,
-        weekly_planning_day,
-        is_active,
-        websites (id, name, url, language)
-      `)
-      .eq('weekly_planning_day', targetDay)
-      .eq('is_active', true)
+      .select('*')
+      .eq('website_id', website_id)
+      .single();
 
-    if (settingsError) {
-      throw settingsError
+    if (pubSettingsError) {
+      throw new Error(`Failed to fetch publication settings: ${pubSettingsError.message}`);
     }
 
-    console.log(`Found ${settings?.length || 0} active websites scheduled for ${targetDay}'s content planning`)
+    // Use required_posts if provided, otherwise use posting_frequency from settings
+    const postsToGenerate = required_posts || pubSettings?.posting_frequency || 3;
+    console.log('Posts to generate:', postsToGenerate);
 
-    // Process each website's content planning
-    const results = await Promise.all((settings || []).map(async (setting) => {
-      try {
-        if (!setting.organisation_id) {
-          throw new Error(`No organisation_id found for website ${setting.website_id}`)
-        }
+    // Calculate date range for the next 7 days
+    const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 7);
 
-        // Get organisation details
-        const { data: orgData, error: orgError } = await supabaseClient
-          .from('organisations')
-          .select('id, name')
-          .eq('id', setting.organisation_id)
-          .single()
-        
-        if (orgError) {
-          throw orgError
-        }
-        
-        // First generate the posts
-        const postIdeas = await generatePostIdeas(setting, supabaseClient)
-
-        if (!postIdeas || postIdeas.length === 0) {
-          console.log(`No new posts needed for website ${setting.website_id} (${setting.websites?.name || 'Unknown'})`)
-          return {
-            website_id: setting.website_id,
-            success: true,
-            posts_generated: 0
-          }
-        }
-
-        // Then insert them into the calendar
-        const { data: calendarEntries, error: calendarError } = await supabaseClient
-          .from('post_themes')
-          .insert(postIdeas)
-          .select()
-
-        if (calendarError) {
-          throw calendarError
-        }
-
-        if (!calendarEntries || calendarEntries.length === 0) {
-          throw new Error('Posts were generated but failed to be inserted into calendar')
-        }
-
-        console.log(`Inserted posts:`, calendarEntries.map(p => ({
-          id: p.id,
-          subject: p.subject_matter,
-          date: p.scheduled_date,
-          website: p.website_id
-        })))
-
-        // Finally send the email with the confirmed posts
-        try {
-        await sendPlanningEmail(setting, calendarEntries, orgData, supabaseClient)
-          return {
-            website_id: setting.website_id,
-            success: true,
-            posts_generated: calendarEntries.length
-          }
-        } catch (emailError) {
-          console.error(`Failed to send planning email for website ${setting.website_id}:`, emailError)
-        return {
-          website_id: setting.website_id,
-          success: true,
-            posts_generated: calendarEntries.length,
-            email_error: emailError.message
-          }
-        }
-      } catch (error) {
-        console.error(`Error processing website ${setting.website_id}:`, error)
-        return {
-          website_id: setting.website_id,
-          success: false,
-          error: error.message
-        }
-      }
-    }))
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        results,
-        message: `Test completed for ${targetDay}. Processed ${results.length} websites.`
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-    )
-
-  } catch (error) {
-    console.error('Error:', error)
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-    )
-  }
-})
-
-// Helper function to generate post ideas
-async function generatePostIdeas(setting: any, supabaseClient: any) {
-  try {
-    // Calculate the date range for the next 7 days
-    const startDate = new Date()
-    startDate.setHours(0, 0, 0, 0)
-    const endDate = new Date(startDate)
-    endDate.setDate(endDate.getDate() + 7)
-    
-    console.log('Checking publication settings:', {
-      website_id: setting.website_id,
-      posting_frequency: setting.posting_frequency,
-      posting_days: setting.posting_days
-    })
-
-    // First check existing posts for this date range
+    // Get existing posts for this date range
     const { data: existingPosts, error: existingError } = await supabaseClient
       .from('post_themes')
       .select('id, scheduled_date, status')
-      .eq('website_id', setting.website_id)
+      .eq('website_id', website_id)
       .gte('scheduled_date', startDate.toISOString())
       .lte('scheduled_date', endDate.toISOString())
-      .neq('status', 'declined')  // Changed to use neq instead of not in
-      .order('scheduled_date', { ascending: true })
+      .neq('status', 'declined');
 
     if (existingError) {
-      console.error('Error fetching existing posts:', existingError)
-      throw existingError
+      throw existingError;
     }
 
-    // Double check what posts we got back
-    console.log('Existing posts found:', existingPosts?.map(p => ({
-      id: p.id,
-      date: p.scheduled_date,
-      status: p.status
-    })))
+    console.log('Existing posts:', existingPosts?.length || 0);
 
     // Get the posting frequency and days
-    const postsPerWeek = setting.posting_frequency || 1
-    let postingDays = setting.posting_days || []
+    const postsPerWeek = pubSettings?.posting_frequency || 1
+    let postingDays = pubSettings?.posting_days || []
     
     // Validate posting days configuration
     if (!Array.isArray(postingDays) || postingDays.length === 0) {
-      console.log('No posting days configured or invalid configuration, using default (1 post per day)')
-      // Default to allowing posts on any day if no configuration
-      postingDays = [
-        { day: 'monday', count: 1 },
-        { day: 'tuesday', count: 1 },
-        { day: 'wednesday', count: 1 },
-        { day: 'thursday', count: 1 },
-        { day: 'friday', count: 1 }
-      ]
+      console.error('No posting days configured in publication settings')
+      throw new Error('No posting days configured in publication settings. Please configure posting days before generating content.')
     }
     
-    console.log('Settings after validation:', {
+    console.log('Using configured posting schedule:', {
       postsPerWeek,
       postingDays,
       existingPosts: existingPosts?.length || 0,
@@ -326,12 +198,12 @@ async function generatePostIdeas(setting: any, supabaseClient: any) {
     }
 
     // Get available dates based on posting days
-    const availableDates = []
-    // Only consider dates that have active posts
-    const existingDates = new Set(
+    const availableDates: Date[] = []
+    // Create a map of existing posts by date
+    const existingPostsByDate = new Map(
       existingPosts
         ?.filter(p => p.status !== 'declined')
-        .map(p => p.scheduled_date.split('T')[0]) || []
+        .map(p => [p.scheduled_date.split('T')[0], p]) || []
     )
     
     // Create a map of day names to their counts
@@ -342,43 +214,306 @@ async function generatePostIdeas(setting: any, supabaseClient: any) {
 
     console.log('Day count map:', dayCountMap)
     
-    // Find available dates for the next 7 days
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(startDate)
-      date.setDate(date.getDate() + i)
-      const dayName = date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
-      const dateStr = date.toISOString().split('T')[0]
+    // Keep looking for dates until we have enough slots for all posts needed
+    let currentDate = new Date(startDate)
+    let weeksSearched = 0
+    const maxWeeks = 4 // Safety limit to prevent infinite loops
+
+    while (availableDates.length < postsNeeded && weeksSearched < maxWeeks) {
+      const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
+      const dateStr = currentDate.toISOString().split('T')[0]
+      
+      // Check if we already have a post for this date
+      const existingPost = existingPostsByDate.get(dateStr)
       
       // Count active posts for this day
       const existingPostsForDay = existingPosts?.filter(p => {
         const postDate = new Date(p.scheduled_date)
         return postDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() === dayName &&
-               p.status !== 'declined'
+               p.status !== 'declined' &&
+               postDate.toISOString().split('T')[0] === dateStr
       }).length || 0
 
       console.log('Checking date:', {
         date: dateStr,
         dayName,
         isPostingDay: !!dayCountMap[dayName],
-        hasExistingPost: existingDates.has(dateStr),
+        hasExistingPost: !!existingPost,
         existingPostsForDay,
         maxPostsForDay: dayCountMap[dayName],
-        canAddPost: dayCountMap[dayName] && existingPostsForDay < dayCountMap[dayName]
+        canAddPost: dayCountMap[dayName] && existingPostsForDay < dayCountMap[dayName],
+        availableDatesCount: availableDates.length,
+        postsStillNeeded: postsNeeded - availableDates.length,
+        currentWeek: weeksSearched + 1
       })
 
-      if (dayCountMap[dayName] && existingPostsForDay < dayCountMap[dayName]) {
-        availableDates.push(date)
+      // Only add date if:
+      // 1. It's a posting day
+      // 2. We haven't reached the max posts for this day
+      // 3. We don't already have a post for this exact date
+      if (dayCountMap[dayName] && 
+          existingPostsForDay < dayCountMap[dayName] && 
+          !existingPost) {
+        availableDates.push(new Date(currentDate))
         console.log(`Added ${dateStr} (${dayName}) as available date`)
+      }
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1)
+      
+      // Check if we've completed a week
+      if (currentDate.getDay() === startDate.getDay()) {
+        weeksSearched++
+        console.log(`Completed week ${weeksSearched}, found ${availableDates.length} available dates so far`)
       }
     }
 
     if (availableDates.length === 0) {
       console.log(`No available dates found. Configuration:`, {
         postingDays,
-        existingDates: Array.from(existingDates),
+        existingDates: Array.from(existingPostsByDate.keys()),
         dayCountMap
       })
       return []
+    }
+
+    if (availableDates.length < postsNeeded) {
+      console.log(`Warning: Could not find enough available dates. Found ${availableDates.length} slots for ${postsNeeded} posts needed`)
+    }
+
+    // Generate new post ideas only if needed
+    const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-post-ideas`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+        'Content-Type': 'application/json',
+        'apikey': Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
+      },
+      body: JSON.stringify({
+        website_id: website_id,
+        website_url: website.url,
+        keywords: pubSettings?.subject_matters || [],
+        writing_style: pubSettings?.writing_style || 'professional',
+        subject_matters: pubSettings?.subject_matters || [],
+        language: website.language || 'en',
+        count: Math.min(postsNeeded, availableDates.length)
+      })
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Failed to generate post ideas: ${errorText}`)
+    }
+
+    const result = await response.json()
+    
+    if (!result.success || !result.ideas || !Array.isArray(result.ideas)) {
+      console.error('Generate post ideas failed:', result)
+      return []
+    }
+
+    console.log(`Raw ideas generated from API:`, result.ideas.map((idea: any) => ({
+      title: idea.title,
+      keywords: idea.keywords
+    })))
+
+    // Create new posts with proper date distribution
+    const newPosts = result.ideas.map((idea: any, index: number) => {
+      const scheduledDate = availableDates[index];
+      return {
+        website_id: website_id,
+        subject_matter: idea.title,
+        keywords: idea.keywords || pubSettings?.subject_matters || [],
+        status: 'approved',
+        scheduled_date: scheduledDate.toISOString()
+      };
+    });
+
+    console.log(`Mapped posts before insertion:`, newPosts.map(p => ({
+          subject: p.subject_matter,
+          date: p.scheduled_date,
+          website: p.website_id
+    })));
+    return newPosts;
+  } catch (error) {
+    console.error('Error:', error);
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+    );
+  }
+});
+
+// Helper function to generate post ideas
+async function generatePostIdeas(setting: any, supabaseClient: any) {
+  try {
+    // Calculate the date range for the next 7 days
+    const startDate = new Date()
+    startDate.setHours(0, 0, 0, 0)
+    const endDate = new Date(startDate)
+    endDate.setDate(endDate.getDate() + 7)
+    
+    console.log('Checking publication settings:', {
+      website_id: setting.website_id,
+      posting_frequency: setting.posting_frequency,
+      posting_days: setting.posting_days
+    })
+
+    // First check existing posts for this date range
+    const { data: existingPosts, error: existingError } = await supabaseClient
+      .from('post_themes')
+      .select('id, scheduled_date, status, subject_matter')
+      .eq('website_id', setting.website_id)
+      .gte('scheduled_date', startDate.toISOString())
+      .lte('scheduled_date', endDate.toISOString())
+      .neq('status', 'declined')
+      .order('scheduled_date', { ascending: true })
+
+    if (existingError) {
+      console.error('Error fetching existing posts:', existingError)
+      throw existingError
+    }
+
+    // Double check what posts we got back
+    console.log('Existing posts found:', existingPosts?.map(p => ({
+      id: p.id,
+      date: p.scheduled_date,
+      status: p.status,
+      subject: p.subject_matter
+    })))
+
+    // Get the posting frequency and days
+    const postsPerWeek = setting.posting_frequency || 1
+    let postingDays = setting.posting_days || []
+    
+    // Validate posting days configuration
+    if (!Array.isArray(postingDays) || postingDays.length === 0) {
+      console.error('No posting days configured in publication settings')
+      throw new Error('No posting days configured in publication settings. Please configure posting days before generating content.')
+    }
+    
+    console.log('Using configured posting schedule:', {
+      postsPerWeek,
+      postingDays,
+      existingPosts: existingPosts?.length || 0,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    })
+    
+    // First update any existing pending posts to approved
+    const pendingPosts = existingPosts?.filter(p => p.status === 'pending') || []
+    if (pendingPosts.length > 0) {
+      const { error: updateError } = await supabaseClient
+        .from('post_themes')
+        .update({ status: 'approved' })
+        .in('id', pendingPosts.map(p => p.id))
+
+      if (updateError) {
+        throw updateError
+      }
+      console.log(`Updated ${pendingPosts.length} existing posts to approved status`)
+    }
+
+    // Calculate how many new posts we need
+    // Only count active posts (not pending or declined)
+    const activePostsCount = existingPosts?.filter(p => 
+      p.status !== 'pending' && p.status !== 'declined'
+    ).length || 0
+    
+    const postsNeeded = Math.max(0, postsPerWeek - activePostsCount)
+    console.log(`Posts needed calculation:`, {
+      postsPerWeek,
+      activePostsCount,
+      postsNeeded
+    })
+
+    if (postsNeeded <= 0) {
+      console.log(`No new posts needed - already have ${activePostsCount} active posts`)
+      return []
+    }
+
+    // Get available dates based on posting days
+    const availableDates: Date[] = []
+    // Create a map of existing posts by date
+    const existingPostsByDate = new Map(
+      existingPosts
+        ?.filter(p => p.status !== 'declined')
+        .map(p => [p.scheduled_date.split('T')[0], p]) || []
+    )
+    
+    // Create a map of day names to their counts
+    const dayCountMap = postingDays.reduce((acc: any, day: { day: string; count: number }) => {
+      acc[day.day.toLowerCase()] = day.count;
+      return acc;
+    }, {});
+
+    console.log('Day count map:', dayCountMap)
+    
+    // Keep looking for dates until we have enough slots for all posts needed
+    let currentDate = new Date(startDate)
+    let weeksSearched = 0
+    const maxWeeks = 4 // Safety limit to prevent infinite loops
+
+    while (availableDates.length < postsNeeded && weeksSearched < maxWeeks) {
+      const dayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase()
+      const dateStr = currentDate.toISOString().split('T')[0]
+      
+      // Check if we already have a post for this date
+      const existingPost = existingPostsByDate.get(dateStr)
+      
+      // Count active posts for this day
+      const existingPostsForDay = existingPosts?.filter(p => {
+        const postDate = new Date(p.scheduled_date)
+        return postDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase() === dayName &&
+               p.status !== 'declined' &&
+               postDate.toISOString().split('T')[0] === dateStr
+      }).length || 0
+
+      console.log('Checking date:', {
+        date: dateStr,
+        dayName,
+        isPostingDay: !!dayCountMap[dayName],
+        hasExistingPost: !!existingPost,
+        existingPostsForDay,
+        maxPostsForDay: dayCountMap[dayName],
+        canAddPost: dayCountMap[dayName] && existingPostsForDay < dayCountMap[dayName],
+        availableDatesCount: availableDates.length,
+        postsStillNeeded: postsNeeded - availableDates.length,
+        currentWeek: weeksSearched + 1
+      })
+
+      // Only add date if:
+      // 1. It's a posting day
+      // 2. We haven't reached the max posts for this day
+      // 3. We don't already have a post for this exact date
+      if (dayCountMap[dayName] && 
+          existingPostsForDay < dayCountMap[dayName] && 
+          !existingPost) {
+        availableDates.push(new Date(currentDate))
+        console.log(`Added ${dateStr} (${dayName}) as available date`)
+      }
+
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1)
+      
+      // Check if we've completed a week
+      if (currentDate.getDay() === startDate.getDay()) {
+        weeksSearched++
+        console.log(`Completed week ${weeksSearched}, found ${availableDates.length} available dates so far`)
+      }
+    }
+
+    if (availableDates.length === 0) {
+      console.log(`No available dates found. Configuration:`, {
+        postingDays,
+        existingDates: Array.from(existingPostsByDate.keys()),
+        dayCountMap
+      })
+      return []
+    }
+
+    if (availableDates.length < postsNeeded) {
+      console.log(`Warning: Could not find enough available dates. Found ${availableDates.length} slots for ${postsNeeded} posts needed`)
     }
 
     // Generate new post ideas only if needed
