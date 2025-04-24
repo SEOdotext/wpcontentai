@@ -36,6 +36,11 @@ interface PostThemeRow {
   image_generation_error?: string | null;
 }
 
+interface WordPressCategory {
+  id: string;
+  name: string;
+}
+
 export interface PostTheme {
   id: string;
   website_id: string;
@@ -102,7 +107,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
   const [error, setError] = useState<Error | null>(null);
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
   const { currentWebsite } = useWebsites();
-  const { publicationFrequency } = useSettings();
+  const { } = useSettings();
 
   // Fetch post themes when the current website changes
   useEffect(() => {
@@ -137,98 +142,79 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         return addDays(new Date(), 1);
       }
 
-      // Convert posting_days to target posts per day
-      const targetPostsPerDay: { [key: string]: number } = {};
-      settings[0].posting_days.forEach((day: { day: string; count: number }) => {
-        targetPostsPerDay[day.day.toLowerCase()] = day.count;
-      });
+      // Create a map of day names to their counts
+      const dayCountMap = settings[0].posting_days.reduce((acc: { [key: string]: number }, day: { day: string; count: number }) => {
+        acc[day.day.toLowerCase()] = day.count;
+        return acc;
+      }, {});
 
-      console.log('Target posts per day configuration:', targetPostsPerDay);
+      console.log('Day count map:', dayCountMap);
 
-      // Get all scheduled dates from existing themes with valid statuses
-      const postsPerDay: { [key: string]: { count: number, dates: Date[] } } = {};
-      let latestTimestamp = new Date().getTime(); // Start from current time instead of 0
-
-      // Get themes with valid statuses (all except pending and declined)
-      const validThemes = postThemes.filter(theme => 
-        theme.website_id === currentWebsite.id && 
-        !['pending', 'declined'].includes(theme.status) &&
-        theme.scheduled_date // Only include themes with a scheduled date
+      // Create a map of existing posts by date
+      const existingPostsByDate = new Map(
+        postThemes
+          .filter(p => p.scheduled_date && p.status !== 'declined' && p.status !== 'pending')
+          .map(p => [p.scheduled_date.split('T')[0], p])
       );
 
-      // Process existing posts
-      for (const theme of validThemes) {
-        try {
-          const date = new Date(theme.scheduled_date!);
-          if (isNaN(date.getTime())) continue;
+      // Start looking from today
+      let currentDate = new Date();
+      currentDate.setHours(0, 0, 0, 0);
+      let maxAttempts = 28; // 4 weeks safety limit
 
-          latestTimestamp = Math.max(latestTimestamp, date.getTime());
-          const day = format(date, 'EEEE').toLowerCase();
-          
-          if (!postsPerDay[day]) {
-            postsPerDay[day] = { count: 0, dates: [] };
-          }
-          postsPerDay[day].count++;
-          postsPerDay[day].dates.push(date);
-        } catch (e) {
-          console.error('Error parsing date:', theme.scheduled_date, e);
-        }
-      }
+      while (maxAttempts > 0) {
+        const dayName = format(currentDate, 'EEEE').toLowerCase();
+        const dateStr = format(currentDate, 'yyyy-MM-dd');
 
-      console.log('Current posts per day:', postsPerDay);
+        // Check if we already have a post for this date
+        const existingPost = existingPostsByDate.get(dateStr);
 
-      // Start from the latest date found or today, whichever is later
-      let nextDate = new Date(latestTimestamp);
-      let maxAttempts = 14; // Prevent infinite loop
-      let foundDate = false;
+        // Count posts for this specific day
+        const existingPostsForDay = postThemes.filter(p => {
+          if (!p.scheduled_date || p.status === 'declined' || p.status === 'pending') return false;
+          const postDate = new Date(p.scheduled_date);
+          return format(postDate, 'yyyy-MM-dd') === dateStr;
+        }).length;
 
-      while (maxAttempts > 0 && !foundDate) {
-        nextDate = addDays(nextDate, 1);
-        const dayName = format(nextDate, 'EEEE').toLowerCase();
+        console.log('Checking date:', {
+          date: dateStr,
+          dayName,
+          isPostingDay: !!dayCountMap[dayName],
+          hasExistingPost: !!existingPost,
+          existingPostsForDay,
+          maxPostsForDay: dayCountMap[dayName],
+          activeStatuses: postThemes
+            .filter(p => p.scheduled_date && format(new Date(p.scheduled_date), 'yyyy-MM-dd') === dateStr)
+            .map(p => p.status)
+        });
 
-        // Skip days that don't have any target posts
-        if (!targetPostsPerDay[dayName]) {
-          console.log(`Skipping ${dayName} - no posts configured for this day`);
-          continue;
-        }
-
-        // Check if this day has room for more posts
-        const currentDayPosts = postsPerDay[dayName] || { count: 0, dates: [] };
-        
-        if (currentDayPosts.count < targetPostsPerDay[dayName]) {
-          // Check if we already have posts on this exact date
-          const hasPostOnExactDate = currentDayPosts.dates.some(date => 
-            format(date, 'yyyy-MM-dd') === format(nextDate, 'yyyy-MM-dd')
-          );
-
-          if (!hasPostOnExactDate) {
-            console.log(`Found available slot on ${dayName}, ${format(nextDate, 'yyyy-MM-dd')} (${currentDayPosts.count + 1}/${targetPostsPerDay[dayName]} posts)`);
-            foundDate = true;
-            break;
-          } else {
-            console.log(`Skipping ${dayName} - already has post on exact date ${format(nextDate, 'yyyy-MM-dd')}`);
-          }
-        } else {
-          console.log(`Skipping ${dayName} - already at max posts (${currentDayPosts.count}/${targetPostsPerDay[dayName]})`);
+        // Only add date if:
+        // 1. It's a posting day
+        // 2. We haven't reached the max posts for this day
+        // 3. We don't already have a post for this exact date
+        if (dayCountMap[dayName] && 
+            existingPostsForDay < dayCountMap[dayName] && 
+            !existingPost) {
+          console.log(`Found available slot on ${dayName}, ${dateStr}`);
+          return currentDate;
         }
 
+        // Move to next day
+        currentDate = addDays(currentDate, 1);
         maxAttempts--;
       }
 
-      if (!foundDate) {
-        // If no suitable day found within the next 2 weeks, log the issue and use next available configured day
-        console.log('No optimal day found within 2 weeks, using next configured day');
-        nextDate = addDays(new Date(latestTimestamp), 1);
-        while (!targetPostsPerDay[format(nextDate, 'EEEE').toLowerCase()]) {
-          nextDate = addDays(nextDate, 1);
-        }
+      // If no date found after 4 weeks, use next available configured day
+      console.log('No optimal day found, using next available configured day');
+      let nextDate = new Date();
+      nextDate.setHours(0, 0, 0, 0);
+      while (!dayCountMap[format(nextDate, 'EEEE').toLowerCase()]) {
+        nextDate = addDays(nextDate, 1);
       }
-
       return nextDate;
 
     } catch (error) {
       console.error('Error calculating next publication date:', error);
-      // Fallback to tomorrow
       return addDays(new Date(), 1);
     }
   }, [currentWebsite, postThemes]);
@@ -252,8 +238,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         .order('created_at', { ascending: false });
 
       if (themesError) {
-        console.error('Error fetching post themes:', themesError);
-        setError(themesError.message);
+        handleError(themesError, 'Error fetching post themes');
         return;
       }
 
@@ -261,6 +246,14 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         setPostThemes([]);
         return;
       }
+
+      // Find the latest publication date from active posts
+      const latestDate = themes
+        .filter(p => p.scheduled_date && p.status !== 'declined' && p.status !== 'pending')
+        .reduce((latest, post) => {
+          const postDate = new Date(post.scheduled_date!);
+          return postDate > latest ? postDate : latest;
+        }, new Date(0));
 
       // Process themes in chunks to avoid URL length limits
       const CHUNK_SIZE = 50;
@@ -302,15 +295,41 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       }
 
       // Combine themes with their categories
-      const themesWithCategories = themes.map(theme => ({
-        ...theme,
-        categories: categoriesByTheme.get(theme.id) || []
-      }));
+      const themesWithCategories = themes.map(theme => {
+        // Format the scheduled_date if it exists
+        let formattedDate = theme.scheduled_date;
+        if (formattedDate) {
+          const date = new Date(formattedDate);
+          date.setHours(0, 0, 0, 0); // Set to start of day
+          formattedDate = date.toISOString();
+        }
+
+        return {
+          ...theme,
+          categories: categoriesByTheme.get(theme.id) || [],
+          scheduled_date: formattedDate
+        };
+      });
 
       setPostThemes(themesWithCategories);
+
+      // Update any pending posts with the next available date
+      const pendingPosts = themesWithCategories.filter(p => p.status === 'pending');
+      if (pendingPosts.length > 0) {
+        const nextDate = await getNextPublicationDate();
+        const formattedDate = new Date(nextDate);
+        formattedDate.setHours(0, 0, 0, 0);
+        const dateString = formattedDate.toISOString();
+
+        // Update pending posts with the next available date
+        setPostThemes(prev => prev.map(theme => 
+          theme.status === 'pending'
+            ? { ...theme, scheduled_date: dateString }
+            : theme
+        ));
+      }
     } catch (err) {
-      console.error('Error in fetchPostThemes:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      handleError(err, 'Error in fetchPostThemes');
     } finally {
       setIsLoading(false);
     }
@@ -452,8 +471,12 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         if (error) throw error;
       }
 
-      // Refresh post themes to get updated data
-      await fetchPostThemes();
+      // Update local state instead of fetching
+      setPostThemes(prev => prev.map(theme => 
+        theme.id === id 
+          ? { ...theme, ...updates }
+          : theme
+      ));
 
       if (showToast) {
         toast.success('Post theme updated');
@@ -644,68 +667,60 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   };
 
-  // Update handleTitleLiked to use getNextPublicationDate
+  // Update handleTitleLiked to properly handle date timezone
   const handleTitleLiked = async (id: string) => {
     try {
-      // Get the current post's date before updating
+      // Get the post being approved
       const postToUpdate = postThemes.find(theme => theme.id === id);
       if (!postToUpdate) return;
 
-      // Validate the date
-      let approvedDate;
-      try {
-        if (!postToUpdate.scheduled_date) {
-          // If no date is set, use getNextPublicationDate
+      // Get the next available publication date
           const nextDate = await getNextPublicationDate();
-          console.log('No date set for approved post, using calculated next date:', nextDate);
-          approvedDate = nextDate;
-        } else {
-          approvedDate = new Date(postToUpdate.scheduled_date);
-          const timestamp = approvedDate.getTime();
-          const minValidTimestamp = new Date('2020-01-01').getTime();
-          
-          // If we have an invalid or too old date, use calculated date instead
-          if (isNaN(timestamp) || timestamp < minValidTimestamp) {
-            const nextDate = await getNextPublicationDate();
-            console.warn('Found invalid date in approved post, using calculated next date:', postToUpdate.scheduled_date, nextDate);
-            approvedDate = nextDate;
-          }
-        }
-      } catch (e) {
-        console.error('Error parsing date in handleTitleLiked:', e);
-        approvedDate = await getNextPublicationDate();
-      }
+      console.log('Setting next publication date:', nextDate);
 
-      // Update the liked post's status to approved while keeping its date
-      const success = await updatePostTheme(id, {
+      // Format the date to ensure consistent timezone handling
+      const formattedDate = new Date(nextDate);
+      formattedDate.setHours(0, 0, 0, 0); // Set to start of day
+      const dateString = formattedDate.toISOString();
+      console.log('Formatted date string:', dateString);
+
+      // Update local state first
+      setPostThemes(prev => prev.map(theme => 
+        theme.id === id 
+          ? { ...theme, status: 'approved', scheduled_date: dateString }
+          : theme
+      ));
+
+      // Then update database
+      const { error: updateError } = await supabase
+        .from('post_themes')
+        .update({ 
         status: 'approved',
-        scheduled_date: approvedDate.toISOString()
-      });
+          scheduled_date: dateString
+        })
+        .eq('id', id);
 
-      if (!success) throw new Error('Failed to update post theme');
-
-      // Get all pending posts except the one being approved
-      const pendingThemes = postThemes.filter(theme => 
-        theme.status === 'pending' && theme.id !== id
-      );
-
-      // Update each pending post's date using the context function
-      for (const theme of pendingThemes) {
-        const nextDate = await getNextPublicationDate();
-        await updatePostTheme(theme.id, {
-          scheduled_date: nextDate.toISOString(),
-          status: 'pending'
-        }, false); // Don't show toast for each update
+      if (updateError) {
+        // Revert local state if database update fails
+        setPostThemes(prev => prev.map(theme => 
+          theme.id === id 
+            ? { ...theme, status: 'pending', scheduled_date: null }
+            : theme
+        ));
+        throw updateError;
       }
 
-      // Refresh post themes to get all the latest data
-      await fetchPostThemes();
-
-      toast.success('Post approved');
+      toast.success('Post approved and scheduled');
     } catch (error) {
       console.error('Error updating post status:', error);
       toast.error('Failed to update post status');
     }
+  };
+
+  // Update error handling
+  const handleError = (err: unknown, message: string) => {
+    console.error(message, err);
+    setError(err instanceof Error ? err : new Error(message));
   };
 
   // Create the context value
