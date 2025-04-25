@@ -11,7 +11,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { AdminProvider } from '@/context/AdminContext';
 import Auth from '@/pages/Auth';
-import AuthCallback from '@/pages/AuthCallback';
+import AuthCallback from '@/pages/auth/callback';
 import ResetPassword from '@/pages/ResetPassword';
 import Index from '@/pages/Index';
 import OrganisationSetup from '@/pages/OrganisationSetup';
