@@ -30,78 +30,6 @@ export default function AuthCallback() {
           return;
         }
 
-        // Handle PKCE code exchange first
-        if (code) {
-          console.log('AuthCallback: Found PKCE code, attempting to exchange for session');
-          
-          // Get the session directly instead of exchanging code
-          const { data, error } = await supabase.auth.getSession();
-          
-          if (error) {
-            console.error('AuthCallback: Error getting session:', error);
-            toast.error('Authentication failed. Please try logging in again.');
-            navigate('/auth', { replace: true });
-            return;
-          }
-
-          if (!data?.session) {
-            console.error('AuthCallback: No session returned');
-            toast.error('Authentication failed. Please try logging in again.');
-            navigate('/auth', { replace: true });
-            return;
-          }
-
-          console.log('AuthCallback: Successfully obtained session');
-          console.log('AuthCallback: User ID:', data.session.user.id);
-          console.log('AuthCallback: User email:', data.session.user.email);
-
-          // Check if this is the user's first login
-          const isFirstLogin = !data.session.user.last_sign_in_at;
-          
-          if (isFirstLogin) {
-            // Redirect to profile setup in the main app
-            toast.success(
-              'Welcome! Let\'s complete your account setup.',
-              { duration: 5000 }
-            );
-            navigate('/profile/setup', { 
-              replace: true,
-              state: { 
-                isFirstLogin: true,
-                email: data.session.user.email
-              }
-            });
-            return;
-          }
-
-          // Handle organization invitation if present
-          const inviteData = data.session.user.user_metadata;
-          if (inviteData?.organisation_id) {
-            console.log('AuthCallback: Found organization data, processing invitation');
-            
-            const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
-              p_email: data.session.user.email,
-              p_organisation_id: inviteData.organisation_id,
-              p_role: inviteData.role || 'member',
-              p_website_ids: inviteData.website_ids || []
-            });
-
-            if (invitationError) {
-              console.error('AuthCallback: Error handling organization invitation:', invitationError);
-              toast.error('Failed to process invitation. Please contact support.');
-              // Continue anyway since the user is authenticated
-            } else {
-              console.log('AuthCallback: Successfully processed organization invitation');
-            }
-          }
-
-          // Verify the session is active
-          await checkAuth();
-          console.log('AuthCallback: Successfully verified session, redirecting to:', next);
-          navigate(next, { replace: true });
-          return;
-        }
-
         // Handle email verification flow
         if (token && type === 'signup') {
           console.log('AuthCallback: Email verification token detected');
@@ -130,6 +58,73 @@ export default function AuthCallback() {
 
           // If no redirect, go to dashboard
           navigate('/dashboard', { replace: true });
+          return;
+        }
+
+        // Handle PKCE code exchange
+        if (code) {
+          console.log('AuthCallback: Found PKCE code, attempting to exchange for session');
+          
+          // Get the stored code verifier from localStorage
+          const codeVerifier = localStorage.getItem('codeVerifier');
+          console.log('AuthCallback: Retrieved code verifier:', codeVerifier ? 'Found' : 'Not found');
+          
+          if (!codeVerifier) {
+            console.error('AuthCallback: No code verifier found in storage');
+            toast.error('Authentication failed. Please try logging in again.');
+            navigate('/auth', { replace: true });
+            return;
+          }
+
+          // Exchange the code for a session
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (error) {
+            console.error('AuthCallback: Error exchanging code for session:', error);
+            toast.error('Authentication failed. Please try logging in again.');
+            navigate('/auth', { replace: true });
+            return;
+          }
+
+          if (!data?.session) {
+            console.error('AuthCallback: No session returned from code exchange');
+            toast.error('Authentication failed. Please try logging in again.');
+            navigate('/auth', { replace: true });
+            return;
+          }
+
+          // Clear the code verifier from storage
+          localStorage.removeItem('codeVerifier');
+          
+          console.log('AuthCallback: Successfully obtained session');
+          console.log('AuthCallback: User ID:', data.session.user.id);
+          console.log('AuthCallback: User email:', data.session.user.email);
+
+          // Handle organization invitation if present
+          const inviteData = data.session.user.user_metadata;
+          if (inviteData?.organisation_id) {
+            console.log('AuthCallback: Found organization data, processing invitation');
+            
+            const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
+              p_email: data.session.user.email,
+              p_organisation_id: inviteData.organisation_id,
+              p_role: inviteData.role || 'member',
+              p_website_ids: inviteData.website_ids || []
+            });
+
+            if (invitationError) {
+              console.error('AuthCallback: Error handling organization invitation:', invitationError);
+              toast.error('Failed to process invitation. Please contact support.');
+              // Continue anyway since the user is authenticated
+            } else {
+              console.log('AuthCallback: Successfully processed organization invitation');
+            }
+          }
+
+          // Verify the session is active
+          await checkAuth();
+          console.log('AuthCallback: Successfully verified session, redirecting to:', next);
+          navigate(next, { replace: true });
           return;
         }
 
