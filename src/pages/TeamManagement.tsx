@@ -199,6 +199,7 @@ const TeamManagement = () => {
         email: email.trim(),
         options: {
           emailRedirectTo: 'https://contentgardener.ai/auth/callback',
+          shouldCreateUser: true,  // Create new users if they don't exist
           data: {
             organisation_id: organisation.id,
             role: role,
