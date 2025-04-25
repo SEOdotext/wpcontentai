@@ -14,9 +14,27 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        console.log('Starting magic link callback handling');
-        
-        // Get the current session after magic link verification
+        console.log('Starting callback handling with params:', {
+          hash: location.hash,
+          search: location.search
+        });
+
+        // First try to exchange the token if present
+        const hashParams = new URLSearchParams(location.hash.substring(1));
+        if (hashParams.get('access_token')) {
+          console.log('Found access token in hash, exchanging...');
+          const { data: { session }, error } = await supabase.auth.setSession({
+            access_token: hashParams.get('access_token') || '',
+            refresh_token: hashParams.get('refresh_token') || ''
+          });
+
+          if (error) throw error;
+          if (!session) throw new Error('No session after token exchange');
+          
+          console.log('Token exchange successful');
+        }
+
+        // Now get the current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
@@ -25,13 +43,13 @@ export default function AuthCallback() {
         }
         
         if (!session) {
-          console.error('No session found after magic link verification');
+          console.error('No session found');
           toast.error('Authentication failed. Please try again.');
           navigate('/auth', { replace: true });
           return;
         }
 
-        console.log('Magic link verification successful, session established');
+        console.log('Session established, checking metadata');
 
         // Get user metadata
         const metadata = session.user.user_metadata;
@@ -39,8 +57,7 @@ export default function AuthCallback() {
           email: session.user.email,
           role: metadata?.role,
           organisationId: metadata?.organisation_id,
-          isNewInvite: metadata?.isNewInvite,
-          invitedBy: metadata?.invitedByEmail
+          isNewInvite: metadata?.isNewInvite
         });
 
         // Handle organization invites
@@ -88,7 +105,7 @@ export default function AuthCallback() {
         navigate('/dashboard', { replace: true });
 
       } catch (error) {
-        console.error('Error in magic link callback:', error);
+        console.error('Error in callback:', error);
         toast.error('Authentication failed. Please try again.');
         navigate('/auth', { replace: true });
       }

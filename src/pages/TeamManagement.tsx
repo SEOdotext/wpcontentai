@@ -195,8 +195,8 @@ const TeamManagement = () => {
       const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          shouldCreateUser: true, // Allow new user creation
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          shouldCreateUser: true,
+          emailRedirectTo: 'https://contentgardener.ai/auth/callback',
           data: {
             organisation_id: organisation.id,
             role: role,
