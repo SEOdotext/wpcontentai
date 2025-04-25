@@ -182,16 +182,19 @@ const TeamManagement = () => {
     if (!organisation?.id || currentUserRole !== 'admin') return;
 
     try {
-      console.log('Sending invitation for:', email, 'with role:', role);
+      console.log('Starting team member invitation process:', { email, role, organisation_id: organisation.id });
 
       // Get current user's session
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       
       if (!currentSession?.user) {
+        console.error('No active session found for admin');
         throw new Error('No active session found');
       }
 
-      // Use Supabase's magic link system for invites
+      console.log('Admin session verified:', { admin_email: currentSession.user.email });
+
+      // Use standard magic link flow for invites
       const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
@@ -210,11 +213,16 @@ const TeamManagement = () => {
       });
 
       if (signInError) {
-        console.error('Error sending invitation:', signInError);
+        console.error('Failed to send invitation:', signInError);
         throw signInError;
       }
 
-      console.log('Invitation sent successfully:', signInData);
+      console.log('Magic link invitation sent successfully:', {
+        email,
+        organisation_id: organisation.id,
+        role,
+        website_count: selectedWebsites.length
+      });
 
       // Reset form and close dialog
       setEmail('');

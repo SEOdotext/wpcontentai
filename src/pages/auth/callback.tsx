@@ -14,59 +14,61 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Log all URL parameters for debugging
-        console.log('Auth callback URL info:', {
-          pathname: location.pathname,
-          search: location.search,
-          hash: location.hash,
-          params: Object.fromEntries(searchParams.entries())
-        });
-
         // Get parameters from URL
         const code = searchParams.get('code');
         const error = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
         
-        console.log('Processing auth callback:', { 
+        console.log('Auth callback initiated:', { 
           hasCode: !!code,
           error,
-          errorDescription
+          errorDescription,
+          url: window.location.href,
+          pathname: location.pathname,
+          search: location.search
         });
 
         // Handle any errors first
         if (error || errorDescription) {
-          console.error('Auth error:', { error, description: errorDescription });
+          console.error('Auth callback received error:', { error, description: errorDescription });
           throw new Error(errorDescription || error || 'Authentication failed');
         }
 
         if (!code) {
-          console.error('No auth code found');
+          console.error('Auth callback missing code parameter');
           throw new Error('No authentication code found');
         }
 
-        // Exchange the code for a session
-        console.log('Exchanging code for session...');
-        const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+        // Get session using standard auth code flow
+        console.log('Starting auth code exchange...');
+        const { data, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
-          console.error('Code exchange failed:', sessionError);
+          console.error('Failed to get session:', sessionError);
           throw sessionError;
         }
 
         if (!data.session) {
-          console.error('No session returned from code exchange');
+          console.error('No session returned after auth');
           throw new Error('Authentication failed - no session');
         }
 
-        console.log('Authentication successful:', !!data.session);
+        console.log('Session established successfully:', { 
+          user_id: data.session.user.id,
+          email: data.session.user.email
+        });
         
         // Get user metadata
         const metadata = data.session.user.user_metadata;
-        console.log('User metadata:', metadata);
+        console.log('Processing user metadata:', metadata);
 
         // Handle organization invites
         if (metadata?.organisation_id) {
-          console.log('Processing organization invite with metadata:', metadata);
+          console.log('Processing organization invite:', { 
+            organisation_id: metadata.organisation_id,
+            role: metadata.role,
+            website_count: metadata.website_ids?.length || 0
+          });
           
           const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
             p_email: data.session.user.email,
@@ -76,7 +78,7 @@ export default function AuthCallback() {
           });
 
           if (invitationError) {
-            console.error('Error processing organization invite:', invitationError);
+            console.error('Organization invite processing failed:', invitationError);
             toast.error('Failed to process invitation. Please contact support.');
             throw invitationError;
           }
@@ -86,21 +88,21 @@ export default function AuthCallback() {
         }
 
         // Update auth context
+        console.log('Updating auth context...');
         await checkAuth();
 
-        // Redirect based on metadata
-        if (metadata?.isNewInvite) {
-          navigate('/profile', { 
-            replace: true,
-            state: { 
-              newUser: true,
-              role: metadata.role,
-              message: 'Please set up your password and account preferences.' 
-            }
-          });
-        } else {
-          navigate('/dashboard', { replace: true });
-        }
+        // Handle redirect
+        const redirectPath = metadata?.isNewInvite ? '/profile' : '/dashboard';
+        console.log('Redirecting user:', { path: redirectPath, isNewInvite: metadata?.isNewInvite });
+        
+        navigate(redirectPath, { 
+          replace: true,
+          state: metadata?.isNewInvite ? { 
+            newUser: true,
+            role: metadata.role,
+            message: 'Please set up your password and account preferences.' 
+          } : undefined
+        });
       } catch (error) {
         console.error('Error in auth callback:', error);
         toast.error('Authentication failed. Please try again.');
