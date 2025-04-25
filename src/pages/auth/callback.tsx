@@ -26,7 +26,60 @@ export default function AuthCallback() {
         if (!supabase?.auth) {
           console.error('AuthCallback: Supabase client not properly initialized');
           toast.error('Authentication service not available');
-          navigate('/auth/error');
+          navigate('/auth', { replace: true });
+          return;
+        }
+
+        // Handle PKCE code exchange first
+        if (code) {
+          console.log('AuthCallback: Found PKCE code, attempting to exchange for session');
+          
+          // First exchange the code for a session
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (error) {
+            console.error('AuthCallback: Error exchanging code for session:', error);
+            toast.error('Authentication failed. Please try logging in again.');
+            navigate('/auth', { replace: true });
+            return;
+          }
+
+          if (!data?.session) {
+            console.error('AuthCallback: No session returned from code exchange');
+            toast.error('Authentication failed. Please try logging in again.');
+            navigate('/auth', { replace: true });
+            return;
+          }
+
+          console.log('AuthCallback: Successfully obtained session');
+          console.log('AuthCallback: User ID:', data.session.user.id);
+          console.log('AuthCallback: User email:', data.session.user.email);
+
+          // Handle organization invitation if present
+          const inviteData = data.session.user.user_metadata;
+          if (inviteData?.organisation_id) {
+            console.log('AuthCallback: Found organization data, processing invitation');
+            
+            const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
+              p_email: data.session.user.email,
+              p_organisation_id: inviteData.organisation_id,
+              p_role: inviteData.role || 'member',
+              p_website_ids: inviteData.website_ids || []
+            });
+
+            if (invitationError) {
+              console.error('AuthCallback: Error handling organization invitation:', invitationError);
+              toast.error('Failed to process invitation. Please contact support.');
+              // Continue anyway since the user is authenticated
+            } else {
+              console.log('AuthCallback: Successfully processed organization invitation');
+            }
+          }
+
+          // Verify the session is active
+          await checkAuth();
+          console.log('AuthCallback: Successfully verified session, redirecting to:', next);
+          navigate(next, { replace: true });
           return;
         }
 
@@ -41,7 +94,9 @@ export default function AuthCallback() {
           
           if (verifyError) {
             console.error('AuthCallback: Error verifying email:', verifyError);
-            throw verifyError;
+            toast.error('Failed to verify email. Please try again.');
+            navigate('/auth', { replace: true });
+            return;
           }
           
           console.log('AuthCallback: Email verified successfully');
@@ -53,6 +108,10 @@ export default function AuthCallback() {
             window.location.href = redirectTo;
             return;
           }
+
+          // If no redirect, go to dashboard
+          navigate('/dashboard', { replace: true });
+          return;
         }
 
         // Handle hash fragment (for access tokens)
@@ -63,7 +122,9 @@ export default function AuthCallback() {
           const { error } = await supabase.auth.getSession();
           if (error) {
             console.error('AuthCallback: Error processing hash authentication:', error);
-            throw error;
+            toast.error('Authentication failed. Please try again.');
+            navigate('/auth', { replace: true });
+            return;
           }
 
           await checkAuth();
@@ -72,61 +133,14 @@ export default function AuthCallback() {
           return;
         }
 
-        // Handle PKCE code exchange
-        if (code) {
-          console.log('AuthCallback: Found PKCE code, attempting to exchange for session');
-          
-          // Let Supabase client handle the code exchange automatically
-          const { data: { session }, error } = await supabase.auth.getSession();
-          
-          if (error) {
-            console.error('AuthCallback: Error getting session:', error);
-            throw error;
-          }
-
-          if (!session) {
-            console.error('AuthCallback: No session returned');
-            throw new Error('No session returned');
-          }
-
-          console.log('AuthCallback: Successfully obtained session');
-          console.log('AuthCallback: User ID:', session.user.id);
-          console.log('AuthCallback: User email:', session.user.email);
-
-          // Handle organization invitation if present
-          const inviteData = session.user.user_metadata;
-          if (inviteData?.organisation_id) {
-            console.log('AuthCallback: Found organization data, processing invitation');
-            
-            const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
-              p_email: session.user.email,
-              p_organisation_id: inviteData.organisation_id,
-              p_role: inviteData.role || 'member',
-              p_website_ids: inviteData.website_ids || []
-            });
-
-            if (invitationError) {
-              console.error('AuthCallback: Error handling organization invitation:', invitationError);
-              throw invitationError;
-            }
-
-            console.log('AuthCallback: Successfully processed organization invitation');
-          }
-
-          // Verify the session is active
-          await checkAuth();
-          console.log('AuthCallback: Successfully verified session, redirecting to:', next);
-          navigate(next, { replace: true });
-          return;
-        }
-
         // If we reach here, no valid authentication method was found
         console.log('AuthCallback: No valid authentication method found, redirecting to auth page');
+        toast.error('Invalid authentication attempt. Please try logging in again.');
         navigate('/auth', { replace: true });
       } catch (error) {
         console.error('AuthCallback: Fatal error:', error);
-        toast.error('Failed to complete signup. Please try clicking the link in your email again.');
-        navigate('/auth/error');
+        toast.error('Authentication failed. Please try logging in again.');
+        navigate('/auth', { replace: true });
       }
     };
 
