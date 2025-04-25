@@ -5,6 +5,14 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
+// IMPORTANT: Magic Link Authentication Flow
+// 1. User clicks magic link in email
+// 2. Supabase verifies the link on their end
+// 3. Creates a session for the user
+// 4. Redirects here with a code parameter
+// 5. We DO NOT need to exchange the code - JUST GET THE SESSION!
+// 6. BUT we need to wait a moment for Supabase to finish setting up the session
+
 export default function AuthCallback() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -14,7 +22,7 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Get parameters from URL
+        // Get parameters from URL - we check these for errors but DON'T use the code!
         const code = searchParams.get('code');
         const error = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
@@ -34,13 +42,12 @@ export default function AuthCallback() {
           throw new Error(errorDescription || error || 'Authentication failed');
         }
 
-        if (!code) {
-          console.error('Auth callback missing code parameter');
-          throw new Error('No authentication code found');
-        }
+        // CRITICAL: Wait a moment for Supabase to finish setting up the session
+        console.log('Waiting for session setup...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        // Get session using standard auth code flow
-        console.log('Starting auth code exchange...');
+        // Now get the session that Supabase has created
+        console.log('Getting established session...');
         const { data, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
@@ -48,8 +55,22 @@ export default function AuthCallback() {
           throw sessionError;
         }
 
+        // Try a few more times if session isn't ready
+        let attempts = 0;
+        while (!data.session && attempts < 3) {
+          console.log(`Session not ready, retrying... (attempt ${attempts + 1}/3)`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const retryResult = await supabase.auth.getSession();
+          if (retryResult.data.session) {
+            console.log('Session found on retry');
+            data.session = retryResult.data.session;
+            break;
+          }
+          attempts++;
+        }
+
         if (!data.session) {
-          console.error('No session returned after auth');
+          console.error('No session established after retries');
           throw new Error('Authentication failed - no session');
         }
 
@@ -58,11 +79,11 @@ export default function AuthCallback() {
           email: data.session.user.email
         });
         
-        // Get user metadata
+        // Get user metadata from the session
         const metadata = data.session.user.user_metadata;
         console.log('Processing user metadata:', metadata);
 
-        // Handle organization invites
+        // Handle organization invites if this was an invite flow
         if (metadata?.organisation_id) {
           console.log('Processing organization invite:', { 
             organisation_id: metadata.organisation_id,
@@ -87,11 +108,11 @@ export default function AuthCallback() {
           toast.success(`Welcome to ${metadata.organisationName || 'the organization'}!`);
         }
 
-        // Update auth context
+        // Update auth context with the new session
         console.log('Updating auth context...');
         await checkAuth();
 
-        // Handle redirect
+        // Handle redirect based on whether this was a new invite
         const redirectPath = metadata?.isNewInvite ? '/profile' : '/dashboard';
         console.log('Redirecting user:', { path: redirectPath, isNewInvite: metadata?.isNewInvite });
         
