@@ -1,0 +1,5 @@
+[functions.store-onboarding-analytics]
+verify_jwt = false
+
+[functions.onboarding-analytics]
+verify_jwt = false 

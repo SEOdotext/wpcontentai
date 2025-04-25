@@ -869,7 +869,7 @@ const Onboarding = () => {
           // Update the step text to show a more fluid message
           setState(prev => ({ 
             ...prev, 
-            currentStepText: "Learning how you sound so we can write like you.\n🔍 Selecting and prioritising key pages to understand your tone."
+            currentStepText: "Learning how you sound so we can write like you.\n🔍 Selecting and prioritising key pages to understand your tone and style."
           }));
           
           // Send ALL pages to suggest-key-content so it has full context
@@ -1430,13 +1430,62 @@ const Onboarding = () => {
   // Check if any ideas are liked
   const hasLikedIdeas = () => likedIdeas.length > 0;
 
+  // When ideas are first shown (in startSetup1 after generating ideas)
+  const handleIdeasGenerated = async (ideas: any[]) => {
+    try {
+      const website_id = localStorage.getItem('website_id');
+      const website_url = localStorage.getItem('onboardingWebsite');
+      
+      await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/store-onboarding-analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          website_id,
+          website_url,
+          status: 'ideas_shown'
+        })
+      });
+    } catch (error) {
+      console.error('Error updating onboarding analytics:', error);
+    }
+  };
+
   // Move to Setup 3: Content Generation
-  const handleContinueToContentCreation = () => {
+  const handleContinueToContentCreation = async () => {
     if (!hasLikedIdeas()) {
       sonnerToast("Error", {
         description: "Please like at least one content idea to continue"
       });
       return;
+    }
+
+    // Get all liked ideas before continuing
+    const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]');
+    const likedIdeasData = postIdeas.filter((idea: any) => likedIdeas.includes(idea.id));
+
+    // Update onboarding analytics with selected ideas and status
+    try {
+      const website_id = localStorage.getItem('website_id');
+      const website_url = localStorage.getItem('onboardingWebsite');
+      
+      await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/store-onboarding-analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          website_id,
+          website_url,
+          status: 'ideas_accepted',
+          post_theme_suggestions: likedIdeasData // Store the selected ideas here
+        })
+      });
+    } catch (error) {
+      console.error('Error updating onboarding analytics:', error);
     }
     
     setState(prev => ({
@@ -1450,6 +1499,29 @@ const Onboarding = () => {
     updateUrlParams({ step: 'post-draft' });
     
     startContentGeneration();
+  };
+
+  // When content is generated and shown
+  const handleContentGenerated = async (content: any) => {
+    try {
+      const website_id = localStorage.getItem('website_id');
+      const website_url = localStorage.getItem('onboardingWebsite');
+      
+      await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/store-onboarding-analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          website_id,
+          website_url,
+          status: 'post_shown'
+        })
+      });
+    } catch (error) {
+      console.error('Error updating onboarding analytics:', error);
+    }
   };
 
   // Generate content based on liked idea
@@ -1561,6 +1633,9 @@ const Onboarding = () => {
               website_id: localStorage.getItem('website_id')
             };
             localStorage.setItem('generated_content', JSON.stringify(generatedContent));
+
+            // Call handleContentGenerated to update status
+            handleContentGenerated(generatedContent);
           }, 500); // Add a 500ms delay for a smoother transition
         } else {
           // Handle error case
@@ -1608,7 +1683,56 @@ const Onboarding = () => {
   };
 
   // Move to scheduling step
-  const handleContinueToScheduling = () => {
+  const handleContinueToScheduling = async () => {
+    // Update onboarding analytics with generated content and status
+    try {
+      const website_id = localStorage.getItem('website_id');
+      const website_url = localStorage.getItem('onboardingWebsite');
+      const generatedContent = JSON.parse(localStorage.getItem('generated_content') || '{}');
+      
+      await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/store-onboarding-analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          website_id,
+          website_url,
+          status: 'post_accepted',
+          post_theme_content: {
+            title: generatedContent.title,
+            content: generatedContent.content,
+            status: 'accepted',
+            created_at: generatedContent.created_at
+          } // Store the actual generated article here
+        })
+      });
+    } catch (error) {
+      console.error('Error updating onboarding analytics:', error);
+    }
+
+    // Update status to schedule_shown
+    try {
+      const website_id = localStorage.getItem('website_id');
+      const website_url = localStorage.getItem('onboardingWebsite');
+      
+      await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/store-onboarding-analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          website_id,
+          website_url,
+          status: 'schedule_shown'
+        })
+      });
+    } catch (error) {
+      console.error('Error updating onboarding analytics:', error);
+    }
+
     setState(prev => ({
       ...prev,
       step: 4,
@@ -1681,26 +1805,6 @@ const Onboarding = () => {
 
   // Handle continue to WordPress auth
   const handleContinueToWordPress = () => {
-    // Save publication settings
-    const publicationSettings = {
-      posting_frequency: state.postingFrequency,
-      posting_days: state.postingDays.reduce((acc, day) => {
-        // Count occurrences of each day
-        const count = state.postingDays.filter(d => d === day).length;
-        // Only add each day once with its total count
-        if (!acc.some(d => d.day === day)) {
-          acc.push({ day, count });
-        }
-        return acc;
-      }, []),
-      website_id: localStorage.getItem('website_id'),
-      organisation_id: localStorage.getItem('organisation_id'),
-      writing_style: 'Professional and informative',
-      subject_matters: []
-    };
-    
-    localStorage.setItem('publication_settings', JSON.stringify(publicationSettings));
-    
     setState(prev => ({ ...prev, step: 5 })); // Move to WordPress auth
     updateUrlParams({ step: 'auth' });
   };
@@ -2001,8 +2105,8 @@ const Onboarding = () => {
     }
   };
 
-  // Update handleContinueToAuth to show signup modal
-  const handleContinueToAuth = () => {
+  // Update handleContinueToAuth to send scheduling settings
+  const handleContinueToAuth = async () => {
     // Format posting days to match database structure
     const formattedPostingDays = state.postingDays.reduce<Array<{ day: string; count: number }>>((acc, day) => {
       const existingDay = acc.find(d => d.day === day);
@@ -2014,7 +2118,7 @@ const Onboarding = () => {
       return acc;
     }, []);
 
-    // Save publication settings to localStorage
+    // Save publication settings
     const publicationSettings = {
       posting_frequency: state.postingFrequency,
       posting_days: formattedPostingDays,
@@ -2025,7 +2129,29 @@ const Onboarding = () => {
     };
     
     localStorage.setItem('publication_settings', JSON.stringify(publicationSettings));
-    
+
+    // Update onboarding analytics with scheduling settings and status
+    try {
+      const website_id = localStorage.getItem('website_id');
+      const website_url = localStorage.getItem('onboardingWebsite');
+      
+      await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/store-onboarding-analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          website_id,
+          website_url,
+          status: 'schedule_accepted',
+          scheduling_settings: publicationSettings
+        })
+      });
+    } catch (error) {
+      console.error('Error updating onboarding analytics:', error);
+    }
+
     // Show signup modal
     setState(prev => ({ ...prev, showSignupModal: true }));
   };

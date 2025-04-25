@@ -60,7 +60,7 @@ const LandingPage = () => {
     return domainWithoutWWW.length > 0 && !hasInvalidChars;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -78,6 +78,31 @@ const LandingPage = () => {
     let formattedUrl = website;
     if (!/^https?:\/\//i.test(formattedUrl)) {
       formattedUrl = 'https://' + formattedUrl;
+    }
+    
+    try {
+      // Store website URL in onboarding analytics
+      const website_id = localStorage.getItem('website_id') || crypto.randomUUID();
+      localStorage.setItem('website_id', website_id);
+      
+      const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/store-onboarding-analytics', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          website_id,
+          website_url: formattedUrl,
+          status: 'started'
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Failed to store onboarding analytics');
+      }
+    } catch (error) {
+      console.error('Error storing onboarding analytics:', error);
     }
     
     // Store the formatted website URL
