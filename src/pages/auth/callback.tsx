@@ -21,21 +21,21 @@ export default function AuthCallback() {
         
         // Handle email OTP verification for new users
         if (token && type === 'signup') {
-          console.log('Processing email verification token for new user');
+          console.log('Processing email verification token for organization invite');
           
           const { error: verifyError } = await supabase.auth.verifyOtp({
             token_hash: token,
-            type: 'signup'
+            type: 'invite'
           });
           
           if (verifyError) {
-            console.error('Error verifying email:', verifyError);
-            toast.error('Failed to verify email. Please try again.');
+            console.error('Error verifying invite:', verifyError);
+            toast.error('Failed to verify invitation. Please try again.');
             navigate('/auth', { replace: true });
             return;
           }
           
-          console.log('Email verified successfully');
+          console.log('Organization invite verified successfully');
         }
 
         // Get the current session (either existing or newly created from OTP)
