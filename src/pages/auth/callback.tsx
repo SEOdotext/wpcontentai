@@ -76,29 +76,30 @@ export default function AuthCallback() {
         if (code) {
           console.log('AuthCallback: Found PKCE code, attempting to exchange for session');
           
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          // Let Supabase client handle the code exchange automatically
+          const { data: { session }, error } = await supabase.auth.getSession();
           
           if (error) {
-            console.error('AuthCallback: Error exchanging code for session:', error);
+            console.error('AuthCallback: Error getting session:', error);
             throw error;
           }
 
-          if (!data?.session) {
-            console.error('AuthCallback: No session returned from code exchange');
-            throw new Error('No session returned from code exchange');
+          if (!session) {
+            console.error('AuthCallback: No session returned');
+            throw new Error('No session returned');
           }
 
           console.log('AuthCallback: Successfully obtained session');
-          console.log('AuthCallback: User ID:', data.session.user.id);
-          console.log('AuthCallback: User email:', data.session.user.email);
+          console.log('AuthCallback: User ID:', session.user.id);
+          console.log('AuthCallback: User email:', session.user.email);
 
           // Handle organization invitation if present
-          const inviteData = data.session.user.user_metadata;
+          const inviteData = session.user.user_metadata;
           if (inviteData?.organisation_id) {
             console.log('AuthCallback: Found organization data, processing invitation');
             
             const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
-              p_email: data.session.user.email,
+              p_email: session.user.email,
               p_organisation_id: inviteData.organisation_id,
               p_role: inviteData.role || 'member',
               p_website_ids: inviteData.website_ids || []
