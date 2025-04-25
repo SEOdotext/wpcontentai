@@ -184,15 +184,17 @@ const TeamManagement = () => {
     try {
       console.log('Sending invitation for:', email);
 
-      // Use Supabase's built-in invitation system
+      // Use Supabase's magic link system for invites
       const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?type=invite&next=/dashboard`,
+          shouldCreateUser: true, // Allow new user creation
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             organisation_id: organisation.id,
             role: role,
-            website_ids: selectedWebsites
+            website_ids: selectedWebsites,
+            isNewInvite: true
           }
         }
       });
