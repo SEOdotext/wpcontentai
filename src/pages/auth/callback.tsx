@@ -34,18 +34,18 @@ export default function AuthCallback() {
         if (code) {
           console.log('AuthCallback: Found PKCE code, attempting to exchange for session');
           
-          // First exchange the code for a session
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          // Get the session directly instead of exchanging code
+          const { data, error } = await supabase.auth.getSession();
           
           if (error) {
-            console.error('AuthCallback: Error exchanging code for session:', error);
+            console.error('AuthCallback: Error getting session:', error);
             toast.error('Authentication failed. Please try logging in again.');
             navigate('/auth', { replace: true });
             return;
           }
 
           if (!data?.session) {
-            console.error('AuthCallback: No session returned from code exchange');
+            console.error('AuthCallback: No session returned');
             toast.error('Authentication failed. Please try logging in again.');
             navigate('/auth', { replace: true });
             return;
