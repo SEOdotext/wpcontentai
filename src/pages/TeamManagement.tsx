@@ -207,7 +207,8 @@ const TeamManagement = () => {
             invitedByEmail: currentSession.user.email,
             organisationName: organisation.name
           }
-        }
+        },
+        type: 'invite'  // Specify that this is an organization invite
       });
 
       if (signInError) {
