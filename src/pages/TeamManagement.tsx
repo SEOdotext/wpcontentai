@@ -196,6 +196,7 @@ const TeamManagement = () => {
         email: email.trim(),
         options: {
           shouldCreateUser: true,
+          // Don't include type in redirect URL as Supabase adds it
           emailRedirectTo: 'https://contentgardener.ai/auth/callback',
           data: {
             organisation_id: organisation.id,
@@ -214,14 +215,15 @@ const TeamManagement = () => {
         throw signInError;
       }
 
+      console.log('Invitation sent successfully:', signInData);
+
       // Handle organization setup through RPC
-      const { data: invitationResponse, error: invitationError } = await supabase
-        .rpc('handle_organisation_invitation', {
-          p_email: email.trim(),
-          p_organisation_id: organisation.id,
-          p_role: role,
-          p_website_ids: selectedWebsites
-        });
+      const { data: invitationResponse, error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
+        p_email: email.trim(),
+        p_organisation_id: organisation.id,
+        p_role: role,
+        p_website_ids: selectedWebsites
+      });
 
       if (invitationError) {
         console.error('Error setting up organization:', invitationError);

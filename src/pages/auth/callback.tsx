@@ -14,55 +14,61 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        console.log('Starting callback handling with params:', {
+        // Log all URL parameters for debugging
+        console.log('Auth callback URL info:', {
+          pathname: location.pathname,
+          search: location.search,
           hash: location.hash,
-          search: location.search
+          params: Object.fromEntries(searchParams.entries())
         });
 
-        // First try to exchange the token if present
-        const hashParams = new URLSearchParams(location.hash.substring(1));
-        if (hashParams.get('access_token')) {
-          console.log('Found access token in hash, exchanging...');
-          const { data: { session }, error } = await supabase.auth.setSession({
-            access_token: hashParams.get('access_token') || '',
-            refresh_token: hashParams.get('refresh_token') || ''
+        // Get the token from the URL
+        const token = searchParams.get('token') || '';
+        const type = searchParams.get('type');
+        const refreshToken = searchParams.get('refresh_token');
+
+        console.log('Processing auth callback:', { type, hasToken: !!token, hasRefreshToken: !!refreshToken });
+
+        // If we have a token, we need to verify it
+        if (token) {
+          console.log('Verifying token...');
+          
+          // First try to verify the token
+          const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'magiclink'
           });
 
-          if (error) throw error;
-          if (!session) throw new Error('No session after token exchange');
-          
-          console.log('Token exchange successful');
+          if (verifyError) {
+            console.error('Token verification failed:', verifyError);
+            throw verifyError;
+          }
+
+          console.log('Token verification successful:', !!verifyData?.user);
         }
 
-        // Now get the current session
+        // Get the current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+
         if (sessionError) {
           console.error('Error getting session:', sessionError);
           throw sessionError;
         }
-        
+
         if (!session) {
-          console.error('No session found');
-          toast.error('Authentication failed. Please try again.');
-          navigate('/auth', { replace: true });
-          return;
+          console.error('No session found after verification');
+          throw new Error('Authentication failed - no session');
         }
 
-        console.log('Session established, checking metadata');
+        console.log('Session established successfully');
 
         // Get user metadata
         const metadata = session.user.user_metadata;
-        console.log('Processing user metadata:', {
-          email: session.user.email,
-          role: metadata?.role,
-          organisationId: metadata?.organisation_id,
-          isNewInvite: metadata?.isNewInvite
-        });
+        console.log('User metadata:', metadata);
 
         // Handle organization invites
         if (metadata?.organisation_id) {
-          console.log(`Processing ${metadata.role} invitation to ${metadata.organisationName}`);
+          console.log('Processing organization invite');
           
           const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
             p_email: session.user.email,
@@ -75,44 +81,37 @@ export default function AuthCallback() {
             console.error('Error processing organization invite:', invitationError);
             toast.error('Failed to process invitation. Please contact support.');
           } else {
-            const roleMessage = metadata.role === 'admin' 
-              ? 'You have been added as an administrator.' 
-              : 'You have been added as a team member.';
-            
             console.log('Organization invite processed successfully');
-            toast.success(`Welcome to ${metadata.organisationName}! ${roleMessage}`);
-          }
-
-          // Update auth context
-          await checkAuth();
-
-          // For new invites, redirect to profile setup
-          if (metadata.isNewInvite) {
-            navigate('/profile', { 
-              replace: true,
-              state: { 
-                newUser: true,
-                role: metadata.role,
-                message: 'Please set up your password and account preferences.' 
-              }
-            });
-            return;
+            toast.success('Welcome! Your account has been set up.');
           }
         }
 
-        // For all other cases, update auth and go to dashboard
+        // Update auth context
         await checkAuth();
-        navigate('/dashboard', { replace: true });
+
+        // Redirect based on metadata
+        if (metadata?.isNewInvite) {
+          navigate('/profile', { 
+            replace: true,
+            state: { 
+              newUser: true,
+              role: metadata.role,
+              message: 'Please set up your password and account preferences.' 
+            }
+          });
+        } else {
+          navigate('/dashboard', { replace: true });
+        }
 
       } catch (error) {
-        console.error('Error in callback:', error);
+        console.error('Error in auth callback:', error);
         toast.error('Authentication failed. Please try again.');
         navigate('/auth', { replace: true });
       }
     };
 
     handleCallback();
-  }, [navigate, location, checkAuth]);
+  }, [navigate, location, searchParams, checkAuth]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
