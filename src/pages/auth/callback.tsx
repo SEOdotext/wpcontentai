@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react';
 
 // IMPORTANT: Auth Flow
 // 1. User clicks link in email
-// 2. If PKCE token (starts with pkce_), we need to exchange it
+// 2. If admin invite, we verify the token with type 'invite'
 // 3. If regular magic link, Supabase handles verification
 // 4. In both cases, we end up with a session
 // 5. Then we can process organization setup if needed
@@ -21,38 +21,67 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        console.log('Auth callback starting...');
-
-        // Check if we have a token to exchange
+        // Log all URL parameters
         const token = searchParams.get('token');
-        if (token?.startsWith('pkce_')) {
-          console.log('Exchanging PKCE token...');
-          const pkceCode = token.replace('pkce_', '');
-          await supabase.auth.exchangeCodeForSession(pkceCode);
+        const type = searchParams.get('type');
+        const code = searchParams.get('code');
+        
+        console.log('Auth callback starting with:', {
+          hasToken: !!token,
+          type,
+          hasCode: !!code,
+          fullUrl: window.location.href
+        });
+
+        // Handle admin invite verification
+        if (token && type === 'invite') {
+          console.log('Processing organization invite token');
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'invite'
+          });
+
+          if (error) {
+            console.error('Error verifying invite:', error);
+            throw error;
+          }
+
+          console.log('Organization invite verified successfully');
         }
 
-        // Now get the session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Try to get the session
+        console.log('Attempting to get session...');
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
-          console.error('Failed to get session:', sessionError);
+          console.error('Error getting session:', sessionError);
           throw sessionError;
         }
 
-        if (!session) {
-          console.error('No session found');
+        if (!sessionData.session) {
+          console.error('No session found after verification');
           throw new Error('Authentication failed - no session');
         }
 
-        console.log('Session established:', { email: session.user.email });
+        console.log('Session established successfully:', {
+          userId: sessionData.session.user.id,
+          email: sessionData.session.user.email,
+          hasMetadata: !!sessionData.session.user.user_metadata
+        });
 
         // Handle organization setup if needed
-        const metadata = session.user.user_metadata;
+        const metadata = sessionData.session.user.user_metadata;
+        console.log('Processing metadata:', metadata);
+
         if (metadata?.organisation_id) {
-          console.log('Setting up organization membership');
+          console.log('Setting up organization membership:', {
+            orgId: metadata.organisation_id,
+            role: metadata.role,
+            websiteCount: metadata.website_ids?.length || 0
+          });
           
           const { error: inviteError } = await supabase.rpc('handle_organisation_invitation', {
-            p_email: session.user.email,
+            p_email: sessionData.session.user.email,
             p_organisation_id: metadata.organisation_id,
             p_role: metadata.role || 'member',
             p_website_ids: metadata.website_ids || []
@@ -62,11 +91,18 @@ export default function AuthCallback() {
             console.error('Organization setup failed:', inviteError);
             throw inviteError;
           }
+
+          console.log('Organization setup completed successfully');
         }
 
         // Update auth context and redirect
+        console.log('Updating auth context...');
         await checkAuth();
-        navigate(metadata?.isNewInvite ? '/profile' : '/dashboard', { 
+
+        const redirectPath = metadata?.isNewInvite ? '/profile' : '/dashboard';
+        console.log('Authentication complete, redirecting to:', redirectPath);
+        
+        navigate(redirectPath, { 
           replace: true,
           state: metadata?.isNewInvite ? {
             newUser: true,
@@ -76,7 +112,7 @@ export default function AuthCallback() {
         });
 
       } catch (error) {
-        console.error('Auth callback failed:', error);
+        console.error('Auth callback failed with error:', error);
         toast.error('Authentication failed. Please try again.');
         navigate('/auth', { replace: true });
       }

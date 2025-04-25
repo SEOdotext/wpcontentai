@@ -184,47 +184,28 @@ const TeamManagement = () => {
     try {
       console.log('Starting team member invitation process:', { email, role, organisation_id: organisation.id });
 
-      // Get current user's session
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      
-      if (!currentSession?.user) {
-        console.error('No active session found for admin');
-        throw new Error('No active session found');
+      // Send invitation using the admin API
+      const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email.trim(), {
+        data: {
+          organisation_id: organisation.id,
+          role: role,
+          website_ids: selectedWebsites,
+          isNewInvite: true,
+          organisationName: organisation.name
+        },
+        redirectTo: 'https://contentgardener.ai/auth/callback'
+      });
+
+      if (inviteError) {
+        console.error('Failed to send invitation:', inviteError);
+        throw inviteError;
       }
 
-      console.log('Admin session verified:', { admin_email: currentSession.user.email });
-
-      // Send magic link invitation
-      const { error: signInError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          emailRedirectTo: 'https://contentgardener.ai/auth/callback',
-          shouldCreateUser: true,  // Create new users if they don't exist
-          data: {
-            organisation_id: organisation.id,
-            role: role,
-            website_ids: selectedWebsites,
-            isNewInvite: true,
-            organisationName: organisation.name
-          }
-        }
-      });
-
-      if (signInError) throw signInError;
-
-      console.log('Magic link invitation sent successfully:', {
-        email,
-        organisation_id: organisation.id,
-        role,
-        website_count: selectedWebsites.length
-      });
-
-      // Reset form and close dialog
+      // Reset form and show success message
       setEmail('');
       setRole('member');
       setSelectedWebsites([]);
       setIsInviteDialogOpen(false);
-
       toast.success('Invitation sent successfully. The user will receive an email to join the organization.');
 
       // Refresh the team list
