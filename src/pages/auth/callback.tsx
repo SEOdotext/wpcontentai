@@ -16,12 +16,11 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // First check if we have an existing session (returning user)
-        const { data: { session: existingSession } } = await supabase.auth.getSession();
+        console.log('Starting callback handling with type:', type);
         
-        // Handle email OTP verification for new users
-        if (token && type === 'signup') {
-          console.log('Processing email verification token for organization invite');
+        // Handle email OTP verification for invites
+        if (token && type === 'invite') {
+          console.log('Processing organization invite token');
           
           const { error: verifyError } = await supabase.auth.verifyOtp({
             token_hash: token,
@@ -35,24 +34,30 @@ export default function AuthCallback() {
             return;
           }
           
-          console.log('Organization invite verified successfully');
+          console.log('Organization invite token verified successfully');
         }
 
-        // Get the current session (either existing or newly created from OTP)
+        // Get the current session after OTP verification
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (error) throw error;
+        if (error) {
+          console.error('Error getting session:', error);
+          throw error;
+        }
         
         if (!session) {
-          console.log('No session found after verification, redirecting to login');
+          console.error('No session found after verification');
+          toast.error('Verification failed. Please try again.');
           navigate('/auth', { replace: true });
           return;
         }
 
+        console.log('Session established successfully');
+
         // Process organization invitation from the user metadata
         const inviteData = session.user.user_metadata;
         if (inviteData?.organisation_id) {
-          console.log('Processing organization invitation');
+          console.log('Processing organization membership');
           
           const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
             p_email: session.user.email,
@@ -62,28 +67,19 @@ export default function AuthCallback() {
           });
 
           if (invitationError) {
-            console.error('Error processing invitation:', invitationError);
+            console.error('Error processing organization membership:', invitationError);
             toast.error('Failed to process invitation. Please contact support.');
           } else {
-            console.log('Successfully processed organization invitation');
-            // Different messages for new vs existing users
-            if (existingSession) {
-              toast.success('You have been added to the organization.');
-            } else {
-              toast.success('Welcome! Your account is now set up.');
-            }
+            console.log('Successfully processed organization membership');
+            toast.success('Welcome! Your account has been set up.');
           }
         }
 
         // Update auth state with the new session
         await checkAuth();
         
-        // Different redirects for new vs existing users
-        if (existingSession) {
-          // Existing user - go to dashboard or next page
-          navigate(next, { replace: true });
-        } else {
-          // New user - go to profile setup
+        // For new users, go to profile setup
+        if (type === 'invite') {
           navigate('/profile', { 
             replace: true,
             state: { 
@@ -91,6 +87,9 @@ export default function AuthCallback() {
               message: 'Please set up your password and account preferences.' 
             }
           });
+        } else {
+          // For existing users, go to dashboard or next page
+          navigate(next, { replace: true });
         }
       } catch (error) {
         console.error('Error during verification:', error);
