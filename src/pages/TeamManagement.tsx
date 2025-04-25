@@ -204,8 +204,7 @@ const TeamManagement = () => {
             isNewInvite: true,
             invitedBy: currentSession.user.id,
             invitedByEmail: currentSession.user.email,
-            organisationName: organisation.name,
-            type: 'invite'
+            organisationName: organisation.name
           }
         }
       });
