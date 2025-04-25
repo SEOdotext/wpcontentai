@@ -191,12 +191,43 @@ const TeamManagement = () => {
         throw new Error('No active session found');
       }
 
+      // First check if the user already exists
+      const { data: existingUser, error: userError } = await supabase
+        .from('users')
+        .select('id, email')
+        .eq('email', email.trim())
+        .single();
+
+      if (userError && userError.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error checking existing user:', userError);
+        throw userError;
+      }
+
+      // If user exists, check if they're already in the organization
+      if (existingUser) {
+        const { data: existingMember, error: memberError } = await supabase
+          .from('organisation_memberships')
+          .select('id')
+          .eq('member_id', existingUser.id)
+          .eq('organisation_id', organisation.id)
+          .single();
+
+        if (memberError && memberError.code !== 'PGRST116') {
+          console.error('Error checking existing membership:', memberError);
+          throw memberError;
+        }
+
+        if (existingMember) {
+          toast.error('User is already a member of this organization');
+          return;
+        }
+      }
+
       // Use Supabase's magic link system for invites
       const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
           shouldCreateUser: true,
-          // Don't include type in redirect URL as Supabase adds it
           emailRedirectTo: 'https://contentgardener.ai/auth/callback',
           data: {
             organisation_id: organisation.id,
@@ -205,10 +236,10 @@ const TeamManagement = () => {
             isNewInvite: true,
             invitedBy: currentSession.user.id,
             invitedByEmail: currentSession.user.email,
-            organisationName: organisation.name
+            organisationName: organisation.name,
+            type: 'invite'
           }
-        },
-        type: 'invite'  // Specify that this is an organization invite
+        }
       });
 
       if (signInError) {
@@ -218,17 +249,20 @@ const TeamManagement = () => {
 
       console.log('Invitation sent successfully:', signInData);
 
-      // Handle organization setup through RPC
-      const { data: invitationResponse, error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
-        p_email: email.trim(),
-        p_organisation_id: organisation.id,
-        p_role: role,
-        p_website_ids: selectedWebsites
-      });
+      // Create a pending invitation record
+      const { error: pendingError } = await supabase
+        .from('pending_invitations')
+        .insert({
+          email: email.trim(),
+          organisation_id: organisation.id,
+          role: role,
+          website_ids: selectedWebsites,
+          invited_by: currentSession.user.id
+        });
 
-      if (invitationError) {
-        console.error('Error setting up organization:', invitationError);
-        throw invitationError;
+      if (pendingError) {
+        console.error('Error creating pending invitation:', pendingError);
+        throw pendingError;
       }
 
       toast.success('Team member invited successfully');

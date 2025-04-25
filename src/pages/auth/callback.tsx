@@ -22,87 +22,74 @@ export default function AuthCallback() {
           params: Object.fromEntries(searchParams.entries())
         });
 
-        // Get the token from the URL
-        const token = searchParams.get('token') || '';
-        const type = searchParams.get('type');
-        const refreshToken = searchParams.get('refresh_token');
+        // Get the code from the URL
+        const code = searchParams.get('code');
+        
+        console.log('Processing auth callback:', { hasCode: !!code });
 
-        console.log('Processing auth callback:', { type, hasToken: !!token, hasRefreshToken: !!refreshToken });
-
-        // If we have a token, we need to verify it
-        if (token) {
-          console.log('Processing verification token:', { type });
+        // If we have a code, we need to exchange it for a session
+        if (code) {
+          console.log('Processing auth code...');
           
-          // Verify the token - handle both magiclink and invite types
-          const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: type === 'invite' ? 'invite' : 'magiclink'  // Handle both types
-          });
+          // Exchange the code for a session
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-          if (verifyError) {
-            console.error('Token verification failed:', verifyError);
-            throw verifyError;
+          if (error) {
+            console.error('Code exchange failed:', error);
+            throw error;
           }
 
-          console.log('Token verification successful:', !!verifyData?.user);
-        }
-
-        // Get the current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error('Error getting session:', sessionError);
-          throw sessionError;
-        }
-
-        if (!session) {
-          console.error('No session found after verification');
-          throw new Error('Authentication failed - no session');
-        }
-
-        console.log('Session established successfully');
-
-        // Get user metadata
-        const metadata = session.user.user_metadata;
-        console.log('User metadata:', metadata);
-
-        // Handle organization invites
-        if (metadata?.organisation_id) {
-          console.log('Processing organization invite');
-          
-          const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
-            p_email: session.user.email,
-            p_organisation_id: metadata.organisation_id,
-            p_role: metadata.role || 'member',
-            p_website_ids: metadata.website_ids || []
-          });
-
-          if (invitationError) {
-            console.error('Error processing organization invite:', invitationError);
-            toast.error('Failed to process invitation. Please contact support.');
-          } else {
-            console.log('Organization invite processed successfully');
-            toast.success('Welcome! Your account has been set up.');
+          if (!data.session) {
+            console.error('No session returned from code exchange');
+            throw new Error('Authentication failed - no session');
           }
-        }
 
-        // Update auth context
-        await checkAuth();
+          console.log('Code exchange successful:', !!data.session);
+          
+          // Get user metadata
+          const metadata = data.session.user.user_metadata;
+          console.log('User metadata:', metadata);
 
-        // Redirect based on metadata
-        if (metadata?.isNewInvite) {
-          navigate('/profile', { 
-            replace: true,
-            state: { 
-              newUser: true,
-              role: metadata.role,
-              message: 'Please set up your password and account preferences.' 
+          // Handle organization invites
+          if (metadata?.organisation_id) {
+            console.log('Processing organization invite');
+            
+            const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
+              p_email: data.session.user.email,
+              p_organisation_id: metadata.organisation_id,
+              p_role: metadata.role || 'member',
+              p_website_ids: metadata.website_ids || []
+            });
+
+            if (invitationError) {
+              console.error('Error processing organization invite:', invitationError);
+              toast.error('Failed to process invitation. Please contact support.');
+            } else {
+              console.log('Organization invite processed successfully');
+              toast.success('Welcome! Your account has been set up.');
             }
-          });
-        } else {
-          navigate('/dashboard', { replace: true });
-        }
+          }
 
+          // Update auth context
+          await checkAuth();
+
+          // Redirect based on metadata
+          if (metadata?.isNewInvite) {
+            navigate('/profile', { 
+              replace: true,
+              state: { 
+                newUser: true,
+                role: metadata.role,
+                message: 'Please set up your password and account preferences.' 
+              }
+            });
+          } else {
+            navigate('/dashboard', { replace: true });
+          }
+        } else {
+          console.error('No auth code found in URL');
+          throw new Error('No authentication code found');
+        }
       } catch (error) {
         console.error('Error in auth callback:', error);
         toast.error('Authentication failed. Please try again.');
