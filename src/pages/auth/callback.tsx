@@ -1,14 +1,19 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { checkAuth } = useAuth();
   const next = searchParams.get('next') || '/dashboard';
   const code = searchParams.get('code');
   const token = searchParams.get('token');
+  const type = searchParams.get('type');
 
   useEffect(() => {
     const handleAuthCallback = async () => {
@@ -16,90 +21,107 @@ export default function AuthCallback() {
       console.log('AuthCallback: Current URL:', window.location.href);
       console.log('AuthCallback: URL parameters:', Object.fromEntries(searchParams.entries()));
       
-      // Verify Supabase client
-      if (!supabase?.auth) {
-        console.error('AuthCallback: Supabase client not properly initialized');
-        toast.error('Authentication service not available');
-        navigate('/auth/error');
-        return;
-      }
-
       try {
-        // Check if user is trying to use the Supabase URL directly
-        if (token && token.startsWith('pkce_')) {
-          console.error('AuthCallback: Direct Supabase URL access detected');
-          toast.error('Please click the link in your email instead of copying it');
-          navigate('/auth');
+        // Verify Supabase client
+        if (!supabase?.auth) {
+          console.error('AuthCallback: Supabase client not properly initialized');
+          toast.error('Authentication service not available');
+          navigate('/auth/error');
           return;
         }
 
-        if (!code) {
-          console.log('AuthCallback: No code found in URL');
-          navigate('/auth');
-          return;
-        }
-
-        console.log('AuthCallback: Found code, attempting to exchange for session');
-        
-        // First check if we already have a session
-        const { data: { session: existingSession } } = await supabase.auth.getSession();
-        if (existingSession) {
-          console.log('AuthCallback: Found existing session, checking if valid');
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
-          if (user && !userError) {
-            console.log('AuthCallback: Existing session is valid, proceeding to dashboard');
-            navigate(next);
+        // Handle email verification flow
+        if (token && type === 'signup') {
+          console.log('AuthCallback: Email verification token detected');
+          
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'signup'
+          });
+          
+          if (verifyError) {
+            console.error('AuthCallback: Error verifying email:', verifyError);
+            throw verifyError;
+          }
+          
+          console.log('AuthCallback: Email verified successfully');
+          
+          // Check for specific redirect after verification
+          const redirectTo = searchParams.get('redirect_to');
+          if (redirectTo) {
+            console.log('AuthCallback: Redirecting to:', redirectTo);
+            window.location.href = redirectTo;
             return;
           }
         }
 
-        // Exchange the code for a session
-        console.log('AuthCallback: Exchanging code for session...');
-        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-        
-        if (error) {
-          console.error('AuthCallback: Error exchanging code for session:', error);
-          throw error;
-        }
-
-        if (!data?.session) {
-          console.error('AuthCallback: No session returned from code exchange');
-          throw new Error('No session returned from code exchange');
-        }
-
-        console.log('AuthCallback: Successfully obtained session');
-        console.log('AuthCallback: User ID:', data.session.user.id);
-        console.log('AuthCallback: User email:', data.session.user.email);
-
-        // Handle organization invitation if present
-        const inviteData = data.session.user.user_metadata;
-        if (inviteData?.organisation_id) {
-          console.log('AuthCallback: Found organization data, processing invitation');
+        // Handle hash fragment (for access tokens)
+        const hash = window.location.hash;
+        if (hash.includes('access_token=') || hash.includes('type=signup')) {
+          console.log('AuthCallback: Token detected in hash, processing authentication');
           
-          const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
-            p_email: data.session.user.email,
-            p_organisation_id: inviteData.organisation_id,
-            p_role: inviteData.role || 'member',
-            p_website_ids: inviteData.website_ids || []
-          });
-
-          if (invitationError) {
-            console.error('AuthCallback: Error handling organization invitation:', invitationError);
-            throw invitationError;
+          const { error } = await supabase.auth.getSession();
+          if (error) {
+            console.error('AuthCallback: Error processing hash authentication:', error);
+            throw error;
           }
 
-          console.log('AuthCallback: Successfully processed organization invitation');
+          await checkAuth();
+          console.log('AuthCallback: Hash authentication successful, redirecting to dashboard');
+          navigate('/dashboard', { replace: true });
+          return;
         }
 
-        // Verify we can get the user
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-          console.error('AuthCallback: Failed to verify user after session exchange:', userError);
-          throw new Error('Failed to verify user after session exchange');
+        // Handle PKCE code exchange
+        if (code) {
+          console.log('AuthCallback: Found PKCE code, attempting to exchange for session');
+          
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          
+          if (error) {
+            console.error('AuthCallback: Error exchanging code for session:', error);
+            throw error;
+          }
+
+          if (!data?.session) {
+            console.error('AuthCallback: No session returned from code exchange');
+            throw new Error('No session returned from code exchange');
+          }
+
+          console.log('AuthCallback: Successfully obtained session');
+          console.log('AuthCallback: User ID:', data.session.user.id);
+          console.log('AuthCallback: User email:', data.session.user.email);
+
+          // Handle organization invitation if present
+          const inviteData = data.session.user.user_metadata;
+          if (inviteData?.organisation_id) {
+            console.log('AuthCallback: Found organization data, processing invitation');
+            
+            const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
+              p_email: data.session.user.email,
+              p_organisation_id: inviteData.organisation_id,
+              p_role: inviteData.role || 'member',
+              p_website_ids: inviteData.website_ids || []
+            });
+
+            if (invitationError) {
+              console.error('AuthCallback: Error handling organization invitation:', invitationError);
+              throw invitationError;
+            }
+
+            console.log('AuthCallback: Successfully processed organization invitation');
+          }
+
+          // Verify the session is active
+          await checkAuth();
+          console.log('AuthCallback: Successfully verified session, redirecting to:', next);
+          navigate(next, { replace: true });
+          return;
         }
 
-        console.log('AuthCallback: Successfully verified user, redirecting to:', next);
-        navigate(next);
+        // If we reach here, no valid authentication method was found
+        console.log('AuthCallback: No valid authentication method found, redirecting to auth page');
+        navigate('/auth', { replace: true });
       } catch (error) {
         console.error('AuthCallback: Fatal error:', error);
         toast.error('Failed to complete signup. Please try clicking the link in your email again.');
@@ -108,11 +130,12 @@ export default function AuthCallback() {
     };
 
     handleAuthCallback();
-  }, [navigate, next, code, searchParams, token]);
+  }, [navigate, next, code, searchParams, token, type, location.hash, checkAuth]);
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
         <h2 className="text-2xl font-semibold mb-4">Setting up your account...</h2>
         <p className="text-muted-foreground">Please wait while we configure your access.</p>
       </div>
