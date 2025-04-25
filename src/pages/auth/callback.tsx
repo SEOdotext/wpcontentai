@@ -52,19 +52,8 @@ export default function AuthCallback() {
         // Process organization invitation from the user metadata
         const inviteData = session.user.user_metadata;
         if (inviteData?.organisation_id) {
-          console.log('Processing organization invitation with role:', inviteData.role);
+          console.log('Processing organization invitation');
           
-          // For admins, we don't need to wait for invitation processing
-          // The database policy will allow immediate access
-          if (inviteData.role === 'admin') {
-            console.log('Admin user detected, updating auth state');
-            await checkAuth();
-            toast.success('Welcome! You now have admin access.');
-            navigate(next, { replace: true });
-            return;
-          }
-
-          // For members, process the invitation
           const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
             p_email: session.user.email,
             p_organisation_id: inviteData.organisation_id,
@@ -77,6 +66,7 @@ export default function AuthCallback() {
             toast.error('Failed to process invitation. Please contact support.');
           } else {
             console.log('Successfully processed organization invitation');
+            // Different messages for new vs existing users
             if (existingSession) {
               toast.success('You have been added to the organization.');
             } else {
