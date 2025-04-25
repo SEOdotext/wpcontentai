@@ -16,13 +16,14 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        console.log('Starting callback handler with token:', token, 'type:', type);
+        // First check if we have an existing session (returning user)
+        const { data: { session: existingSession } } = await supabase.auth.getSession();
         
         // Handle email OTP verification for new users
         if (token && type === 'signup') {
-          console.log('Processing email verification token');
+          console.log('Processing email verification token for new user');
           
-          const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+          const { error: verifyError } = await supabase.auth.verifyOtp({
             token_hash: token,
             type: 'signup'
           });
@@ -34,41 +35,37 @@ export default function AuthCallback() {
             return;
           }
           
-          console.log('Email verified successfully:', verifyData);
+          console.log('Email verified successfully');
         }
 
-        // Wait a moment for the session to be established
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // Get the current session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Get the current session (either existing or newly created from OTP)
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (sessionError) {
-          console.error('Error getting session:', sessionError);
-          throw sessionError;
-        }
+        if (error) throw error;
         
         if (!session) {
-          console.error('No session found after verification');
-          toast.error('Unable to establish session. Please try logging in again.');
+          console.log('No session found after verification, redirecting to login');
           navigate('/auth', { replace: true });
           return;
         }
 
-        console.log('Session established:', session.user.id);
-        console.log('User metadata:', session.user.user_metadata);
-
         // Process organization invitation from the user metadata
         const inviteData = session.user.user_metadata;
         if (inviteData?.organisation_id) {
-          console.log('Processing organization invitation:', {
-            email: session.user.email,
-            organisationId: inviteData.organisation_id,
-            role: inviteData.role,
-            websiteIds: inviteData.website_ids
-          });
+          console.log('Processing organization invitation with role:', inviteData.role);
           
-          const { data: inviteResult, error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
+          // For admins, we don't need to wait for invitation processing
+          // The database policy will allow immediate access
+          if (inviteData.role === 'admin') {
+            console.log('Admin user detected, updating auth state');
+            await checkAuth();
+            toast.success('Welcome! You now have admin access.');
+            navigate(next, { replace: true });
+            return;
+          }
+
+          // For members, process the invitation
+          const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
             p_email: session.user.email,
             p_organisation_id: inviteData.organisation_id,
             p_role: inviteData.role || 'member',
@@ -79,31 +76,24 @@ export default function AuthCallback() {
             console.error('Error processing invitation:', invitationError);
             toast.error('Failed to process invitation. Please contact support.');
           } else {
-            console.log('Organization invitation processed:', inviteResult);
-            
-            if (inviteData.role === 'admin') {
-              toast.success('Welcome! Your admin account has been set up.');
+            console.log('Successfully processed organization invitation');
+            if (existingSession) {
+              toast.success('You have been added to the organization.');
             } else {
-              toast.success('Welcome! Your account has been set up.');
+              toast.success('Welcome! Your account is now set up.');
             }
           }
         }
 
-        // Update auth state
+        // Update auth state with the new session
         await checkAuth();
         
-        // Redirect based on role
-        if (inviteData?.role === 'admin') {
-          console.log('Redirecting admin to team management');
-          navigate('/team', { 
-            replace: true,
-            state: { 
-              newAdmin: true,
-              message: 'Welcome! You can manage your team here.' 
-            }
-          });
+        // Different redirects for new vs existing users
+        if (existingSession) {
+          // Existing user - go to dashboard or next page
+          navigate(next, { replace: true });
         } else {
-          console.log('Redirecting member to profile setup');
+          // New user - go to profile setup
           navigate('/profile', { 
             replace: true,
             state: { 
@@ -113,7 +103,7 @@ export default function AuthCallback() {
           });
         }
       } catch (error) {
-        console.error('Error in callback handler:', error);
+        console.error('Error during verification:', error);
         toast.error('Verification failed. Please try again.');
         navigate('/auth', { replace: true });
       }
