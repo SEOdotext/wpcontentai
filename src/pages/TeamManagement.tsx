@@ -194,34 +194,22 @@ const TeamManagement = () => {
 
       console.log('Admin session verified:', { admin_email: currentSession.user.email });
 
-      // IMPORTANT: Magic Link Flow
-      // 1. We use signInWithOtp to send a magic link email
-      // 2. When clicked, Supabase verifies the link and creates a session
-      // 3. Then redirects to our callback URL
-      // 4. In the callback, we just use getSession() - DO NOT try to exchange codes!
-      // 5. The session will already be set up by Supabase
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
+      // Send magic link invitation
+      const { error: signInError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          shouldCreateUser: true,  // Creates new user if they don't exist
-          emailRedirectTo: 'https://contentgardener.ai/auth/callback',  // Where Supabase will redirect after verification
+          emailRedirectTo: 'https://contentgardener.ai/auth/callback',
           data: {
-            // This metadata will be available in the session after verification
             organisation_id: organisation.id,
             role: role,
             website_ids: selectedWebsites,
             isNewInvite: true,
-            invitedBy: currentSession.user.id,
-            invitedByEmail: currentSession.user.email,
             organisationName: organisation.name
           }
         }
       });
 
-      if (signInError) {
-        console.error('Failed to send invitation:', signInError);
-        throw signInError;
-      }
+      if (signInError) throw signInError;
 
       console.log('Magic link invitation sent successfully:', {
         email,

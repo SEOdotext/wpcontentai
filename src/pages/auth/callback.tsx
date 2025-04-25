@@ -23,7 +23,15 @@ export default function AuthCallback() {
       try {
         console.log('Auth callback starting...');
 
-        // Get session - Supabase has already handled the verification
+        // Check if we have a token to exchange
+        const token = searchParams.get('token');
+        if (token?.startsWith('pkce_')) {
+          console.log('Exchanging PKCE token...');
+          const pkceCode = token.replace('pkce_', '');
+          await supabase.auth.exchangeCodeForSession(pkceCode);
+        }
+
+        // Now get the session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
