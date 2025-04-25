@@ -31,7 +31,23 @@ export default function AuthCallback() {
 
         let session;
 
-        if (token && type === 'magiclink') {
+        // If we have a PKCE token, extract the code from it
+        if (token?.startsWith('pkce_')) {
+          console.log('Processing PKCE token...');
+          // The code is the token without the pkce_ prefix
+          const pkceCode = token.replace('pkce_', '');
+          
+          // Exchange the PKCE code for a session
+          const { data, error } = await supabase.auth.exchangeCodeForSession(pkceCode);
+
+          if (error) {
+            console.error('PKCE code exchange failed:', error);
+            throw error;
+          }
+
+          session = data.session;
+          console.log('PKCE code exchange successful:', !!session);
+        } else if (token && type === 'magiclink') {
           console.log('Processing magic link verification...');
           
           // Verify the magic link
