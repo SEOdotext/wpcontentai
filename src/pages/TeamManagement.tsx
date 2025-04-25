@@ -184,9 +184,8 @@ const TeamManagement = () => {
     try {
       console.log('Starting team member invitation process:', { email, role, organisation_id: organisation.id });
 
-      // Generate invite link using the admin API
-      const { data, error: generateError } = await supabase.auth.admin.generateLink({
-        type: 'invite',
+      // Send invitation using the standard auth API
+      const { error: inviteError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
           data: {
@@ -196,13 +195,13 @@ const TeamManagement = () => {
             isNewInvite: true,
             organisationName: organisation.name
           },
-          redirectTo: 'https://contentgardener.ai/auth/callback'
+          emailRedirectTo: 'https://contentgardener.ai/auth/callback'
         }
       });
 
-      if (generateError) {
-        console.error('Failed to generate invitation link:', generateError);
-        throw generateError;
+      if (inviteError) {
+        console.error('Failed to send invitation:', inviteError);
+        throw inviteError;
       }
 
       // Reset form and show success message
