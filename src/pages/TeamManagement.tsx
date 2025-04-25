@@ -188,7 +188,7 @@ const TeamManagement = () => {
       const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?type=invite&next=/dashboard`,
           data: {
             organisation_id: organisation.id,
             role: role,
