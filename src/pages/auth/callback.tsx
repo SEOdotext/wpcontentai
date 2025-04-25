@@ -52,7 +52,7 @@ export default function AuthCallback() {
 
           // Handle organization invites
           if (metadata?.organisation_id) {
-            console.log('Processing organization invite');
+            console.log('Processing organization invite with metadata:', metadata);
             
             const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
               p_email: data.session.user.email,
@@ -64,10 +64,11 @@ export default function AuthCallback() {
             if (invitationError) {
               console.error('Error processing organization invite:', invitationError);
               toast.error('Failed to process invitation. Please contact support.');
-            } else {
-              console.log('Organization invite processed successfully');
-              toast.success('Welcome! Your account has been set up.');
+              throw invitationError;  // This will trigger the catch block and redirect to /auth
             }
+
+            console.log('Organization invite processed successfully');
+            toast.success(`Welcome to ${metadata.organisationName || 'the organization'}!`);
           }
 
           // Update auth context

@@ -235,29 +235,13 @@ const TeamManagement = () => {
 
       console.log('Invitation sent successfully:', signInData);
 
-      // Create a pending invitation record
-      const { error: pendingError } = await supabase
-        .from('pending_invitations')
-        .insert({
-          email: email.trim(),
-          organisation_id: organisation.id,
-          role: role,
-          website_ids: selectedWebsites,
-          invited_by: currentSession.user.id
-        });
-
-      if (pendingError) {
-        console.error('Error creating pending invitation:', pendingError);
-        throw pendingError;
-      }
-
-      toast.success('Team member invited successfully');
-      
-      // Reset form
+      // Reset form and close dialog
       setEmail('');
       setRole('member');
       setSelectedWebsites([]);
       setIsInviteDialogOpen(false);
+
+      toast.success('Invitation sent successfully. The user will receive an email to join the organization.');
 
       // Refresh the team list
       await fetchTeamData();
