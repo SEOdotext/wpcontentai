@@ -10,78 +10,41 @@ export default function AuthCallback() {
   const code = searchParams.get('code');
 
   useEffect(() => {
-    // Handle the OAuth callback
     const handleAuthCallback = async () => {
       try {
-        // First check if we have a code to exchange
-        if (code) {
-          console.log('AuthCallback: Exchanging OTP code for session');
-          const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: code,
-            type: 'email'
-          });
-
-          if (verifyError) {
-            console.error('Error verifying OTP:', verifyError);
-            throw verifyError;
-          }
-
-          if (!verifyData.session) {
-            console.error('No session returned from OTP verification');
-            throw new Error('No session returned from OTP verification');
-          }
-
-          // Get the invitation data from the session
-          const inviteData = verifyData.session.user.user_metadata;
-          
-          if (inviteData?.organisation_id) {
-            console.log('AuthCallback: Handling organization invitation');
-            // Handle organization setup through RPC
-            const { error: invitationError } = await supabase
-              .rpc('handle_organisation_invitation', {
-                p_email: verifyData.session.user.email,
-                p_organisation_id: inviteData.organisation_id,
-                p_role: inviteData.role || 'member',
-                p_website_ids: inviteData.website_ids || []
-              });
-
-            if (invitationError) throw invitationError;
-          }
-
-          // Redirect to the next page (usually dashboard)
-          navigate(next);
+        if (!code) {
+          console.log('No code found in URL');
+          navigate('/auth');
           return;
         }
 
-        // If no code, check for existing session
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Exchange the code for a session
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
         
-        if (error) throw error;
-
-        if (session) {
-          // Get the invitation data from the session
-          const inviteData = session.user.user_metadata;
-          
-          if (inviteData?.organisation_id) {
-            // Handle organization setup through RPC
-            const { error: invitationError } = await supabase
-              .rpc('handle_organisation_invitation', {
-                p_email: session.user.email,
-                p_organisation_id: inviteData.organisation_id,
-                p_role: inviteData.role || 'member',
-                p_website_ids: inviteData.website_ids || []
-              });
-
-            if (invitationError) throw invitationError;
-          }
-
-          // Redirect to the next page (usually dashboard)
-          navigate(next);
-        } else {
-          // No session and no code, redirect to auth
-          console.log('AuthCallback: No valid token found in URL, redirecting to auth page');
-          navigate('/auth');
+        if (error) {
+          console.error('Error exchanging code for session:', error);
+          throw error;
         }
+
+        if (!data.session) {
+          throw new Error('No session returned from code exchange');
+        }
+
+        // Handle organization invitation if present
+        const inviteData = data.session.user.user_metadata;
+        if (inviteData?.organisation_id) {
+          const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
+            p_email: data.session.user.email,
+            p_organisation_id: inviteData.organisation_id,
+            p_role: inviteData.role || 'member',
+            p_website_ids: inviteData.website_ids || []
+          });
+
+          if (invitationError) throw invitationError;
+        }
+
+        // Redirect to the next page
+        navigate(next);
       } catch (error) {
         console.error('Error in auth callback:', error);
         toast.error('Failed to complete signup');
