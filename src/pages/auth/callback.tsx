@@ -34,34 +34,58 @@ export default function AuthCallback() {
         if (code) {
           console.log('AuthCallback: Found PKCE code, attempting to exchange for session');
           
-          // First exchange the code for a session
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          // Get the session directly - this will handle the PKCE flow internally
+          const { data: { session }, error } = await supabase.auth.getSession();
           
           if (error) {
-            console.error('AuthCallback: Error exchanging code for session:', error);
+            console.error('AuthCallback: Error getting session:', error);
             toast.error('Authentication failed. Please try logging in again.');
             navigate('/auth', { replace: true });
             return;
           }
 
-          if (!data?.session) {
-            console.error('AuthCallback: No session returned from code exchange');
+          if (!session) {
+            console.error('AuthCallback: No session returned');
             toast.error('Authentication failed. Please try logging in again.');
             navigate('/auth', { replace: true });
             return;
           }
 
           console.log('AuthCallback: Successfully obtained session');
-          console.log('AuthCallback: User ID:', data.session.user.id);
-          console.log('AuthCallback: User email:', data.session.user.email);
+          console.log('AuthCallback: User ID:', session.user.id);
+          console.log('AuthCallback: User email:', session.user.email);
+
+          // Check if this is the user's first login
+          const isFirstLogin = !session.user.last_sign_in_at;
+          
+          if (isFirstLogin) {
+            // Send password setup email
+            const { error: passwordSetupError } = await supabase.auth.resetPasswordForEmail(
+              session.user.email,
+              {
+                redirectTo: `${window.location.origin}/auth/set-password`
+              }
+            );
+
+            if (passwordSetupError) {
+              console.error('Error sending password setup email:', passwordSetupError);
+              // Don't block the login process, just notify
+              toast.error('Unable to send password setup email. You can set it up later from your account settings.');
+            } else {
+              toast.success(
+                'Welcome! We\'ve sent you an email to set up your password. For now, you\'ll be redirected to the dashboard.',
+                { duration: 6000 }
+              );
+            }
+          }
 
           // Handle organization invitation if present
-          const inviteData = data.session.user.user_metadata;
+          const inviteData = session.user.user_metadata;
           if (inviteData?.organisation_id) {
             console.log('AuthCallback: Found organization data, processing invitation');
             
             const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
-              p_email: data.session.user.email,
+              p_email: session.user.email,
               p_organisation_id: inviteData.organisation_id,
               p_role: inviteData.role || 'member',
               p_website_ids: inviteData.website_ids || []
