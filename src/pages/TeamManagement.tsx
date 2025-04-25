@@ -184,21 +184,40 @@ const TeamManagement = () => {
     try {
       console.log('Starting team member invitation process:', { email, role, organisation_id: organisation.id });
 
-      // Send invitation using the admin API
-      const { error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email.trim(), {
-        data: {
-          organisation_id: organisation.id,
-          role: role,
-          website_ids: selectedWebsites,
-          isNewInvite: true,
-          organisationName: organisation.name
-        },
-        redirectTo: 'https://contentgardener.ai/auth/callback'
+      // Generate invite link using the admin API
+      const { data, error: generateError } = await supabase.auth.admin.generateLink({
+        type: 'invite',
+        email: email.trim(),
+        options: {
+          data: {
+            organisation_id: organisation.id,
+            role: role,
+            website_ids: selectedWebsites,
+            isNewInvite: true,
+            organisationName: organisation.name
+          },
+          redirectTo: 'https://contentgardener.ai/auth/callback'
+        }
       });
 
-      if (inviteError) {
-        console.error('Failed to send invitation:', inviteError);
-        throw inviteError;
+      if (generateError) {
+        console.error('Failed to generate invitation link:', generateError);
+        throw generateError;
+      }
+
+      // Send the invitation email using our backend function
+      const { error: sendError } = await supabase.functions.invoke('send-invite-email', {
+        body: {
+          email: email.trim(),
+          actionLink: data.properties.action_link,
+          organisationName: organisation.name,
+          role: role
+        }
+      });
+
+      if (sendError) {
+        console.error('Failed to send invitation email:', sendError);
+        throw sendError;
       }
 
       // Reset form and show success message
