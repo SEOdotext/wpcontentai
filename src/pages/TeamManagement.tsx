@@ -205,21 +205,6 @@ const TeamManagement = () => {
         throw generateError;
       }
 
-      // Send the invitation email using our backend function
-      const { error: sendError } = await supabase.functions.invoke('send-invite-email', {
-        body: {
-          email: email.trim(),
-          actionLink: data.properties.action_link,
-          organisationName: organisation.name,
-          role: role
-        }
-      });
-
-      if (sendError) {
-        console.error('Failed to send invitation email:', sendError);
-        throw sendError;
-      }
-
       // Reset form and show success message
       setEmail('');
       setRole('member');
