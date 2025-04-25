@@ -31,12 +31,12 @@ export default function AuthCallback() {
 
         // If we have a token, we need to verify it
         if (token) {
-          console.log('Verifying token...');
+          console.log('Processing verification token:', { type });
           
-          // First try to verify the token
+          // Verify the token - handle both magiclink and invite types
           const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
             token_hash: token,
-            type: 'magiclink'
+            type: type === 'invite' ? 'invite' : 'magiclink'  // Handle both types
           });
 
           if (verifyError) {
