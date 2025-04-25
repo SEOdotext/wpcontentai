@@ -21,91 +21,28 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Get URL parameters
-        const code = searchParams.get('code');
-        const token = searchParams.get('token');
-        const type = searchParams.get('type');
-        const error = searchParams.get('error');
-        const errorDescription = searchParams.get('error_description');
+        console.log('Auth callback starting...');
+
+        // Get session - Supabase has already handled the verification
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        console.log('Auth callback starting...', {
-          hasCode: !!code,
-          hasToken: !!token,
-          type,
-          hasError: !!error,
-          url: window.location.href
-        });
-
-        // Handle any errors first
-        if (error || errorDescription) {
-          console.error('Auth error received:', { error, description: errorDescription });
-          throw new Error(errorDescription || error || 'Authentication failed');
-        }
-
-        let session;
-
-        // If we have a PKCE token, we need to exchange it
-        if (token?.startsWith('pkce_')) {
-          console.log('Processing PKCE token...');
-          const pkceCode = token.replace('pkce_', '');
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(pkceCode);
-          
-          if (exchangeError) {
-            console.error('PKCE exchange failed:', exchangeError);
-            throw exchangeError;
-          }
-
-          session = data.session;
-        } else {
-          // Regular magic link flow - wait for session setup
-          console.log('Waiting for magic link session setup...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-
-          // Try to get session
-          let attempts = 0;
-          const maxAttempts = 3;
-
-          while (!session && attempts < maxAttempts) {
-            console.log(`Attempting to get session (${attempts + 1}/${maxAttempts})...`);
-            const { data, error: sessionError } = await supabase.auth.getSession();
-            
-            if (sessionError) {
-              console.error(`Session fetch error on attempt ${attempts + 1}:`, sessionError);
-              throw sessionError;
-            }
-
-            if (data?.session) {
-              console.log('Session found!');
-              session = data.session;
-              break;
-            }
-
-            console.log('No session yet, waiting...');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            attempts++;
-          }
+        if (sessionError) {
+          console.error('Failed to get session:', sessionError);
+          throw sessionError;
         }
 
         if (!session) {
-          console.error('Failed to establish session');
+          console.error('No session found');
           throw new Error('Authentication failed - no session');
         }
 
-        console.log('Session established:', {
-          user_id: session.user.id,
-          email: session.user.email
-        });
+        console.log('Session established:', { email: session.user.email });
 
-        // Process metadata and handle organization setup
+        // Handle organization setup if needed
         const metadata = session.user.user_metadata;
-        console.log('Processing session metadata:', metadata);
-
         if (metadata?.organisation_id) {
-          console.log('Setting up organization membership:', {
-            org_id: metadata.organisation_id,
-            role: metadata.role
-          });
-
+          console.log('Setting up organization membership');
+          
           const { error: inviteError } = await supabase.rpc('handle_organisation_invitation', {
             p_email: session.user.email,
             p_organisation_id: metadata.organisation_id,
@@ -117,18 +54,11 @@ export default function AuthCallback() {
             console.error('Organization setup failed:', inviteError);
             throw inviteError;
           }
-
-          console.log('Organization setup complete');
         }
 
-        // Update auth context
+        // Update auth context and redirect
         await checkAuth();
-
-        // Handle redirect
-        const redirectPath = metadata?.isNewInvite ? '/profile' : '/dashboard';
-        console.log('Authentication complete, redirecting to:', redirectPath);
-        
-        navigate(redirectPath, { 
+        navigate(metadata?.isNewInvite ? '/profile' : '/dashboard', { 
           replace: true,
           state: metadata?.isNewInvite ? {
             newUser: true,
