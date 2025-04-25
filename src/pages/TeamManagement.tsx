@@ -191,36 +191,22 @@ const TeamManagement = () => {
         throw new Error('No active session found');
       }
 
-      // First check if the user already exists
-      const { data: existingUser, error: userError } = await supabase
-        .from('users')
-        .select('id, email')
+      // Check if the user is already in the organization
+      const { data: existingMembership, error: membershipError } = await supabase
+        .from('organisation_memberships')
+        .select('id')
         .eq('email', email.trim())
+        .eq('organisation_id', organisation.id)
         .single();
 
-      if (userError && userError.code !== 'PGRST116') { // PGRST116 is "not found"
-        console.error('Error checking existing user:', userError);
-        throw userError;
+      if (membershipError && membershipError.code !== 'PGRST116') { // PGRST116 is "not found"
+        console.error('Error checking existing membership:', membershipError);
+        throw membershipError;
       }
 
-      // If user exists, check if they're already in the organization
-      if (existingUser) {
-        const { data: existingMember, error: memberError } = await supabase
-          .from('organisation_memberships')
-          .select('id')
-          .eq('member_id', existingUser.id)
-          .eq('organisation_id', organisation.id)
-          .single();
-
-        if (memberError && memberError.code !== 'PGRST116') {
-          console.error('Error checking existing membership:', memberError);
-          throw memberError;
-        }
-
-        if (existingMember) {
-          toast.error('User is already a member of this organization');
-          return;
-        }
+      if (existingMembership) {
+        toast.error('User is already a member of this organization');
+        return;
       }
 
       // Use Supabase's magic link system for invites
