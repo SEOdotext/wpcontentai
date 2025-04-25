@@ -30,53 +30,11 @@ export default function AuthCallback() {
           return;
         }
 
-        // Handle email verification flow
-        if (token && type === 'signup') {
-          console.log('AuthCallback: Email verification token detected');
-          
-          const { error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'signup'
-          });
-          
-          if (verifyError) {
-            console.error('AuthCallback: Error verifying email:', verifyError);
-            toast.error('Failed to verify email. Please try again.');
-            navigate('/auth', { replace: true });
-            return;
-          }
-          
-          console.log('AuthCallback: Email verified successfully');
-          
-          // Check for specific redirect after verification
-          const redirectTo = searchParams.get('redirect_to');
-          if (redirectTo) {
-            console.log('AuthCallback: Redirecting to:', redirectTo);
-            window.location.href = redirectTo;
-            return;
-          }
-
-          // If no redirect, go to dashboard
-          navigate('/dashboard', { replace: true });
-          return;
-        }
-
-        // Handle PKCE code exchange
+        // Handle PKCE code exchange first
         if (code) {
           console.log('AuthCallback: Found PKCE code, attempting to exchange for session');
           
-          // Get the stored code verifier from localStorage
-          const codeVerifier = localStorage.getItem('codeVerifier');
-          console.log('AuthCallback: Retrieved code verifier:', codeVerifier ? 'Found' : 'Not found');
-          
-          if (!codeVerifier) {
-            console.error('AuthCallback: No code verifier found in storage');
-            toast.error('Authentication failed. Please try logging in again.');
-            navigate('/auth', { replace: true });
-            return;
-          }
-
-          // Exchange the code for a session
+          // First exchange the code for a session
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
           
           if (error) {
@@ -93,9 +51,6 @@ export default function AuthCallback() {
             return;
           }
 
-          // Clear the code verifier from storage
-          localStorage.removeItem('codeVerifier');
-          
           console.log('AuthCallback: Successfully obtained session');
           console.log('AuthCallback: User ID:', data.session.user.id);
           console.log('AuthCallback: User email:', data.session.user.email);
@@ -125,6 +80,37 @@ export default function AuthCallback() {
           await checkAuth();
           console.log('AuthCallback: Successfully verified session, redirecting to:', next);
           navigate(next, { replace: true });
+          return;
+        }
+
+        // Handle email verification flow
+        if (token && type === 'signup') {
+          console.log('AuthCallback: Email verification token detected');
+          
+          const { error: verifyError } = await supabase.auth.verifyOtp({
+            token_hash: token,
+            type: 'signup'
+          });
+          
+          if (verifyError) {
+            console.error('AuthCallback: Error verifying email:', verifyError);
+            toast.error('Failed to verify email. Please try again.');
+            navigate('/auth', { replace: true });
+            return;
+          }
+          
+          console.log('AuthCallback: Email verified successfully');
+          
+          // Check for specific redirect after verification
+          const redirectTo = searchParams.get('redirect_to');
+          if (redirectTo) {
+            console.log('AuthCallback: Redirecting to:', redirectTo);
+            window.location.href = redirectTo;
+            return;
+          }
+
+          // If no redirect, go to dashboard
+          navigate('/dashboard', { replace: true });
           return;
         }
 
