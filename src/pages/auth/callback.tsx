@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
@@ -7,7 +7,6 @@ import { Loader2 } from 'lucide-react';
 
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { checkAuth } = useAuth();
   const next = searchParams.get('next') || '/dashboard';
@@ -15,23 +14,14 @@ export default function AuthCallback() {
   const type = searchParams.get('type');
 
   useEffect(() => {
-    const handleAuthCallback = async () => {
-      console.log('AuthCallback: Starting authentication process');
-      console.log('AuthCallback: Current URL:', window.location.href);
-      console.log('AuthCallback: URL parameters:', Object.fromEntries(searchParams.entries()));
-      
+    const handleCallback = async () => {
       try {
-        // Verify Supabase client
-        if (!supabase?.auth) {
-          console.error('AuthCallback: Supabase client not properly initialized');
-          toast.error('Authentication service not available');
-          navigate('/auth', { replace: true });
-          return;
-        }
-
-        // Handle email verification flow
+        // First check if we have an existing session (returning user)
+        const { data: { session: existingSession } } = await supabase.auth.getSession();
+        
+        // Handle email OTP verification for new users
         if (token && type === 'signup') {
-          console.log('AuthCallback: Email verification token detected');
+          console.log('Processing email verification token for new user');
           
           const { error: verifyError } = await supabase.auth.verifyOtp({
             token_hash: token,
@@ -39,52 +29,30 @@ export default function AuthCallback() {
           });
           
           if (verifyError) {
-            console.error('AuthCallback: Error verifying email:', verifyError);
+            console.error('Error verifying email:', verifyError);
             toast.error('Failed to verify email. Please try again.');
             navigate('/auth', { replace: true });
             return;
           }
           
-          console.log('AuthCallback: Email verified successfully');
-          
-          // Check for specific redirect after verification
-          const redirectTo = searchParams.get('redirect_to');
-          if (redirectTo) {
-            console.log('AuthCallback: Redirecting to:', redirectTo);
-            window.location.href = redirectTo;
-            return;
-          }
-
-          // If no redirect, go to dashboard
-          navigate('/dashboard', { replace: true });
-          return;
+          console.log('Email verified successfully');
         }
 
-        // Let Supabase handle the session automatically
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        // Get the current session (either existing or newly created from OTP)
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (sessionError) {
-          console.error('AuthCallback: Error getting session:', sessionError);
-          toast.error('Authentication failed. Please try logging in again.');
-          navigate('/auth', { replace: true });
-          return;
-        }
-
+        if (error) throw error;
+        
         if (!session) {
-          console.error('AuthCallback: No session found');
-          toast.error('Authentication failed. Please try logging in again.');
+          console.log('No session found after verification, redirecting to login');
           navigate('/auth', { replace: true });
           return;
         }
 
-        console.log('AuthCallback: Successfully obtained session');
-        console.log('AuthCallback: User ID:', session.user.id);
-        console.log('AuthCallback: User email:', session.user.email);
-
-        // Handle organization invitation if present
+        // Process organization invitation from the user metadata
         const inviteData = session.user.user_metadata;
         if (inviteData?.organisation_id) {
-          console.log('AuthCallback: Found organization data, processing invitation');
+          console.log('Processing organization invitation');
           
           const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
             p_email: session.user.email,
@@ -94,35 +62,52 @@ export default function AuthCallback() {
           });
 
           if (invitationError) {
-            console.error('AuthCallback: Error handling organization invitation:', invitationError);
+            console.error('Error processing invitation:', invitationError);
             toast.error('Failed to process invitation. Please contact support.');
-            // Continue anyway since the user is authenticated
           } else {
-            console.log('AuthCallback: Successfully processed organization invitation');
+            console.log('Successfully processed organization invitation');
+            // Different messages for new vs existing users
+            if (existingSession) {
+              toast.success('You have been added to the organization.');
+            } else {
+              toast.success('Welcome! Your account is now set up.');
+            }
           }
         }
 
-        // Verify the session is active
+        // Update auth state with the new session
         await checkAuth();
-        console.log('AuthCallback: Successfully verified session, redirecting to:', next);
-        navigate(next, { replace: true });
-
+        
+        // Different redirects for new vs existing users
+        if (existingSession) {
+          // Existing user - go to dashboard or next page
+          navigate(next, { replace: true });
+        } else {
+          // New user - go to profile setup
+          navigate('/profile', { 
+            replace: true,
+            state: { 
+              newUser: true,
+              message: 'Please set up your password and account preferences.' 
+            }
+          });
+        }
       } catch (error) {
-        console.error('AuthCallback: Fatal error:', error);
-        toast.error('Authentication failed. Please try logging in again.');
+        console.error('Error during verification:', error);
+        toast.error('Verification failed. Please try again.');
         navigate('/auth', { replace: true });
       }
     };
 
-    handleAuthCallback();
-  }, [navigate, next, token, type, location.hash, checkAuth, searchParams]);
+    handleCallback();
+  }, [navigate, token, type, checkAuth, next]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center">
         <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-        <h2 className="text-2xl font-semibold mb-4">Setting up your account...</h2>
-        <p className="text-muted-foreground">Please wait while we configure your access.</p>
+        <h2 className="text-2xl font-semibold mb-4">Verifying your access...</h2>
+        <p className="text-muted-foreground">Please wait while we set up your account.</p>
       </div>
     </div>
   );
