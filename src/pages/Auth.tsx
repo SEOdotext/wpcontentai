@@ -82,9 +82,12 @@ const Auth = () => {
     try {
       if (mode === 'signup') {
         console.log('Auth: Attempting signup');
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`
+          }
         });
         
         if (error) throw error;
@@ -93,9 +96,17 @@ const Auth = () => {
         toast.success('Check your email to confirm your account');
       } else {
         console.log('Auth: Attempting login');
-        const { error } = await supabase.auth.signInWithPassword({
+        // Generate and store code verifier for PKCE
+        const codeVerifier = generateCodeVerifier();
+        console.log('Auth: Generated code verifier');
+        localStorage.setItem('codeVerifier', codeVerifier);
+        
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`
+          }
         });
         
         if (error) throw error;
@@ -176,6 +187,11 @@ const Auth = () => {
       setGoogleLoading(true);
       setAuthError(null);
       
+      // Generate and store code verifier for PKCE
+      const codeVerifier = generateCodeVerifier();
+      console.log('Auth: Generated code verifier for Google sign-in');
+      localStorage.setItem('codeVerifier', codeVerifier);
+      
       // Use current origin for localhost testing
       const currentOrigin = window.location.origin;
       // Check if we're in signup mode (new user)
@@ -188,7 +204,8 @@ const Auth = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUrl
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false
         }
       });
       
@@ -208,6 +225,13 @@ const Auth = () => {
       toast.error(errorMessage);
       setGoogleLoading(false);
     }
+  };
+
+  // Helper function to generate a code verifier for PKCE
+  const generateCodeVerifier = () => {
+    const array = new Uint8Array(32);
+    crypto.getRandomValues(array);
+    return Array.from(array, dec => ('0' + dec.toString(16)).slice(-2)).join('');
   };
 
   if (authLoading) {

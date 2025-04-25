@@ -70,7 +70,10 @@ export default function AuthCallback() {
           console.log('AuthCallback: Retrieved code verifier:', codeVerifier ? 'Found' : 'Not found');
           
           if (!codeVerifier) {
-            console.error('AuthCallback: No code verifier found in storage');
+            console.error('AuthCallback: No code verifier found in storage. This may happen if:');
+            console.error('- The browser cleared localStorage');
+            console.error('- The user opened the callback URL directly');
+            console.error('- The auth flow was initiated from a different browser/device');
             toast.error('Authentication failed. Please try logging in again.');
             navigate('/auth', { replace: true });
             return;

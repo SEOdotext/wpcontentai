@@ -108,33 +108,48 @@ const ProtectedRoute = ({ children, requireOrg = true }: { children: React.React
   const isOnboarding = !!localStorage.getItem('website_info') || !!localStorage.getItem('pending_signup');
   const isOnboardingPath = location.pathname === '/onboarding';
   
-  // Safety timeout - if org loading takes too long, force-show content
+  // Combined loading and redirect check
   useEffect(() => {
-    const safetyTimer = setTimeout(() => {
-      if (orgLoading || websitesLoading) {
+    let safetyTimer: NodeJS.Timeout;
+    let setupCheckTimer: NodeJS.Timeout;
+
+    // Only start safety timer if we're loading and not in onboarding
+    if ((orgLoading || websitesLoading) && !isOnboarding && !isOnboardingPath) {
+      safetyTimer = setTimeout(() => {
         console.log('Organization loading state persisted too long, showing content anyway');
         setForceShowContent(true);
-      }
-    }, 3000);
-    
-    return () => clearTimeout(safetyTimer);
-  }, [orgLoading, websitesLoading]);
-  
-  // After a delay, if we're sure the user has no org, redirect to setup
-  useEffect(() => {
-    // Only start this check if we're past loading, requiring an org, and not in onboarding
-    if (!orgLoading && !websitesLoading && requireOrg && !isOnboarding && !isOnboardingPath) {
-      const setupCheckTimer = setTimeout(() => {
+        setRedirectToSetup(false); // Ensure we don't redirect if forcing content
+      }, 3000);
+    }
+
+    // Only start setup check if we're not loading and require org
+    if (!orgLoading && !websitesLoading && requireOrg && !isOnboarding && !isOnboardingPath && !forceShowContent) {
+      setupCheckTimer = setTimeout(() => {
         // If we definitely have no org data or website data after loading is complete
         if (!hasOrganisation && !currentWebsite && !hasCachedOrg && !hasCachedWebsite) {
           console.log('Confirmed user has no organization, redirecting to setup');
           setRedirectToSetup(true);
+          setForceShowContent(false); // Ensure we don't show content if redirecting
         }
       }, 1000);
-      
-      return () => clearTimeout(setupCheckTimer);
     }
-  }, [orgLoading, websitesLoading, hasOrganisation, currentWebsite, hasCachedOrg, hasCachedWebsite, requireOrg, isOnboarding, isOnboardingPath]);
+
+    return () => {
+      if (safetyTimer) clearTimeout(safetyTimer);
+      if (setupCheckTimer) clearTimeout(setupCheckTimer);
+    };
+  }, [
+    orgLoading, 
+    websitesLoading, 
+    hasOrganisation, 
+    currentWebsite, 
+    hasCachedOrg, 
+    hasCachedWebsite, 
+    requireOrg, 
+    isOnboarding, 
+    isOnboardingPath,
+    forceShowContent
+  ]);
   
   // Skip checks if not required or during onboarding
   if (!requireOrg || isOnboarding || isOnboardingPath) {
