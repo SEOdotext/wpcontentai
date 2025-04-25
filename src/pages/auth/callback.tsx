@@ -35,11 +35,17 @@ export default function AuthCallback() {
 
         // Get user metadata
         const metadata = session.user.user_metadata;
-        console.log('User metadata:', metadata);
+        console.log('Processing user metadata:', {
+          email: session.user.email,
+          role: metadata?.role,
+          organisationId: metadata?.organisation_id,
+          isNewInvite: metadata?.isNewInvite,
+          invitedBy: metadata?.invitedByEmail
+        });
 
         // Handle organization invites
         if (metadata?.organisation_id) {
-          console.log('Processing organization invite');
+          console.log(`Processing ${metadata.role} invitation to ${metadata.organisationName}`);
           
           const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
             p_email: session.user.email,
@@ -52,8 +58,12 @@ export default function AuthCallback() {
             console.error('Error processing organization invite:', invitationError);
             toast.error('Failed to process invitation. Please contact support.');
           } else {
+            const roleMessage = metadata.role === 'admin' 
+              ? 'You have been added as an administrator.' 
+              : 'You have been added as a team member.';
+            
             console.log('Organization invite processed successfully');
-            toast.success('Welcome! Your account has been set up.');
+            toast.success(`Welcome to ${metadata.organisationName}! ${roleMessage}`);
           }
 
           // Update auth context
@@ -65,6 +75,7 @@ export default function AuthCallback() {
               replace: true,
               state: { 
                 newUser: true,
+                role: metadata.role,
                 message: 'Please set up your password and account preferences.' 
               }
             });

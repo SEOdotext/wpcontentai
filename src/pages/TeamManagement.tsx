@@ -182,7 +182,14 @@ const TeamManagement = () => {
     if (!organisation?.id || currentUserRole !== 'admin') return;
 
     try {
-      console.log('Sending invitation for:', email);
+      console.log('Sending invitation for:', email, 'with role:', role);
+
+      // Get current user's session
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
+      if (!currentSession?.user) {
+        throw new Error('No active session found');
+      }
 
       // Use Supabase's magic link system for invites
       const { data: signInData, error: signInError } = await supabase.auth.signInWithOtp({
@@ -194,7 +201,10 @@ const TeamManagement = () => {
             organisation_id: organisation.id,
             role: role,
             website_ids: selectedWebsites,
-            isNewInvite: true
+            isNewInvite: true,
+            invitedBy: currentSession.user.id,
+            invitedByEmail: currentSession.user.email,
+            organisationName: organisation.name
           }
         }
       });
