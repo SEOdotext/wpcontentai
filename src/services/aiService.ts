@@ -152,23 +152,6 @@ const generateFocusedKeywords = (title: string, userKeywords: string[], subjectM
   
   result.push(...qualityUserKeywords);
   
-  // 5. If we still need more keywords, add some topical categories based on the title
-  if (result.length < 3) {
-    // Check for common content types
-    if (lowerTitle.includes('guide') || lowerTitle.includes('sådan')) {
-      result.push('guides og vejledninger');
-    }
-    if (lowerTitle.includes('fordel') || lowerTitle.includes('benefit')) {
-      result.push('fordele og muligheder');
-    }
-    if (lowerTitle.includes('erfaring') || lowerTitle.includes('case')) {
-      result.push('erfaringer og cases');
-    }
-    if (lowerTitle.includes('lovgivning') || lowerTitle.includes('regler')) {
-      result.push('lovgivning og regler');
-    }
-  }
-  
   // Deduplicate and limit to 5 keywords
   return [...new Set(result)].slice(0, 5);
 };
