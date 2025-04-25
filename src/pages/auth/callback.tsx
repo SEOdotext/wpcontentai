@@ -5,13 +5,12 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
-// IMPORTANT: Magic Link Authentication Flow
-// 1. User clicks magic link in email
-// 2. Supabase verifies the link on their end
-// 3. Creates a session for the user
-// 4. Redirects here with a code parameter
-// 5. We DO NOT need to exchange the code - JUST GET THE SESSION!
-// 6. BUT we need to wait a moment for Supabase to finish setting up the session
+// IMPORTANT: Auth Flow
+// 1. User clicks link in email
+// 2. If PKCE token (starts with pkce_), we need to exchange it
+// 3. If regular magic link, Supabase handles verification
+// 4. In both cases, we end up with a session
+// 5. Then we can process organization setup if needed
 
 export default function AuthCallback() {
   const navigate = useNavigate();
@@ -22,55 +21,80 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // Log initial state
-        console.log('Auth callback starting...', {
-          url: window.location.href,
-          hasCode: !!searchParams.get('code'),
-          hasError: !!searchParams.get('error')
-        });
-
-        // Check for errors
+        // Get URL parameters
+        const code = searchParams.get('code');
+        const token = searchParams.get('token');
+        const type = searchParams.get('type');
         const error = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
         
+        console.log('Auth callback starting...', {
+          hasCode: !!code,
+          hasToken: !!token,
+          type,
+          hasError: !!error,
+          url: window.location.href
+        });
+
+        // Handle any errors first
         if (error || errorDescription) {
           console.error('Auth error received:', { error, description: errorDescription });
           throw new Error(errorDescription || error || 'Authentication failed');
         }
 
-        // Wait for session setup
-        console.log('Waiting for Supabase session setup...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        let session;
 
-        // Try to get session
-        let session = null;
-        let attempts = 0;
-        const maxAttempts = 3;
-
-        while (!session && attempts < maxAttempts) {
-          console.log(`Attempting to get session (${attempts + 1}/${maxAttempts})...`);
-          const { data, error: sessionError } = await supabase.auth.getSession();
+        // If we have a PKCE token, we need to exchange it
+        if (token?.startsWith('pkce_')) {
+          console.log('Processing PKCE token...');
+          const pkceCode = token.replace('pkce_', '');
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(pkceCode);
           
-          if (sessionError) {
-            console.error(`Session fetch error on attempt ${attempts + 1}:`, sessionError);
-            throw sessionError;
+          if (exchangeError) {
+            console.error('PKCE exchange failed:', exchangeError);
+            throw exchangeError;
           }
 
-          if (data?.session) {
-            console.log('Session found!');
-            session = data.session;
-            break;
-          }
-
-          console.log('No session yet, waiting...');
+          session = data.session;
+        } else {
+          // Regular magic link flow - wait for session setup
+          console.log('Waiting for magic link session setup...');
           await new Promise(resolve => setTimeout(resolve, 1000));
-          attempts++;
+
+          // Try to get session
+          let attempts = 0;
+          const maxAttempts = 3;
+
+          while (!session && attempts < maxAttempts) {
+            console.log(`Attempting to get session (${attempts + 1}/${maxAttempts})...`);
+            const { data, error: sessionError } = await supabase.auth.getSession();
+            
+            if (sessionError) {
+              console.error(`Session fetch error on attempt ${attempts + 1}:`, sessionError);
+              throw sessionError;
+            }
+
+            if (data?.session) {
+              console.log('Session found!');
+              session = data.session;
+              break;
+            }
+
+            console.log('No session yet, waiting...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            attempts++;
+          }
         }
 
         if (!session) {
-          console.error(`No session found after ${maxAttempts} attempts`);
-          throw new Error('Failed to establish session');
+          console.error('Failed to establish session');
+          throw new Error('Authentication failed - no session');
         }
+
+        console.log('Session established:', {
+          user_id: session.user.id,
+          email: session.user.email
+        });
 
         // Process metadata and handle organization setup
         const metadata = session.user.user_metadata;
