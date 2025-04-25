@@ -22,78 +22,46 @@ export default function AuthCallback() {
           params: Object.fromEntries(searchParams.entries())
         });
 
-        // Get the token and type from the URL
-        const token = searchParams.get('token');
-        const type = searchParams.get('type');
+        // Get parameters from URL
         const code = searchParams.get('code');
+        const error = searchParams.get('error');
+        const errorDescription = searchParams.get('error_description');
         
-        console.log('Processing auth callback:', { hasToken: !!token, type, hasCode: !!code });
+        console.log('Processing auth callback:', { 
+          hasCode: !!code,
+          error,
+          errorDescription
+        });
 
-        let session;
-
-        // If we have a PKCE token, extract the code from it
-        if (token?.startsWith('pkce_')) {
-          console.log('Processing PKCE token...');
-          // The code is the token without the pkce_ prefix
-          const pkceCode = token.replace('pkce_', '');
-          
-          // Exchange the PKCE code for a session
-          const { data, error } = await supabase.auth.exchangeCodeForSession(pkceCode);
-
-          if (error) {
-            console.error('PKCE code exchange failed:', error);
-            throw error;
-          }
-
-          session = data.session;
-          console.log('PKCE code exchange successful:', !!session);
-        } else if (token && type === 'magiclink') {
-          console.log('Processing magic link verification...');
-          
-          // Verify the magic link
-          const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'magiclink'
-          });
-
-          if (verifyError) {
-            console.error('Magic link verification failed:', verifyError);
-            throw verifyError;
-          }
-
-          console.log('Magic link verification successful:', !!verifyData?.user);
-          
-          // Get the session after verification
-          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-          if (sessionError) throw sessionError;
-          session = sessionData.session;
-        } else if (code) {
-          console.log('Processing auth code...');
-          
-          // Exchange the code for a session
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-
-          if (error) {
-            console.error('Code exchange failed:', error);
-            throw error;
-          }
-
-          session = data.session;
-          console.log('Code exchange successful:', !!session);
-        } else {
-          console.error('No valid authentication parameters found');
-          throw new Error('Invalid authentication parameters');
+        // Handle any errors first
+        if (error || errorDescription) {
+          console.error('Auth error:', { error, description: errorDescription });
+          throw new Error(errorDescription || error || 'Authentication failed');
         }
 
-        if (!session) {
-          console.error('No session established');
+        if (!code) {
+          console.error('No auth code found');
+          throw new Error('No authentication code found');
+        }
+
+        // Exchange the code for a session
+        console.log('Exchanging code for session...');
+        const { data, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+        
+        if (sessionError) {
+          console.error('Code exchange failed:', sessionError);
+          throw sessionError;
+        }
+
+        if (!data.session) {
+          console.error('No session returned from code exchange');
           throw new Error('Authentication failed - no session');
         }
 
-        console.log('Session established successfully');
+        console.log('Authentication successful:', !!data.session);
         
         // Get user metadata
-        const metadata = session.user.user_metadata;
+        const metadata = data.session.user.user_metadata;
         console.log('User metadata:', metadata);
 
         // Handle organization invites
@@ -101,7 +69,7 @@ export default function AuthCallback() {
           console.log('Processing organization invite with metadata:', metadata);
           
           const { error: invitationError } = await supabase.rpc('handle_organisation_invitation', {
-            p_email: session.user.email,
+            p_email: data.session.user.email,
             p_organisation_id: metadata.organisation_id,
             p_role: metadata.role || 'member',
             p_website_ids: metadata.website_ids || []
