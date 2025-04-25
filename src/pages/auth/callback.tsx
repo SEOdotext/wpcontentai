@@ -8,13 +8,22 @@ export default function AuthCallback() {
   const [searchParams] = useSearchParams();
   const next = searchParams.get('next') || '/dashboard';
   const code = searchParams.get('code');
-  const token = searchParams.get('token'); // Check if user is trying to use Supabase URL directly
+  const token = searchParams.get('token');
 
   useEffect(() => {
     const handleAuthCallback = async () => {
       console.log('AuthCallback: Starting authentication process');
+      console.log('AuthCallback: Current URL:', window.location.href);
       console.log('AuthCallback: URL parameters:', Object.fromEntries(searchParams.entries()));
       
+      // Verify Supabase client
+      if (!supabase?.auth) {
+        console.error('AuthCallback: Supabase client not properly initialized');
+        toast.error('Authentication service not available');
+        navigate('/auth/error');
+        return;
+      }
+
       try {
         // Check if user is trying to use the Supabase URL directly
         if (token && token.startsWith('pkce_')) {
@@ -32,7 +41,20 @@ export default function AuthCallback() {
 
         console.log('AuthCallback: Found code, attempting to exchange for session');
         
+        // First check if we already have a session
+        const { data: { session: existingSession } } = await supabase.auth.getSession();
+        if (existingSession) {
+          console.log('AuthCallback: Found existing session, checking if valid');
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (user && !userError) {
+            console.log('AuthCallback: Existing session is valid, proceeding to dashboard');
+            navigate(next);
+            return;
+          }
+        }
+
         // Exchange the code for a session
+        console.log('AuthCallback: Exchanging code for session...');
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
         
         if (error) {
@@ -69,7 +91,14 @@ export default function AuthCallback() {
           console.log('AuthCallback: Successfully processed organization invitation');
         }
 
-        console.log('AuthCallback: Verified session exists, redirecting to:', next);
+        // Verify we can get the user
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          console.error('AuthCallback: Failed to verify user after session exchange:', userError);
+          throw new Error('Failed to verify user after session exchange');
+        }
+
+        console.log('AuthCallback: Successfully verified user, redirecting to:', next);
         navigate(next);
       } catch (error) {
         console.error('AuthCallback: Fatal error:', error);
