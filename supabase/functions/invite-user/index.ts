@@ -50,7 +50,7 @@ serve(async (req) => {
         organisation_id,
         role
       },
-      redirectTo: `${new URL(req.url).origin}/auth/callback?next=/dashboard`
+      redirectTo: `${supabaseUrl}/auth/v1/verify?redirect_to=https://contentgardener.ai/auth/callback?next=/dashboard`
     });
 
     if (error) {
