@@ -182,34 +182,67 @@ const TeamManagement = () => {
     if (!organisation?.id || currentUserRole !== 'admin') return;
 
     try {
-      console.log('Starting team member invitation process:', { email, role, organisation_id: organisation.id });
+      console.log('Starting invitation process:', { email, role, organisation_id: organisation.id });
 
-      // Send invitation using the standard auth API
-      const { error: inviteError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          data: {
-            organisation_id: organisation.id,
-            role: role,
-            website_ids: selectedWebsites,
-            isNewInvite: true,
-            organisationName: organisation.name
-          },
-          emailRedirectTo: 'https://contentgardener.ai/auth/callback'
+      // Use Supabase's built-in invitation system
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email.trim(), {
+        data: {
+          organisation_id: organisation.id,
+          role: role
         }
       });
 
-      if (inviteError) {
-        console.error('Failed to send invitation:', inviteError);
-        throw inviteError;
+      if (error) {
+        console.error('Error sending invitation:', error);
+        throw error;
       }
 
-      // Reset form and show success message
+      console.log('Invitation sent successfully:', data);
+
+      // Set up organization membership
+      const { error: membershipError } = await supabase
+        .from('organisation_memberships')
+        .insert({
+          organisation_id: organisation.id,
+          role: role,
+          member_id: data.user.id
+        });
+
+      if (membershipError) {
+        console.error('Error creating membership:', membershipError);
+        throw membershipError;
+      }
+
+      console.log('Organization membership created');
+
+      // If they're a member (not admin), set up website access
+      if (role === 'member' && selectedWebsites.length > 0) {
+        console.log('Setting up website access:', selectedWebsites);
+        
+        const { error: accessError } = await supabase
+          .from('website_access')
+          .insert(
+            selectedWebsites.map(websiteId => ({
+              user_id: data.user.id,
+              website_id: websiteId
+            }))
+          );
+
+        if (accessError) {
+          console.error('Error setting up website access:', accessError);
+          throw accessError;
+        }
+
+        console.log('Website access configured');
+      }
+
+      toast.success('Team member invited successfully');
+      
+      // Reset form
       setEmail('');
       setRole('member');
       setSelectedWebsites([]);
       setIsInviteDialogOpen(false);
-      toast.success('Invitation sent successfully. The user will receive an email to join the organization.');
 
       // Refresh the team list
       await fetchTeamData();
