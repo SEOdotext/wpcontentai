@@ -40,6 +40,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+// Import Supabase config
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 // Define types
 interface TeamMember {
   id: string;
@@ -185,10 +189,11 @@ const TeamManagement = () => {
       console.log('Starting invitation process:', { email, role, organisation_id: organisation.id });
 
       // Call the Edge Function to handle the invitation
-      const response = await fetch('/functions/v1/invite-user', {
+      const response = await fetch(`${supabaseUrl}/functions/v1/invite-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`
         },
         body: JSON.stringify({
           email: email.trim(),
