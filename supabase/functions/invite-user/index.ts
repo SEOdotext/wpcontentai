@@ -50,7 +50,7 @@ serve(async (req) => {
         organisation_id,
         role
       },
-      redirectTo: `${supabaseUrl}/auth/v1/verify?redirect_to=https://contentgardener.ai/auth/callback?next=/dashboard`
+      redirectTo: `https://contentgardener.ai/auth/callback?type=invite&next=/dashboard`
     });
 
     if (error) {
@@ -58,7 +58,7 @@ serve(async (req) => {
       throw error;
     }
 
-    console.log('Invitation sent successfully');
+    console.log('Invitation sent successfully:', inviteData);
 
     return new Response(
       JSON.stringify({ 

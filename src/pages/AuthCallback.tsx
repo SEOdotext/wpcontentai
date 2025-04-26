@@ -14,17 +14,41 @@ const AuthCallback = () => {
   useEffect(() => {
     const handleCallback = async () => {
       console.log('AuthCallback: Processing authentication callback');
+      console.log('AuthCallback: URL:', window.location.href);
       
       try {
-        // Get the token from the URL
+        // Try to get the token from different possible locations
         const searchParams = new URLSearchParams(location.search);
-        const token = searchParams.get('token');
+        const hashParams = new URLSearchParams(location.hash.replace('#', '?'));
+        
+        // Check for token in various parameters
+        let token = searchParams.get('token') || 
+                   hashParams.get('token') ||
+                   searchParams.get('code') ||
+                   hashParams.get('code') ||
+                   searchParams.get('access_token') ||
+                   hashParams.get('access_token');
+
+        // If no token found, try to get it from the URL path
+        if (!token) {
+          const pathParts = location.pathname.split('/');
+          const lastPart = pathParts[pathParts.length - 1];
+          if (lastPart && lastPart !== 'callback') {
+            token = lastPart;
+          }
+        }
+        
+        console.log('AuthCallback: Found token:', !!token);
         
         if (!token) {
           console.log('AuthCallback: No token found, redirecting to auth');
           navigate('/auth', { replace: true });
           return;
         }
+
+        // Get the type parameter
+        const type = searchParams.get('type') || hashParams.get('type');
+        console.log('AuthCallback: Auth type:', type);
 
         // Exchange the token for a session
         const { data, error } = await supabase.auth.exchangeCodeForSession(token);
@@ -38,22 +62,22 @@ const AuthCallback = () => {
 
         // Check if this is an invitation flow
         const invitationData = user.user_metadata;
-        if (invitationData?.organisation_id) {
-          console.log('AuthCallback: Processing invitation for organization:', invitationData.organisation_id);
+        if (type === 'invite' || invitationData?.organisation_id) {
+          console.log('AuthCallback: Processing invitation for organization:', invitationData?.organisation_id);
           
           // Verify organization membership
           const { data: membership, error: membershipError } = await supabase
             .from('organisation_memberships')
             .select('*')
             .eq('member_id', user.id)
-            .eq('organisation_id', invitationData.organisation_id)
+            .eq('organisation_id', invitationData?.organisation_id)
             .single();
 
           if (membershipError && membershipError.code !== 'PGRST116') { // PGRST116 is "not found"
             throw membershipError;
           }
 
-          if (!membership) {
+          if (!membership && invitationData?.organisation_id) {
             // Create organization membership if it doesn't exist
             const { error: createError } = await supabase
               .from('organisation_memberships')
@@ -73,7 +97,7 @@ const AuthCallback = () => {
         console.log('AuthCallback: Auth state updated');
 
         // Get the next URL or default to dashboard
-        const next = searchParams.get('next') || '/dashboard';
+        const next = searchParams.get('next') || hashParams.get('next') || '/dashboard';
         console.log('AuthCallback: Redirecting to:', next);
         navigate(next, { replace: true });
       } catch (err) {
@@ -88,7 +112,7 @@ const AuthCallback = () => {
     };
 
     handleCallback();
-  }, [navigate, location.search, checkAuth]);
+  }, [navigate, location.search, location.hash, location.pathname, checkAuth]);
 
   if (isProcessing) {
     return (
