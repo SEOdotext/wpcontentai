@@ -32,6 +32,42 @@ const AuthCallback = () => {
 
         if (error) throw error;
 
+        // Get user metadata from the session
+        const user = data.session?.user;
+        if (!user) throw new Error('No user data in session');
+
+        // Check if this is an invitation flow
+        const invitationData = user.user_metadata;
+        if (invitationData?.organisation_id) {
+          console.log('AuthCallback: Processing invitation for organization:', invitationData.organisation_id);
+          
+          // Verify organization membership
+          const { data: membership, error: membershipError } = await supabase
+            .from('organisation_memberships')
+            .select('*')
+            .eq('member_id', user.id)
+            .eq('organisation_id', invitationData.organisation_id)
+            .single();
+
+          if (membershipError && membershipError.code !== 'PGRST116') { // PGRST116 is "not found"
+            throw membershipError;
+          }
+
+          if (!membership) {
+            // Create organization membership if it doesn't exist
+            const { error: createError } = await supabase
+              .from('organisation_memberships')
+              .insert({
+                organisation_id: invitationData.organisation_id,
+                member_id: user.id,
+                role: invitationData.role || 'member'
+              });
+
+            if (createError) throw createError;
+            console.log('AuthCallback: Created organization membership');
+          }
+        }
+
         // Update auth state
         await checkAuth();
         console.log('AuthCallback: Auth state updated');

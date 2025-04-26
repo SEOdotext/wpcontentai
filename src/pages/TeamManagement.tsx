@@ -184,62 +184,26 @@ const TeamManagement = () => {
     try {
       console.log('Starting invitation process:', { email, role, organisation_id: organisation.id });
 
-      // Use Supabase's built-in invitation system
-      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email.trim(), {
-        data: {
+      // Call the Edge Function to handle the invitation
+      const response = await fetch('/functions/v1/invite-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.trim(),
           organisation_id: organisation.id,
           role: role
-        },
-        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`
+        })
       });
 
-      if (error) {
-        console.error('Error sending invitation:', error);
-        throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send invitation');
       }
 
+      const { data } = await response.json();
       console.log('Invitation sent successfully:', data);
-
-      if (!data.user || !data.user.id) {
-        throw new Error('Failed to get user data from invitation');
-      }
-
-      // Set up organization membership
-      const { error: membershipError } = await supabase
-        .from('organisation_memberships')
-        .insert({
-          organisation_id: organisation.id,
-          role: role,
-          member_id: data.user.id
-        });
-
-      if (membershipError) {
-        console.error('Error creating membership:', membershipError);
-        throw membershipError;
-      }
-
-      console.log('Organization membership created');
-
-      // If they're a member (not admin), set up website access
-      if (role === 'member' && selectedWebsites.length > 0) {
-        console.log('Setting up website access:', selectedWebsites);
-        
-        const { error: accessError } = await supabase
-          .from('website_access')
-          .insert(
-            selectedWebsites.map(websiteId => ({
-              user_id: data.user.id,
-              website_id: websiteId
-            }))
-          );
-
-        if (accessError) {
-          console.error('Error setting up website access:', accessError);
-          throw accessError;
-        }
-
-        console.log('Website access configured');
-      }
 
       toast.success('Team member invited successfully');
       
