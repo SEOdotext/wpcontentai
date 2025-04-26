@@ -8,6 +8,12 @@ const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 serve(async (req) => {
+  console.log('Request received:', {
+    method: req.method,
+    url: req.url,
+    headers: Object.fromEntries(req.headers.entries())
+  });
+
   // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -18,16 +24,28 @@ serve(async (req) => {
       throw new Error(`Method ${req.method} not allowed`);
     }
 
-    const { email, organisation_id, role } = await req.json();
+    const body = await req.text();
+    console.log('Request body:', body);
+
+    let data;
+    try {
+      data = JSON.parse(body);
+    } catch (e) {
+      console.error('Failed to parse request body:', e);
+      throw new Error('Invalid JSON in request body');
+    }
+
+    const { email, organisation_id, role } = data;
 
     if (!email || !organisation_id || !role) {
+      console.error('Missing required fields:', { email, organisation_id, role });
       throw new Error('Missing required fields: email, organisation_id, role');
     }
 
     console.log('Sending invitation to:', { email, organisation_id, role });
 
     // Send invitation using admin client
-    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+    const { data: inviteData, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: {
         organisation_id,
         role
@@ -35,25 +53,19 @@ serve(async (req) => {
       redirectTo: `${new URL(req.url).origin}/auth/callback?next=/dashboard`
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error sending invitation:', error);
+      throw error;
+    }
 
-    console.log('Invitation sent, creating membership');
-
-    // Create organization membership
-    const { error: membershipError } = await supabaseAdmin
-      .from('organisation_memberships')
-      .insert({
-        organisation_id,
-        role,
-        member_id: data.user.id
-      });
-
-    if (membershipError) throw membershipError;
-
-    console.log('Membership created');
+    console.log('Invitation sent successfully');
 
     return new Response(
-      JSON.stringify({ data, status: 'success' }),
+      JSON.stringify({ 
+        data: inviteData, 
+        status: 'success',
+        message: 'Invitation sent successfully'
+      }),
       { 
         headers: { 
           ...corsHeaders,
