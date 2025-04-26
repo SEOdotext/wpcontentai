@@ -1,8 +1,27 @@
-Send an email invite link
-Sends an invite link to an email address.
+# User Invitation Flow
 
-Sends an invite link to the user's email address.
-The invite_user_by_email() method is typically used by administrators to invite users to join the application.
-Note that PKCE is not supported when using invite_user_by_email. This is because the browser initiating the invite is often different from the browser accepting the invite which makes it difficult to provide the security guarantees required of the PKCE flow.
+## Admin Invites User
+1. Admin uses `supabase.auth.admin.inviteUserByEmail(email, options)` to send invitation
+2. User receives email with magic link containing token
+3. User clicks link and is redirected to `/auth/callback?token=...`
+4. AuthCallback exchanges token for session using `exchangeCodeForSession`
+5. User is redirected to dashboard
 
-response = supabase.auth.admin.invite_user_by_email("email@example.com")
+## Code Example
+```typescript
+// Send invitation
+const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+  data: {
+    organisation_id: organisation.id,
+    role: role
+  }
+});
+
+// Handle callback (in AuthCallback.tsx)
+const { data, error } = await supabase.auth.exchangeCodeForSession(token);
+```
+
+## Important Notes
+- PKCE is not supported for invites
+- Invitation links are single-use
+- Invites include custom metadata (org ID, role)
