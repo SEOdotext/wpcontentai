@@ -21,27 +21,41 @@ const AuthCallback = () => {
         const searchParams = new URLSearchParams(location.search);
         const hashParams = new URLSearchParams(location.hash.replace('#', '?'));
         
-        // Check for token in various parameters
-        let token = searchParams.get('token') || 
-                   hashParams.get('token') ||
-                   searchParams.get('code') ||
-                   hashParams.get('code') ||
-                   searchParams.get('access_token') ||
-                   hashParams.get('access_token');
-
-        // If no token found, try to get it from the URL path
-        if (!token) {
-          const pathParts = location.pathname.split('/');
-          const lastPart = pathParts[pathParts.length - 1];
-          if (lastPart && lastPart !== 'callback') {
-            token = lastPart;
+        // Check for access token first (invitation flow)
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const expiresIn = hashParams.get('expires_in');
+        const expiresAt = hashParams.get('expires_at');
+        
+        let session;
+        
+        if (accessToken) {
+          console.log('AuthCallback: Found access token, setting session');
+          // Set the session directly
+          const { data: { user }, error: setSessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+            expires_in: parseInt(expiresIn || '3600'),
+            expires_at: parseInt(expiresAt || '0')
+          });
+          
+          if (setSessionError) throw setSessionError;
+          if (!user) throw new Error('No user data in session');
+          
+          session = { user };
+        } else {
+          // Try PKCE code flow
+          const code = searchParams.get('code');
+          if (code) {
+            console.log('AuthCallback: Found code, exchanging for session');
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+            if (error) throw error;
+            session = data;
           }
         }
         
-        console.log('AuthCallback: Found token:', !!token);
-        
-        if (!token) {
-          console.log('AuthCallback: No token found, redirecting to auth');
+        if (!session) {
+          console.log('AuthCallback: No valid auth data found, redirecting to auth');
           navigate('/auth', { replace: true });
           return;
         }
@@ -50,18 +64,8 @@ const AuthCallback = () => {
         const type = searchParams.get('type') || hashParams.get('type');
         console.log('AuthCallback: Auth type:', type);
 
-        // Exchange the token for a session
-        const { data, error } = await supabase.auth.exchangeCodeForSession(token);
-        console.log('AuthCallback: Exchange result:', { success: !!data.session, error: !!error });
-
-        if (error) throw error;
-
-        // Get user metadata from the session
-        const user = data.session?.user;
-        if (!user) throw new Error('No user data in session');
-
         // Check if this is an invitation flow
-        const invitationData = user.user_metadata;
+        const invitationData = session.user.user_metadata;
         if (type === 'invite' || invitationData?.organisation_id) {
           console.log('AuthCallback: Processing invitation for organization:', invitationData?.organisation_id);
           
@@ -69,7 +73,7 @@ const AuthCallback = () => {
           const { data: membership, error: membershipError } = await supabase
             .from('organisation_memberships')
             .select('*')
-            .eq('member_id', user.id)
+            .eq('member_id', session.user.id)
             .eq('organisation_id', invitationData?.organisation_id)
             .single();
 
@@ -83,7 +87,7 @@ const AuthCallback = () => {
               .from('organisation_memberships')
               .insert({
                 organisation_id: invitationData.organisation_id,
-                member_id: user.id,
+                member_id: session.user.id,
                 role: invitationData.role || 'member'
               });
 
