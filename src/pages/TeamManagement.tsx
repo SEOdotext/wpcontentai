@@ -182,70 +182,74 @@ const TeamManagement = () => {
     if (!organisation?.id || currentUserRole !== 'admin') return;
 
     try {
-      console.log('Sending invitation for:', email);
-      
-      // First create the auth user
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: email,
-        password: Math.random().toString(36).slice(-12), // Generate a random password
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            role: role,
-            organisation_id: organisation.id
-          }
+      console.log('Starting invitation process:', { email, role, organisation_id: organisation.id });
+
+      // Use Supabase's built-in invitation system
+      const { data, error } = await supabase.auth.admin.inviteUserByEmail(email.trim(), {
+        data: {
+          organisation_id: organisation.id,
+          role: role
         }
       });
 
-      if (signUpError) {
-        console.error('Error creating auth user:', signUpError);
-        throw signUpError;
+      if (error) {
+        console.error('Error sending invitation:', error);
+        throw error;
       }
 
-      if (!authData.user?.id) {
-        throw new Error('Failed to create auth user');
+      console.log('Invitation sent successfully:', data);
+
+      if (!data.user || !data.user.id) {
+        throw new Error('Failed to get user data from invitation');
       }
 
-      // Now call the RPC function to handle the invitation
-      const { data: invitationResponse, error: invitationError } = await supabase
-        .rpc('handle_organisation_invitation', {
-          p_email: email,
-          p_organisation_id: organisation.id,
-          p_role: role,
-          p_website_ids: [] // Pass empty array for website IDs
+      // Set up organization membership
+      const { error: membershipError } = await supabase
+        .from('organisation_memberships')
+        .insert({
+          organisation_id: organisation.id,
+          role: role,
+          member_id: data.user.id
         });
 
-      if (invitationError) {
-        console.error('Error sending invitation:', invitationError);
-        throw invitationError;
+      if (membershipError) {
+        console.error('Error creating membership:', membershipError);
+        throw membershipError;
       }
 
-      console.log('Invitation response:', invitationResponse);
+      console.log('Organization membership created');
 
-      if (invitationResponse && invitationResponse.status === 'success') {
-        // Only send invitation email for new users
-        if (invitationResponse.is_new_user) {
-          await supabase.rpc('send_invitation_email', {
-            p_user_id: invitationResponse.user_id,
-            p_organisation_id: organisation.id,
-            p_is_new_user: true
-          });
+      // If they're a member (not admin), set up website access
+      if (role === 'member' && selectedWebsites.length > 0) {
+        console.log('Setting up website access:', selectedWebsites);
+        
+        const { error: accessError } = await supabase
+          .from('website_access')
+          .insert(
+            selectedWebsites.map(websiteId => ({
+              user_id: data.user.id,
+              website_id: websiteId
+            }))
+          );
+
+        if (accessError) {
+          console.error('Error setting up website access:', accessError);
+          throw accessError;
         }
 
-        toast.success('Team member added successfully');
-        
-        // Always refresh team data, regardless of the response
-        console.log('Refreshing team data...');
-        await fetchTeamData();
-
-        setEmail('');
-        setRole('member');
-        setIsInviteDialogOpen(false);
-      } else if (invitationResponse && invitationResponse.message === 'User is already a member of this organization') {
-        toast.info('This user is already a member of your organization.');
-      } else {
-        toast.error((invitationResponse && invitationResponse.message) || 'Failed to invite team member');
+        console.log('Website access configured');
       }
+
+      toast.success('Team member invited successfully');
+      
+      // Reset form
+      setEmail('');
+      setRole('member');
+      setSelectedWebsites([]);
+      setIsInviteDialogOpen(false);
+
+      // Refresh the team list
+      await fetchTeamData();
     } catch (error) {
       console.error('Error in handleInviteTeamMember:', error);
       toast.error('Failed to invite team member');
