@@ -189,7 +189,8 @@ const TeamManagement = () => {
         data: {
           organisation_id: organisation.id,
           role: role
-        }
+        },
+        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`
       });
 
       if (error) {
@@ -427,13 +428,6 @@ const TeamManagement = () => {
       if (error) throw error;
 
       if (data && data.status === 'success') {
-        // Send invitation email
-        await supabase.rpc('send_invitation_email', {
-          p_user_id: data.user_id,
-          p_organisation_id: organisation.id,
-          p_is_new_user: data.is_new_user || false
-        });
-
         toast.success(data.message || 'User added to organization successfully');
             
         // Reset form
