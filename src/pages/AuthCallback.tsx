@@ -13,13 +13,18 @@ const AuthCallback = () => {
 
   useEffect(() => {
     const handleCallback = async () => {
-      console.log('AuthCallback: Processing authentication callback');
-      console.log('AuthCallback: URL:', window.location.href);
+      console.log('AuthCallback: Starting authentication callback processing');
+      console.log('AuthCallback: Current URL:', window.location.href);
+      console.log('AuthCallback: Search params:', location.search);
+      console.log('AuthCallback: Hash:', location.hash);
       
       try {
-        // Try to get the token from different possible locations
+        // Parse URL parameters
         const searchParams = new URLSearchParams(location.search);
         const hashParams = new URLSearchParams(location.hash.replace('#', '?'));
+        
+        console.log('AuthCallback: Search parameters:', Object.fromEntries(searchParams.entries()));
+        console.log('AuthCallback: Hash parameters:', Object.fromEntries(hashParams.entries()));
         
         // Check for access token first (invitation flow)
         const accessToken = hashParams.get('access_token');
@@ -27,47 +32,71 @@ const AuthCallback = () => {
         const expiresIn = hashParams.get('expires_in');
         const expiresAt = hashParams.get('expires_at');
         
+        console.log('AuthCallback: Auth tokens found:', {
+          hasAccessToken: !!accessToken,
+          hasRefreshToken: !!refreshToken,
+          expiresIn,
+          expiresAt
+        });
+        
         let session;
         
         if (accessToken) {
-          console.log('AuthCallback: Found access token, setting session');
+          console.log('AuthCallback: Using access token flow');
           // Set the session directly
-          const { data: { user }, error: setSessionError } = await supabase.auth.setSession({
+          const { data, error: setSessionError } = await supabase.auth.setSession({
             access_token: accessToken,
-            refresh_token: refreshToken || '',
-            expires_in: parseInt(expiresIn || '3600'),
-            expires_at: parseInt(expiresAt || '0')
+            refresh_token: refreshToken || ''
           });
           
-          if (setSessionError) throw setSessionError;
-          if (!user) throw new Error('No user data in session');
+          if (setSessionError) {
+            console.error('AuthCallback: Error setting session:', setSessionError);
+            throw setSessionError;
+          }
           
-          session = { user };
+          console.log('AuthCallback: Session set successfully:', {
+            hasUser: !!data.user,
+            hasSession: !!data.session
+          });
+          
+          if (!data.user) throw new Error('No user data in session');
+          session = { user: data.user };
         } else {
           // Try PKCE code flow
           const code = searchParams.get('code');
+          console.log('AuthCallback: Attempting PKCE code flow:', { hasCode: !!code });
+          
           if (code) {
-            console.log('AuthCallback: Found code, exchanging for session');
+            console.log('AuthCallback: Exchanging code for session');
             const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-            if (error) throw error;
+            if (error) {
+              console.error('AuthCallback: Error exchanging code:', error);
+              throw error;
+            }
+            console.log('AuthCallback: Code exchange successful');
             session = data;
           }
         }
         
         if (!session) {
-          console.log('AuthCallback: No valid auth data found, redirecting to auth');
+          console.log('AuthCallback: No valid auth data found');
           navigate('/auth', { replace: true });
           return;
         }
 
-        // Get the type parameter
+        // Get the type parameter and check invitation flow
         const type = searchParams.get('type') || hashParams.get('type');
         console.log('AuthCallback: Auth type:', type);
-
-        // Check if this is an invitation flow
+        
         const invitationData = session.user.user_metadata;
+        console.log('AuthCallback: User metadata:', invitationData);
+
         if (type === 'invite' || invitationData?.organisation_id) {
-          console.log('AuthCallback: Processing invitation for organization:', invitationData?.organisation_id);
+          console.log('AuthCallback: Processing invitation flow:', {
+            type,
+            organisationId: invitationData?.organisation_id,
+            role: invitationData?.role
+          });
           
           // Verify organization membership
           const { data: membership, error: membershipError } = await supabase
@@ -77,12 +106,19 @@ const AuthCallback = () => {
             .eq('organisation_id', invitationData?.organisation_id)
             .single();
 
-          if (membershipError && membershipError.code !== 'PGRST116') { // PGRST116 is "not found"
+          console.log('AuthCallback: Membership check result:', {
+            hasMembership: !!membership,
+            error: membershipError?.code
+          });
+
+          if (membershipError && membershipError.code !== 'PGRST116') {
+            console.error('AuthCallback: Error checking membership:', membershipError);
             throw membershipError;
           }
 
           if (!membership && invitationData?.organisation_id) {
-            // Create organization membership if it doesn't exist
+            console.log('AuthCallback: Creating new membership');
+            // Create organization membership
             const { error: createError } = await supabase
               .from('organisation_memberships')
               .insert({
@@ -91,16 +127,20 @@ const AuthCallback = () => {
                 role: invitationData.role || 'member'
               });
 
-            if (createError) throw createError;
-            console.log('AuthCallback: Created organization membership');
+            if (createError) {
+              console.error('AuthCallback: Error creating membership:', createError);
+              throw createError;
+            }
+            console.log('AuthCallback: Membership created successfully');
           }
         }
 
         // Update auth state
+        console.log('AuthCallback: Updating auth state');
         await checkAuth();
         console.log('AuthCallback: Auth state updated');
 
-        // Get the next URL or default to dashboard
+        // Handle redirect
         const next = searchParams.get('next') || hashParams.get('next') || '/dashboard';
         console.log('AuthCallback: Redirecting to:', next);
         navigate(next, { replace: true });
