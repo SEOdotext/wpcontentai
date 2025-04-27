@@ -3,8 +3,8 @@
 
 // Edge function to crawl a website and extract pages when no sitemap is available
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DOMParser, Element } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 
 // Maximum number of pages to crawl
 const MAX_PAGES = 50;
@@ -201,7 +201,7 @@ async function crawlWebsite(baseUrl: string, maxPages = MAX_PAGES): Promise<Arra
 
 serve(async (req) => {
   // Get the origin from the request
-  const origin = req.headers.get('origin');
+  const origin = req.headers.get('origin') || ALLOWED_ORIGINS.production[0];
   
   // Set CORS headers based on origin
   const corsHeaders = {
@@ -209,56 +209,43 @@ serve(async (req) => {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Max-Age': '86400'
-  };
+  } as const;
 
-  // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  let requestBody: { website_id?: string; website_url?: string; max_pages?: string } = {};
   
+  // Create Supabase client
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL") || "",
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
+  );
+
   try {
     // Only allow POST requests
+    if (req.method === "OPTIONS") {
+      return new Response("ok", { headers: corsHeaders });
+    }
+
     if (req.method !== "POST") {
-      return new Response(
-        JSON.stringify({ error: "Method not allowed" }),
-        { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw new Error("Method not allowed");
     }
     
     // Get the request body
-    const body = await req.json();
-    const { website_id, website_url, max_pages } = body;
+    requestBody = await req.json();
+    const { website_id, website_url, max_pages } = requestBody;
     
     if (!website_id) {
-      return new Response(
-        JSON.stringify({ error: "Missing website_id parameter" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      throw new Error("Missing website_id parameter");
     }
     
-    let url;
-    
-    // Use three ways to determine the website URL:
-    // 1. If website_url is directly provided from frontend
-    // 2. Special case for testing with a sample website
-    // 3. Get the website URL from the database using website_id
+    let url: string;
     
     if (website_url) {
-      // Option 1: Use the URL provided directly from the frontend
       console.log(`Using provided website_url: ${website_url}`);
       url = website_url;
-    } else if (website_id === 'sample' && body.website_url) {
-      // Option 2: Special case for testing with a sample website
-      url = body.website_url;
+    } else if (website_id === 'sample' && requestBody.website_url) {
+      url = requestBody.website_url;
       console.log(`Using provided sample URL: ${url}`);
     } else {
-      // Option 3: Get the website URL from the database
-      // Create a Supabase client
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-      const supabase = createClient(supabaseUrl, supabaseKey);
-      
-      // Get the website URL from the database
       const { data: website, error: websiteError } = await supabase
         .from('websites')
         .select('url')
@@ -266,10 +253,16 @@ serve(async (req) => {
         .single();
       
       if (websiteError || !website) {
-        return new Response(
-          JSON.stringify({ error: websiteError?.message || "Website not found" }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        const errorMessage = websiteError ? websiteError.message : "Website not found";
+        
+        await supabase.from('onboarding').upsert({
+          website_id,
+          error: errorMessage,
+          error_step: 'crawl-website-pages',
+          status: 'error'
+        });
+
+        throw new Error(errorMessage);
       }
       
       url = website.url;
@@ -285,6 +278,14 @@ serve(async (req) => {
     const pages = await crawlWebsite(url, maxPagesToFetch);
     
     if (pages.length === 0) {
+      // Log error to onboarding table
+      await supabase.from('onboarding').upsert({
+        website_id,
+        error: `No pages found at URL: ${url}`,
+        error_step: 'crawl-website-pages',
+        status: 'error'
+      });
+
       return new Response(
         JSON.stringify({ 
           error: "No pages found", 
@@ -303,6 +304,14 @@ serve(async (req) => {
       title: page.title,
       last_fetched: new Date().toISOString()
     }));
+
+    // Clear any previous errors on success
+    await supabase.from('onboarding').upsert({
+      website_id,
+      error: null,
+      error_step: null,
+      status: 'success'
+    });
     
     return new Response(
       JSON.stringify({ 
@@ -313,10 +322,22 @@ serve(async (req) => {
     );
     
   } catch (error) {
-    console.error(`Error processing request: ${error.message}`);
+    console.error(`Error processing request: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    
+    // Log error to onboarding table
+    try {
+      await supabase.from('onboarding').upsert({
+        website_id: requestBody?.website_id,
+        error: `Error in crawl-website-pages: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error_step: 'crawl-website-pages',
+        status: 'error'
+      });
+    } catch (logError) {
+      console.error('Failed to log error to onboarding table:', logError instanceof Error ? logError.message : 'Unknown error');
+    }
     
     return new Response(
-      JSON.stringify({ error: `Internal server error: ${error.message}` }),
+      JSON.stringify({ error: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}` }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

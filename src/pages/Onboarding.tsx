@@ -751,65 +751,17 @@ const Onboarding = () => {
                   }
                 } catch (error) {
                   console.error("Failed crawl with payload:", payload, error);
-
-                  // Store the error in onboarding analytics
-                  try {
-                    const errorResponse = error.message.match(/Function .+ returned status \d+: (.+)$/);
-                    const workerResponse = errorResponse ? JSON.parse(errorResponse[1]) : null;
-                    
-                    const errorData = {
-                      message: error.message,
-                      code: workerResponse?.code || 'CRAWL_ERROR',
-                      step: '2',
-                      details: workerResponse?.message || error.message,
-                      worker_response: workerResponse,
-                      timestamp: new Date().toISOString()
-                    };
-
-                    await callEdgeFunction('store-onboarding-analytics', {
-                      website_id: localStorage.getItem('website_id'),
-                      website_url: state.websiteUrl,
-                      status: 'error',
-                      error: JSON.stringify(errorData)
-                    });
-                  } catch (storeError) {
-                    console.error("Failed to store error in analytics:", storeError);
-                  }
-
-              throw error; // Let the error propagate up
-              }
+                  await storeError(error, '2', 'CRAWL_ERROR');
+                  throw error; // Let the error propagate up
+                }
               
               // If we got here, all attempts failed
             throw new Error("Could not find any pages on the website. Please check the URL and try again.");
           }
         } catch (error) {
           console.error("Error reading website:", error);
-          
-          // Store the error in onboarding analytics
-          try {
-            const errorResponse = error.message.match(/Function .+ returned status \d+: (.+)$/);
-            const workerResponse = errorResponse ? JSON.parse(errorResponse[1]) : null;
-            
-            const errorData = {
-              message: error.message,
-              code: workerResponse?.code || 'CRAWL_ERROR',
-              step: '2',
-              details: workerResponse?.message || error.message,
-              worker_response: workerResponse,
-              timestamp: new Date().toISOString()
-            };
-
-            await callEdgeFunction('store-onboarding-analytics', {
-              website_id: localStorage.getItem('website_id'),
-              website_url: state.websiteUrl,
-              status: 'error',
-              error: JSON.stringify(errorData)
-            });
-          } catch (storeError) {
-            console.error("Failed to store error in analytics:", storeError);
-          }
-          
-          throw error; // Let the error propagate up
+          await storeError(error, '2', 'CRAWL_ERROR');
+          throw error;
         }
       },
       
@@ -2252,6 +2204,32 @@ const Onboarding = () => {
       sonnerToast("Error", {
         description: error.message || "Failed to save scheduling settings. Please try again."
       });
+    }
+  };
+
+  // Store the error in onboarding analytics
+  const storeError = async (error: Error, step: string, defaultCode: string) => {
+    try {
+      const errorResponse = error.message.match(/Function .+ returned status \d+: (.+)$/);
+      const workerResponse = errorResponse ? JSON.parse(errorResponse[1]) : null;
+      
+      const errorData = {
+        message: error.message,
+        code: workerResponse?.code || defaultCode,
+        step,
+        details: workerResponse?.message || error.message,
+        worker_response: workerResponse,
+        timestamp: new Date().toISOString()
+      };
+
+      await callEdgeFunction('store-onboarding-analytics', {
+        website_id: localStorage.getItem('website_id'),
+        website_url: state.websiteUrl,
+        status: 'error',
+        error: JSON.stringify(errorData)
+      });
+    } catch (storeError) {
+      console.error("Failed to store error in analytics:", storeError);
     }
   };
 
