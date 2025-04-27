@@ -15,6 +15,10 @@ Test: Reset password feature
 
 ---
 
+Resend magic link to user when invites are sent.
+
+---
+
 Update the default content formatting - make it great for LLM + SEO!
 ---
 

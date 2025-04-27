@@ -133,9 +133,8 @@ serve(async (req) => {
     if (requestBody.error) {
       // Parse error message to extract details if it's a string containing JSON
       let workerResponse = null;
-      let errorCode = requestBody.error_code;
-      let errorDetails = requestBody.error_details;
-      let errorStep = requestBody.error_step;
+      let errorDetails = null;
+      let errorStep = null;
 
       // Try to parse error message if it contains JSON
       if (typeof requestBody.error === 'string') {
@@ -144,8 +143,7 @@ serve(async (req) => {
           try {
             const parsedError = JSON.parse(errorMatch[1]);
             workerResponse = parsedError;
-            errorCode = parsedError.code || errorCode;
-            errorDetails = parsedError.message || errorDetails;
+            errorDetails = parsedError.message;
           } catch (e) {
             console.error('Failed to parse error JSON:', e);
           }
@@ -161,11 +159,9 @@ serve(async (req) => {
       errorData = {
         message: requestBody.error,
         timestamp: new Date().toISOString(),
-        details: errorDetails || requestBody.error_details || null,
-        code: errorCode || requestBody.error_code || null,
-        step: errorStep || requestBody.error_step || null,
-        worker_response: workerResponse || requestBody.worker_response || null,
-        stack: requestBody.error_stack || null
+        details: errorDetails,
+        step: errorStep,
+        worker_response: workerResponse
       };
     }
 
@@ -174,7 +170,7 @@ serve(async (req) => {
       id: existingData?.id || crypto.randomUUID(),
       website_id: requestBody.website_id,
       website_url: requestBody.website_url,
-      status: requestBody.status || existingData?.status || 'started',
+      status: errorData ? 'error' : (requestBody.status || existingData?.status || 'started'),
       post_theme_suggestions: requestBody.post_theme_suggestions || existingData?.post_theme_suggestions || null,
       post_theme_content: requestBody.post_theme_content || existingData?.post_theme_content || null,
       scheduling_settings: requestBody.scheduling_settings || existingData?.scheduling_settings || null,
@@ -218,14 +214,20 @@ serve(async (req) => {
           }
         )
 
+        // Get any existing error data
+        const { data: existingRecord } = await supabaseClient
+          .from('onboarding')
+          .select('error')
+          .eq('website_id', requestBody.website_id)
+          .single();
+
         const errorData = {
           message: error instanceof Error ? error.message : 'Unknown error occurred',
-          stack: error instanceof Error ? error.stack : null,
           timestamp: new Date().toISOString(),
           details: error.details || null,
-          code: error.code || null,
+          step: error.step || null,
           worker_response: error.worker_response || null,
-          step: error.step || null
+          previous_error: existingRecord?.error || null // Preserve previous error
         };
 
         // Store error in onboarding table
@@ -233,6 +235,7 @@ serve(async (req) => {
           .from('onboarding')
           .upsert({
             website_id: requestBody.website_id,
+            status: 'error', // Always set status to error
             error: JSON.stringify(errorData),
             updated_at: new Date().toISOString()
           })
