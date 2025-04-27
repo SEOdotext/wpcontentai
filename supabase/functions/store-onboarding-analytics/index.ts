@@ -30,21 +30,20 @@ const extractWebsiteName = (url: string): string => {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    console.log('Handling CORS preflight request');
-    return new Response(null, {
-      headers: corsHeaders
-    })
-  }
-
+  let requestBody;
+  
   try {
-    console.log('Received request:', {
-      method: req.method,
-      headers: Object.fromEntries(req.headers.entries()),
-      url: req.url,
-      userAgent: req.headers.get('user-agent')
-    })
+    // Handle CORS preflight
+    if (req.method === 'OPTIONS') {
+      console.log('Handling CORS preflight request');
+      return new Response(null, {
+        headers: corsHeaders
+      })
+    }
+
+    // Parse request body early so we have access to it in catch block
+    requestBody = await req.json();
+    console.log('Received request body:', requestBody);
 
     // Validate request method
     if (req.method !== 'POST') {
@@ -57,22 +56,12 @@ serve(async (req) => {
       console.error('No authorization header found in request');
       throw new Error('No authorization header')
     }
-    console.log('Auth header present:', authHeader.substring(0, 10) + '...')
-
-    // Parse request body
-    const body = await req.json()
-    console.log('Request body:', {
-      ...body,
-      website_url: body.website_url,
-      website_id: body.website_id,
-      status: body.status
-    })
 
     // Validate required fields
-    if (!body.website_url) {
+    if (!requestBody.website_url) {
       throw new Error('website_url is required')
     }
-    if (!body.website_id) {
+    if (!requestBody.website_id) {
       throw new Error('website_id is required')
     }
 
@@ -88,14 +77,14 @@ serve(async (req) => {
     )
 
     // Check if this is a new attempt with a previous website_id
-    if (body.previous_website_id) {
-      console.log('Found previous website_id:', body.previous_website_id);
+    if (requestBody.previous_website_id) {
+      console.log('Found previous website_id:', requestBody.previous_website_id);
       
       // Check if the previous website_id exists and is still in 'started' state
       const { data: previousData, error: previousError } = await supabaseClient
         .from('onboarding')
         .select('*')
-        .eq('website_id', body.previous_website_id)
+        .eq('website_id', requestBody.previous_website_id)
         .eq('status', 'started')
         .maybeSingle();
       
@@ -103,7 +92,6 @@ serve(async (req) => {
         console.error('Error checking previous website:', previousError);
       } else if (previousData) {
         console.log('Previous website found in started state, preserving it');
-        // The previous website will remain in the database
       }
     }
 
@@ -112,8 +100,8 @@ serve(async (req) => {
     const { error: websiteError } = await supabaseClient
       .from('websites')
       .insert({
-        id: body.website_id,
-        url: body.website_url,
+        id: requestBody.website_id,
+        url: requestBody.website_url,
         name: 'Temporary Website',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -128,12 +116,11 @@ serve(async (req) => {
       throw websiteError
     }
 
-    // Now check for existing onboarding record
-    console.log('Checking for existing onboarding record...')
+    // Check for existing onboarding record
     const { data: existingData, error: fetchError } = await supabaseClient
       .from('onboarding')
       .select('*')
-      .eq('website_id', body.website_id)
+      .eq('website_id', requestBody.website_id)
       .maybeSingle()
 
     if (fetchError) {
@@ -141,23 +128,65 @@ serve(async (req) => {
       throw fetchError
     }
 
-    console.log('Existing data:', existingData)
+    // Prepare error data if present
+    let errorData = null;
+    if (requestBody.error) {
+      // Parse error message to extract details if it's a string containing JSON
+      let workerResponse = null;
+      let errorCode = requestBody.error_code;
+      let errorDetails = requestBody.error_details;
+      let errorStep = requestBody.error_step;
+
+      // Try to parse error message if it contains JSON
+      if (typeof requestBody.error === 'string') {
+        const errorMatch = requestBody.error.match(/Function .+ returned status \d+: (.+)$/);
+        if (errorMatch) {
+          try {
+            const parsedError = JSON.parse(errorMatch[1]);
+            workerResponse = parsedError;
+            errorCode = parsedError.code || errorCode;
+            errorDetails = parsedError.message || errorDetails;
+          } catch (e) {
+            console.error('Failed to parse error JSON:', e);
+          }
+        }
+
+        // Try to extract step information
+        const stepMatch = requestBody.error.match(/Error in step (\d+):/);
+        if (stepMatch) {
+          errorStep = stepMatch[1];
+        }
+      }
+
+      errorData = {
+        message: requestBody.error,
+        timestamp: new Date().toISOString(),
+        details: errorDetails || requestBody.error_details || null,
+        code: errorCode || requestBody.error_code || null,
+        step: errorStep || requestBody.error_step || null,
+        worker_response: workerResponse || requestBody.worker_response || null,
+        stack: requestBody.error_stack || null
+      };
+    }
 
     // Prepare data for upsert
     const data = {
       id: existingData?.id || crypto.randomUUID(),
-      website_id: body.website_id,
-      website_url: body.website_url,
-      status: body.status || 'started',
-      post_theme_suggestions: body.post_theme_suggestions || existingData?.post_theme_suggestions || null,
-      post_theme_content: body.post_theme_content || existingData?.post_theme_content || null,
-      scheduling_settings: body.scheduling_settings || existingData?.scheduling_settings || null,
+      website_id: requestBody.website_id,
+      website_url: requestBody.website_url,
+      status: requestBody.status || existingData?.status || 'started',
+      post_theme_suggestions: requestBody.post_theme_suggestions || existingData?.post_theme_suggestions || null,
+      post_theme_content: requestBody.post_theme_content || existingData?.post_theme_content || null,
+      scheduling_settings: requestBody.scheduling_settings || existingData?.scheduling_settings || null,
+      error: errorData ? JSON.stringify(errorData) : null,
       updated_at: new Date().toISOString(),
-      created_at: existingData?.created_at || new Date().toISOString(),
-      error: null // Reset error field on successful operation
+      created_at: existingData?.created_at || new Date().toISOString()
     }
 
-    console.log('Upserting onboarding data:', data)
+    console.log('Upserting onboarding data:', {
+      ...data,
+      error: errorData ? 'Error data present' : null // Log presence of error without full details
+    })
 
     const { error: upsertError } = await supabaseClient
       .from('onboarding')
@@ -168,7 +197,6 @@ serve(async (req) => {
       throw upsertError
     }
 
-    console.log('Successfully stored onboarding analytics')
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
@@ -177,8 +205,8 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in store-onboarding-analytics:', error)
     
-    // If we have a website_id, try to store the error
-    if (body?.website_id) {
+    // If we have a website_id from the request, store the error
+    if (requestBody?.website_id) {
       try {
         const supabaseClient = createClient(
           Deno.env.get('SUPABASE_URL') ?? '',
@@ -190,20 +218,28 @@ serve(async (req) => {
           }
         )
 
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
-        const errorStack = error instanceof Error ? error.stack : null
-        
-        await supabaseClient
+        const errorData = {
+          message: error instanceof Error ? error.message : 'Unknown error occurred',
+          stack: error instanceof Error ? error.stack : null,
+          timestamp: new Date().toISOString(),
+          details: error.details || null,
+          code: error.code || null,
+          worker_response: error.worker_response || null,
+          step: error.step || null
+        };
+
+        // Store error in onboarding table
+        const { error: errorUpsertError } = await supabaseClient
           .from('onboarding')
           .upsert({
-            website_id: body.website_id,
-            error: JSON.stringify({
-              message: errorMessage,
-              stack: errorStack,
-              timestamp: new Date().toISOString()
-            }),
+            website_id: requestBody.website_id,
+            error: JSON.stringify(errorData),
             updated_at: new Date().toISOString()
           })
+
+        if (errorUpsertError) {
+          console.error('Failed to store error in database:', errorUpsertError)
+        }
       } catch (errorLoggingError) {
         console.error('Failed to log error to database:', errorLoggingError)
       }

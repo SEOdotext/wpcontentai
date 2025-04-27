@@ -751,6 +751,23 @@ const Onboarding = () => {
                   }
                 } catch (error) {
                   console.error("Failed crawl with payload:", payload, error);
+
+                  // Store the error in onboarding analytics
+                  try {
+                    await callEdgeFunction('store-onboarding-analytics', {
+                      website_id: websiteId,
+                      website_url: state.websiteUrl,
+                      status: 'error',
+                      error: error.message,
+                      error_code: error.code || 'CRAWL_ERROR',
+                      error_step: '2',
+                      error_details: error.details || error.message,
+                      worker_response: error.response || null
+                    });
+                  } catch (storeError) {
+                    console.error("Failed to store error in analytics:", storeError);
+                  }
+
               throw error; // Let the error propagate up
               }
               
@@ -759,6 +776,23 @@ const Onboarding = () => {
           }
         } catch (error) {
           console.error("Error reading website:", error);
+          
+          // Store the error in onboarding analytics
+          try {
+            await callEdgeFunction('store-onboarding-analytics', {
+              website_id: websiteId,
+              website_url: state.websiteUrl,
+              status: 'error',
+              error: `Error in step 2: ${error.message}`,
+              error_code: error.code || 'WEBSITE_READ_ERROR',
+              error_step: '2',
+              error_details: error.details || error.message,
+              worker_response: error.response || null
+            });
+          } catch (storeError) {
+            console.error("Failed to store error in analytics:", storeError);
+          }
+          
           throw error; // Let the error propagate up
         }
       },
@@ -1654,6 +1688,22 @@ const Onboarding = () => {
         clearInterval(progressInterval);
         setState(prev => ({ ...prev, progress: 0 }));
         
+        // Log error to analytics
+        try {
+          callEdgeFunction('store-onboarding-analytics', {
+            website_id: localStorage.getItem('website_id'),
+            website_url: state.websiteUrl,
+            status: 'error',
+            error: error.message,
+            error_code: 'CONTENT_GENERATION_ERROR',
+            error_step: '3',
+            error_details: error.details || error.message,
+            worker_response: error.response || null
+          });
+        } catch (storeError) {
+          console.error("Failed to store error in analytics:", storeError);
+        }
+        
         sonnerToast("Error", {
           description: error.message || "Failed to generate content. Please try again."
         });
@@ -2107,34 +2157,31 @@ const Onboarding = () => {
 
   // Update handleContinueToAuth to send scheduling settings
   const handleContinueToAuth = async () => {
-    // Format posting days to match database structure
-    const formattedPostingDays = state.postingDays.reduce<Array<{ day: string; count: number }>>((acc, day) => {
-      const existingDay = acc.find(d => d.day === day);
-      if (existingDay) {
-        existingDay.count += 1;
-      } else {
-        acc.push({ day, count: 1 });
-      }
-      return acc;
-    }, []);
-
-    // Save publication settings
-    const publicationSettings = {
-      posting_frequency: state.postingFrequency,
-      posting_days: formattedPostingDays,
-      website_id: localStorage.getItem('website_id'),
-      organisation_id: localStorage.getItem('organisation_id'),
-      writing_style: 'Professional and informative',
-      subject_matters: []
-    };
-    
-    localStorage.setItem('publication_settings', JSON.stringify(publicationSettings));
-
-    // Update onboarding analytics with scheduling settings and status
     try {
-      const website_id = localStorage.getItem('website_id');
-      const website_url = localStorage.getItem('onboardingWebsite');
+      // Format posting days to match database structure
+      const formattedPostingDays = state.postingDays.reduce<Array<{ day: string; count: number }>>((acc, day) => {
+        const existingDay = acc.find(d => d.day === day);
+        if (existingDay) {
+          existingDay.count += 1;
+        } else {
+          acc.push({ day, count: 1 });
+        }
+        return acc;
+      }, []);
+
+      // Save publication settings
+      const publicationSettings = {
+        posting_frequency: state.postingFrequency,
+        posting_days: formattedPostingDays,
+        website_id: localStorage.getItem('website_id'),
+        organisation_id: localStorage.getItem('organisation_id'),
+        writing_style: 'Professional and informative',
+        subject_matters: []
+      };
       
+      localStorage.setItem('publication_settings', JSON.stringify(publicationSettings));
+
+      // Update onboarding analytics with scheduling settings and status
       await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/store-onboarding-analytics', {
         method: 'POST',
         headers: {
@@ -2142,18 +2189,38 @@ const Onboarding = () => {
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({
-          website_id,
-          website_url,
+          website_id: localStorage.getItem('website_id'),
+          website_url: state.websiteUrl,
           status: 'schedule_accepted',
           scheduling_settings: publicationSettings
         })
       });
-    } catch (error) {
-      console.error('Error updating onboarding analytics:', error);
-    }
 
-    // Show signup modal
-    setState(prev => ({ ...prev, showSignupModal: true }));
+      // Show signup modal
+      setState(prev => ({ ...prev, showSignupModal: true }));
+    } catch (error) {
+      console.error('Error in scheduling step:', error);
+      
+      // Log error to analytics
+      try {
+        await callEdgeFunction('store-onboarding-analytics', {
+          website_id: localStorage.getItem('website_id'),
+          website_url: state.websiteUrl,
+          status: 'error',
+          error: error.message,
+          error_code: 'SCHEDULING_ERROR',
+          error_step: '4',
+          error_details: error.details || error.message,
+          worker_response: error.response || null
+        });
+      } catch (storeError) {
+        console.error("Failed to store error in analytics:", storeError);
+      }
+      
+      sonnerToast("Error", {
+        description: error.message || "Failed to save scheduling settings. Please try again."
+      });
+    }
   };
 
   return (
