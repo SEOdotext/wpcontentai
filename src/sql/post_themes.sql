@@ -84,6 +84,8 @@ CREATE TRIGGER update_post_themes_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 
 -- Create function to handle post theme deletion
+-- This function uses SECURITY DEFINER to ensure it can delete related records
+-- even when RLS policies would normally prevent it
 CREATE OR REPLACE FUNCTION handle_post_theme_deletion()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -98,7 +100,7 @@ BEGIN
   
   RETURN OLD;
 END;
-$$ language 'plpgsql';
+$$ language 'plpgsql' SECURITY DEFINER;
 
 -- Drop existing trigger if it exists
 DROP TRIGGER IF EXISTS handle_post_theme_deletion_trigger ON post_themes;

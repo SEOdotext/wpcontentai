@@ -1,3 +1,33 @@
+
+User has alread accepted invite and is part of the team, then we get this error:
+
+TeamManagement.tsx:428 Resending invitation to: philipleth+stripe@gmail.com
+TeamManagement.tsx:430 
+            
+            
+           POST https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/invite-user 400 (Bad Request)
+handleResendInvite @ TeamManagement.tsx:430
+onClick @ TeamManagement.tsx:664
+callCallback2 @ chunk-W6L2VRDA.js?v=c0a0cf57:3674
+invokeGuardedCallbackDev @ chunk-W6L2VRDA.js?v=c0a0cf57:3699
+invokeGuardedCallback @ chunk-W6L2VRDA.js?v=c0a0cf57:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-W6L2VRDA.js?v=c0a0cf57:3736
+executeDispatch @ chunk-W6L2VRDA.js?v=c0a0cf57:7014
+processDispatchQueueItemsInOrder @ chunk-W6L2VRDA.js?v=c0a0cf57:7034
+processDispatchQueue @ chunk-W6L2VRDA.js?v=c0a0cf57:7043
+dispatchEventsForPlugins @ chunk-W6L2VRDA.js?v=c0a0cf57:7051
+(anonymous) @ chunk-W6L2VRDA.js?v=c0a0cf57:7174
+batchedUpdates$1 @ chunk-W6L2VRDA.js?v=c0a0cf57:18913
+batchedUpdates @ chunk-W6L2VRDA.js?v=c0a0cf57:3579
+dispatchEventForPluginEventSystem @ chunk-W6L2VRDA.js?v=c0a0cf57:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-W6L2VRDA.js?v=c0a0cf57:5478
+dispatchEvent @ chunk-W6L2VRDA.js?v=c0a0cf57:5472
+dispatchDiscreteEvent @ chunk-W6L2VRDA.js?v=c0a0cf57:5449Understand this error
+TeamManagement.tsx:454 Error in handleResendInvite: Error: A user with this email address has already been registered
+    at handleResendInvite (TeamManagement.tsx:446:15)
+
+---
+
 If a current user tries to use the signup onboarding input from the front page... Then logs in to the application, the storage contains the organsiation data and it seems to make the user unable to manage the organisation etc. Also the organisation now shows as the new name that the user inputted...
 
 Let's add a feature to log people in, if they try to create a website from the front page while they already have a functional login. 
