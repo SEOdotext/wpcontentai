@@ -1,3 +1,11 @@
+If a current user tries to use the signup onboarding input from the front page... Then logs in to the application, the storage contains the organsiation data and it seems to make the user unable to manage the organisation etc. Also the organisation now shows as the new name that the user inputted...
+
+Let's add a feature to log people in, if they try to create a website from the front page while they already have a functional login. 
+
+Also add the function to create a new website for existing account users...
+
+---
+
 Finish the onboarding / Dash
 - Options for the platform setting (select publishing platform)
 - Add integration with optional platform in the onboarding suggestions (- Login start WordPress integration if the user has set in the localstorage that the website:)
@@ -16,6 +24,10 @@ Test: Reset password feature
 ---
 
 Resend magic link to user when invites are sent.
+
+---
+
+DONE: Make sure we store all error logs in onboarding
 
 ---
 

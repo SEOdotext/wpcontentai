@@ -85,6 +85,7 @@ const TeamManagement = () => {
   const [isAddingExistingUser, setIsAddingExistingUser] = useState(false);
   const [activeTab, setActiveTab] = useState<'invite' | 'add'>('add');
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'member' | null>(null);
+  const [isResendingInvite, setIsResendingInvite] = useState(false);
 
   // Fetch the current user's role
   const fetchCurrentUserRole = async () => {
@@ -418,6 +419,45 @@ const TeamManagement = () => {
     }
   };
 
+  // Resend invitation to a team member
+  const handleResendInvite = async (member: TeamMember) => {
+    if (!organisation?.id || currentUserRole !== 'admin') return;
+    
+    setIsResendingInvite(true);
+    try {
+      console.log('Resending invitation to:', member.email);
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/invite-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`
+        },
+        body: JSON.stringify({
+          email: member.email,
+          organisation_id: organisation.id,
+          role: member.role,
+          is_resend: true
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to resend invitation');
+      }
+
+      const { data } = await response.json();
+      console.log('Invitation resent successfully:', data);
+
+      toast.success('Invitation resent successfully');
+    } catch (error) {
+      console.error('Error in handleResendInvite:', error);
+      toast.error('Failed to resend invitation');
+    } finally {
+      setIsResendingInvite(false);
+    }
+  };
+
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
@@ -618,6 +658,21 @@ const TeamManagement = () => {
                                             Manage Access
                                           </Button>
                                         )}
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleResendInvite(member)}
+                                          disabled={isResendingInvite}
+                                        >
+                                          {isResendingInvite ? (
+                                            <>
+                                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                              Resending...
+                                            </>
+                                          ) : (
+                                            'Resend Invite'
+                                          )}
+                                        </Button>
                                         <Button
                                           variant="destructive"
                                           size="icon"

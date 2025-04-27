@@ -35,14 +35,28 @@ serve(async (req) => {
       throw new Error('Invalid JSON in request body');
     }
 
-    const { email, organisation_id, role } = data;
+    const { email, organisation_id, role, is_resend } = data;
 
     if (!email || !organisation_id || !role) {
       console.error('Missing required fields:', { email, organisation_id, role });
       throw new Error('Missing required fields: email, organisation_id, role');
     }
 
-    console.log('Sending invitation to:', { email, organisation_id, role });
+    console.log('Processing invitation:', { email, organisation_id, role, is_resend });
+
+    // For resends, first check if user exists
+    if (is_resend) {
+      const { data: existingUser, error: userError } = await supabaseAdmin.auth.admin.getUserByEmail(email);
+      
+      if (userError) {
+        console.error('Error checking existing user:', userError);
+        throw userError;
+      }
+
+      if (!existingUser) {
+        throw new Error('User not found for resend');
+      }
+    }
 
     // Send invitation using admin client
     const { data: inviteData, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
@@ -64,7 +78,7 @@ serve(async (req) => {
       JSON.stringify({ 
         data: inviteData, 
         status: 'success',
-        message: 'Invitation sent successfully'
+        message: is_resend ? 'Invitation resent successfully' : 'Invitation sent successfully'
       }),
       { 
         headers: { 
