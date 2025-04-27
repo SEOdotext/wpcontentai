@@ -81,9 +81,22 @@ const LandingPage = () => {
     }
     
     try {
-      // Store website URL in onboarding analytics
-      const website_id = localStorage.getItem('website_id') || crypto.randomUUID();
-      localStorage.setItem('website_id', website_id);
+      // Generate a new website_id for this attempt
+      const new_website_id = crypto.randomUUID();
+      
+      // Store both the new and previous website_id
+      const previous_website_id = localStorage.getItem('website_id');
+      if (previous_website_id) {
+        localStorage.setItem('previous_website_id', previous_website_id);
+      }
+      localStorage.setItem('website_id', new_website_id);
+      
+      console.log('Sending onboarding analytics request:', {
+        website_id: new_website_id,
+        previous_website_id,
+        website_url: formattedUrl,
+        status: 'started'
+      });
       
       const response = await fetch('https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1/store-onboarding-analytics', {
         method: 'POST',
@@ -92,17 +105,28 @@ const LandingPage = () => {
           'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
         },
         body: JSON.stringify({
-          website_id,
+          website_id: new_website_id,
+          previous_website_id,
           website_url: formattedUrl,
           status: 'started'
         })
       });
 
       if (!response.ok) {
-        console.error('Failed to store onboarding analytics');
+        const errorText = await response.text();
+        console.error('Failed to store onboarding analytics:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`Failed to store onboarding analytics: ${response.status} ${response.statusText}`);
       }
+      
+      const result = await response.json();
+      console.log('Onboarding analytics stored successfully:', result);
     } catch (error) {
       console.error('Error storing onboarding analytics:', error);
+      // Don't block navigation on error, but log it
     }
     
     // Store the formatted website URL

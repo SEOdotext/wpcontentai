@@ -32,6 +32,7 @@ const extractWebsiteName = (url: string): string => {
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
+    console.log('Handling CORS preflight request');
     return new Response(null, {
       headers: corsHeaders
     })
@@ -41,6 +42,8 @@ serve(async (req) => {
     console.log('Received request:', {
       method: req.method,
       headers: Object.fromEntries(req.headers.entries()),
+      url: req.url,
+      userAgent: req.headers.get('user-agent')
     })
 
     // Validate request method
@@ -51,13 +54,19 @@ serve(async (req) => {
     // Get auth header
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
+      console.error('No authorization header found in request');
       throw new Error('No authorization header')
     }
-    console.log('Auth header present')
+    console.log('Auth header present:', authHeader.substring(0, 10) + '...')
 
     // Parse request body
     const body = await req.json()
-    console.log('Request body:', body)
+    console.log('Request body:', {
+      ...body,
+      website_url: body.website_url,
+      website_id: body.website_id,
+      status: body.status
+    })
 
     // Validate required fields
     if (!body.website_url) {
@@ -77,6 +86,26 @@ serve(async (req) => {
         }
       }
     )
+
+    // Check if this is a new attempt with a previous website_id
+    if (body.previous_website_id) {
+      console.log('Found previous website_id:', body.previous_website_id);
+      
+      // Check if the previous website_id exists and is still in 'started' state
+      const { data: previousData, error: previousError } = await supabaseClient
+        .from('onboarding')
+        .select('*')
+        .eq('website_id', body.previous_website_id)
+        .eq('status', 'started')
+        .maybeSingle();
+      
+      if (previousError) {
+        console.error('Error checking previous website:', previousError);
+      } else if (previousData) {
+        console.log('Previous website found in started state, preserving it');
+        // The previous website will remain in the database
+      }
+    }
 
     // First, create a temporary website record
     console.log('Creating temporary website record...')
@@ -124,7 +153,8 @@ serve(async (req) => {
       post_theme_content: body.post_theme_content || existingData?.post_theme_content || null,
       scheduling_settings: body.scheduling_settings || existingData?.scheduling_settings || null,
       updated_at: new Date().toISOString(),
-      created_at: existingData?.created_at || new Date().toISOString()
+      created_at: existingData?.created_at || new Date().toISOString(),
+      error: null // Reset error field on successful operation
     }
 
     console.log('Upserting onboarding data:', data)
@@ -146,6 +176,39 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error in store-onboarding-analytics:', error)
+    
+    // If we have a website_id, try to store the error
+    if (body?.website_id) {
+      try {
+        const supabaseClient = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+          {
+            auth: {
+              persistSession: false,
+            }
+          }
+        )
+
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+        const errorStack = error instanceof Error ? error.stack : null
+        
+        await supabaseClient
+          .from('onboarding')
+          .upsert({
+            website_id: body.website_id,
+            error: JSON.stringify({
+              message: errorMessage,
+              stack: errorStack,
+              timestamp: new Date().toISOString()
+            }),
+            updated_at: new Date().toISOString()
+          })
+      } catch (errorLoggingError) {
+        console.error('Failed to log error to database:', errorLoggingError)
+      }
+    }
+
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : 'Unknown error occurred',

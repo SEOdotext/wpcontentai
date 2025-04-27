@@ -5,6 +5,66 @@ import { Link } from 'react-router-dom';
 import PublicNav from '@/components/PublicNav';
 
 const LandingPage: React.FC = () => {
+  const storeOnboardingAnalytics = async (websiteUrl: string, status: string, previousWebsiteId?: string) => {
+    try {
+      console.log('Storing onboarding analytics:', { websiteUrl, status, previousWebsiteId });
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/store-onboarding-analytics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          website_url: websiteUrl,
+          website_id: websiteId,
+          status,
+          previous_website_id: previousWebsiteId
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Error storing onboarding analytics:', errorData);
+        
+        // Store error in onboarding table
+        await supabase
+          .from('onboarding')
+          .upsert({
+            website_id: websiteId,
+            error: JSON.stringify({
+              message: errorData.error || 'Failed to store onboarding analytics',
+              status: response.status,
+              timestamp: new Date().toISOString()
+            }),
+            updated_at: new Date().toISOString()
+          });
+        
+        throw new Error(errorData.error || 'Failed to store onboarding analytics');
+      }
+
+      const data = await response.json();
+      console.log('Successfully stored onboarding analytics:', data);
+      return data;
+    } catch (error) {
+      console.error('Error in storeOnboardingAnalytics:', error);
+      
+      // Store error in onboarding table
+      await supabase
+        .from('onboarding')
+        .upsert({
+          website_id: websiteId,
+          error: JSON.stringify({
+            message: error instanceof Error ? error.message : 'Unknown error occurred',
+            timestamp: new Date().toISOString()
+          }),
+          updated_at: new Date().toISOString()
+        });
+      
+      throw error;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <PublicNav />
