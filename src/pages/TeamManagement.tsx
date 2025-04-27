@@ -85,7 +85,7 @@ const TeamManagement = () => {
   const [isAddingExistingUser, setIsAddingExistingUser] = useState(false);
   const [activeTab, setActiveTab] = useState<'invite' | 'add'>('add');
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'member' | null>(null);
-  const [isResendingInvite, setIsResendingInvite] = useState(false);
+  const [resendingMemberId, setResendingMemberId] = useState<string | null>(null);
 
   // Fetch the current user's role
   const fetchCurrentUserRole = async () => {
@@ -423,7 +423,7 @@ const TeamManagement = () => {
   const handleResendInvite = async (member: TeamMember) => {
     if (!organisation?.id || currentUserRole !== 'admin') return;
     
-    setIsResendingInvite(true);
+    setResendingMemberId(member.id);
     try {
       console.log('Resending invitation to:', member.email);
 
@@ -454,7 +454,7 @@ const TeamManagement = () => {
       console.error('Error in handleResendInvite:', error);
       toast.error('Failed to resend invitation');
     } finally {
-      setIsResendingInvite(false);
+      setResendingMemberId(null);
     }
   };
 
@@ -662,9 +662,9 @@ const TeamManagement = () => {
                                           variant="outline"
                                           size="sm"
                                           onClick={() => handleResendInvite(member)}
-                                          disabled={isResendingInvite}
+                                          disabled={resendingMemberId === member.id}
                                         >
-                                          {isResendingInvite ? (
+                                          {resendingMemberId === member.id ? (
                                             <>
                                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                                               Resending...

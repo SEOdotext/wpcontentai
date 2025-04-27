@@ -44,21 +44,55 @@ serve(async (req) => {
 
     console.log('Processing invitation:', { email, organisation_id, role, is_resend });
 
-    // For resends, first check if user exists
     if (is_resend) {
+      // For resends, first check if user exists
       const { data: existingUser, error: userError } = await supabaseAdmin.auth.admin.getUserByEmail(email);
       
-      if (userError) {
+      if (userError && userError.message !== 'User not found') {
+        // Only throw if it's an error other than user not found
         console.error('Error checking existing user:', userError);
         throw userError;
       }
 
-      if (!existingUser) {
-        throw new Error('User not found for resend');
+      if (existingUser) {
+        // User exists - generate a magic link
+        console.log('User exists, generating magic link');
+        const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+          type: 'magiclink',
+          email: email,
+          options: {
+            redirectTo: `https://contentgardener.ai/auth/callback?type=invite&next=/dashboard`
+          }
+        });
+
+        if (linkError) {
+          console.error('Error generating magic link:', linkError);
+          throw linkError;
+        }
+
+        console.log('Magic link generated successfully');
+
+        return new Response(
+          JSON.stringify({ 
+            data: linkData, 
+            status: 'success',
+            message: 'Magic link sent successfully'
+          }),
+          { 
+            headers: { 
+              ...corsHeaders,
+              'Content-Type': 'application/json'
+            },
+            status: 200 
+          }
+        );
+      } else {
+        // User doesn't exist - send a new invitation
+        console.log('User not found, sending new invitation');
       }
     }
 
-    // Send invitation using admin client
+    // For new invites or resends to non-existent users, use the invitation flow
     const { data: inviteData, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: {
         organisation_id,
@@ -78,7 +112,7 @@ serve(async (req) => {
       JSON.stringify({ 
         data: inviteData, 
         status: 'success',
-        message: is_resend ? 'Invitation resent successfully' : 'Invitation sent successfully'
+        message: is_resend ? 'New invitation sent successfully' : 'Invitation sent successfully'
       }),
       { 
         headers: { 
