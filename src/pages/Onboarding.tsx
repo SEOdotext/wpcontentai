@@ -754,15 +754,23 @@ const Onboarding = () => {
 
                   // Store the error in onboarding analytics
                   try {
+                    const errorResponse = error.message.match(/Function .+ returned status \d+: (.+)$/);
+                    const workerResponse = errorResponse ? JSON.parse(errorResponse[1]) : null;
+                    
+                    const errorData = {
+                      message: error.message,
+                      code: workerResponse?.code || 'CRAWL_ERROR',
+                      step: '2',
+                      details: workerResponse?.message || error.message,
+                      worker_response: workerResponse,
+                      timestamp: new Date().toISOString()
+                    };
+
                     await callEdgeFunction('store-onboarding-analytics', {
-                      website_id: websiteId,
+                      website_id: localStorage.getItem('website_id'),
                       website_url: state.websiteUrl,
                       status: 'error',
-                      error: error.message,
-                      error_code: error.code || 'CRAWL_ERROR',
-                      error_step: '2',
-                      error_details: error.details || error.message,
-                      worker_response: error.response || null
+                      error: JSON.stringify(errorData)
                     });
                   } catch (storeError) {
                     console.error("Failed to store error in analytics:", storeError);
@@ -779,15 +787,23 @@ const Onboarding = () => {
           
           // Store the error in onboarding analytics
           try {
+            const errorResponse = error.message.match(/Function .+ returned status \d+: (.+)$/);
+            const workerResponse = errorResponse ? JSON.parse(errorResponse[1]) : null;
+            
+            const errorData = {
+              message: error.message,
+              code: workerResponse?.code || 'CRAWL_ERROR',
+              step: '2',
+              details: workerResponse?.message || error.message,
+              worker_response: workerResponse,
+              timestamp: new Date().toISOString()
+            };
+
             await callEdgeFunction('store-onboarding-analytics', {
-              website_id: websiteId,
+              website_id: localStorage.getItem('website_id'),
               website_url: state.websiteUrl,
               status: 'error',
-              error: `Error in step 2: ${error.message}`,
-              error_code: error.code || 'WEBSITE_READ_ERROR',
-              error_step: '2',
-              error_details: error.details || error.message,
-              worker_response: error.response || null
+              error: JSON.stringify(errorData)
             });
           } catch (storeError) {
             console.error("Failed to store error in analytics:", storeError);
@@ -1690,15 +1706,23 @@ const Onboarding = () => {
         
         // Log error to analytics
         try {
-          callEdgeFunction('store-onboarding-analytics', {
+          const errorResponse = error.message.match(/Function .+ returned status \d+: (.+)$/);
+          const workerResponse = errorResponse ? JSON.parse(errorResponse[1]) : null;
+          
+          const errorData = {
+            message: error.message,
+            code: workerResponse?.code || 'CONTENT_GENERATION_ERROR',
+            step: '3',
+            details: workerResponse?.message || error.message,
+            worker_response: workerResponse,
+            timestamp: new Date().toISOString()
+          };
+
+          await callEdgeFunction('store-onboarding-analytics', {
             website_id: localStorage.getItem('website_id'),
             website_url: state.websiteUrl,
             status: 'error',
-            error: error.message,
-            error_code: 'CONTENT_GENERATION_ERROR',
-            error_step: '3',
-            error_details: error.details || error.message,
-            worker_response: error.response || null
+            error: JSON.stringify(errorData)
           });
         } catch (storeError) {
           console.error("Failed to store error in analytics:", storeError);
@@ -2203,15 +2227,23 @@ const Onboarding = () => {
       
       // Log error to analytics
       try {
+        const errorResponse = error.message.match(/Function .+ returned status \d+: (.+)$/);
+        const workerResponse = errorResponse ? JSON.parse(errorResponse[1]) : null;
+        
+        const errorData = {
+          message: error.message,
+          code: workerResponse?.code || 'SCHEDULING_ERROR',
+          step: '4',
+          details: workerResponse?.message || error.message,
+          worker_response: workerResponse,
+          timestamp: new Date().toISOString()
+        };
+
         await callEdgeFunction('store-onboarding-analytics', {
           website_id: localStorage.getItem('website_id'),
           website_url: state.websiteUrl,
           status: 'error',
-          error: error.message,
-          error_code: 'SCHEDULING_ERROR',
-          error_step: '4',
-          error_details: error.details || error.message,
-          worker_response: error.response || null
+          error: JSON.stringify(errorData)
         });
       } catch (storeError) {
         console.error("Failed to store error in analytics:", storeError);
