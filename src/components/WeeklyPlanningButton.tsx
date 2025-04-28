@@ -4,7 +4,6 @@ import { Calendar } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { createClient } from '@supabase/supabase-js';
 import { useWebsites } from '@/context/WebsitesContext';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const WeeklyPlanningButton: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -81,25 +80,15 @@ const WeeklyPlanningButton: React.FC = () => {
   };
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleWeeklyPlanning}
-            disabled={isLoading || !currentWebsite?.id}
-            className="flex items-center gap-2"
-          >
-            <Calendar className="h-4 w-4" />
-            {isLoading ? 'Planning...' : 'Plan Weekly Content'}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-[300px] p-3">
-          <p>Generate and schedule content ideas for the upcoming week. You'll receive an email with the planned content for your review.</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Button 
+      variant="outline" 
+      className="w-full justify-start border-primary/20 hover:bg-primary/5 hover:border-primary/30 transition-colors"
+      onClick={handleWeeklyPlanning}
+      disabled={isLoading || !currentWebsite?.id}
+    >
+      <Calendar className="mr-2 h-4 w-4 text-primary" />
+      {isLoading ? 'Planning Weekly Content...' : 'Plan Weekly Content'}
+    </Button>
   );
 };
 

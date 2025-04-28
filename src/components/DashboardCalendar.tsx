@@ -7,6 +7,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { usePostThemes, PostTheme } from '@/context/PostThemesContext';
 
+// Define status colors as constants
+const STATUS_COLORS = {
+  published: 'bg-emerald-500',
+  scheduled: 'bg-blue-500',
+  approved: 'bg-violet-500',
+  textgenerated: 'bg-amber-500',
+  generated: 'bg-pink-500',
+  pending: 'bg-gray-400',
+  generatingidea: 'bg-orange-500',
+} as const;
+
 const DashboardCalendar: React.FC = () => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [hoveredPost, setHoveredPost] = useState<PostTheme | null>(null);
@@ -67,20 +78,7 @@ const DashboardCalendar: React.FC = () => {
   
   // Get the status color for a post
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'published':
-        return 'bg-green-500';
-      case 'approved':
-        return 'bg-blue-500';
-      case 'generated':
-        return 'bg-purple-500';
-      case 'textgenerated':
-        return 'bg-amber-500';
-      case 'generatingidea':
-        return 'bg-orange-500';
-      default:
-        return 'bg-gray-500';
-    }
+    return STATUS_COLORS[status as keyof typeof STATUS_COLORS] || STATUS_COLORS.pending;
   };
   
   // Render the calendar
@@ -211,23 +209,23 @@ const DashboardCalendar: React.FC = () => {
         {/* Legend */}
         <div className="mt-4 flex flex-wrap gap-2 text-xs">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <div className={cn("w-3 h-3 rounded-full", STATUS_COLORS.published)}></div>
             <span>Published</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <div className={cn("w-3 h-3 rounded-full", STATUS_COLORS.scheduled)}></div>
             <span>Scheduled</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+            <div className={cn("w-3 h-3 rounded-full", STATUS_COLORS.approved)}></div>
             <span>Approved</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-indigo-500"></div>
+            <div className={cn("w-3 h-3 rounded-full", STATUS_COLORS.textgenerated)}></div>
             <span>Text Generated</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-pink-500"></div>
+            <div className={cn("w-3 h-3 rounded-full", STATUS_COLORS.generated)}></div>
             <span>Generated</span>
           </div>
         </div>
