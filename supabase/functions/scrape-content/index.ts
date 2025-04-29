@@ -30,6 +30,14 @@ interface WebsiteContent {
   content: string;
   digest?: string;
   last_fetched: string;
+  website_id: string;
+}
+
+interface UpdateData {
+  content: string;
+  last_fetched: string;
+  updated_at: string;
+  digest?: string;
 }
 
 // New function to generate content digest using OpenAI
@@ -182,7 +190,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    let pagesToProcess = [];
+    let pagesToProcess: WebsiteContent[] = [];
     
     // If in onboarding mode with direct URL, use that URL
     if (isOnboarding) {
@@ -191,7 +199,9 @@ serve(async (req) => {
         id: `temp-${Date.now()}`,
         url: website_url,
         title: 'Onboarding Page',
-        website_id: website_id || `temp-${Date.now()}`
+        website_id: website_id || `temp-${Date.now()}`,
+        content: '',
+        last_fetched: new Date().toISOString()
       }];
     } else {
       // Otherwise, get key content pages from the database
@@ -216,14 +226,14 @@ serve(async (req) => {
         );
       }
       
-      pagesToProcess = pages;
+      pagesToProcess = pages as WebsiteContent[];
     }
     
     console.log(`Found ${pagesToProcess.length} pages to process`);
 
     // Process pages in batches to avoid overwhelming the server
     const batchSize = 5;
-    const results = [];
+    const results: WebsiteContent[] = [];
     let processedCount = 0;
 
     for (let i = 0; i < pagesToProcess.length; i += batchSize) {
@@ -264,7 +274,7 @@ serve(async (req) => {
             // For onboarding mode, don't try to update the database since it doesn't exist yet
             if (!isOnboarding) {
               // Update the page with the scraped content and digest
-              const updateData = {
+              const updateData: UpdateData = {
                 content: cleanContent,
                 last_fetched: new Date().toISOString(),
                 updated_at: new Date().toISOString()
@@ -288,9 +298,7 @@ serve(async (req) => {
 
             processedCount++;
             return {
-              id: page.id,
-              url: page.url,
-              title: page.title,
+              ...page,
               content: cleanContent,
               digest: digest,
               last_fetched: new Date().toISOString()
@@ -306,7 +314,7 @@ serve(async (req) => {
       });
 
       const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults.filter(r => r !== null));
+      results.push(...(batchResults.filter(r => r !== null) as WebsiteContent[]));
     }
 
     return new Response(
@@ -385,9 +393,9 @@ function extractMainContent(html: string): string {
     ];
 
     elementsToRemove.forEach(selector => {
-      doc.querySelectorAll(selector).forEach((node: Node) => {
+      doc.querySelectorAll(selector).forEach((node) => {
         if (node instanceof Element) {
-          node._remove();
+          node.remove();
         }
       });
     });
@@ -404,7 +412,7 @@ function extractMainContent(html: string): string {
       doc.querySelector('[role="main"]');
 
     // If we found a main content container, use it
-    if (mainContent) {
+    if (mainContent instanceof Element) {
       // Clean up the content before returning
       return cleanAndStructureContent(mainContent);
     }
@@ -412,6 +420,7 @@ function extractMainContent(html: string): string {
     // If no main content container is found, try to extract content from the body
     // but first remove common non-content sections
     const body = doc.body;
+    if (!body) return '';
     
     // Extract text content from paragraphs and headings
     const contentElements = Array.from(body.querySelectorAll('p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote'));
@@ -422,7 +431,9 @@ function extractMainContent(html: string): string {
       
       // Add each content element to our container
       contentElements.forEach(el => {
-        extractedContent.appendChild(el.cloneNode(true));
+        if (el instanceof Element) {
+          extractedContent.appendChild(el.cloneNode(true));
+        }
       });
       
       return cleanAndStructureContent(extractedContent);
@@ -478,16 +489,18 @@ function cleanAndStructureContent(element: Element): string {
     // Process child nodes
     const childNodes = Array.from(node.childNodes);
     childNodes.forEach(child => {
-      if (child.nodeType === 1 || child.nodeType === 3) { // Element or text node
+      if (child instanceof Node && (child.nodeType === 1 || child.nodeType === 3)) { // Element or text node
         processNode(child);
       }
     });
   };
   
-  processNode(tempDoc.body);
-  
-  // Get the processed HTML
-  html = tempDoc.body.innerHTML;
+  if (tempDoc.body) {
+    processNode(tempDoc.body);
+    
+    // Get the processed HTML
+    html = tempDoc.body.innerHTML;
+  }
   
   // Ensure paragraphs have proper spacing
   html = html.replace(/<\/p>\s*<p>/g, '</p>\n<p>');
