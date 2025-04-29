@@ -190,35 +190,32 @@ const Settings = () => {
         
         try {
           console.log('Making direct Supabase call to fetch WordPress settings');
-          // Note: We're making a direct call to Supabase here, ignoring type errors
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            console.error('No active session found');
+            return;
+          }
+
           const response = await (supabase as any)
             .from('wordpress_settings')
             .select('*')
             .eq('website_id', currentWebsite.id)
-            .limit(1);
+            .limit(1)
+            .auth(session.access_token);
           
           if (response.data && response.data.length > 0) {
             console.log('Directly fetched settings from database:', response.data[0]);
             setDirectWpSettings(response.data[0]);
-            setWpUsername(response.data[0].wp_username || '');
-            setWpPassword(response.data[0].wp_application_password || '');
-            console.log('Set fields from direct database query:', {
-              username: response.data[0].wp_username,
-              passwordLength: response.data[0].wp_application_password?.length || 0
-            });
-          } else if (response.error && response.error.code !== 'PGRST116') {
-            console.error('Error fetching WordPress settings:', response.error);
-          } else {
-            console.log('No WordPress settings found for this website');
-            setDirectWpSettings(null);
-            setWpUsername('');
-            setWpPassword('');
+            // Only set fields if they're empty
+            if (!wpUsername) {
+              setWpUsername(response.data[0].wp_username || '');
+            }
+            if (!wpPassword) {
+              setWpPassword(response.data[0].wp_application_password || '');
+            }
           }
         } catch (error) {
           console.error('Error fetching WordPress settings:', error);
-          setDirectWpSettings(null);
-          setWpUsername('');
-          setWpPassword('');
         }
       }
     };
@@ -237,12 +234,13 @@ const Settings = () => {
         passwordLength: wpSettings.wp_application_password?.length || 0
       });
       
-      // Set a small timeout to ensure React has fully rendered the dialog
-      setTimeout(() => {
+      // Only set fields if they're empty
+      if (!wpUsername) {
         setWpUsername(wpSettings.wp_username || '');
+      }
+      if (!wpPassword) {
         setWpPassword(wpSettings.wp_application_password || '');
-        console.log('Fields should now be populated');
-      }, 50);
+      }
     }
   }, [showAuthDialog, wpSettings]);
 

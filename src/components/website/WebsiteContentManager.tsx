@@ -439,6 +439,7 @@ const WebsiteContentManager = forwardRef<WebsiteContentManagerRef, {
           onClose={() => setSelectedContent(null)}
           title={selectedContent.title}
           content={selectedContent.content}
+          digest={selectedContent.digest}
           lastFetched={selectedContent.last_fetched}
         />
       )}

@@ -13,6 +13,7 @@ interface ContentViewModalProps {
   onClose: () => void;
   title: string;
   content: string;
+  digest?: string;
   lastFetched: string;
 }
 
@@ -108,6 +109,7 @@ const ContentViewModal: React.FC<ContentViewModalProps> = ({
   onClose,
   title,
   content,
+  digest,
   lastFetched,
 }) => {
   // Process content to ensure proper formatting
@@ -125,6 +127,12 @@ const ContentViewModal: React.FC<ContentViewModalProps> = ({
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="h-[60vh] mt-4">
+          {digest && (
+            <div className="p-4 mb-4 bg-muted rounded-md">
+              <h3 className="text-sm font-medium mb-2">Content Summary</h3>
+              <p className="text-sm text-muted-foreground">{digest}</p>
+            </div>
+          )}
           {formattedContent ? (
             <div 
               className="p-4 bg-gray-50 rounded-md content-view"

@@ -10,6 +10,7 @@ export type WebsiteContent = Database['public']['Tables']['website_content']['Ro
   // Additional UI-only fields
   type?: 'page' | 'post' | 'custom';
   status?: 'published' | 'draft';
+  digest?: string;
 };
 
 // Define the context type
@@ -59,7 +60,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       // Explicitly include is_cornerstone in the select statement
       const { data, error } = await supabase
         .from('website_content')
-        .select('id, website_id, url, title, content, content_type, last_fetched, created_at, updated_at, metadata, is_cornerstone')
+        .select('id, website_id, url, title, content, content_type, last_fetched, created_at, updated_at, metadata, is_cornerstone, digest')
         .eq('website_id', websiteId);
       
       if (error) {
