@@ -1,17 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Calendar } from 'lucide-react';
+import { Calendar, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { createClient } from '@supabase/supabase-js';
 import { useWebsites } from '@/context/WebsitesContext';
+import { usePostThemes } from '@/context/PostThemesContext';
 
 const WeeklyPlanningButton: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isScheduleFilled, setIsScheduleFilled] = useState(false);
   const { toast } = useToast();
   const { currentWebsite } = useWebsites();
+  const { checkWeeklySchedule } = usePostThemes();
+
+  // Check schedule status on mount and when website changes
+  useEffect(() => {
+    const checkSchedule = async () => {
+      if (currentWebsite?.id) {
+        const { isFilled } = await checkWeeklySchedule();
+        setIsScheduleFilled(isFilled);
+      }
+    };
+    
+    checkSchedule();
+  }, [currentWebsite?.id, checkWeeklySchedule]);
 
   const handleWeeklyPlanning = async () => {
     try {
+      // Check schedule first
+      const { isFilled, missingSlots } = await checkWeeklySchedule();
+      
+      if (isFilled) {
+        toast({
+          title: "Schedule Complete",
+          description: "No more posts required for the next week",
+        });
+        return;
+      }
+
       setIsLoading(true);
       
       // Check if we have a current website
@@ -50,7 +76,7 @@ const WeeklyPlanningButton: React.FC = () => {
         body: JSON.stringify({
           day: new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase(),
           website_id: currentWebsite.id,
-          required_posts: postingFrequency // Pass the required number of posts
+          required_posts: postingFrequency
         })
       });
 
@@ -67,6 +93,11 @@ const WeeklyPlanningButton: React.FC = () => {
         title: 'Weekly planning started',
         description: `Content planning started for ${currentWebsite.name}. You will receive an email with the results.`,
       });
+
+      // Recheck schedule after planning
+      const newScheduleStatus = await checkWeeklySchedule();
+      setIsScheduleFilled(newScheduleStatus.isFilled);
+
     } catch (error) {
       console.error('Error triggering weekly planning:', error);
       toast({
@@ -82,12 +113,25 @@ const WeeklyPlanningButton: React.FC = () => {
   return (
     <Button 
       variant="outline" 
-      className="w-full justify-start border-primary/20 hover:bg-primary/5 hover:border-primary/30 transition-colors"
+      className={`w-full justify-start transition-colors ${
+        isScheduleFilled 
+          ? 'border-green-500/20 hover:bg-green-500/5 hover:border-green-500/30 text-green-700'
+          : 'border-primary/20 hover:bg-primary/5 hover:border-primary/30'
+      }`}
       onClick={handleWeeklyPlanning}
       disabled={isLoading || !currentWebsite?.id}
     >
-      <Calendar className="mr-2 h-4 w-4 text-primary" />
-      {isLoading ? 'Planning Weekly Content...' : 'Plan Weekly Content'}
+      {isScheduleFilled ? (
+        <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
+      ) : (
+        <Calendar className="mr-2 h-4 w-4 text-primary" />
+      )}
+      {isLoading 
+        ? 'Planning Weekly Content...' 
+        : isScheduleFilled 
+          ? 'Weekly Content Complete' 
+          : 'Plan Weekly Content'
+      }
     </Button>
   );
 };
