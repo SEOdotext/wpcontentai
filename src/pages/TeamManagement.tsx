@@ -45,6 +45,15 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Define types
+interface Invitation {
+  id: string;
+  email: string;
+  role: 'admin' | 'member';
+  status: 'pending' | 'accepted' | 'expired';
+  created_at: string;
+  expires_at: string;
+}
+
 interface TeamMember {
   id: string;
   email: string;
@@ -86,6 +95,7 @@ const TeamManagement = () => {
   const [activeTab, setActiveTab] = useState<'invite' | 'add'>('add');
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'member' | null>(null);
   const [resendingMemberId, setResendingMemberId] = useState<string | null>(null);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
 
   // Fetch the current user's role
   const fetchCurrentUserRole = async () => {
@@ -175,10 +185,31 @@ const TeamManagement = () => {
     }
   };
   
+  // Add fetchInvitations function
+  const fetchInvitations = async () => {
+    if (!organisation?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('invitations')
+        .select('*')
+        .eq('organisation_id', organisation.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setInvitations(data || []);
+    } catch (error) {
+      console.error('Error fetching invitations:', error);
+      toast.error('Failed to load invitations');
+    }
+  };
+
   // Initial data fetch
   useEffect(() => {
     fetchCurrentUserRole();
     fetchTeamData();
+    fetchInvitations();
   }, [organisation?.id]);
 
   // Invite a new team member
@@ -455,6 +486,66 @@ const TeamManagement = () => {
       toast.error('Failed to resend invitation');
     } finally {
       setResendingMemberId(null);
+    }
+  };
+
+  // Handle resending invitation emails
+  const handleResendInvitationEmail = async (invitation: Invitation) => {
+    if (!organisation?.id || currentUserRole !== 'admin') return;
+    
+    setResendingMemberId(invitation.id);
+    try {
+      console.log('Resending invitation to:', invitation.email);
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/invite-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`
+        },
+        body: JSON.stringify({
+          email: invitation.email,
+          organisation_id: organisation.id,
+          role: invitation.role,
+          is_resend: true
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to resend invitation');
+      }
+
+      const { data } = await response.json();
+      console.log('Invitation resent successfully:', data);
+
+      toast.success('Invitation resent successfully');
+      fetchInvitations(); // Refresh the invitations list
+    } catch (error) {
+      console.error('Error in handleResendInvitationEmail:', error);
+      toast.error('Failed to resend invitation');
+    } finally {
+      setResendingMemberId(null);
+    }
+  };
+
+  // Add function to cancel invitation
+  const handleCancelInvitation = async (invitationId: string) => {
+    if (!organisation?.id || currentUserRole !== 'admin') return;
+    
+    try {
+      const { error } = await supabase
+        .from('invitations')
+        .update({ status: 'expired' })
+        .eq('id', invitationId);
+      
+      if (error) throw error;
+      
+      toast.success('Invitation cancelled successfully');
+      fetchInvitations(); // Refresh the invitations list
+    } catch (error) {
+      console.error('Error cancelling invitation:', error);
+      toast.error('Failed to cancel invitation');
     }
   };
 
@@ -762,6 +853,89 @@ const TeamManagement = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Add this after the Team Members card and before the closing main tag */}
+      {currentUserRole === 'admin' && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              <CardTitle>Pending Invitations</CardTitle>
+            </div>
+            <CardDescription>
+              Manage pending team invitations
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {invitations.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">No pending invitations</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Sent</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invitations.map((invitation) => (
+                    <TableRow key={invitation.id}>
+                      <TableCell>{invitation.email}</TableCell>
+                      <TableCell>
+                        <Badge variant={invitation.role === 'admin' ? 'default' : 'secondary'}>
+                          {invitation.role === 'admin' ? (
+                            <Shield className="h-3 w-3 mr-1" />
+                          ) : (
+                            <Users className="h-3 w-3 mr-1" />
+                          )}
+                          {invitation.role === 'admin' ? 'Admin' : 'Member'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(invitation.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(invitation.expires_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleResendInvitationEmail(invitation)}
+                            disabled={resendingMemberId === invitation.id}
+                          >
+                            {resendingMemberId === invitation.id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Resending...
+                              </>
+                            ) : (
+                              'Resend'
+                            )}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            onClick={() => handleCancelInvitation(invitation.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
       )}
     </SidebarProvider>
   );

@@ -98,11 +98,14 @@ const WebsiteManager = () => {
       await updateWebsite(editingWebsite.id, {
         name: editingWebsite.name,
         url: editingWebsite.url,
-        language: editingWebsite.language,
+        language: editingWebsite.language || 'en',
         enable_ai_image_generation: editingWebsite.enable_ai_image_generation,
         image_prompt: editingWebsite.image_prompt
       });
       setEditingWebsite(null);
+    } catch (error) {
+      console.error('Error updating website:', error);
+      toast.error('Failed to update website. Please try again.');
     } finally {
       setIsEditing(false);
     }
@@ -361,6 +364,7 @@ const WebsiteManager = () => {
                 value={editingWebsite?.name || ''}
                 onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, name: e.target.value } : null)}
                 placeholder="Enter website name"
+                disabled={isEditing}
               />
             </div>
             <div className="space-y-2">
@@ -370,6 +374,7 @@ const WebsiteManager = () => {
                 value={editingWebsite?.url || ''}
                 onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, url: e.target.value } : null)}
                 placeholder="Enter website URL"
+                disabled={isEditing}
               />
             </div>
             <div className="space-y-2">
@@ -379,6 +384,7 @@ const WebsiteManager = () => {
                 value={editingWebsite?.language || 'en'}
                 onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, language: e.target.value } : null)}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isEditing}
               >
                 <option value="en">English</option>
                 <option value="da">Danish</option>
@@ -398,6 +404,7 @@ const WebsiteManager = () => {
                 id="ai-image-generation"
                 checked={editingWebsite?.enable_ai_image_generation || false}
                 onCheckedChange={(checked) => setEditingWebsite(prev => prev ? { ...prev, enable_ai_image_generation: checked } : null)}
+                disabled={isEditing}
               />
             </div>
             {editingWebsite?.enable_ai_image_generation && (
@@ -413,6 +420,7 @@ const WebsiteManager = () => {
                   value={editingWebsite?.image_prompt || `Create a modern, professional image that represents: {title}. Context: {content}`}
                   onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, image_prompt: e.target.value } : null)}
                   placeholder="Create a modern, professional image that represents: {title}. Context: {content}"
+                  disabled={isEditing}
                 />
                 <p className="text-xs text-muted-foreground">
                   Example: "Create a photorealistic {'{'}title{'}'} in the style of {'{'}content{'}'}"

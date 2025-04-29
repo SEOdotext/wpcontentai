@@ -513,16 +513,31 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const updateWebsite = async (id: string, website: WebsiteUpdate) => {
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('websites')
         .update(website)
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
 
       if (error) {
         throw error;
       }
+
+      // Update local state
+      setWebsites(prev => 
+        prev.map(w => w.id === id ? { ...w, ...data } : w)
+      );
+
+      // If the current website is being updated, update that too
+      if (currentWebsite?.id === id) {
+        setCurrentWebsite({ ...currentWebsite, ...data });
+      }
+
+      toast.success('Website updated successfully');
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to update website'));
+      toast.error('Failed to update website: ' + (err instanceof Error ? err.message : 'Unknown error'));
       throw err;
     }
   };
