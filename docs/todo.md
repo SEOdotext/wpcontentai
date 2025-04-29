@@ -1,3 +1,20 @@
+Fold email og pass ind og vis sign up with google som den primære knap
+
+Almost there. When clicking create account you’re ready to start generating content for free
+
+Save and continue" → "You're almost ready to let your growth flourish on autopilot. 🌱🚀
+
+---
+
+Add support for adding new website from the backend with the "onboarding"
+
+---
+
+Create a dashboard to see the users 
+
+Add signup status to the onboarding database
+
+---
 
 User has alread accepted invite and is part of the team, then we get this error:
 

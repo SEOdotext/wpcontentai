@@ -116,9 +116,17 @@ ${truncatedText}
     // Extract the digest
     let digest = data.choices[0].message.content.trim();
     
-    // Ensure the digest is close to 300 letters
+    // Ensure the digest is close to 300 letters and ends at a sentence
     if (digest.length > 320) {
-      digest = digest.substring(0, 300);
+      // Find the last sentence boundary before 300 characters
+      const match = digest.slice(0, 300).match(/^.*?[.!?](?:\s|$)/g);
+      if (match) {
+        // Join all complete sentences that fit within ~300 characters
+        digest = match.join('').trim();
+      } else {
+        // If no sentence boundary found, cut at 300 and add ellipsis
+        digest = digest.substring(0, 300) + '...';
+      }
     } else if (digest.length < 280) {
       console.log(`Digest shorter than expected: ${digest.length} letters`);
     }
