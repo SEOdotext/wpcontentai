@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ThumbsDown, ThumbsUp, Calendar, Minus, Check, RefreshCw, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,6 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   onUpdateCategories,
   isGeneratingContent = false,
 }) => {
-  const { publicationFrequency } = useSettings();
   const { postThemes, updatePostTheme, deletePostTheme, getNextPublicationDate } = usePostThemes();
   const { currentWebsite } = useWebsites();
   
@@ -58,12 +57,32 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   const [liked, setLiked] = useState(status === 'approved');
   const [disliked, setDisliked] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [displayDate, setDisplayDate] = useState<Date>(date);
+
+  // For pending posts, calculate display date whenever postThemes changes
+  useEffect(() => {
+    const updateDisplayDate = async () => {
+      if (status === 'pending') {
+        try {
+          const nextDate = await getNextPublicationDate();
+          setDisplayDate(nextDate);
+        } catch (e) {
+          console.error('Error calculating next publication date:', e);
+          setDisplayDate(date); // Fallback to prop date
+        }
+      } else {
+        setDisplayDate(date); // Use prop date for non-pending posts
+      }
+    };
+
+    updateDisplayDate();
+  }, [status, postThemes, getNextPublicationDate, date]);
   
   /**
    * Handles the approval (like) action for a title suggestion
    * This function:
    * 1. Updates the post status to 'approved'
-   * 2. Sets the proper scheduled date
+   * 2. Uses the current frontend date
    * 3. Notifies the parent component about the approval
    */
   const handleLike = async () => {
@@ -73,27 +92,20 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       setLiked(true);
       setDisliked(false);
       
-      // Calculate a publication date based on the website's publication frequency
-      const nextPublicationDate = await getNextPublicationDate();
+      // Always use the current frontend date (displayDate) when approving
+      // This preserves any manual date selections the user has made
+      console.log('Scheduling post for:', format(displayDate, 'MMM dd, yyyy'));
       
-      // Check if the user has manually set a custom date using the date picker
-      const isCustomDate = date.getTime() !== new Date().getTime();
-      
-      // Determine which date to use:
-      const scheduledDate = isCustomDate ? date : nextPublicationDate;
-      
-      console.log('Scheduling post for:', format(scheduledDate, 'MMM dd, yyyy'));
-      
-      // Update the post theme with the scheduled date and status
+      // Update the post theme with the current frontend date and approved status
       const updated = await updatePostTheme(id, { 
         status: 'approved',
-        scheduled_date: scheduledDate.toISOString()
+        scheduled_date: displayDate.toISOString()
       }, false);
       
       if (updated) {
         // Show a success toast with the scheduled date
         toast.success(
-          `"${title}" has been scheduled for ${format(scheduledDate, 'MMM dd, yyyy')}`,
+          `"${title}" has been scheduled for ${format(displayDate, 'MMM dd, yyyy')}`,
           {
             description: "Content added to your calendar"
           }
@@ -358,13 +370,13 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
                     onClick={(e) => e.stopPropagation()}
                   >
                     <CalendarIcon className="h-3 w-3 mr-1" />
-                    <span>{formatDate(date)}</span>
+                    <span>{formatDate(displayDate)}</span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="end">
                   <CalendarComponent
                     mode="single"
-                    selected={date}
+                    selected={displayDate}
                     onSelect={handleDateSelect}
                     initialFocus
                     className="p-3 pointer-events-auto"

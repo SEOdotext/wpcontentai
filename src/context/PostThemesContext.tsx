@@ -129,6 +129,20 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, [currentWebsite?.id]);
 
+  // Helper function to count posts for a specific date
+  const countPostsForDate = (posts: PostTheme[], dateStr: string): number => {
+    return posts.filter(post => {
+      if (!post.scheduled_date) return false;
+      try {
+        const postDate = format(new Date(post.scheduled_date), 'yyyy-MM-dd');
+        return postDate === dateStr && post.status !== 'declined' && post.status !== 'pending';
+      } catch (e) {
+        console.error('Error parsing date in countPostsForDate:', e, post);
+        return false;
+      }
+    }).length;
+  };
+
   // Function to get the next publication date
   const getNextPublicationDate = useCallback(async () => {
     if (!currentWebsite) {
@@ -160,11 +174,69 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
 
       console.log('Day count map:', dayCountMap);
 
-      // Use findNextAvailableDate which already handles the calendar check logic
-      return findNextAvailableDate(dayCountMap, postThemes, existingPostsByDate);
+      // Get all active posts (not pending or declined)
+      const activePosts = postThemes.filter(p => 
+        p.scheduled_date && 
+        p.status !== 'declined' && 
+        p.status !== 'pending'
+      );
+
+      // Find the latest scheduled date from active posts
+      let currentDate = new Date();
+      if (activePosts.length > 0) {
+        const latestDate = new Date(Math.max(
+          ...activePosts
+            .map(p => new Date(p.scheduled_date || 0).getTime())
+            .filter(time => !isNaN(time))
+        ));
+        
+        // If latest date is valid and in the future, use it as starting point
+        if (!isNaN(latestDate.getTime()) && latestDate > currentDate) {
+          currentDate = latestDate;
+        }
+      }
+
+      // Set to start of day for consistent comparison
+      currentDate.setHours(0, 0, 0, 0);
+      
+      // Look for next available slot
+      let maxAttempts = 28; // 4 weeks safety limit
+      while (maxAttempts > 0) {
+        const dayName = format(currentDate, 'EEEE').toLowerCase();
+        const dateStr = format(currentDate, 'yyyy-MM-dd');
+        const existingPostsForDay = countPostsForDate(postThemes, dateStr);
+
+        console.log('Checking date:', {
+          date: dateStr,
+          dayName,
+          isPostingDay: !!dayCountMap[dayName],
+          existingPostsForDay,
+          maxPostsForDay: dayCountMap[dayName],
+          activeStatuses: postThemes
+            .filter(p => p.scheduled_date && format(new Date(p.scheduled_date), 'yyyy-MM-dd') === dateStr)
+            .map(p => p.status)
+        });
+
+        if (dayCountMap[dayName] && existingPostsForDay < dayCountMap[dayName]) {
+          console.log(`Found available slot on ${dayName}, ${dateStr}`);
+          return currentDate;
+        }
+
+        currentDate = addDays(currentDate, 1);
+        maxAttempts--;
+      }
+
+      // If no suitable date found within 4 weeks, default to tomorrow
+      const tomorrow = addDays(new Date(), 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      return tomorrow;
+
     } catch (error) {
       console.error('Error calculating next publication date:', error);
-      return new Date(); // Default to today on error
+      // Default to tomorrow on error
+      const tomorrow = addDays(new Date(), 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      return tomorrow;
     }
   }, [currentWebsite, postThemes]);
 

@@ -16,6 +16,22 @@ This document explains the centralized approach to date calculation in the Conte
 
 5. Make sure that there are 5 dates calculated (with number of posts) so the frontend knows which days the next 5 posts are scheduled for. 
 
+---
+
+Date Handling for Pending Posts:
+Pending posts now only show calculated dates in the frontend
+These dates are calculated dynamically using getNextPublicationDate()
+No dates are stored in the database for pending posts
+The frontend updates these display dates whenever the post list changes
+Date Handling for Approved Posts:
+When a post is approved, it gets a fixed date in the database
+This date is calculated using getNextPublicationDate()
+Once set, this date remains unchanged unless manually modified
+The date is stored in the database
+
+
+---
+
 ## Implementation
 
 The centralized date logic was implemented to fix issues where competing functions were calculating dates in different ways. The changes:
