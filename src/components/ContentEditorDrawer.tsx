@@ -21,7 +21,8 @@ import {
   BookOpen,
   Heart,
   MessageCircle,
-  Bookmark
+  Bookmark,
+  Twitter
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -32,6 +33,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { InstagramPost } from './social/InstagramPost';
 import { LinkedInPost } from './social/LinkedInPost';
 import { canSendToWordPress } from '@/utils/wordpress';
+import { XLogo } from '@/components/icons/XLogo';
 
 interface ContentEditorDrawerProps {
   isOpen: boolean;
@@ -210,7 +212,8 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
     { key: 'linkedin', name: 'LinkedIn', icon: <Linkedin className="h-5 w-5" /> },
     { key: 'instagram', name: 'Instagram', icon: <Instagram className="h-5 w-5" /> },
     { key: 'tiktok', name: 'TikTok', icon: <Video className="h-5 w-5" /> },
-    { key: 'facebook', name: 'Facebook', icon: <Facebook className="h-5 w-5" /> }
+    { key: 'facebook', name: 'Facebook', icon: <Facebook className="h-5 w-5" /> },
+    { key: 'x', name: 'X', icon: <XLogo className="h-5 w-5" /> }
   ];
 
   // Fetch active platform settings
@@ -578,6 +581,8 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
         return <Facebook className="h-4 w-4" />;
       case 'tiktok':
         return <Video className="h-4 w-4" />;
+      case 'x':
+        return <XLogo className="h-4 w-4" />;
       default:
         return <Globe className="h-4 w-4" />;
     }
