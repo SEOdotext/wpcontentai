@@ -34,6 +34,9 @@ import { InstagramPost } from './social/InstagramPost';
 import { LinkedInPost } from './social/LinkedInPost';
 import { canSendToWordPress } from '@/utils/wordpress';
 import { XLogo } from '@/components/icons/XLogo';
+import { TikTokLogo } from '@/components/icons/TikTokLogo';
+import { FacebookPost } from './social/FacebookPost';
+import { TikTokPost } from './social/TikTokPost';
 
 interface ContentEditorDrawerProps {
   isOpen: boolean;
@@ -211,7 +214,7 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   const platforms: Platform[] = [
     { key: 'linkedin', name: 'LinkedIn', icon: <Linkedin className="h-5 w-5" /> },
     { key: 'instagram', name: 'Instagram', icon: <Instagram className="h-5 w-5" /> },
-    { key: 'tiktok', name: 'TikTok', icon: <Video className="h-5 w-5" /> },
+    { key: 'tiktok', name: 'TikTok', icon: <TikTokLogo className="h-5 w-5" /> },
     { key: 'facebook', name: 'Facebook', icon: <Facebook className="h-5 w-5" /> },
     { key: 'x', name: 'X', icon: <XLogo className="h-5 w-5" /> }
   ];
@@ -580,7 +583,7 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
       case 'facebook':
         return <Facebook className="h-4 w-4" />;
       case 'tiktok':
-        return <Video className="h-4 w-4" />;
+        return <TikTokLogo className="h-4 w-4" />;
       case 'x':
         return <XLogo className="h-4 w-4" />;
       default:
@@ -888,6 +891,20 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                                 <LinkedInPost 
                                   content={editedContent} 
                                   websiteUrl={currentWebsite?.url}
+                                  websiteName={currentWebsite?.name}
+                                />
+                              </div>
+                            ) : currentPlatform === 'facebook' ? (
+                              <div className="bg-white">
+                                <FacebookPost 
+                                  content={editedContent}
+                                  websiteName={currentWebsite?.name}
+                                />
+                              </div>
+                            ) : currentPlatform === 'tiktok' ? (
+                              <div className="phone-frame">
+                                <TikTokPost 
+                                  content={editedContent || content} 
                                   websiteName={currentWebsite?.name}
                                 />
                               </div>

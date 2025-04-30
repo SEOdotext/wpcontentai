@@ -1,0 +1,134 @@
+/* X (Twitter) specific styles */
+.x-header {
+  background-color: #ffffff;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.x-logo {
+  width: 32px;
+  height: 32px;
+}
+
+/* Post styles */
+.x-post {
+  background-color: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 12px;
+}
+
+.x-post-header {
+  display: flex;
+  gap: 12px;
+}
+
+.x-profile-picture {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.x-profile-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.x-profile-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: #0f1419;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.x-profile-handle {
+  font-size: 15px;
+  color: #536471;
+}
+
+.x-post-meta {
+  color: #536471;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.x-post-content {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #0f1419;
+  white-space: pre-wrap;
+}
+
+/* Engagement section */
+.x-engagement {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  max-width: 425px;
+}
+
+.x-action-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #536471;
+  font-size: 13px;
+  padding: 4px;
+  border-radius: 9999px;
+  transition: all 0.2s;
+}
+
+/* Action button hover states */
+.x-action-reply:hover {
+  color: rgb(29, 155, 240);
+  background-color: rgba(29, 155, 240, 0.1);
+}
+
+.x-action-repost:hover {
+  color: rgb(0, 186, 124);
+  background-color: rgba(0, 186, 124, 0.1);
+}
+
+.x-action-like:hover {
+  color: rgb(249, 24, 128);
+  background-color: rgba(249, 24, 128, 0.1);
+}
+
+.x-action-share:hover {
+  color: rgb(29, 155, 240);
+  background-color: rgba(29, 155, 240, 0.1);
+}
+
+/* Hashtag styles */
+.x-hashtag {
+  color: rgb(29, 155, 240);
+  cursor: pointer;
+}
+
+.x-hashtag:hover {
+  text-decoration: underline;
+}
+
+/* Verified badge */
+.x-verified {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgb(29, 155, 240);
+  border-radius: 50%;
+  margin-left: 2px;
+} 

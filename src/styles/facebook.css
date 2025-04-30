@@ -1,0 +1,130 @@
+/* Facebook specific styles */
+.facebook-header {
+  background-color: #ffffff;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.facebook-logo {
+  color: #1877f2;
+  font-size: 24px;
+  font-weight: bold;
+}
+
+/* Post styles */
+.facebook-post {
+  background-color: #ffffff;
+  border-radius: 8px;
+  margin: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.facebook-post-header {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.facebook-profile-picture {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #1877f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.facebook-profile-info {
+  flex: 1;
+}
+
+.facebook-profile-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #050505;
+  margin-bottom: 2px;
+}
+
+.facebook-post-meta {
+  font-size: 12px;
+  color: #65676b;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.facebook-post-content {
+  padding: 0 12px 12px;
+  font-size: 15px;
+  line-height: 1.3333;
+  color: #050505;
+}
+
+/* Engagement section */
+.facebook-engagement {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.facebook-reactions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #65676b;
+}
+
+.facebook-reaction-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1877f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+/* Action buttons */
+.facebook-actions {
+  display: flex;
+  justify-content: space-around;
+  padding: 4px 12px 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.facebook-action-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  color: #65676b;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.facebook-action-button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Hashtag styles */
+.facebook-hashtag {
+  color: #1877f2;
+  cursor: pointer;
+}
+
+.facebook-hashtag:hover {
+  text-decoration: underline;
+} 

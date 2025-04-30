@@ -10,7 +10,27 @@ import { Database } from '@/types/supabase';
 import { useWebsites } from '@/context/WebsitesContext';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Linkedin, Instagram, Facebook, Video, RefreshCw, Twitter } from 'lucide-react';
+import { 
+  Send, 
+  Loader2, 
+  RefreshCw, 
+  X, 
+  MessageSquare, 
+  Edit2, 
+  Eye,
+  Globe,
+  Linkedin,
+  Instagram,
+  Facebook,
+  Share2,
+  FileEdit,
+  BookOpen,
+  Heart,
+  MessageCircle,
+  Bookmark,
+  Twitter
+} from 'lucide-react';
+import { TikTokLogo } from '@/components/icons/TikTokLogo';
 
 // Exactly match the database schema
 interface SomeSettings {
@@ -227,7 +247,7 @@ Value-add or insight 💡
   const platforms = [
     { key: 'linkedin' as const, name: 'LinkedIn', icon: <Linkedin className="h-5 w-5" /> },
     { key: 'instagram' as const, name: 'Instagram', icon: <Instagram className="h-5 w-5" /> },
-    { key: 'tiktok' as const, name: 'TikTok', icon: <Video className="h-5 w-5" /> },
+    { key: 'tiktok' as const, name: 'TikTok', icon: <TikTokLogo className="h-5 w-5" /> },
     { key: 'facebook' as const, name: 'Facebook', icon: <Facebook className="h-5 w-5" /> },
     { key: 'x' as const, name: 'X (Twitter)', icon: <Twitter className="h-5 w-5" /> }
   ];
