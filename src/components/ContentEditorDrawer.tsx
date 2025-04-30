@@ -225,6 +225,7 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   const [isLoadingSocialContent, setIsLoadingSocialContent] = useState(false);
   const [activeSettings, setActiveSettings] = useState<SomeSettings[]>([]);
   const [wpConfigured, setWpConfigured] = useState(false);
+  const [currentImageUrl, setCurrentImageUrl] = useState(preview_image_url);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -358,6 +359,51 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
     
     fetchWordPressSettings();
   }, [currentWebsite]);
+
+  // Add polling effect for image generation
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout;
+    let hasShownToast = false;
+
+    if (isGeneratingImage && postThemeId) {
+      pollInterval = setInterval(async () => {
+        try {
+          const { data: postTheme, error } = await supabase
+            .from('post_themes')
+            .select('image')
+            .eq('id', postThemeId)
+            .single();
+
+          if (error) {
+            console.error('Error checking image status:', error);
+            return;
+          }
+
+          if (postTheme?.image) {
+            setCurrentImageUrl(postTheme.image);
+            if (!hasShownToast) {
+              toast.success('Image generated successfully');
+              hasShownToast = true;
+            }
+            clearInterval(pollInterval);
+          }
+        } catch (error) {
+          console.error('Error in image polling:', error);
+        }
+      }, 2000); // Poll every 2 seconds
+    }
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
+  }, [isGeneratingImage, postThemeId]);
+
+  // Update currentImageUrl when preview_image_url changes
+  useEffect(() => {
+    setCurrentImageUrl(preview_image_url);
+  }, [preview_image_url]);
 
   // Add function to generate social content
   const handleGenerateSocialContent = async () => {
@@ -975,10 +1021,10 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                           </div>
                         </div>
                       )}
-                      {!currentPlatform && preview_image_url && (
+                      {!currentPlatform && currentImageUrl && (
                         <div className="mb-4 relative group">
                           <img 
-                            src={preview_image_url} 
+                            src={currentImageUrl} 
                             alt="Generated preview"
                             className="rounded-lg shadow-md max-h-[300px] object-cover w-full"
                           />
