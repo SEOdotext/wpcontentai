@@ -37,6 +37,7 @@ import { XLogo } from '@/components/icons/XLogo';
 import { TikTokLogo } from '@/components/icons/TikTokLogo';
 import { FacebookPost } from './social/FacebookPost';
 import { TikTokPost } from './social/TikTokPost';
+import { XPost } from './social/XPost';
 
 interface ContentEditorDrawerProps {
   isOpen: boolean;
@@ -908,6 +909,11 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                                   websiteName={currentWebsite?.name}
                                 />
                               </div>
+                            ) : currentPlatform === 'x' ? (
+                              <XPost 
+                                content={editedContent}
+                                websiteName={currentWebsite?.name}
+                              />
                             ) : (
                   <div
                     ref={contentRef}

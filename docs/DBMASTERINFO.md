@@ -1041,6 +1041,16 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "websites.favicon",
+    "detail_1": "text",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "some_settings.id",
     "detail_1": "uuid",
     "detail_2": null,

@@ -4,6 +4,7 @@ interface ChatUpdateRequest {
   userMessage: string;
   selectedText?: string;
   platform?: string;
+  platformSettings?: any;
 }
 
 interface ChatUpdateResponse {
