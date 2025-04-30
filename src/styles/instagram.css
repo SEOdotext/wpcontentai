@@ -1,0 +1,141 @@
+/* Instagram Phone Frame */
+.instagram-phone-frame {
+  @apply max-w-[375px] mx-auto bg-white rounded-[50px] overflow-hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Status Bar */
+.status-bar {
+  @apply flex justify-between items-center px-6 py-3 bg-black text-white;
+}
+
+.time {
+  @apply font-semibold;
+}
+
+.icons {
+  @apply flex items-center gap-2;
+}
+
+/* Instagram App Header */
+.instagram-app-header {
+  @apply bg-white border-b border-gray-200;
+}
+
+/* Stories Bar */
+.stories-bar {
+  @apply flex gap-4 px-4 py-3 overflow-x-auto;
+}
+
+.story-item {
+  @apply flex flex-col items-center gap-1 min-w-[64px];
+}
+
+.story-avatar {
+  @apply w-16 h-16 rounded-full p-[3px];
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+}
+
+.story-avatar.your-story {
+  @apply bg-gray-200;
+}
+
+.story-avatar .plus-icon {
+  @apply w-full h-full rounded-full bg-white flex items-center justify-center text-2xl text-blue-500;
+}
+
+.story-username {
+  @apply text-xs text-[#262626] truncate max-w-full;
+}
+
+/* Post Styles */
+.instagram-post {
+  @apply bg-white;
+}
+
+.post-header {
+  @apply flex items-center justify-between px-4 py-3 border-b border-gray-200;
+}
+
+.profile-picture {
+  @apply mr-3;
+}
+
+.username {
+  @apply text-sm font-semibold text-[#262626];
+}
+
+.more-options {
+  @apply text-[#262626];
+}
+
+/* Post Content */
+.post-content {
+  @apply px-4 py-3;
+}
+
+.caption {
+  @apply text-[14px] leading-[18px] text-[#262626] whitespace-pre-wrap;
+}
+
+/* Post Actions */
+.post-actions {
+  @apply flex items-center justify-between px-2 pt-2;
+}
+
+.primary-actions {
+  @apply flex items-center gap-2;
+}
+
+.action-button {
+  @apply p-2 hover:opacity-60 transition-opacity;
+}
+
+.action-icon {
+  @apply w-6 h-6 text-[#262626];
+}
+
+/* Bottom Navigation */
+.bottom-nav {
+  @apply flex justify-between items-center px-4 py-2 border-t border-gray-200 bg-white;
+}
+
+.nav-item {
+  @apply p-2 text-[#262626] hover:opacity-60 transition-opacity;
+}
+
+/* Hashtag Styles */
+.caption a, 
+.caption .hashtag {
+  @apply text-[#0095F6] hover:underline cursor-pointer;
+}
+
+/* Note Text */
+.note {
+  @apply text-[#8E8E8E] text-[12px] mt-1;
+}
+
+/* Container Background */
+.instagram-container {
+  @apply bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 p-8;
+}
+
+/* Emoji Styles */
+.instagram-post .emoji {
+  @apply inline-block;
+}
+
+/* Numbered List Styles */
+.instagram-post .numbered-circle {
+  @apply inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#F1F1F1] text-sm mr-2;
+}
+
+/* Link Styles */
+.instagram-post a {
+  @apply text-[#0095F6] hover:underline;
+}
+
+/* Container Styles */
+.instagram-container {
+  @apply bg-[#FAFAFA] p-4;
+} 

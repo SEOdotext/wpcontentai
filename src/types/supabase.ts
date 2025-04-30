@@ -6,6 +6,8 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type SocialMediaPlatform = 'linkedin' | 'instagram' | 'tiktok' | 'facebook';
+
 export type Database = {
   public: {
     Tables: {
@@ -13,7 +15,7 @@ export type Database = {
         Row: {
           id: string
           website_id: string
-          platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook'
+          platform: SocialMediaPlatform
           tone: string | null
           format_preference: Json | null
           other_settings: Json | null
@@ -24,7 +26,7 @@ export type Database = {
         Insert: {
           id?: string
           website_id: string
-          platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook'
+          platform: SocialMediaPlatform
           tone?: string | null
           format_preference?: Json | null
           other_settings?: Json | null
@@ -35,7 +37,7 @@ export type Database = {
         Update: {
           id?: string
           website_id?: string
-          platform?: 'linkedin' | 'instagram' | 'tiktok' | 'facebook'
+          platform?: SocialMediaPlatform
           tone?: string | null
           format_preference?: Json | null
           other_settings?: Json | null
@@ -51,10 +53,10 @@ export type Database = {
           post_theme_id: string
           title: string
           content: string
-          platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook'
+          platform: SocialMediaPlatform
+          status: 'pending' | 'approved' | 'published' | 'textgenerated' | 'generated' | 'declined'
           scheduled_time: string | null
           published_time: string | null
-          status: 'draft' | 'scheduled' | 'published' | 'failed'
           media_urls: string[] | null
           platform_post_id: string | null
           error_message: string | null
@@ -68,10 +70,10 @@ export type Database = {
           post_theme_id: string
           title: string
           content: string
-          platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook'
+          platform: SocialMediaPlatform
+          status?: 'pending' | 'approved' | 'published' | 'textgenerated' | 'generated' | 'declined'
           scheduled_time?: string | null
           published_time?: string | null
-          status?: 'draft' | 'scheduled' | 'published' | 'failed'
           media_urls?: string[] | null
           platform_post_id?: string | null
           error_message?: string | null
@@ -85,10 +87,10 @@ export type Database = {
           post_theme_id?: string
           title?: string
           content?: string
-          platform?: 'linkedin' | 'instagram' | 'tiktok' | 'facebook'
+          platform?: SocialMediaPlatform
+          status?: 'pending' | 'approved' | 'published' | 'textgenerated' | 'generated' | 'declined'
           scheduled_time?: string | null
           published_time?: string | null
-          status?: 'draft' | 'scheduled' | 'published' | 'failed'
           media_urls?: string[] | null
           platform_post_id?: string | null
           error_message?: string | null
@@ -102,22 +104,43 @@ export type Database = {
           id: string
           name: string
           url: string
+          organisation_id: string
           created_at: string
           updated_at: string
+          language?: string
+          enable_ai_image_generation?: boolean
+          enable_some?: boolean
+          image_prompt?: string
+          page_import_limit?: number
+          key_content_limit?: number
         }
         Insert: {
           id?: string
           name: string
           url: string
+          organisation_id: string
           created_at?: string
           updated_at?: string
+          language?: string
+          enable_ai_image_generation?: boolean
+          enable_some?: boolean
+          image_prompt?: string
+          page_import_limit?: number
+          key_content_limit?: number
         }
         Update: {
           id?: string
           name?: string
           url?: string
+          organisation_id?: string
           created_at?: string
           updated_at?: string
+          language?: string
+          enable_ai_image_generation?: boolean
+          enable_some?: boolean
+          image_prompt?: string
+          page_import_limit?: number
+          key_content_limit?: number
         }
       }
     }
