@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 interface GenerateRequest {
   post_theme_id: string;
-  platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook';
+  platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook' | 'x';
   website_id: string;
 }
 
@@ -11,7 +11,17 @@ interface SomeSettings {
   tone: string;
   hashtags: string;
   mentions: string;
-  platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook';
+  platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook' | 'x';
+  format_preference: {
+    post_type?: 'single' | 'carousel';
+    slides_count?: number;
+  };
+  post_length: number | null;
+  simple_post_format_example: string | null;
+}
+
+interface Website {
+  language: string;
 }
 
 serve(async (req) => {
@@ -46,7 +56,7 @@ serve(async (req) => {
     // Fetch the post theme content
     const { data: postTheme, error: postThemeError } = await supabaseClient
       .from('post_themes')
-      .select('subject_matter, keywords, post_content')
+      .select('subject_matter, keywords, post_content, wp_post_url')
       .eq('id', post_theme_id)
       .single();
 
@@ -55,7 +65,7 @@ serve(async (req) => {
     // Fetch platform settings
     const { data: settings, error: settingsError } = await supabaseClient
       .from('some_settings')
-      .select('tone, hashtags, mentions')
+      .select('tone, hashtags, mentions, post_length, format_preference, simple_post_format_example')
       .eq('website_id', website_id)
       .eq('platform', platform)
       .eq('is_active', true)
@@ -63,8 +73,17 @@ serve(async (req) => {
 
     if (settingsError) throw new Error('Failed to fetch platform settings');
 
+    // Fetch website language setting
+    const { data: website, error: websiteError } = await supabaseClient
+      .from('websites')
+      .select('language')
+      .eq('id', website_id)
+      .single();
+
+    if (websiteError) throw new Error('Failed to fetch website settings');
+
     // Construct the prompt
-    const prompt = constructPrompt(platform, postTheme, settings);
+    const prompt = constructPrompt(platform, postTheme, settings, website.language);
 
     // Generate content using OpenAI
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -78,7 +97,16 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: "You are a professional social media content creator that specializes in creating platform-optimized content."
+            content: `You are a professional social media content creator that specializes in creating platform-optimized content in ${website.language || 'English'}. 
+IMPORTANT: You MUST write ALL content in ${website.language || 'English'}. This includes:
+- Main content
+- Hashtags
+- Mentions
+- Call-to-actions
+- Slide markers
+- Any other text elements
+
+Never mix languages or switch to English unless explicitly requested. Maintain consistent language throughout the entire post.`
           },
           {
             role: "user",
@@ -86,7 +114,7 @@ serve(async (req) => {
           }
         ],
         temperature: 0.7,
-        max_tokens: 500
+        max_tokens: 2000
       })
     });
 
@@ -141,48 +169,39 @@ serve(async (req) => {
 
 function constructPrompt(
   platform: string, 
-  postTheme: { subject_matter: string; keywords: string[]; post_content: string | null }, 
-  settings: SomeSettings
+  postTheme: { subject_matter: string; keywords: string[]; post_content: string | null; wp_post_url: string | null }, 
+  settings: SomeSettings,
+  language: string
 ): string {
-  const platformSpecifics = {
-    linkedin: {
-      maxLength: 3000,
-      format: "Professional, business-focused content with industry insights"
-    },
-    instagram: {
-      maxLength: 2200,
-      format: "Visual, engaging, and concise with emojis and hashtags"
-    },
-    tiktok: {
-      maxLength: 2200,
-      format: "Short, punchy, and trend-aware content"
-    },
-    facebook: {
-      maxLength: 63206,
-      format: "Conversational and engaging community-focused content"
-    }
+  const platformLimits = {
+    linkedin: 3000,
+    instagram: 2200,
+    tiktok: 2200,
+    facebook: 63206,
+    x: 280
   };
 
-  const spec = platformSpecifics[platform as keyof typeof platformSpecifics];
+  const maxLength = settings.post_length || platformLimits[platform as keyof typeof platformLimits] || 2200;
 
-  return `Create a ${platform} post about:
+  let basePrompt = `Create a ${platform} post in ${language || 'English'} about:
 Subject: ${postTheme.subject_matter}
 Keywords: ${postTheme.keywords?.join(', ') || ''}
 
 ${postTheme.post_content ? `Original Content Summary: ${postTheme.post_content.substring(0, 500)}...` : ''}
+${postTheme.wp_post_url ? `\nOriginal Post URL: ${postTheme.wp_post_url}` : ''}
 
-Platform Requirements:
-- Maximum length: ${spec.maxLength} characters
-- Format style: ${spec.format}
+Format your post following this example structure:
+${settings.simple_post_format_example || ''}
 
-Tone Instructions:
-${settings.tone || 'Professional and engaging'}
+Requirements:
+1. Follow the format example above exactly, replacing the placeholder content with relevant content about the subject
+2. Maximum length: ${maxLength} characters
+3. Write everything in ${language || 'English'}
+4. Use these hashtags if relevant: ${settings.hashtags?.split('\n').filter(Boolean).join(', ')}
+5. Use these mentions if relevant: ${settings.mentions?.split('\n').filter(Boolean).join(', ')}
+${postTheme.wp_post_url ? `6. Include a call-to-action to read the full article at: ${postTheme.wp_post_url}` : ''}
 
-${settings.hashtags ? `Use these hashtags where appropriate:
-${settings.hashtags}` : ''}
+Write the complete post now, formatted exactly as shown in the example above.`;
 
-${settings.mentions ? `Include these mentions where relevant:
-${settings.mentions}` : ''}
-
-Generate a platform-optimized post that captures the key message while following the platform's best practices and tone requirements.`;
+  return basePrompt;
 } 

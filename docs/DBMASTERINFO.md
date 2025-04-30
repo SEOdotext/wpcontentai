@@ -1171,6 +1171,26 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "some_settings.post_length",
+    "detail_1": "numeric",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "some_settings.simple_post_format_example",
+    "detail_1": "text",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "some_posts.id",
     "detail_1": "uuid",
     "detail_2": null,
@@ -1213,7 +1233,7 @@
     "section": "columns_and_checks",
     "identifier": "some_posts.platform",
     "detail_1": "USER-DEFINED",
-    "detail_2": null,
+    "detail_2": "((platform = ANY (ARRAY['linkedin'::social_media_platform, 'ins",
     "detail_3": null,
     "detail_4": null,
     "detail_5": null,
@@ -1233,16 +1253,6 @@
     "section": "columns_and_checks",
     "identifier": "some_posts.published_time",
     "detail_1": "timestamp with time zone",
-    "detail_2": null,
-    "detail_3": null,
-    "detail_4": null,
-    "detail_5": null,
-    "detail_6": null
-  },
-  {
-    "section": "columns_and_checks",
-    "identifier": "some_posts.status",
-    "detail_1": "USER-DEFINED",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -1313,6 +1323,16 @@
     "section": "columns_and_checks",
     "identifier": "some_posts.website_id",
     "detail_1": "uuid",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "some_posts.status",
+    "detail_1": "USER-DEFINED",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -5591,6 +5611,16 @@
   },
   {
     "section": "constraints",
+    "identifier": null,
+    "detail_1": "CHECK",
+    "detail_2": "some_posts_platform_check",
+    "detail_3": "some_posts",
+    "detail_4": "platform",
+    "detail_5": "((platform = ANY (ARRAY['linkedin'::social_media_platform, 'instagram'::social_media_platform, 'tiktok'::social_media_platform, 'facebook'::social_media_platform])))",
+    "detail_6": null
+  },
+  {
+    "section": "constraints",
     "identifier": "some_posts.post_theme_id",
     "detail_1": "FOREIGN KEY",
     "detail_2": "some_posts_post_theme_id_fkey",
@@ -6443,16 +6473,6 @@
     "section": "constraints",
     "identifier": null,
     "detail_1": "CHECK",
-    "detail_2": "2200_95504_10_not_null",
-    "detail_3": null,
-    "detail_4": null,
-    "detail_5": "status IS NOT NULL",
-    "detail_6": null
-  },
-  {
-    "section": "constraints",
-    "identifier": null,
-    "detail_1": "CHECK",
     "detail_2": "2200_95504_15_not_null",
     "detail_3": null,
     "detail_4": null,
@@ -6477,6 +6497,16 @@
     "detail_3": null,
     "detail_4": null,
     "detail_5": "website_id IS NOT NULL",
+    "detail_6": null
+  },
+  {
+    "section": "constraints",
+    "identifier": null,
+    "detail_1": "CHECK",
+    "detail_2": "2200_95504_18_not_null",
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": "status IS NOT NULL",
     "detail_6": null
   },
   {

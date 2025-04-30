@@ -10,19 +10,25 @@ import { Database } from '@/types/supabase';
 import { useWebsites } from '@/context/WebsitesContext';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Linkedin, Instagram, Facebook, Video, RefreshCw } from 'lucide-react';
+import { Linkedin, Instagram, Facebook, Video, RefreshCw, Twitter } from 'lucide-react';
 
 // Exactly match the database schema
 interface SomeSettings {
   id: string;
   website_id: string;
-  platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook';
+  platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook' | 'x';
   tone: string | null;
   hashtags: string | null;
   mentions: string | null;
   image_prompt: string | null;
   image_formats: string | null;
   is_active: boolean;
+  format_preference: {
+    post_type?: 'single' | 'carousel';
+    slides_count?: number;
+  } | null;
+  post_length: number | null;
+  simple_post_format_example: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -79,6 +85,55 @@ export const SocialMediaSettings = () => {
     return defaults[platform as keyof typeof defaults] || '';
   };
 
+  const getDefaultFormat = (platform: string) => {
+    const defaults = {
+      linkedin: `🎯 Main message here
+
+Key point or insight that adds value.
+
+💡 Pro tip or actionable advice.
+
+#Hashtag1 #Hashtag2 #Hashtag3`,
+
+      instagram: `✨ Engaging opening line that hooks attention
+
+🔍 Main point or insight here
+💡 Key takeaway or value add
+
+#Hashtag1 #Hashtag2 #Hashtag3
+
+[For carousel posts:]
+[SLIDE 1]
+Hook and main point...
+
+[SLIDE 2]
+Supporting content...`,
+
+      tiktok: `🎬 Hook that grabs attention
+
+💫 Main point
+📍 Key details
+
+#Hashtag1 #Hashtag2`,
+
+      facebook: `💡 Opening hook
+
+Main message here. Keep it conversational and engaging.
+
+🔑 Key takeaway or call-to-action
+
+#RelevantHashtag`,
+
+      x: `Key message here 🎯
+
+Value-add or insight 💡
+
+#Hashtag1 #Hashtag2`
+    };
+
+    return defaults[platform as keyof typeof defaults] || '';
+  };
+
   const handleResetTone = async (platform: string, currentSetting: SomeSettings) => {
     const defaultTone = getDefaultTone(platform);
     await updatePlatformSettings(platform as SomeSettings['platform'], true, { tone: defaultTone });
@@ -97,22 +152,22 @@ export const SocialMediaSettings = () => {
     
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('some_settings')
-        .select('*')
+    const { data, error } = await supabase
+      .from('some_settings')
+      .select('*')
         .eq('website_id', currentWebsite.id);
 
-      if (error) {
+    if (error) {
         toast.error('Failed to load social media settings');
-        console.error('Error fetching settings:', error);
-      } else {
-        setSettings(data || []);
-      }
+      console.error('Error fetching settings:', error);
+    } else {
+      setSettings(data || []);
+    }
     } catch (err) {
       console.error('Error in fetchSettings:', err);
       toast.error('Failed to load social media settings');
     } finally {
-      setLoading(false);
+    setLoading(false);
     }
   };
 
@@ -120,15 +175,15 @@ export const SocialMediaSettings = () => {
     if (!currentWebsite) return;
 
     try {
-      const existingSetting = settings.find(s => s.platform === platform);
+    const existingSetting = settings.find(s => s.platform === platform);
       
-      const settingData = {
+    const settingData = {
         website_id: currentWebsite.id,
-        platform,
-        is_active: isActive,
+      platform,
+      is_active: isActive,
         updated_at: new Date().toISOString(),
-        ...values
-      };
+      ...values
+    };
 
       if (existingSetting) {
         const { error } = await supabase
@@ -151,16 +206,16 @@ export const SocialMediaSettings = () => {
             created_at: new Date().toISOString()
           }]);
 
-        if (error) {
+    if (error) {
           if (error.code === '23505') {
             toast.error(`Settings for ${platform} already exist`);
           } else {
             toast.error(`Failed to create ${platform} settings`);
           }
           console.error('Error creating settings:', error);
-        } else {
+    } else {
           toast.success(`${platform} settings created successfully`);
-          fetchSettings();
+      fetchSettings();
         }
       }
     } catch (err) {
@@ -173,35 +228,87 @@ export const SocialMediaSettings = () => {
     { key: 'linkedin' as const, name: 'LinkedIn', icon: <Linkedin className="h-5 w-5" /> },
     { key: 'instagram' as const, name: 'Instagram', icon: <Instagram className="h-5 w-5" /> },
     { key: 'tiktok' as const, name: 'TikTok', icon: <Video className="h-5 w-5" /> },
-    { key: 'facebook' as const, name: 'Facebook', icon: <Facebook className="h-5 w-5" /> }
+    { key: 'facebook' as const, name: 'Facebook', icon: <Facebook className="h-5 w-5" /> },
+    { key: 'x' as const, name: 'X (Twitter)', icon: <Twitter className="h-5 w-5" /> }
   ];
 
   return (
-    <div className="space-y-6">
-      {platforms.map(platform => {
-        const setting = settings.find(s => s.platform === platform.key);
-        
-        return (
+        <div className="space-y-6">
+          {platforms.map(platform => {
+            const setting = settings.find(s => s.platform === platform.key);
+            
+            return (
           <Card key={platform.key}>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2">
                   <div className="text-muted-foreground">
                     {platform.icon}
                   </div>
                   <CardTitle className="text-xl">{platform.name}</CardTitle>
-                </div>
-                <Switch
-                  checked={setting?.is_active || false}
+                  </div>
+                  <Switch
+                    checked={setting?.is_active || false}
                   onCheckedChange={(checked) => updatePlatformSettings(platform.key, checked)}
                   disabled={loading}
-                />
-              </div>
+                  />
+                </div>
             </CardHeader>
 
-            {setting?.is_active && (
+                {setting?.is_active && (
               <CardContent className="space-y-4">
                 <div className="space-y-4">
+                  {platform.key === 'instagram' && (
+                    <div className="space-y-2">
+                      <Label>Post Format Preference</Label>
+                      <Select
+                        value={setting?.format_preference?.post_type || 'single'}
+                        onValueChange={(value) => updatePlatformSettings(platform.key, true, {
+                          format_preference: {
+                      ...setting?.format_preference,
+                            post_type: value as 'single' | 'carousel',
+                            slides_count: value === 'carousel' ? (setting?.format_preference?.slides_count || 5) : undefined
+                      }
+                    })}
+                  >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select post format" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="single">Single Post</SelectItem>
+                          <SelectItem value="carousel">Carousel Post</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {setting?.format_preference?.post_type === 'carousel' && (
+                        <div className="space-y-2">
+                          <Label>Number of Slides</Label>
+                          <Select
+                            value={String(setting?.format_preference?.slides_count || 5)}
+                            onValueChange={(value) => updatePlatformSettings(platform.key, true, {
+                              format_preference: {
+                                ...setting?.format_preference,
+                                slides_count: parseInt(value)
+                              }
+                            })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select number of slides" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                                <SelectItem key={num} value={String(num)}>{num} Slides</SelectItem>
+                              ))}
+                            </SelectContent>
+                        </Select>
+                          <p className="text-sm text-muted-foreground">
+                            Choose how many slides you want in your carousel posts. Each slide will contain a portion of your content in a logical sequence.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Tone & Prompt Instructions</Label>
@@ -250,12 +357,54 @@ export const SocialMediaSettings = () => {
                     </p>
                   </div>
 
+                  <div className="space-y-2">
+                    <Label>Maximum Post Length (characters)</Label>
+                    <Input
+                      type="number"
+                      placeholder="Enter maximum post length"
+                      value={setting?.post_length || ''}
+                      onChange={(e) => updatePlatformSettings(platform.key, true, { post_length: parseInt(e.target.value) || null })}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Set the maximum number of characters for posts on this platform. Leave empty to use platform defaults.
+                      {platform.key === 'linkedin' && ' LinkedIn: Recommended 150-300 characters (Max: 3000)'}
+                      {platform.key === 'instagram' && ' Instagram: Recommended 100-200 characters (Max: 2200)'}
+                      {platform.key === 'tiktok' && ' TikTok: Recommended 100-150 characters (Max: 2200)'}
+                      {platform.key === 'facebook' && ' Facebook: Recommended 100-250 characters (Max: 63206)'}
+                      {platform.key === 'x' && ' X (Twitter): Recommended 100-120 characters (Max: 280)'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Post Format Example</Label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updatePlatformSettings(platform.key, true, { simple_post_format_example: getDefaultFormat(platform.key) })}
+                        className="h-8"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Reset to Default
+                      </Button>
+                    </div>
+                    <Textarea
+                      placeholder="Enter a simple example of how you want your posts formatted"
+                      value={setting?.simple_post_format_example || getDefaultFormat(platform.key)}
+                      onChange={(e) => updatePlatformSettings(platform.key, true, { simple_post_format_example: e.target.value })}
+                      className="min-h-[200px] font-mono text-sm"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      This format will be used as a template for generating posts. Include placeholders for main content, hashtags, and any platform-specific elements.
+                    </p>
+                  </div>
+
                 </div>
               </CardContent>
-            )}
-          </Card>
-        );
-      })}
+                )}
+              </Card>
+            );
+          })}
     </div>
   );
 }; 

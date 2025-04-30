@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,6 +30,8 @@ import { SocialMediaPlatformSwitcher } from './SocialMediaPlatformSwitcher';
 import { supabase } from '@/integrations/supabase/client';
 import { useWebsites } from '@/context/WebsitesContext';
 import { InstagramPost } from './social/InstagramPost';
+import { LinkedInPost } from './social/LinkedInPost';
+import { canSendToWordPress } from '@/utils/wordpress';
 
 interface ContentEditorDrawerProps {
   isOpen: boolean;
@@ -45,6 +47,8 @@ interface ContentEditorDrawerProps {
   keywords?: Array<string>;
   onUpdateContent: (newContent: string, platform?: string | null) => void;
   postThemeId?: string;
+  isMainPostPublished?: boolean;
+  wp_post_url?: string;
 }
 
 interface ChatMessage {
@@ -179,11 +183,13 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   onSendToWordPress,
   isGeneratingContent = false,
   isSendingToWP = false,
-  canSendToWordPress = false,
+  canSendToWordPress: externalCanSendToWordPress = false,
   categories = [],
   keywords = [],
   onUpdateContent,
   postThemeId,
+  isMainPostPublished = false,
+  wp_post_url,
 }) => {
   const { currentWebsite } = useWebsites();
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -196,6 +202,7 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   const [platformContent, setPlatformContent] = useState<Record<string, string>>({});
   const [isLoadingSocialContent, setIsLoadingSocialContent] = useState(false);
   const [activeSettings, setActiveSettings] = useState<SomeSettings[]>([]);
+  const [wpConfigured, setWpConfigured] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -301,6 +308,33 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
       fetchSocialContent();
     }
   }, [currentPlatform, postThemeId, content, currentWebsite]);
+
+  // Add useEffect to fetch WordPress settings
+  useEffect(() => {
+    const fetchWordPressSettings = async () => {
+      if (!currentWebsite) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('wordpress_settings')
+          .select('*')
+          .eq('website_id', currentWebsite.id)
+          .limit(1);
+          
+        if (error) {
+          if (error.code !== 'PGRST116') { // Not the "no rows returned" error
+            console.error('Error fetching WordPress settings from DB:', error);
+          }
+        } else if (data && data.length > 0) {
+          setWpConfigured(true);
+        }
+      } catch (e) {
+        console.error('Exception checking WordPress settings:', e);
+      }
+    };
+    
+    fetchWordPressSettings();
+  }, [currentWebsite]);
 
   // Add function to generate social content
   const handleGenerateSocialContent = async () => {
@@ -549,6 +583,15 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
     }
   };
 
+  // Add a memoized function to check WordPress availability
+  const canSendToWP = useCallback((postId: string, postUrl: string | undefined, content: string) => {
+    return canSendToWordPress({
+      id: postId,
+      wp_post_url: postUrl,
+      content: content
+    }, wpConfigured, isSendingToWP);
+  }, [wpConfigured, isSendingToWP]);
+
   const getPlatformActions = (platform: string | null) => {
     const actions = [];
 
@@ -651,7 +694,7 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
           variant="ghost"
           size="icon"
           onClick={onSendToWordPress}
-          disabled={!canSendToWordPress || isSendingToWP}
+          disabled={!externalCanSendToWordPress || isSendingToWP}
           title="Publish to WordPress"
         >
           {isSendingToWP ? (
@@ -797,7 +840,24 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                       </Button>
                     </div>
                   ) : (
-                    isEditing ? (
+                    <div className="h-full flex flex-col">
+                      {currentPlatform && !wp_post_url && (
+                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                          <div className="flex">
+                            <div className="flex-shrink-0">
+                              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="ml-3">
+                              <p className="text-sm text-yellow-700">
+                                Note: Social media posts can only include links to the article once it is published.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+              {isEditing ? (
                 <div className="h-full flex flex-col">
                   <Textarea
                     value={editedContent}
@@ -810,31 +870,39 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                 </div>
               ) : (
                 <ScrollArea className="h-full">
-                  <div className="p-4">
-                    {currentPlatform === 'instagram' ? (
-                      <div className="bg-[#FAFAFA]">
-                        <InstagramPost content={editedContent} />
-                      </div>
-                    ) : (
-                      <div
-                        ref={contentRef}
-                        className={cn(
-                          "prose max-w-none select-text",
-                          currentPlatform && "social-content",
-                          currentPlatform === 'linkedin' && "linkedin-content",
-                          currentPlatform === 'tiktok' && "tiktok-content",
-                          currentPlatform === 'facebook' && "facebook-content"
-                        )}
-                        dangerouslySetInnerHTML={{ 
-                          __html: currentPlatform ? formatSocialContent(editedContent, currentPlatform) : editedContent 
-                        }}
-                        onMouseUp={handleTextSelection}
-                        onKeyUp={handleTextSelection}
-                      />
-                    )}
-                  </div>
+                          <div className="p-4">
+                            {currentPlatform === 'instagram' ? (
+                              <div className="bg-[#FAFAFA]">
+                                <InstagramPost content={editedContent} />
+                              </div>
+                            ) : currentPlatform === 'linkedin' ? (
+                              <div className="bg-[#F3F2EF]">
+                                <LinkedInPost 
+                                  content={editedContent} 
+                                  websiteUrl={currentWebsite?.url}
+                                  websiteName={currentWebsite?.name}
+                                />
+                              </div>
+                            ) : (
+                  <div
+                    ref={contentRef}
+                                className={cn(
+                                  "prose max-w-none select-text",
+                                  currentPlatform && "social-content",
+                                  currentPlatform === 'tiktok' && "tiktok-content",
+                                  currentPlatform === 'facebook' && "facebook-content"
+                                )}
+                                dangerouslySetInnerHTML={{ 
+                                  __html: currentPlatform ? formatSocialContent(editedContent, currentPlatform) : editedContent 
+                                }}
+                    onMouseUp={handleTextSelection}
+                    onKeyUp={handleTextSelection}
+                  />
+                            )}
+                          </div>
                 </ScrollArea>
-                    )
+                      )}
+                    </div>
               )}
             </div>
 

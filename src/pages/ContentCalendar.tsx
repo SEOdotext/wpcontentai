@@ -26,6 +26,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { generateImage, checkWebsiteImageGenerationEnabled, generateAndPublishContent } from '@/api/aiEndpoints';
 import { PostTheme } from '@/context/PostThemesContext';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { canSendToWordPress } from '@/utils/wordpress';
 
 interface Keyword {
   text: string;
@@ -273,26 +274,13 @@ const ContentCalendar = () => {
   }, [isWordPressConfigured]);
 
   // Memoize the canSendToWordPress function
-  const canSendToWordPress = React.useCallback((content: CalendarContent) => {
-    const issues = [];
-    
-    if (!wpConfigured) {
-      issues.push('WordPress not configured');
-    }
-    
-    if (isSendingToWP) {
-      issues.push('Already sending to WordPress');
-    }
-    
-    if (content.contentStatus === 'published' && !!content.wpSentDate) {
-      issues.push('Already sent to WordPress');
-    }
-    
-    if (!content.description || content.description.trim().length === 0) {
-      issues.push('No content to send');
-    }
-    
-    return issues.length === 0;
+  const canSendToWP = React.useCallback((content: CalendarContent) => {
+    return canSendToWordPress({
+      id: content.id,
+      wp_post_url: content.wpPostUrl,
+      wp_sent_date: content.wpSentDate,
+      description: content.description
+    }, wpConfigured, isSendingToWP);
   }, [wpConfigured, isSendingToWP]);
 
   const navigateMonth = (direction: 'prev' | 'next') => {
@@ -1093,11 +1081,11 @@ const ContentCalendar = () => {
                                         e.stopPropagation();
                                         handleSendToWordPress(content.id);
                                       }}
-                                      disabled={!canSendToWordPress(content) || (isSendingToWP && sendingToWPId === content.id)}
+                                      disabled={!canSendToWP(content) || (isSendingToWP && sendingToWPId === content.id)}
                                       className={`h-8 w-8 ${
                                         content.contentStatus === 'published' && !!content.wpSentDate
                                           ? 'text-emerald-800 bg-emerald-50'
-                                          : canSendToWordPress(content)
+                                          : canSendToWP(content)
                                             ? 'text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700'
                                             : 'text-slate-300 cursor-not-allowed'
                                       }`}
@@ -1202,7 +1190,7 @@ const ContentCalendar = () => {
           isGeneratingImage={generatingImageIds.has(selectedContent.id)}
           isSendingToWP={isSendingToWP && sendingToWPId === selectedContent.id}
           isGeneratingAndPublishing={generatingAndPublishingIds.has(selectedContent.id)}
-          canSendToWordPress={canSendToWordPress(selectedContent)}
+          canSendToWordPress={canSendToWP(selectedContent)}
           canGenerateImage={!!currentWebsite?.enable_ai_image_generation && !selectedContent.preview_image_url}
         />
       )}
