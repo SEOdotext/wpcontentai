@@ -28,29 +28,6 @@ function isAllowedOrigin(origin: string | null): boolean {
   return allowedOrigins.includes(origin);
 }
 
-// Function to create a safe prompt that won't exceed OpenAI's limits
-function createSafePrompt(content: string): string {
-  // Extract a title if possible (first line or first sentence)
-  let title = '';
-  if (content.includes('\n')) {
-    title = content.split('\n')[0].trim();
-  } else if (content.includes('.')) {
-    title = content.split('.')[0].trim() + '.';
-  } else {
-    title = content.substring(0, Math.min(100, content.length));
-  }
-  
-  // Create a shortened summary - limit to safe character count
-  // OpenAI limit is 4000, but we'll use much less to be safe
-  const MAX_PROMPT_LENGTH = 1500;
-  
-  // Only use the title for the prompt
-  let safeContent = title;
-  
-  // Add business context and make it more professional
-  return `Create a professional business blog header image that represents business growth and success. The image should be clean, modern, and suitable for a corporate website. Theme: ${safeContent}`;
-}
-
 // Helper to add timeout to fetch requests
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeout = 30000): Promise<Response> {
   const controller = new AbortController();
@@ -106,15 +83,19 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Verify that the post_themes record exists
+    // Verify that the post_themes record exists and get its content
     const { data: postTheme, error: postThemeError } = await supabaseClient
       .from('post_themes')
-      .select('id')
+      .select('id, subject_matter, post_content')
       .eq('id', postId)
       .single();
       
     if (postThemeError || !postTheme) {
       throw new Error(`Post theme record not found: ${postThemeError?.message || 'No record with ID ' + postId}`);
+    }
+
+    if (!postTheme.subject_matter || !postTheme.post_content) {
+      throw new Error('Post theme is missing required content (subject_matter or post_content)');
     }
 
     // Check if AI image generation is enabled for the website
@@ -154,31 +135,23 @@ serve(async (req) => {
       console.log('Using negative prompt for Stable Diffusion');
     }
 
-    // Create a safe prompt that won't exceed API limits
-    const safePrompt = createSafePrompt(content);
-    console.log('Generated safe prompt, length:', safePrompt.length);
-
-    // Apply custom prompt template if available
-    let finalPrompt = safePrompt;
-    if (pubSettings?.image_prompt || website.image_prompt) {
-      try {
-        // Extract the main topic to use in the custom prompt
-        const mainTopic = content.split('\n')[0] || content.substring(0, 50);
-        const promptTemplate = pubSettings?.image_prompt || website.image_prompt;
-        finalPrompt = promptTemplate
-          .replace('{content}', mainTopic)  // Only use the title/main topic
-          .replace('{title}', mainTopic);
-          
-        // Ensure the prompt doesn't exceed the limit
-        if (finalPrompt.length > 4000) {
-          finalPrompt = finalPrompt.substring(0, 3900) + '...';
-        }
-        
-        console.log('Using custom prompt template, length:', finalPrompt.length);
-      } catch (promptError) {
-        console.error('Error applying custom prompt, using default:', promptError);
-      }
+    // Get the prompt template from settings, or use a default if none is configured
+    const promptTemplate = pubSettings?.image_prompt || website.image_prompt || 'Create a modern, professional image that represents: {title}. Context: {content}';
+    
+    // Create the final prompt by replacing placeholders with actual content
+    let finalPrompt = promptTemplate
+      .replace('{content}', postTheme.post_content)
+      .replace('{title}', postTheme.subject_matter);
+    
+    // Ensure the prompt doesn't exceed the limit
+    const MAX_PROMPT_LENGTH = 4000;
+    if (finalPrompt.length > MAX_PROMPT_LENGTH) {
+      finalPrompt = finalPrompt.substring(0, MAX_PROMPT_LENGTH - 3) + '...';
     }
+    
+    console.log('Using prompt template:', promptTemplate);
+    console.log('Final prompt:', finalPrompt);
+    console.log('Prompt length:', finalPrompt.length);
 
     let imageBlob: Blob;
     let imageFormat = 'image/png'; // Default format
