@@ -2,114 +2,114 @@
 .instagram-phone-frame {
   width: 375px;
   margin: 0 auto;
-  background-color: white;
+  background-color: #FAFAFA;
   border-radius: 50px;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  border: 15px solid #000;
+  font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  border: 15px solid #f5f5f5;
   position: relative;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
 }
 
 /* Instagram App Header */
 .instagram-app-header {
-  background-color: white;
-  border-bottom: 1px solid #dbdbdb;
-  padding: 12px 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .instagram-logo-header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  height: 36px;
 }
 
-/* Post Styles */
+/* Post Container */
 .instagram-post {
-  background-color: white;
+  background-color: #ffffff;
 }
 
+/* Post Header */
 .post-header {
+  padding: 8px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #dbdbdb;
 }
 
 .profile-picture {
-  margin-right: 0.75rem;
+  margin-right: 12px;
 }
 
 .username {
-  font-size: 0.875rem;
   font-weight: 600;
+  font-size: 14px;
   color: #262626;
 }
 
 .more-options {
-  color: #262626;
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
 }
 
 /* Post Content */
 .post-content {
-  padding: 0.75rem 1rem;
+  padding: 0 12px;
 }
 
 .caption {
   font-size: 14px;
-  line-height: 18px;
+  line-height: 1.5;
   color: #262626;
+  padding: 12px 0;
   white-space: pre-wrap;
 }
 
 /* Post Actions */
 .post-actions {
+  padding: 8px 12px;
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 0.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .primary-actions {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  gap: 16px;
 }
 
 .action-button {
-  padding: 0.5rem;
-  transition: opacity 0.2s;
-}
-
-.action-button:hover {
-  opacity: 0.6;
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
 }
 
 .action-icon {
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 24px;
+  height: 24px;
   color: #262626;
 }
 
 /* Bottom Navigation */
 .bottom-nav {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  border-top: 1px solid #dbdbdb;
-  background-color: white;
+  justify-content: space-around;
+  padding: 10px 0;
+  background-color: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .nav-item {
-  padding: 0.5rem;
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
   color: #262626;
-  transition: opacity 0.2s;
-}
-
-.nav-item:hover {
-  opacity: 0.6;
 }
 
 /* Hashtag Styles */

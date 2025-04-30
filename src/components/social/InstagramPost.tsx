@@ -2,6 +2,7 @@ import React from 'react';
 import { Instagram, Heart, MessageCircle, Share2, Bookmark, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import '@/styles/instagram.css';
+import '@/styles/phone-frame.css';
 
 interface InstagramPostProps {
   content: string;
@@ -30,9 +31,9 @@ export const InstagramPost: React.FC<InstagramPostProps> = ({ content }) => {
   };
 
   return (
-    <div className="instagram-phone-frame">
+    <div className="social-phone-frame instagram">
       {/* Instagram App Header */}
-      <div className="instagram-app-header">
+      <div className="social-header">
         <div className="instagram-logo-header">
           <svg
             aria-label="Instagram"
@@ -50,74 +51,76 @@ export const InstagramPost: React.FC<InstagramPostProps> = ({ content }) => {
       </div>
 
       {/* Post Content */}
-      <article className="instagram-post">
-        {/* Post Header */}
-        <header className="post-header">
-          <div className="flex items-center">
-            <div className="profile-picture">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-fuchsia-600 p-[2px]">
-                <div className="w-full h-full rounded-full bg-white p-0.5">
-                  <Instagram className="w-5 h-5 text-[#262626]" />
+      <div className="social-post-container">
+        <article className="instagram-post">
+          {/* Post Header */}
+          <header className="post-header">
+            <div className="flex items-center">
+              <div className="profile-picture">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-fuchsia-600 p-[2px]">
+                  <div className="w-full h-full rounded-full bg-white p-0.5">
+                    <Instagram className="w-5 h-5 text-[#262626]" />
+                  </div>
                 </div>
               </div>
+              <span className="username">hirely.dk</span>
             </div>
-            <span className="username">hirely.dk</span>
-          </div>
-          <button className="more-options">
-            <MoreHorizontal className="w-5 h-5" />
-          </button>
-        </header>
+            <button className="social-action-button">
+              <MoreHorizontal className="w-5 h-5" />
+            </button>
+          </header>
 
-        {/* Post Content */}
-        <div className="post-content">
-          <div 
-            className="caption"
-            dangerouslySetInnerHTML={{ 
-              __html: processEmojis(processHashtags(content))
-            }}
-          />
-        </div>
+          {/* Post Content */}
+          <div className="post-content">
+            <div 
+              className="caption"
+              dangerouslySetInnerHTML={{ 
+                __html: processEmojis(processHashtags(content))
+              }}
+            />
+          </div>
 
-        {/* Post Actions */}
-        <div className="post-actions">
-          <div className="primary-actions">
-            <button className="action-button">
-              <Heart className="action-icon" />
-            </button>
-            <button className="action-button">
-              <MessageCircle className="action-icon" />
-            </button>
-            <button className="action-button">
-              <Share2 className="action-icon" />
+          {/* Post Actions */}
+          <div className="post-actions">
+            <div className="primary-actions">
+              <button className="social-action-button">
+                <Heart className="social-action-icon" />
+              </button>
+              <button className="social-action-button">
+                <MessageCircle className="social-action-icon" />
+              </button>
+              <button className="social-action-button">
+                <Share2 className="social-action-icon" />
+              </button>
+            </div>
+            <button className="social-action-button">
+              <Bookmark className="social-action-icon" />
             </button>
           </div>
-          <button className="action-button">
-            <Bookmark className="action-icon" />
-          </button>
-        </div>
-      </article>
+        </article>
+      </div>
 
       {/* Bottom Navigation */}
-      <nav className="bottom-nav">
-        <button className="nav-item">
+      <nav className="social-bottom-nav">
+        <button className="social-action-button">
           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
-        <button className="nav-item">
+        <button className="social-action-button">
           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
         </button>
-        <button className="nav-item">
+        <button className="social-action-button">
           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
             <line x1="12" y1="3" x2="12" y2="21" />
             <line x1="3" y1="12" x2="21" y2="12" />
           </svg>
         </button>
-        <button className="nav-item">
+        <button className="social-action-button">
           <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
             <circle cx="9" cy="7" r="4" />

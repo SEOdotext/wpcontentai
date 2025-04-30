@@ -872,11 +872,11 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                 <ScrollArea className="h-full">
                           <div className="p-4">
                             {currentPlatform === 'instagram' ? (
-                              <div className="bg-[#FAFAFA]">
+                              <div className="bg-white">
                                 <InstagramPost content={editedContent} />
                               </div>
                             ) : currentPlatform === 'linkedin' ? (
-                              <div className="bg-[#F3F2EF]">
+                              <div className="bg-white">
                                 <LinkedInPost 
                                   content={editedContent} 
                                   websiteUrl={currentWebsite?.url}
