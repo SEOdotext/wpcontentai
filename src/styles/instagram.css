@@ -1,141 +1,172 @@
 /* Instagram Phone Frame */
 .instagram-phone-frame {
-  @apply max-w-[375px] mx-auto bg-white rounded-[50px] overflow-hidden;
+  width: 375px;
+  margin: 0 auto;
+  background-color: white;
+  border-radius: 50px;
+  overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
-
-/* Status Bar */
-.status-bar {
-  @apply flex justify-between items-center px-6 py-3 bg-black text-white;
-}
-
-.time {
-  @apply font-semibold;
-}
-
-.icons {
-  @apply flex items-center gap-2;
+  border: 15px solid #000;
+  position: relative;
 }
 
 /* Instagram App Header */
 .instagram-app-header {
-  @apply bg-white border-b border-gray-200;
+  background-color: white;
+  border-bottom: 1px solid #dbdbdb;
+  padding: 12px 16px;
 }
 
-/* Stories Bar */
-.stories-bar {
-  @apply flex gap-4 px-4 py-3 overflow-x-auto;
-}
-
-.story-item {
-  @apply flex flex-col items-center gap-1 min-w-[64px];
-}
-
-.story-avatar {
-  @apply w-16 h-16 rounded-full p-[3px];
-  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-}
-
-.story-avatar.your-story {
-  @apply bg-gray-200;
-}
-
-.story-avatar .plus-icon {
-  @apply w-full h-full rounded-full bg-white flex items-center justify-center text-2xl text-blue-500;
-}
-
-.story-username {
-  @apply text-xs text-[#262626] truncate max-w-full;
+.instagram-logo-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  height: 36px;
 }
 
 /* Post Styles */
 .instagram-post {
-  @apply bg-white;
+  background-color: white;
 }
 
 .post-header {
-  @apply flex items-center justify-between px-4 py-3 border-b border-gray-200;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #dbdbdb;
 }
 
 .profile-picture {
-  @apply mr-3;
+  margin-right: 0.75rem;
 }
 
 .username {
-  @apply text-sm font-semibold text-[#262626];
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #262626;
 }
 
 .more-options {
-  @apply text-[#262626];
+  color: #262626;
 }
 
 /* Post Content */
 .post-content {
-  @apply px-4 py-3;
+  padding: 0.75rem 1rem;
 }
 
 .caption {
-  @apply text-[14px] leading-[18px] text-[#262626] whitespace-pre-wrap;
+  font-size: 14px;
+  line-height: 18px;
+  color: #262626;
+  white-space: pre-wrap;
 }
 
 /* Post Actions */
 .post-actions {
-  @apply flex items-center justify-between px-2 pt-2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem;
 }
 
 .primary-actions {
-  @apply flex items-center gap-2;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .action-button {
-  @apply p-2 hover:opacity-60 transition-opacity;
+  padding: 0.5rem;
+  transition: opacity 0.2s;
+}
+
+.action-button:hover {
+  opacity: 0.6;
 }
 
 .action-icon {
-  @apply w-6 h-6 text-[#262626];
+  width: 1.5rem;
+  height: 1.5rem;
+  color: #262626;
 }
 
 /* Bottom Navigation */
 .bottom-nav {
-  @apply flex justify-between items-center px-4 py-2 border-t border-gray-200 bg-white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid #dbdbdb;
+  background-color: white;
 }
 
 .nav-item {
-  @apply p-2 text-[#262626] hover:opacity-60 transition-opacity;
+  padding: 0.5rem;
+  color: #262626;
+  transition: opacity 0.2s;
+}
+
+.nav-item:hover {
+  opacity: 0.6;
 }
 
 /* Hashtag Styles */
 .caption a, 
 .caption .hashtag {
-  @apply text-[#0095F6] hover:underline cursor-pointer;
+  color: #0095f6;
+  cursor: pointer;
+}
+
+.caption a:hover, 
+.caption .hashtag:hover {
+  text-decoration: underline;
 }
 
 /* Note Text */
 .note {
-  @apply text-[#8E8E8E] text-[12px] mt-1;
-}
-
-/* Container Background */
-.instagram-container {
-  @apply bg-gradient-to-tr from-pink-500 via-purple-500 to-indigo-500 p-8;
+  color: #8e8e8e;
+  font-size: 12px;
+  margin-top: 0.25rem;
 }
 
 /* Emoji Styles */
 .instagram-post .emoji {
-  @apply inline-block;
+  display: inline-block;
 }
 
 /* Numbered List Styles */
 .instagram-post .numbered-circle {
-  @apply inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#F1F1F1] text-sm mr-2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background-color: #f1f1f1;
+  font-size: 0.875rem;
+  margin-right: 0.5rem;
 }
 
 /* Link Styles */
 .instagram-post a {
-  @apply text-[#0095F6] hover:underline;
+  color: #0095f6;
 }
 
-/* Container Styles */
-.instagram-container {
-  @apply bg-[#FAFAFA] p-4;
+.instagram-post a:hover {
+  text-decoration: underline;
+}
+
+/* Add Instagram gradient border */
+.instagram-phone-frame::before {
+  content: '';
+  position: absolute;
+  top: -15px;
+  left: -15px;
+  right: -15px;
+  bottom: -15px;
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  border-radius: 60px;
+  z-index: -1;
 } 
