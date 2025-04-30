@@ -986,20 +986,6 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                             <Button
                               variant="secondary"
                               size="icon"
-                              className="h-8 w-8 bg-white/80 hover:bg-white shadow-sm"
-                              onClick={onRegenerateImage}
-                              disabled={isGeneratingImage}
-                              title="Regenerate image"
-                            >
-                              {isGeneratingImage ? (
-                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
-                              ) : (
-                                <RefreshCw className="h-4 w-4" />
-                              )}
-                            </Button>
-                            <Button
-                              variant="secondary"
-                              size="icon"
                               className="h-8 w-8 bg-white/80 hover:bg-white shadow-sm text-destructive hover:text-destructive"
                               onClick={onDeleteImage}
                               title="Remove image"
