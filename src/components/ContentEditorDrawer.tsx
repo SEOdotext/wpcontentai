@@ -22,7 +22,11 @@ import {
   Heart,
   MessageCircle,
   Bookmark,
-  Twitter
+  Twitter,
+  ExternalLink,
+  Trash,
+  Image,
+  Sparkles
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -55,6 +59,12 @@ interface ContentEditorDrawerProps {
   postThemeId?: string;
   isMainPostPublished?: boolean;
   wp_post_url?: string;
+  preview_image_url?: string;
+  onRegenerateImage?: () => void;
+  onDeleteImage?: () => void;
+  isGeneratingImage?: boolean;
+  onGenerateAndPublish?: () => void;
+  isGeneratingAndPublishing?: boolean;
 }
 
 interface ChatMessage {
@@ -196,6 +206,12 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   postThemeId,
   isMainPostPublished = false,
   wp_post_url,
+  preview_image_url,
+  onRegenerateImage,
+  onDeleteImage,
+  isGeneratingImage = false,
+  onGenerateAndPublish,
+  isGeneratingAndPublishing = false,
 }) => {
   const { currentWebsite } = useWebsites();
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -657,6 +673,31 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
           </Button>
         );
       }
+
+      // Add image generation button for website content
+      if (!preview_image_url && currentWebsite?.enable_ai_image_generation) {
+        actions.push(
+          <Button
+            key="generate-image"
+            variant="ghost"
+            size="icon"
+            onClick={onRegenerateImage}
+            disabled={isGeneratingImage}
+            className={`h-8 w-8 ${
+              isGeneratingImage
+                ? 'text-purple-300 cursor-not-allowed'
+                : 'text-purple-600 hover:bg-purple-100 hover:text-purple-700'
+            }`}
+            title={isGeneratingImage ? "Generating image..." : "Generate image"}
+          >
+            {isGeneratingImage ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-purple-600 border-t-transparent" />
+            ) : (
+              <Image className="h-4 w-4" />
+            )}
+          </Button>
+        );
+      }
     } else {
       // For social media content
       if (editedContent) {
@@ -704,15 +745,69 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
           size="icon"
           onClick={onSendToWordPress}
           disabled={!externalCanSendToWordPress || isSendingToWP}
-          title="Publish to WordPress"
+          className={`h-8 w-8 ${
+            wp_post_url
+              ? 'text-emerald-800 bg-emerald-50'
+              : externalCanSendToWordPress
+                ? 'text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700'
+                : 'text-slate-300 cursor-not-allowed'
+          }`}
+          title={
+            wp_post_url
+              ? "Already sent to WordPress"
+              : "Send to WordPress"
+          }
         >
           {isSendingToWP ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+          ) : wp_post_url ? (
+            <Send className="h-4 w-4 fill-emerald-800" />
           ) : (
             <Send className="h-4 w-4" />
           )}
         </Button>
       );
+
+      // Add Generate and Publish button
+      if (!wp_post_url) {
+        actions.push(
+          <Button
+            key="generate-and-publish"
+            variant="ghost"
+            size="icon"
+            onClick={onGenerateAndPublish}
+            disabled={isGeneratingAndPublishing}
+            className={`h-8 w-8 ${
+              isGeneratingAndPublishing
+                ? 'text-blue-300 cursor-not-allowed'
+                : 'text-blue-600 hover:bg-blue-100 hover:text-blue-700'
+            }`}
+            title={isGeneratingAndPublishing ? "Generating and publishing..." : "Generate and publish content"}
+          >
+            {isGeneratingAndPublishing ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+          </Button>
+        );
+      }
+
+      // Add View Post button if wp_post_url exists
+      if (wp_post_url) {
+        actions.push(
+          <Button
+            key="view-post"
+            variant="ghost"
+            size="icon"
+            onClick={() => window.open(wp_post_url, '_blank')}
+            className="h-8 w-8 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700"
+            title="View WordPress Post"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+        );
+      }
     } else if (editedContent) {
       // Social media share button (only show if content exists)
       actions.push(
@@ -820,6 +915,17 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                   {isLoadingSocialContent && (
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   )}
+                  {wp_post_url && currentPlatform === null && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-2 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700"
+                      onClick={() => window.open(wp_post_url, '_blank')}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      View Post
+                    </Button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {getPlatformActions(currentPlatform)}
@@ -869,19 +975,53 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                           </div>
                         </div>
                       )}
-              {isEditing ? (
-                <div className="h-full flex flex-col">
-                  <Textarea
-                    value={editedContent}
-                    onChange={(e) => setEditedContent(e.target.value)}
-                    className="flex-1 min-h-[500px] font-mono text-sm"
-                  />
-                  <div className="mt-4 flex justify-end">
-                    <Button onClick={handleSaveEdit}>Save Changes</Button>
-                  </div>
-                </div>
-              ) : (
-                <ScrollArea className="h-full">
+                      {!currentPlatform && preview_image_url && (
+                        <div className="mb-4 relative group">
+                          <img 
+                            src={preview_image_url} 
+                            alt="Generated preview"
+                            className="rounded-lg shadow-md max-h-[300px] object-cover w-full"
+                          />
+                          <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="secondary"
+                              size="icon"
+                              className="h-8 w-8 bg-white/80 hover:bg-white shadow-sm"
+                              onClick={onRegenerateImage}
+                              disabled={isGeneratingImage}
+                              title="Regenerate image"
+                            >
+                              {isGeneratingImage ? (
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              size="icon"
+                              className="h-8 w-8 bg-white/80 hover:bg-white shadow-sm text-destructive hover:text-destructive"
+                              onClick={onDeleteImage}
+                              title="Remove image"
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {isEditing ? (
+                        <div className="h-full flex flex-col">
+                          <Textarea
+                            value={editedContent}
+                            onChange={(e) => setEditedContent(e.target.value)}
+                            className="flex-1 min-h-[500px] font-mono text-sm"
+                          />
+                          <div className="mt-4 flex justify-end">
+                            <Button onClick={handleSaveEdit}>Save Changes</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <ScrollArea className="h-full">
                           <div className="p-4">
                             {currentPlatform === 'instagram' ? (
                               <div className="bg-white">
@@ -931,7 +1071,7 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                   />
                             )}
                           </div>
-                </ScrollArea>
+                        </ScrollArea>
                       )}
                     </div>
               )}

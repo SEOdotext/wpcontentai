@@ -875,6 +875,37 @@ const ContentCalendar = () => {
     }
   };
 
+  const handleDeleteImage = async (contentId: string) => {
+    try {
+      // Update the post theme to remove the image
+      const { error } = await supabase
+        .from('post_themes')
+        .update({ image: null })
+        .eq('id', contentId);
+
+      if (error) throw error;
+
+      // Update local state
+      setPostThemes(prev => 
+        prev.map(theme => 
+          theme.id === contentId 
+            ? { ...theme, image: null }
+            : theme
+        )
+      );
+
+      // Update selected content if this is the currently selected item
+      if (selectedContent?.id === contentId) {
+        setSelectedContent(prev => prev ? { ...prev, preview_image_url: undefined } : null);
+      }
+
+      toast.success('Image removed successfully');
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      toast.error('Failed to remove image');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -1012,7 +1043,7 @@ const ContentCalendar = () => {
                                 <TableCell>
                                   <div className="flex items-center justify-end gap-1">
                                     {/* Only show Generate/Regenerate button when content hasn't been sent to WordPress */}
-                                    {!(content.contentStatus === 'published' && !!content.wpSentDate) && (
+                                    {!(content.wpSentDate || content.wpPostUrl) && (
                                       <Button
                                         variant="ghost"
                                         size="icon"
@@ -1040,7 +1071,7 @@ const ContentCalendar = () => {
                                       </Button>
                                     )}
                                     {/* Image Status Icon */}
-                                    {!(content.contentStatus === 'published' && !!content.wpSentDate) && 
+                                    {!(content.wpSentDate || content.wpPostUrl) && 
                                      content.description && 
                                      currentWebsite?.enable_ai_image_generation && (
                                       <Button
@@ -1083,21 +1114,21 @@ const ContentCalendar = () => {
                                       }}
                                       disabled={!canSendToWP(content) || (isSendingToWP && sendingToWPId === content.id)}
                                       className={`h-8 w-8 ${
-                                        content.contentStatus === 'published' && !!content.wpSentDate
+                                        (content.wpSentDate || content.wpPostUrl)
                                           ? 'text-emerald-800 bg-emerald-50'
                                           : canSendToWP(content)
                                             ? 'text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700'
                                             : 'text-slate-300 cursor-not-allowed'
                                       }`}
                                       title={
-                                        content.contentStatus === 'published' && !!content.wpSentDate
+                                        (content.wpSentDate || content.wpPostUrl)
                                           ? `Sent to WordPress${content.wpSentDate ? ` on ${format(new Date(content.wpSentDate), 'PPP')}` : ''}`
                                           : "Send to WordPress"
                                       }
                                     >
                                       {isSendingToWP && sendingToWPId === content.id ? (
                                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
-                                      ) : content.contentStatus === 'published' && !!content.wpSentDate ? (
+                                      ) : (content.wpSentDate || content.wpPostUrl) ? (
                                         <Send className="h-4 w-4 fill-emerald-800" />
                                       ) : (
                                         <Send className="h-4 w-4" />
@@ -1105,7 +1136,7 @@ const ContentCalendar = () => {
                                     </Button>
 
                                     {/* Generate and Publish Button */}
-                                    {!(content.contentStatus === 'published' && !!content.wpSentDate) && (
+                                    {!(content.wpSentDate || content.wpPostUrl) && (
                                       <Button
                                         variant="ghost"
                                         size="icon"
@@ -1180,6 +1211,7 @@ const ContentCalendar = () => {
           onDeleteClick={() => handleDeleteContent(selectedContent.id)}
           onRegenerateClick={() => handleRegenerateContent(selectedContent.id)}
           onGenerateImage={() => handleGenerateImage(selectedContent.id)}
+          onDeleteImage={() => handleDeleteImage(selectedContent.id)}
           onSendToWordPress={() => handleSendToWordPress(selectedContent.id)}
           onGenerateAndPublish={() => handleGenerateAndPublish(selectedContent.id)}
           fullContent={selectedContent.description}
