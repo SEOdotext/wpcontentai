@@ -58,8 +58,8 @@ export const InstagramPost: React.FC<InstagramPostProps> = ({ content }) => {
             <div className="flex items-center">
               <div className="profile-picture">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-fuchsia-600 p-[2px]">
-                  <div className="w-full h-full rounded-full bg-white p-0.5">
-                    <Instagram className="w-5 h-5 text-[#262626]" />
+                  <div className="w-full h-full rounded-full bg-white flex items-center justify-center">
+                    <Instagram className="w-4 h-4 text-[#262626]" />
                   </div>
                 </div>
               </div>

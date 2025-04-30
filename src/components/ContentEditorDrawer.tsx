@@ -767,30 +767,33 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
           <div className="flex-1 flex overflow-hidden">
             {/* Left Sidebar - Platform Selection */}
             <div className="w-[60px] border-r flex flex-col items-center py-4 bg-muted/10">
-              <div className="space-y-2">
+              <div className="flex flex-col items-center space-y-2 w-full">
                 {/* Website Icon */}
-                <Button
-                  variant={currentPlatform === null ? "default" : "ghost"}
-                  size="icon"
-                  className="h-10 w-10"
-                  onClick={() => handlePlatformChange(null)}
-                  title="Website Content"
-                >
-                  <Globe className="h-5 w-5" />
-                </Button>
+                <div className="w-full flex justify-center">
+                  <Button
+                    variant={currentPlatform === null ? "default" : "ghost"}
+                    size="icon"
+                    className="h-10 w-10"
+                    onClick={() => handlePlatformChange(null)}
+                    title="Website Content"
+                  >
+                    <Globe className="h-5 w-5" />
+                  </Button>
+                </div>
 
                 {/* Social Platform Icons */}
                 {activePlatforms.map(platform => (
-                  <Button
-                    key={platform.key}
-                    variant={currentPlatform === platform.key ? "default" : "ghost"}
-                    size="icon"
-                    className="h-10 w-10"
-                    onClick={() => handlePlatformChange(platform.key)}
-                    title={platform.name}
-                  >
-                    {platform.icon}
-                  </Button>
+                  <div key={platform.key} className="w-full flex justify-center">
+                    <Button
+                      variant={currentPlatform === platform.key ? "default" : "ghost"}
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={() => handlePlatformChange(platform.key)}
+                      title={platform.name}
+                    >
+                      {platform.icon}
+                    </Button>
+                  </div>
                 ))}
               </div>
             </div>

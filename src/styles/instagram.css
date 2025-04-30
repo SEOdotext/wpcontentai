@@ -24,6 +24,11 @@
 .instagram-logo-header {
   display: flex;
   align-items: center;
+  padding-top: 8px;
+}
+
+.instagram-logo-header svg {
+  margin-top: 4px;
 }
 
 /* Post Container */
