@@ -1,3 +1,14 @@
+Add social media options to the onboarding
+
+Let the user select which social media platforms they use
+Generate versions of the some elements
+Then show the some versions of the post
+Use the drawer when showing the article - layout and make the menu and header blurred. 
+
+----
+
+
+
 @DBMASTERINFO.md Now make sure that the image fields are properly saved from /settings
 
 Minimal changes. 
