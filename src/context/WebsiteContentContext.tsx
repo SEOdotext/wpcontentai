@@ -684,11 +684,7 @@ export const WebsiteContentProvider: React.FC<{ children: React.ReactNode }> = (
       if (updateError) {
         console.error('Error updating cornerstone content:', updateError);
         setError(updateError.message);
-        toast({
-          title: 'Error',
-          description: `Failed to update cornerstone content: ${updateError.message}`,
-          variant: 'destructive',
-        });
+        toast.error(`Failed to update cornerstone content: ${updateError.message}`);
         return false;
       }
       
