@@ -1349,7 +1349,7 @@ const Onboarding = () => {
     // Force update
     setState(prev => ({ ...prev }));
     
-    toast.success("Idea saved! We'll use this to create content for you.");
+    toast.success("Idea added to your content calendar! We'll generate content based on this topic.");
   };
 
   // Handle thumbs down on content idea
@@ -2349,12 +2349,11 @@ const Onboarding = () => {
             >
               <div className="w-full mx-auto">
                 <h2 className="text-2xl font-semibold mb-6">
-                  🌱✨ Choose your content seeds 🪴
+                  🌱✨ Choose the best ideas 🪴
                 </h2>
                 
                 <p className="text-muted-foreground mb-8">
-                  ✨ Which ideas do you want to grow?<br />
-                  We've planted five fresh content ideas based on your website's tone and style.
+                  ✨ Thumbs up your favourite topics so we can generate content based on your website's tone and style.
                 </p>
                 
                 <div className="grid grid-cols-1 gap-4 mb-8">
@@ -2379,7 +2378,13 @@ const Onboarding = () => {
                               onClick={() => handleThumbsUp(idea.id)}
                               title="Like this idea"
                             >
-                              <ThumbsUp className="h-3.5 w-3.5" />
+                              <motion.div
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                                transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                              >
+                                <ThumbsUp className="h-3.5 w-3.5" />
+                              </motion.div>
                               <span className="sr-only">Like</span>
                             </Button>
                             

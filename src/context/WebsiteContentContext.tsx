@@ -693,21 +693,14 @@ export const WebsiteContentProvider: React.FC<{ children: React.ReactNode }> = (
       // We don't need to update the global state here since the component is managing its own state
       // This prevents unnecessary re-renders of the entire content list
       
-      toast({
-        title: 'Success',
-        description: `Cornerstone content ${newIsCornerstone ? 'set' : 'unset'} successfully`,
-      });
+      toast.success(`Cornerstone content ${newIsCornerstone ? 'set' : 'unset'} successfully`);
       
       return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception updating cornerstone content:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to update cornerstone content: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to update cornerstone content: ${errorMessage}`);
       return false;
     } finally {
       // Don't set loading state to avoid causing re-renders in components
@@ -732,11 +725,7 @@ export const WebsiteContentProvider: React.FC<{ children: React.ReactNode }> = (
       if (updateError) {
         console.error('Error updating NULL values:', updateError);
         setError(updateError.message);
-        toast({
-          title: 'Error',
-          description: `Failed to update NULL values: ${updateError.message}`,
-          variant: 'destructive',
-        });
+        toast.error(`Failed to update NULL values: ${updateError.message}`);
         return `Error: ${updateError.message}`;
       }
       
@@ -764,21 +753,14 @@ export const WebsiteContentProvider: React.FC<{ children: React.ReactNode }> = (
       //   await fetchWebsiteContent(website.id);
       // }
       
-      toast({
-        title: 'Success',
-        description: 'Cornerstone content database check completed successfully',
-      });
+      toast.success('Cornerstone content database check completed successfully');
       
       return 'Database check completed. Any NULL values in is_cornerstone have been set to FALSE.';
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception fixing cornerstone content:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to check cornerstone content: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to check cornerstone content: ${errorMessage}`);
       return `Error: ${errorMessage}`;
     } finally {
       setLoading(false);
@@ -859,11 +841,7 @@ export const WebsiteContentProvider: React.FC<{ children: React.ReactNode }> = (
             if (error) {
               console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
               setError(error.message);
-              toast({
-                title: 'Error',
-                description: `Failed to import pages: ${error.message}`,
-                variant: 'destructive',
-              });
+              toast.error(`Failed to import pages: ${error.message}`);
             } else {
               insertedCount += newPages.length;
               console.log(`Inserted batch ${i / batchSize + 1} (${newPages.length} pages)`);
@@ -882,21 +860,14 @@ export const WebsiteContentProvider: React.FC<{ children: React.ReactNode }> = (
         await fetchWebsiteContent(websiteId);
       }
       
-      toast({
-        title: 'Success',
-        description: `Successfully imported ${insertedCount} pages`,
-      });
+      toast.success(`Successfully imported ${insertedCount} pages`);
       
       return insertedCount;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception importing pages:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to import pages: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to import pages: ${errorMessage}`);
       return 0;
     } finally {
       setLoading(false);
@@ -916,19 +887,12 @@ export const WebsiteContentProvider: React.FC<{ children: React.ReactNode }> = (
 
       if (error) {
         console.error('Error scraping content:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to analyze key content',
-          variant: 'destructive'
-        });
+        toast.error('Failed to analyze key content');
         return 0;
       }
 
       if (!data.processed) {
-        toast({
-          title: 'No Content',
-          description: data.message || 'No key content pages found to analyze'
-        });
+        toast.info(data.message || 'No key content pages found to analyze');
         return 0;
       }
 
@@ -936,20 +900,12 @@ export const WebsiteContentProvider: React.FC<{ children: React.ReactNode }> = (
       await fetchWebsiteContent(websiteId);
 
       // Show success message
-      toast({
-        title: 'Success',
-        description: data.message,
-        variant: data.processed === data.total ? 'default' : 'destructive'
-      });
+      toast.success(data.message);
 
       return data.processed;
     } catch (error) {
       console.error('Error in scrapeCornerstone:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to analyze key content',
-        variant: 'destructive'
-      });
+      toast.error('Failed to analyze key content');
       return 0;
     } finally {
       setLoading(false);

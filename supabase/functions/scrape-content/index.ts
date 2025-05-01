@@ -151,6 +151,113 @@ ${truncatedText}
   }
 }
 
+// Simple fetch scraping
+async function simpleFetch(url: string): Promise<string> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch ${url}`);
+    return await response.text();
+  } catch (error) {
+    console.error(`Simple fetch failed for ${url}:`, error);
+    throw error;
+  }
+}
+
+// Add delay helper
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Modify scrapeWithBrowserless to work within free tier limits
+async function scrapeWithBrowserless(url: string, retryCount = 0): Promise<string> {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 3000; // 3 seconds between retries
+  const SESSION_TIMEOUT = 45000; // 45 seconds (safe margin below 1 min limit)
+  
+  const BROWSERLESS_API_KEY = Deno.env.get('BROWSERLESS_API_KEY');
+  if (!BROWSERLESS_API_KEY) {
+    throw new Error('BROWSERLESS_API_KEY environment variable is not set');
+  }
+  
+  const BROWSERLESS_URL = `https://chrome.browserless.io/content?token=${BROWSERLESS_API_KEY}`;
+  
+  try {
+    console.log('Using Browserless for:', url);
+    
+    // Add longer delay between requests due to single concurrent browser limit
+    if (retryCount > 0) {
+      const backoffDelay = RETRY_DELAY * Math.pow(2, retryCount - 1); // Exponential backoff
+      console.log(`Waiting ${backoffDelay}ms before retry ${retryCount}`);
+      await delay(backoffDelay);
+    }
+    
+    const response = await fetch(BROWSERLESS_URL, {
+      method: 'POST',
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: url,
+        waitFor: 1500, // Reduced wait time to 1.5s
+        gotoOptions: {
+          waitUntil: 'networkidle0',
+          timeout: SESSION_TIMEOUT
+        },
+        // Additional options to optimize for free tier
+        rejectResourceTypes: ['image', 'media', 'font', 'stylesheet'],
+        setExtraHTTPHeaders: {
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate'
+        }
+      })
+    });
+
+    if (!response.ok) {
+      if (response.status === 429 && retryCount < MAX_RETRIES) {
+        console.log(`Rate limited, attempt ${retryCount + 1} of ${MAX_RETRIES}`);
+        return scrapeWithBrowserless(url, retryCount + 1);
+      }
+      throw new Error(`Browserless request failed: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.text();
+  } catch (error) {
+    console.error(`Browserless scraping failed for ${url}:`, error);
+    if (retryCount < MAX_RETRIES && (error.message?.includes('429') || error.message?.includes('timeout'))) {
+      console.log(`Retrying after error, attempt ${retryCount + 1} of ${MAX_RETRIES}`);
+      return scrapeWithBrowserless(url, retryCount + 1);
+    }
+    throw error;
+  }
+}
+
+// Combined scraping function
+async function scrapeContent(url: string): Promise<string> {
+  try {
+    // Try simple fetch first
+    console.log(`Attempting simple fetch for ${url}`);
+    const html = await simpleFetch(url);
+    
+    // Check if we got meaningful content
+    if (html.length > 500) { // Basic check for meaningful content
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      if (doc) {
+        const mainContent = doc.querySelector('article, main, .content, .post-content, #content');
+        if (mainContent) {
+          console.log('Successfully scraped with simple fetch');
+          return html;
+        }
+      }
+    }
+    
+    console.log('Simple fetch did not get meaningful content, trying Browserless');
+    return await scrapeWithBrowserless(url);
+    
+  } catch (error) {
+    console.log('Simple fetch failed, falling back to Browserless');
+    return await scrapeWithBrowserless(url);
+  }
+}
+
 serve(async (req) => {
   // Get the origin from the request
   const origin = req.headers.get('origin');
@@ -239,27 +346,23 @@ serve(async (req) => {
     for (let i = 0; i < pagesToProcess.length; i += batchSize) {
       const batch = pagesToProcess.slice(i, i + batchSize);
       
-      // Process each page in the batch concurrently
-      const batchPromises = batch.map(async (page) => {
+      // Process each page in sequence with longer delays
+      const batchResults = [];
+      for (const page of batch) {
         try {
-          // Fetch the page content
-          console.log(`Fetching content from ${page.url}`);
-          const response = await fetch(page.url);
-          if (!response.ok) throw new Error(`Failed to fetch ${page.url}`);
-          
-          const html = await response.text();
+          // Use the combined scraping function
+          console.log(`Starting content scraping for ${page.url}`);
+          const html = await scrapeContent(page.url);
           console.log(`Received ${html.length} characters of HTML from ${page.url}`);
           
           // Extract main content - this is synchronous
           const cleanContent = extractMainContent(html);
           console.log(`Extracted content for ${page.url}: ${cleanContent.length} characters`);
           
-          // Generate content digest using OpenAI - this waits for the content to be ready
           if (cleanContent.length > 0) {
             console.log(`Starting digest generation for ${page.url} with available content`);
             let digest = '';
             try {
-              // This will wait until the digest is generated before continuing
               digest = await generateContentDigest(page.title, cleanContent);
               if (digest) {
                 console.log(`Digest generated for ${page.url} (${digest.length} chars)`);
@@ -268,19 +371,15 @@ serve(async (req) => {
               }
             } catch (digestError) {
               console.error(`Error generating digest for ${page.url}:`, digestError);
-              // Continue with empty digest
             }
             
-            // For onboarding mode, don't try to update the database since it doesn't exist yet
             if (!isOnboarding) {
-              // Update the page with the scraped content and digest
               const updateData: UpdateData = {
                 content: cleanContent,
                 last_fetched: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               };
               
-              // Only include digest if it was successfully generated
               if (digest) {
                 updateData.digest = digest;
               }
@@ -292,29 +391,42 @@ serve(async (req) => {
 
               if (updateError) {
                 console.error(`Error updating page ${page.url}:`, updateError);
-                // Continue even if update fails
               }
             }
 
             processedCount++;
-            return {
+            batchResults.push({
               ...page,
               content: cleanContent,
               digest: digest,
               last_fetched: new Date().toISOString()
-            };
+            });
           } else {
             console.error(`No content extracted for ${page.url}, skipping digest generation`);
-            return null;
+            batchResults.push(null);
           }
+          
+          // Increased delay between pages due to single concurrent browser limit
+          if (batch.length > 1) {
+            await delay(3000); // 3 second delay between pages
+          }
+          
         } catch (error) {
           console.error(`Error processing page ${page.url}:`, error);
-          return null;
+          batchResults.push(null);
+          // Still add delay even after error
+          if (batch.length > 1) {
+            await delay(3000);
+          }
         }
-      });
-
-      const batchResults = await Promise.all(batchPromises);
+      }
+      
       results.push(...(batchResults.filter(r => r !== null) as WebsiteContent[]));
+      
+      // Increased delay between batches
+      if (i + batchSize < pagesToProcess.length) {
+        await delay(5000); // 5 second delay between batches
+      }
     }
 
     return new Response(
