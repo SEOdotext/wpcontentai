@@ -1,50 +1,41 @@
 import { supabase } from '@/integrations/supabase/client';
 
+interface ChatUpdateRequest {
+  userMessage: string;
+  selectedText?: string;
+  platform?: string;
+  platformSettings?: any;
+}
+
 interface ChatUpdateResponse {
   success: boolean;
-  content?: string;
-  error?: string;
+  message?: string;
+  updatedContent?: string;
 }
 
 export const updateContentWithChat = async (
   postThemeId: string,
-  message: string,
-  currentContent: string
+  request: ChatUpdateRequest
 ): Promise<ChatUpdateResponse> => {
   try {
-    // Call the Supabase Edge Function for chat-based content updates
-    const { data, error } = await supabase.functions.invoke('chat-content-update', {
-      body: {
-        post_theme_id: postThemeId,
-        message,
-        current_content: currentContent
-      }
+    const response = await fetch(`/api/chat/update/${postThemeId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
     });
 
-    if (error) {
-      console.error('Error updating content with chat:', error);
-      return {
-        success: false,
-        error: error.message
-      };
+    if (!response.ok) {
+      throw new Error('Failed to update content');
     }
 
-    if (!data?.success) {
-      return {
-        success: false,
-        error: data?.error || 'Failed to update content'
-      };
-    }
-
-    return {
-      success: true,
-      content: data.content
-    };
+    return await response.json();
   } catch (error) {
     console.error('Error in updateContentWithChat:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'An unexpected error occurred'
+      message: 'Failed to update content',
     };
   }
 }; 

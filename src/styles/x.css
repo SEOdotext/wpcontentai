@@ -1,0 +1,145 @@
+/* X (Twitter) specific styles */
+.x-header {
+  background-color: #ffffff;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.x-logo {
+  width: 32px;
+  height: 32px;
+}
+
+/* Post styles */
+.x-post {
+  background-color: #ffffff;
+  margin: 0;
+  color: #0f1419;
+  min-height: 100%;
+}
+
+.x-post-header {
+  padding: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.x-profile-picture {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #1d9bf0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.x-profile-info {
+  flex: 1;
+}
+
+.x-profile-name {
+  font-weight: 700;
+  font-size: 15px;
+  color: #0f1419;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.x-verified {
+  color: #1d9bf0;
+}
+
+.x-username {
+  font-size: 14px;
+  color: #536471;
+}
+
+.x-post-content {
+  padding: 0 12px 12px 64px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #0f1419;
+  margin-top: -8px;
+}
+
+/* Engagement section */
+.x-engagement {
+  padding: 12px 12px 12px 64px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #536471;
+}
+
+.x-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.x-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.x-stat-number {
+  color: #536471;
+}
+
+.x-stat:hover {
+  color: #1d9bf0;
+}
+
+.x-stat:hover .x-stat-number {
+  color: #1d9bf0;
+}
+
+/* Action buttons */
+.x-actions {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 12px 8px 64px;
+  max-width: 425px;
+}
+
+.x-action-button {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  color: #536471;
+  font-size: 13px;
+  border-radius: 9999px;
+  transition: all 0.2s;
+}
+
+/* Hashtag styles */
+.x-hashtag {
+  color: #1d9bf0;
+  cursor: pointer;
+}
+
+.x-hashtag:hover {
+  text-decoration: underline;
+}
+
+/* Dark theme specific */
+.x-phone-frame {
+  background-color: #000000;
+  color: white;
+}
+
+.x-bottom-nav {
+  background-color: #000000;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+} 

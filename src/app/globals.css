@@ -1,0 +1,163 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import '../styles/instagram.css';
+
+/* Social Media Content Styles */
+.social-content {
+  @apply text-base leading-relaxed p-4 rounded-lg;
+}
+
+/* LinkedIn Style */
+.linkedin-content {
+  @apply space-y-4 bg-white border border-gray-200 p-6 font-sans;
+}
+
+.linkedin-content strong {
+  @apply font-semibold;
+}
+
+.linkedin-content div {
+  @apply text-[15px] text-gray-900 leading-relaxed;
+}
+
+.linkedin-content div:first-child {
+  @apply text-base font-medium mb-4;
+}
+
+.linkedin-content .hashtag {
+  @apply text-blue-600 hover:underline cursor-pointer font-medium;
+}
+
+/* Instagram Style */
+.instagram-container {
+  @apply max-w-[470px] mx-auto bg-white;
+}
+
+.instagram-header {
+  @apply flex items-center px-4 py-3 border-b border-gray-200;
+}
+
+.instagram-header .profile-pic {
+  @apply w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 to-pink-500 p-[2px];
+}
+
+.instagram-header .profile-pic img {
+  @apply rounded-full bg-white p-[2px];
+}
+
+.instagram-header .profile-info {
+  @apply ml-3;
+}
+
+.instagram-header .profile-name {
+  @apply text-sm font-semibold;
+}
+
+.instagram-content {
+  @apply px-4 py-3 space-y-4 font-sans;
+}
+
+.instagram-content div {
+  @apply text-[14px] leading-[18px] text-[#262626];
+}
+
+/* First paragraph special styling */
+.instagram-content div:first-child {
+  @apply mb-4;
+}
+
+/* Hashtags styling */
+.instagram-content .hashtag {
+  @apply text-[#00376B] hover:underline cursor-pointer;
+}
+
+/* Emoji styling */
+.instagram-content .emoji {
+  @apply text-base leading-none;
+}
+
+/* Instagram post footer */
+.instagram-footer {
+  @apply px-4 py-3 border-t border-gray-200;
+}
+
+.instagram-actions {
+  @apply flex items-center space-x-4 mb-2;
+}
+
+.instagram-actions button {
+  @apply p-0 hover:opacity-60;
+}
+
+/* TikTok Style */
+.tiktok-content {
+  @apply space-y-2 bg-[#121212] text-white p-4 font-sans;
+}
+
+.tiktok-content div {
+  @apply text-[16px] leading-snug;
+}
+
+.tiktok-content .hashtag {
+  @apply text-[#20F0F0] hover:opacity-80;
+}
+
+/* Facebook Style */
+.facebook-content {
+  @apply space-y-3 bg-white border border-gray-300 p-5 font-sans;
+}
+
+.facebook-content div {
+  @apply text-[15px] leading-relaxed text-gray-800;
+}
+
+.facebook-content div:first-child {
+  @apply text-base font-medium mb-3;
+}
+
+.facebook-content .hashtag {
+  @apply text-blue-600 hover:bg-blue-50 cursor-pointer;
+}
+
+/* Common social media elements */
+.social-content .emoji {
+  @apply inline-block;
+}
+
+.social-content .bullet-point {
+  @apply ml-4 my-2;
+}
+
+.social-content .numbered-point {
+  @apply ml-4 my-2;
+}
+
+/* Platform-specific containers */
+.platform-preview {
+  @apply relative;
+}
+
+.platform-preview::before {
+  @apply absolute -top-8 left-0 text-sm text-gray-500 font-medium;
+  content: attr(data-platform);
+}
+
+/* Mobile-like containers */
+.tiktok-container {
+  @apply max-w-[380px] mx-auto bg-[#121212] text-white min-h-[500px];
+}
+
+.linkedin-container {
+  @apply max-w-[550px] mx-auto bg-[#f3f2ef];
+}
+
+.facebook-container {
+  @apply max-w-[500px] mx-auto bg-[#f0f2f5];
+}
+
+/* Update the preview wrapper */
+.platform-preview[data-platform="Instagram Preview"] {
+  @apply bg-gray-50;
+} 

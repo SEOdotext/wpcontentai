@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useWebsites } from '@/context/WebsitesContext';
-import { useToast } from '@/components/ui/use-toast';
 
 // Define Json type since @/schema is not found
 type Json = string[] | number[] | boolean[] | {[key: string]: any} | string | number | boolean | null;
@@ -129,7 +128,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [weeklyPlanningDay, setWeeklyPlanningDay] = useState<string>('friday');
   const [isLoading, setIsLoading] = useState(true);
   const { currentWebsite } = useWebsites();
-  const { toast } = useToast();
 
   // Fetch settings from Supabase whenever the current website changes
   useEffect(() => {
@@ -188,21 +186,25 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setWordpressTemplate(settings.wordpress_template);
           }
           
-          // Set image prompt if it exists
-          if (settings.image_prompt) {
-            setImagePrompt(settings.image_prompt);
-          } else if (currentWebsite.image_prompt) {
-            setImagePrompt(currentWebsite.image_prompt);
-          }
-          
           // Set image model if it exists
           if (settings.image_model) {
             setImageModel(settings.image_model);
+          } else {
+            setImageModel(defaultSettings.imageModel);
+          }
+          
+          // Set image prompt if it exists
+          if (settings.image_prompt) {
+            setImagePrompt(settings.image_prompt);
+          } else {
+            setImagePrompt(defaultSettings.imagePrompt);
           }
           
           // Set negative prompt if it exists
           if (settings.negative_prompt) {
             setNegativePrompt(settings.negative_prompt);
+          } else {
+            setNegativePrompt(defaultSettings.negativePrompt);
           }
           
           // Parse and set subject matters
@@ -233,7 +235,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               writing_style: defaultSettings.writingStyle,
               subject_matters: defaultSettings.subjectMatters,
               wordpress_template: defaultSettings.wordpressTemplate,
-              image_prompt: currentWebsite.image_prompt || defaultSettings.imagePrompt,
+              image_prompt: defaultSettings.imagePrompt,
               image_model: defaultSettings.imageModel,
               negative_prompt: defaultSettings.negativePrompt,
               weekly_planning_day: defaultSettings.weeklyPlanningDay,
@@ -256,7 +258,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setWritingStyle(defaultSettings.writingStyle);
             setSubjectMatters(defaultSettings.subjectMatters);
             setWordpressTemplate(defaultSettings.wordpressTemplate);
-            setImagePrompt(currentWebsite.image_prompt || defaultSettings.imagePrompt);
+            setImagePrompt(defaultSettings.imagePrompt);
             setImageModel(defaultSettings.imageModel);
             setNegativePrompt(defaultSettings.negativePrompt);
             setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay || 'friday');
@@ -285,16 +287,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     weeklyPlanningDay?: string
   ) => {
     if (!currentWebsite) return;
-    
-    // Skip update if subjects haven't changed
-    const currentSubjects = JSON.stringify(subjectMatters);
-    const newSubjects = JSON.stringify(subjects);
-    if (currentSubjects === newSubjects) {
-      console.log('SettingsContext: Skipping update - subjects unchanged');
-      return;
-    }
 
-    console.log('SettingsContext: Saving subject matters to database:', subjects);
+    console.log('SettingsContext: Saving settings to database');
     try {
       // Check if user is authenticated
       const { data: sessionData } = await supabase.auth.getSession();
@@ -311,7 +305,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       // Ensure subjects is a clean array of strings
       const cleanSubjects = subjects.filter(s => s && s.trim().length > 0);
-      console.log("Saving subject matters to database:", cleanSubjects);
+      console.log("Saving settings with subjects:", cleanSubjects);
       
       // If we don't have a settingsId, we need to create new settings
       if (!settingsId) {
@@ -321,7 +315,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .insert({
             posting_frequency: frequency,
             writing_style: style,
-            subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
+            subject_matters: cleanSubjects,
             wordpress_template: templateToUpdate,
             image_prompt: promptToUpdate,
             image_model: modelToUpdate,
@@ -351,7 +345,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .update({
             posting_frequency: frequency,
             writing_style: style,
-            subject_matters: cleanSubjects, // Store directly as an array - Supabase will handle the JSON conversion
+            subject_matters: cleanSubjects,
             wordpress_template: templateToUpdate,
             image_prompt: promptToUpdate,
             image_model: modelToUpdate,
@@ -413,7 +407,16 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Add handler for image model
   const handleSetImageModel = (model: string) => {
     setImageModel(model);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, model, negativePrompt, weeklyPlanningDay);
+    updateSettingsInDatabase(
+      postingFrequency,
+      writingStyle,
+      subjectMatters,
+      wordpressTemplate,
+      imagePrompt,
+      model,
+      negativePrompt,
+      weeklyPlanningDay
+    );
   };
 
   // Add handler for negative prompt

@@ -1,0 +1,77 @@
+/* Shared Phone Frame */
+.social-phone-frame {
+  width: 375px;
+  min-height: 600px;
+  margin: 0 auto;
+  border-radius: 50px;
+  overflow: hidden;
+  font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  border: 15px solid #f5f5f5;
+  position: relative;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+  background-color: white;
+}
+
+/* Platform-specific background colors */
+.social-phone-frame.instagram {
+  background-color: white;
+}
+
+.social-phone-frame.linkedin {
+  background-color: white;
+}
+
+/* Instagram gradient border */
+.social-phone-frame.instagram::before {
+  content: '';
+  position: absolute;
+  top: -15px;
+  left: -15px;
+  right: -15px;
+  bottom: -15px;
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  border-radius: 60px;
+  z-index: -1;
+}
+
+/* Shared header styles */
+.social-header {
+  background-color: #ffffff;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Shared action button styles */
+.social-action-button {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.social-action-icon {
+  width: 24px;
+  height: 24px;
+  color: #262626;
+}
+
+/* Shared bottom navigation */
+.social-bottom-nav {
+  display: flex;
+  justify-content: space-around;
+  padding: 10px 0;
+  background-color: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  position: sticky;
+  bottom: 0;
+}
+
+/* Post container styles */
+.social-post-container {
+  background-color: white;
+  min-height: calc(600px - 60px); /* Account for header height */
+  padding-bottom: 60px; /* Account for bottom nav */
+} 

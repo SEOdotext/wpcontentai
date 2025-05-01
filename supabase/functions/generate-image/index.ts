@@ -5,6 +5,11 @@ interface GenerateImageParams {
   content: string;
   postId: string;
   websiteId: string;
+  imageSettings?: {
+    prompt?: string;
+    model?: string;
+    negativePrompt?: string;
+  };
 }
 
 // Get allowed origins from environment variables
@@ -26,29 +31,6 @@ function isAllowedOrigin(origin: string | null): boolean {
     : ALLOWED_ORIGINS.staging;
     
   return allowedOrigins.includes(origin);
-}
-
-// Function to create a safe prompt that won't exceed OpenAI's limits
-function createSafePrompt(content: string): string {
-  // Extract a title if possible (first line or first sentence)
-  let title = '';
-  if (content.includes('\n')) {
-    title = content.split('\n')[0].trim();
-  } else if (content.includes('.')) {
-    title = content.split('.')[0].trim() + '.';
-  } else {
-    title = content.substring(0, Math.min(100, content.length));
-  }
-  
-  // Create a shortened summary - limit to safe character count
-  // OpenAI limit is 4000, but we'll use much less to be safe
-  const MAX_PROMPT_LENGTH = 1500;
-  
-  // Only use the title for the prompt
-  let safeContent = title;
-  
-  // Add business context and make it more professional
-  return `Create a professional business blog header image that represents business growth and success. The image should be clean, modern, and suitable for a corporate website. Theme: ${safeContent}`;
 }
 
 // Helper to add timeout to fetch requests
@@ -88,7 +70,7 @@ serve(async (req) => {
 
   try {
     // Get the request body
-    const { content, postId, websiteId } = await req.json() as GenerateImageParams;
+    const { content, postId, websiteId, imageSettings } = await req.json() as GenerateImageParams;
 
     if (!content || !postId || !websiteId) {
       throw new Error('Missing required fields');
@@ -106,21 +88,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Verify that the post_themes record exists
-    const { data: postTheme, error: postThemeError } = await supabaseClient
-      .from('post_themes')
-      .select('id')
-      .eq('id', postId)
-      .single();
-      
-    if (postThemeError || !postTheme) {
-      throw new Error(`Post theme record not found: ${postThemeError?.message || 'No record with ID ' + postId}`);
-    }
-
-    // Check if AI image generation is enabled for the website
+    // Get website settings to check if AI image generation is enabled
     const { data: website, error: websiteError } = await supabaseClient
       .from('websites')
-      .select('enable_ai_image_generation, image_prompt')
+      .select('enable_ai_image_generation')
       .eq('id', websiteId)
       .single();
 
@@ -132,53 +103,48 @@ serve(async (req) => {
       throw new Error('AI image generation is not enabled for this website');
     }
 
-    // Get publication settings to check for image model and other settings
-    const { data: pubSettings, error: pubSettingsError } = await supabaseClient
-      .from('publication_settings')
-      .select('image_prompt, image_model, negative_prompt')
-      .eq('website_id', websiteId)
+    // Get post theme content
+    const { data: postTheme, error: postThemeError } = await supabaseClient
+      .from('post_themes')
+      .select('id, subject_matter, post_content')
+      .eq('id', postId)
       .single();
-
-    if (pubSettingsError) {
-      console.log('Error fetching publication settings:', pubSettingsError.message);
-      // Continue with default settings if there's an error
+      
+    if (postThemeError || !postTheme) {
+      throw new Error(`Post theme record not found: ${postThemeError?.message || 'No record with ID ' + postId}`);
     }
 
-    // Determine which model to use, defaulting to DALL-E if not specified
-    const imageModel = pubSettings?.image_model || 'dalle';
+    if (!postTheme.subject_matter || !postTheme.post_content) {
+      throw new Error('Post theme is missing required content (subject_matter or post_content)');
+    }
+
+    // Use the image settings from the request, or fall back to defaults
+    const imageModel = imageSettings?.model || 'dalle';
     console.log('Using image model:', imageModel);
 
     // Get negative prompt if using Stable Diffusion
-    const negativePrompt = imageModel === 'stable-diffusion' ? (pubSettings?.negative_prompt || '') : '';
+    const negativePrompt = imageModel === 'stable-diffusion' ? (imageSettings?.negativePrompt || '') : '';
     if (imageModel === 'stable-diffusion' && negativePrompt) {
       console.log('Using negative prompt for Stable Diffusion');
     }
 
-    // Create a safe prompt that won't exceed API limits
-    const safePrompt = createSafePrompt(content);
-    console.log('Generated safe prompt, length:', safePrompt.length);
-
-    // Apply custom prompt template if available
-    let finalPrompt = safePrompt;
-    if (pubSettings?.image_prompt || website.image_prompt) {
-      try {
-        // Extract the main topic to use in the custom prompt
-        const mainTopic = content.split('\n')[0] || content.substring(0, 50);
-        const promptTemplate = pubSettings?.image_prompt || website.image_prompt;
-        finalPrompt = promptTemplate
-          .replace('{content}', mainTopic)  // Only use the title/main topic
-          .replace('{title}', mainTopic);
-          
-        // Ensure the prompt doesn't exceed the limit
-        if (finalPrompt.length > 4000) {
-          finalPrompt = finalPrompt.substring(0, 3900) + '...';
-        }
-        
-        console.log('Using custom prompt template, length:', finalPrompt.length);
-      } catch (promptError) {
-        console.error('Error applying custom prompt, using default:', promptError);
-      }
+    // Get the prompt template from settings, or use a default
+    const promptTemplate = imageSettings?.prompt || 'Create a modern, professional image that represents: {title}. Context: {content}';
+    
+    // Create the final prompt by replacing placeholders with actual content
+    let finalPrompt = promptTemplate
+      .replace('{content}', postTheme.post_content)
+      .replace('{title}', postTheme.subject_matter);
+    
+    // Ensure the prompt doesn't exceed the limit
+    const MAX_PROMPT_LENGTH = 4000;
+    if (finalPrompt.length > MAX_PROMPT_LENGTH) {
+      finalPrompt = finalPrompt.substring(0, MAX_PROMPT_LENGTH - 3) + '...';
     }
+    
+    console.log('Using prompt template:', promptTemplate);
+    console.log('Final prompt:', finalPrompt);
+    console.log('Prompt length:', finalPrompt.length);
 
     let imageBlob: Blob;
     let imageFormat = 'image/png'; // Default format

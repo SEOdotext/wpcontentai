@@ -46,6 +46,7 @@ interface ContentViewProps {
   onDeleteClick?: () => void;
   onRegenerateClick?: () => void;
   onGenerateImage?: () => void;
+  onDeleteImage?: () => void;
   onSendToWordPress?: () => void;
   onGenerateAndPublish?: () => void;
   isGeneratingContent?: boolean;
@@ -72,6 +73,7 @@ const ContentView: React.FC<ContentViewProps> = ({
   onDeleteClick,
   onRegenerateClick,
   onGenerateImage,
+  onDeleteImage,
   onSendToWordPress,
   onGenerateAndPublish,
   isGeneratingContent = false,
@@ -85,7 +87,7 @@ const ContentView: React.FC<ContentViewProps> = ({
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const hasContent = !!content;
   const formattedWpSentDate = wpSentDate ? new Date(wpSentDate).toLocaleString() : null;
-  const shouldShowWpLink = wpSentDate && (wpPostUrl || status === 'published');
+  const shouldShowWpLink = wpPostUrl;
   const alreadySentToWP = status === 'published' && !!wpSentDate;
   const safeKeywords = Array.isArray(keywords) ? keywords : [];
   const safeCategories = Array.isArray(categories) ? categories : [];
@@ -128,6 +130,13 @@ const ContentView: React.FC<ContentViewProps> = ({
         console.log('Content updated:', newContent);
       }}
       postThemeId={postThemeId}
+      wp_post_url={wpPostUrl}
+      preview_image_url={preview_image_url}
+      onRegenerateImage={onGenerateImage}
+      onDeleteImage={onDeleteImage}
+      isGeneratingImage={isGeneratingImage}
+      onGenerateAndPublish={onGenerateAndPublish}
+      isGeneratingAndPublishing={isGeneratingAndPublishing}
     />
   );
 };

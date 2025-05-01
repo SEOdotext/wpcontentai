@@ -11,11 +11,12 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { useWordPress } from '@/context/WordPressContext';
 import { usePostThemes } from '@/context/PostThemesContext';
 import { toast } from 'sonner';
-import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap, Link, HelpCircle, Pencil, Sparkles, RefreshCw, Wand2, Trash2, Upload, ExternalLink } from 'lucide-react';
+import { X, Plus, Loader2, Globe, Link2Off, ArrowRight, Key, Zap, Link, HelpCircle, Pencil, Sparkles, RefreshCw, Wand2, Trash2, Upload, ExternalLink, Share2 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { ImportLimitsSettings } from '@/components/ImportLimitsSettings';
+import { SocialMediaSettings } from '@/components/AccountMenu/SocialMediaSettings';
 import {
   Dialog,
   DialogContent,
@@ -181,6 +182,7 @@ const Settings = () => {
     setWeeklyPlanningDay: setContextWeeklyPlanningDay,
     updateSettingsInDatabase 
   } = useSettings();
+  const [isSocialMediaEnabled, setIsSocialMediaEnabled] = useState(false);
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -1543,6 +1545,13 @@ const Settings = () => {
     }
   }, [currentWebsite]);
 
+  // Effect to initialize social media enabled state
+  useEffect(() => {
+    if (currentWebsite) {
+      setIsSocialMediaEnabled(currentWebsite.enable_some || false);
+    }
+  }, [currentWebsite]);
+
   // Update WordPress publish status
   const updateWordPressPublishStatus = async (status: string) => {
     if (!currentWebsite) {
@@ -2583,14 +2592,16 @@ const Settings = () => {
                               </span>
                             </Label>
                             <Select 
-                              value={imageModel} 
+                              value={imageModel || 'dalle'} 
                               onValueChange={(value) => {
                                 setImageModel(value);
                                 toast.success(`Image model updated to ${value === 'dalle' ? 'DALL-E' : 'Stable Diffusion'}`);
                               }}
                             >
                               <SelectTrigger id="image-model">
-                                <SelectValue placeholder="Select image generation model" />
+                                <SelectValue placeholder="Select image generation model">
+                                  {imageModel === 'dalle' ? 'DALL-E' : 'Stable Diffusion'}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="dalle">DALL-E</SelectItem>
@@ -2609,10 +2620,22 @@ const Settings = () => {
                             <Input
                               id="image-prompt"
                               type="text"
-                              defaultValue={imagePrompt}
-                              onBlur={async (e) => {
+                              value={imagePrompt}
+                              onChange={(e) => {
+                                setImagePrompt(e.target.value);
+                              }}
+                              onBlur={async () => {
                                 try {
-                                  setImagePrompt(e.target.value);
+                                  await updateSettingsInDatabase(
+                                    postingFrequency,
+                                    writingStyle,
+                                    subjectMatters,
+                                    wordpressTemplate,
+                                    imagePrompt,
+                                    imageModel,
+                                    negativePrompt,
+                                    weeklyPlanningDay
+                                  );
                                   toast.success("Image generation prompt updated");
                                 } catch (error) {
                                   console.error('Failed to update image prompt:', error);
@@ -2667,6 +2690,53 @@ const Settings = () => {
                               )}
                             </ul>
                           </div>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Add Social Media Card */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Social Media</CardTitle>
+                    <CardDescription>
+                      Configure social media platforms for content distribution
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label>Enable Social Media Integration</Label>
+                          <p className="text-sm text-muted-foreground">
+                            Automatically share your content across social media platforms
+                          </p>
+                        </div>
+                        <Switch
+                          checked={currentWebsite?.enable_some || false}
+                          onCheckedChange={async (checked) => {
+                            if (!currentWebsite) {
+                              toast.error("Please select a website first");
+                              return;
+                            }
+                            try {
+                              await updateWebsite(currentWebsite.id, {
+                                enable_some: checked
+                              });
+                              setIsSocialMediaEnabled(checked);
+                              toast.success(checked ? "Social media integration enabled" : "Social media integration disabled");
+                            } catch (error) {
+                              console.error('Failed to update social media setting:', error);
+                              toast.error('Failed to update social media setting');
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {currentWebsite?.enable_some && (
+                        <div className="mt-6">
+                          <SocialMediaSettings />
                         </div>
                       )}
                     </div>

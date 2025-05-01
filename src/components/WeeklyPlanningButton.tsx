@@ -4,6 +4,7 @@ import { Calendar, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { createClient } from '@supabase/supabase-js';
 import { useWebsites } from '@/context/WebsitesContext';
+import { toast } from 'sonner';
 import { usePostThemes } from '@/context/PostThemesContext';
 
 const WeeklyPlanningButton: React.FC = () => {
