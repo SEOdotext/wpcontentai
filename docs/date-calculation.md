@@ -14,6 +14,24 @@ This document explains the centralized approach to date calculation in the Conte
 
 4. **No custom date calculation**: Components should not implement their own date calculation logic or maintain separate state for future dates.
 
+5. Make sure that there are 5 dates calculated (with number of posts) so the frontend knows which days the next 5 posts are scheduled for. 
+
+---
+
+Date Handling for Pending Posts:
+Pending posts now only show calculated dates in the frontend
+These dates are calculated dynamically using getNextPublicationDate()
+No dates are stored in the database for pending posts
+The frontend updates these display dates whenever the post list changes
+Date Handling for Approved Posts:
+When a post is approved, it gets a fixed date in the database
+This date is calculated using getNextPublicationDate()
+Once set, this date remains unchanged unless manually modified
+The date is stored in the database
+
+
+---
+
 ## Implementation
 
 The centralized date logic was implemented to fix issues where competing functions were calculating dates in different ways. The changes:
@@ -37,3 +55,28 @@ Future improvements might include:
 1. Adding more robust date validation
 2. Implementing a more sophisticated scheduling algorithm
 3. Adding user-configurable options for date calculation 
+
+
+
+----
+
+
+On the /create
+
+Date settings
+
+These dates should just be the same and only set in the frontend with the logic from the file! 
+
+For example, user has 7 posts pr. week. 1 monday, 2 tuesday, 1 wed, 2 thur, 1 friday
+Today is tuesday and 1 has been set to today. Then post 1 more today. Then schedule a post on wed and 2 on thur. etc. 
+
+The dates in the frontend can still be updated by the user.
+
+When the user likes the post, the date is unchanged for that post as it changes status. (Given that the database already has the correct date. The post theme entry in the database should have the date with date set as the post is the approved)
+
+getNextPublicationDate is the main function used for the calculation. 
+
+---
+
+FALLBACK
+With no content in Content calendar. Make sure that it takes the content calendar added posts. If none are added. Defaults back to todays date 

@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useWebsites } from './WebsitesContext';
 import { useSettings } from './SettingsContext';
 import { addDays, format } from 'date-fns';
-import { createDayCountMap, createExistingPostsMap, findNextAvailableDate, formatScheduledDate } from '@/utils/dates';
+import { createDayCountMap, createExistingPostsMap, findNextAvailableDate, formatScheduledDate, isWeeklyScheduleFilled } from '@/utils/dates';
 
 /**
  * IMPORTANT: Centralized Date Calculation
@@ -35,6 +35,8 @@ interface PostThemeRow {
   wp_post_url: string | null;
   wp_sent_date: string | null;
   image_generation_error?: string | null;
+  // Add categories relation
+  categories?: WordPressCategory[];
 }
 
 interface WordPressCategory {
@@ -57,7 +59,7 @@ export interface PostTheme {
   wp_post_url: string | null;
   wp_sent_date: string | null;
   image_generation_error?: string | null;
-  categories: { id: string; name: string }[];
+  categories: WordPressCategory[];
 }
 
 interface PublicationSettings {
@@ -72,6 +74,14 @@ interface PublicationSettings {
   updated_at: string;
 }
 
+interface PostThemeCategoryResponse {
+  post_theme_id: string;
+  wordpress_category: {
+    id: string;
+    name: string;
+  } | null;
+}
+
 interface PostThemesContextType {
   postThemes: PostTheme[];
   isLoading: boolean;
@@ -84,6 +94,7 @@ interface PostThemesContextType {
   sendToWordPress: (id: string) => Promise<boolean>;
   isGeneratingContent: (id: string) => boolean;
   getNextPublicationDate: () => Promise<Date>;
+  checkWeeklySchedule: () => Promise<{ isFilled: boolean; missingSlots: { date: Date; count: number }[] }>;
   setPostThemes: React.Dispatch<React.SetStateAction<PostTheme[]>>;
 }
 
@@ -99,6 +110,7 @@ const PostThemesContext = createContext<PostThemesContextType>({
   sendToWordPress: async () => false,
   isGeneratingContent: () => false,
   getNextPublicationDate: async () => new Date(),
+  checkWeeklySchedule: async () => ({ isFilled: false, missingSlots: [] }),
   setPostThemes: () => {},
 });
 
@@ -117,14 +129,31 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, [currentWebsite?.id]);
 
+  // Helper function to count posts for a specific date
+  const countPostsForDate = (posts: PostTheme[], dateStr: string): number => {
+    return posts.filter(post => {
+      if (!post.scheduled_date) return false;
+      try {
+        const postDate = format(new Date(post.scheduled_date), 'yyyy-MM-dd');
+        return postDate === dateStr && post.status !== 'declined' && post.status !== 'pending';
+      } catch (e) {
+        console.error('Error parsing date in countPostsForDate:', e, post);
+        return false;
+      }
+    }).length;
+  };
+
   // Function to get the next publication date
   const getNextPublicationDate = useCallback(async () => {
     if (!currentWebsite) {
       console.log('No current website selected');
-      return addDays(new Date(), 1);
+      return new Date(); // Default to today if no website
     }
 
     try {
+      // First check content calendar for existing posts
+      const existingPostsByDate = createExistingPostsMap(postThemes);
+      
       // Get publication settings
       const { data: settings, error: settingsError } = await supabase
         .from('publication_settings')
@@ -135,23 +164,79 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
 
       if (settingsError) {
         console.error('Error fetching publication settings:', settingsError);
-        return addDays(new Date(), 1);
+        return new Date(); // Default to today on error
       }
 
-      if (!settings || settings.length === 0 || !settings[0].posting_days || settings[0].posting_days.length === 0) {
-        console.log('No publication settings found, using default (tomorrow)');
-        return addDays(new Date(), 1);
-      }
+      // Create day count map from settings if available
+      const dayCountMap = settings?.[0]?.posting_days?.length > 0 
+        ? createDayCountMap(settings[0].posting_days)
+        : { monday: 1, wednesday: 1, friday: 1 }; // Default schedule if no settings
 
-      const dayCountMap = createDayCountMap(settings[0].posting_days);
       console.log('Day count map:', dayCountMap);
 
-      const existingPostsByDate = createExistingPostsMap(postThemes);
-      return findNextAvailableDate(dayCountMap, postThemes, existingPostsByDate);
+      // Get all active posts (not pending or declined)
+      const activePosts = postThemes.filter(p => 
+        p.scheduled_date && 
+        p.status !== 'declined' && 
+        p.status !== 'pending'
+      );
+
+      // Find the latest scheduled date from active posts
+      let currentDate = new Date();
+      if (activePosts.length > 0) {
+        const latestDate = new Date(Math.max(
+          ...activePosts
+            .map(p => new Date(p.scheduled_date || 0).getTime())
+            .filter(time => !isNaN(time))
+        ));
+        
+        // If latest date is valid and in the future, use it as starting point
+        if (!isNaN(latestDate.getTime()) && latestDate > currentDate) {
+          currentDate = latestDate;
+        }
+      }
+
+      // Set to start of day for consistent comparison
+      currentDate.setHours(0, 0, 0, 0);
+      
+      // Look for next available slot
+      let maxAttempts = 28; // 4 weeks safety limit
+      while (maxAttempts > 0) {
+        const dayName = format(currentDate, 'EEEE').toLowerCase();
+        const dateStr = format(currentDate, 'yyyy-MM-dd');
+        const existingPostsForDay = countPostsForDate(postThemes, dateStr);
+
+        console.log('Checking date:', {
+          date: dateStr,
+          dayName,
+          isPostingDay: !!dayCountMap[dayName],
+          existingPostsForDay,
+          maxPostsForDay: dayCountMap[dayName],
+          activeStatuses: postThemes
+            .filter(p => p.scheduled_date && format(new Date(p.scheduled_date), 'yyyy-MM-dd') === dateStr)
+            .map(p => p.status)
+        });
+
+        if (dayCountMap[dayName] && existingPostsForDay < dayCountMap[dayName]) {
+          console.log(`Found available slot on ${dayName}, ${dateStr}`);
+          return currentDate;
+        }
+
+        currentDate = addDays(currentDate, 1);
+        maxAttempts--;
+      }
+
+      // If no suitable date found within 4 weeks, default to tomorrow
+      const tomorrow = addDays(new Date(), 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      return tomorrow;
 
     } catch (error) {
       console.error('Error calculating next publication date:', error);
-      return addDays(new Date(), 1);
+      // Default to tomorrow on error
+      const tomorrow = addDays(new Date(), 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      return tomorrow;
     }
   }, [currentWebsite, postThemes]);
 
@@ -193,7 +278,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
 
       // Process themes in chunks to avoid URL length limits
       const CHUNK_SIZE = 50;
-      const categoriesByTheme = new Map<string, Array<{ id: string; name: string }>>();
+      const categoriesByTheme = new Map<string, WordPressCategory[]>();
       
       for (let i = 0; i < themes.length; i += CHUNK_SIZE) {
         const chunk = themes.slice(i, i + CHUNK_SIZE);
@@ -208,7 +293,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
               name
             )
           `)
-          .in('post_theme_id', themeIds);
+          .in('post_theme_id', themeIds) as { data: PostThemeCategoryResponse[] | null, error: any };
 
         if (categoriesError) {
           console.error('Error fetching categories:', categoriesError);
@@ -221,10 +306,13 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
               categoriesByTheme.set(cat.post_theme_id, []);
             }
             if (cat.wordpress_category) {
-              categoriesByTheme.get(cat.post_theme_id)?.push({
-                id: cat.wordpress_category.id,
-                name: cat.wordpress_category.name
-              });
+              const categoryArray = categoriesByTheme.get(cat.post_theme_id);
+              if (categoryArray) {
+                categoryArray.push({
+                  id: cat.wordpress_category.id,
+                  name: cat.wordpress_category.name
+                });
+              }
             }
           });
         }
@@ -649,6 +737,39 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     setError(err instanceof Error ? err : new Error(message));
   };
 
+  // Function to check weekly schedule status
+  const checkWeeklySchedule = useCallback(async () => {
+    if (!currentWebsite) {
+      console.log('No current website selected');
+      return { isFilled: false, missingSlots: [] };
+    }
+
+    try {
+      // Get publication settings
+      const { data: settings, error: settingsError } = await supabase
+        .from('publication_settings')
+        .select('*')
+        .eq('website_id', currentWebsite.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (settingsError) {
+        console.error('Error fetching publication settings:', settingsError);
+        return { isFilled: false, missingSlots: [] };
+      }
+
+      // Create day count map from settings if available
+      const dayCountMap = settings?.[0]?.posting_days?.length > 0 
+        ? createDayCountMap(settings[0].posting_days)
+        : { monday: 1, wednesday: 1, friday: 1 }; // Default schedule if no settings
+
+      return isWeeklyScheduleFilled(dayCountMap, postThemes);
+    } catch (error) {
+      console.error('Error checking weekly schedule:', error);
+      return { isFilled: false, missingSlots: [] };
+    }
+  }, [currentWebsite, postThemes]);
+
   // Create the context value
   const contextValue: PostThemesContextType = {
     postThemes,
@@ -662,6 +783,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     sendToWordPress,
     isGeneratingContent,
     getNextPublicationDate,
+    checkWeeklySchedule,
     setPostThemes
   };
 

@@ -96,7 +96,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   const [viewMode, setViewMode] = useState<'pending' | 'approved' | 'published'>('pending');
   const generationAttemptedRef = useRef(false);
   const isMountedRef = useRef(true);
-  const { publicationFrequency, subjectMatters, writingStyle } = useSettings();
+  const { subjectMatters, writingStyle } = useSettings();
   const { currentWebsite } = useWebsites();
   const { 
     postThemes, 
@@ -470,65 +470,30 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     setPostThemes(prev => prev.filter(theme => theme.id !== id));
   }, [setPostThemes]);
 
-  // Update handleTitleLiked to use getNextPublicationDate
+  // Update handleTitleLiked to only handle status change
   const handleTitleLiked = async (id: string) => {
     try {
-      // Get the current post's date before updating
+      // Get the current post
       const postToUpdate = postThemes.find(theme => theme.id === id);
       if (!postToUpdate) return;
 
-      // Validate the date
-      let approvedDate;
-      try {
-        if (!postToUpdate.scheduled_date) {
-          // If no date is set, use getNextPublicationDate
-          const nextDate = await getNextPublicationDate();
-          console.log('No date set for approved post, using calculated next date:', nextDate);
-          approvedDate = nextDate;
-        } else {
-          approvedDate = new Date(postToUpdate.scheduled_date);
-          const timestamp = approvedDate.getTime();
-          const minValidTimestamp = new Date('2020-01-01').getTime();
-          
-          // If we have an invalid or too old date, use calculated date instead
-          if (isNaN(timestamp) || timestamp < minValidTimestamp) {
-            const nextDate = await getNextPublicationDate();
-            console.warn('Found invalid date in approved post, using calculated next date:', postToUpdate.scheduled_date, nextDate);
-            approvedDate = nextDate;
-          }
-        }
-      } catch (e) {
-        console.error('Error parsing date in handleTitleLiked:', e);
-        approvedDate = await getNextPublicationDate();
-      }
-
-      // Update the liked post's status to approved while keeping its date
+      // Update just the status - the date is handled in TitleSuggestion component
       const success = await updatePostTheme(id, {
-        status: 'approved',
-        scheduled_date: approvedDate.toISOString()
+        status: 'approved'
       });
 
-      if (!success) throw new Error('Failed to update post theme');
-
-      // Get all pending posts except the one being approved
-      const pendingThemes = postThemes.filter(theme => 
-        theme.status === 'pending' && theme.id !== id
-      );
-
-      // Update each pending post's date using the context function
-      for (const theme of pendingThemes) {
-        const nextDate = await getNextPublicationDate();
-        await updatePostTheme(theme.id, {
-          scheduled_date: nextDate.toISOString(),
-          status: 'pending'
-        }, false); // Don't show toast for each update
+      if (!success) {
+        throw new Error('Failed to update post theme');
       }
 
-      // Refresh post themes to get all the latest data
+      // Refresh post themes to get the latest data
       await fetchPostThemes();
+
     } catch (error) {
       console.error('Error updating post status:', error);
       toast.error('Failed to update post status');
+      // Refresh post themes to ensure state is consistent
+      await fetchPostThemes();
     }
   };
 

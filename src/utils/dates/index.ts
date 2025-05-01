@@ -1,7 +1,7 @@
-import { addDays, format } from 'date-fns';
+import { addDays, format, startOfDay, endOfDay, isSameDay } from 'date-fns';
 import { PostTheme } from '@/context/PostThemesContext';
 
-interface PostingDay {
+export interface PostingDay {
   day: string;
   count: number;
 }
@@ -55,63 +55,56 @@ export function findLatestScheduledDate(posts: PostTheme[]): Date {
 
 /**
  * Finds the next available publication date based on posting configuration
- * Starts looking from either today or the latest scheduled date, whichever is later
  */
 export function findNextAvailableDate(
   dayCountMap: { [key: string]: number },
   posts: PostTheme[],
   existingPostsByDate: Map<string, PostTheme>
 ): Date {
-  // Start from either today or the latest scheduled date, whichever is later
+  // First check content calendar for any active posts
+  const calendarPosts = posts.filter(p => 
+    p.scheduled_date && 
+    p.status !== 'declined' && 
+    p.status !== 'pending'
+  );
+
+  // If we have calendar posts, use them to determine next date
+  if (calendarPosts.length > 0) {
+    const latestScheduled = findLatestScheduledDate(calendarPosts);
+    let currentDate = latestScheduled;
+    let maxAttempts = 28; // 4 weeks safety limit
+
+    while (maxAttempts > 0) {
+      const dayName = format(currentDate, 'EEEE').toLowerCase();
+      const dateStr = format(currentDate, 'yyyy-MM-dd');
+      const existingPostsForDay = countPostsForDate(posts, dateStr);
+
+      console.log('Checking date:', {
+        date: dateStr,
+        dayName,
+        isPostingDay: !!dayCountMap[dayName],
+        existingPostsForDay,
+        maxPostsForDay: dayCountMap[dayName],
+        activeStatuses: posts
+          .filter(p => p.scheduled_date && format(new Date(p.scheduled_date), 'yyyy-MM-dd') === dateStr)
+          .map(p => p.status)
+      });
+
+      if (dayCountMap[dayName] && existingPostsForDay < dayCountMap[dayName]) {
+        console.log(`Found available slot on ${dayName}, ${dateStr}`);
+        return currentDate;
+      }
+
+      currentDate = addDays(currentDate, 1);
+      maxAttempts--;
+    }
+  }
+
+  // FALLBACK: No posts in calendar or no suitable date found
+  // Default to today as specified in documentation
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const latestScheduled = findLatestScheduledDate(posts);
-  let currentDate = latestScheduled > today ? addDays(latestScheduled, 1) : today;
-  let maxAttempts = 28; // 4 weeks safety limit
-
-  while (maxAttempts > 0) {
-    const dayName = format(currentDate, 'EEEE').toLowerCase();
-    const dateStr = format(currentDate, 'yyyy-MM-dd');
-
-    // Check if we already have a post for this date
-    const existingPost = existingPostsByDate.get(dateStr);
-    const existingPostsForDay = countPostsForDate(posts, dateStr);
-
-    console.log('Checking date:', {
-      date: dateStr,
-      dayName,
-      isPostingDay: !!dayCountMap[dayName],
-      hasExistingPost: !!existingPost,
-      existingPostsForDay,
-      maxPostsForDay: dayCountMap[dayName],
-      activeStatuses: posts
-        .filter(p => p.scheduled_date && format(new Date(p.scheduled_date), 'yyyy-MM-dd') === dateStr)
-        .map(p => p.status)
-    });
-
-    // Only add date if:
-    // 1. It's a posting day
-    // 2. We haven't reached the max posts for this day
-    // 3. We don't already have a post for this exact date
-    if (dayCountMap[dayName] && 
-        existingPostsForDay < dayCountMap[dayName] && 
-        !existingPost) {
-      console.log(`Found available slot on ${dayName}, ${dateStr}`);
-      return currentDate;
-    }
-
-    // Move to next day
-    currentDate = addDays(currentDate, 1);
-    maxAttempts--;
-  }
-
-  // If no date found after 4 weeks, use next available configured day
-  console.log('No optimal day found, using next available configured day');
-  let nextDate = latestScheduled > today ? addDays(latestScheduled, 1) : today;
-  while (!dayCountMap[format(nextDate, 'EEEE').toLowerCase()]) {
-    nextDate = addDays(nextDate, 1);
-  }
-  return nextDate;
+  return today;
 }
 
 /**
@@ -122,4 +115,48 @@ export function formatScheduledDate(date: Date | string | null): string | null {
   const dateObj = new Date(date);
   dateObj.setHours(0, 0, 0, 0);
   return dateObj.toISOString();
+}
+
+/**
+ * Checks if all required posts for the next week are already scheduled
+ */
+export function isWeeklyScheduleFilled(
+  dayCountMap: { [key: string]: number },
+  posts: PostTheme[],
+  startDate: Date = new Date()
+): { isFilled: boolean; missingSlots: { date: Date; count: number }[] } {
+  const start = startOfDay(startDate);
+  const missingSlots: { date: Date; count: number }[] = [];
+  let totalRequired = 0;
+  let totalScheduled = 0;
+
+  // Check next 7 days
+  for (let i = 0; i < 7; i++) {
+    const currentDate = addDays(start, i);
+    const dayName = format(currentDate, 'EEEE').toLowerCase();
+    const requiredPosts = dayCountMap[dayName] || 0;
+    totalRequired += requiredPosts;
+
+    // Count scheduled posts for this day
+    const scheduledPosts = posts.filter(p => {
+      if (!p.scheduled_date || p.status === 'declined' || p.status === 'pending') return false;
+      const postDate = new Date(p.scheduled_date);
+      return isSameDay(postDate, currentDate);
+    }).length;
+
+    totalScheduled += scheduledPosts;
+
+    // If we have fewer posts than required for this day, record it
+    if (scheduledPosts < requiredPosts) {
+      missingSlots.push({
+        date: currentDate,
+        count: requiredPosts - scheduledPosts
+      });
+    }
+  }
+
+  return {
+    isFilled: totalScheduled >= totalRequired && missingSlots.length === 0,
+    missingSlots
+  };
 } 

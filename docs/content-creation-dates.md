@@ -7,15 +7,17 @@ posting_frequency
 ## Overview
 The date setting in content creation follows a specific pattern to ensure consistent content scheduling:
 
-1. When new content is generated:
-   - The first post gets the next available publication date
-   - Each subsequent post is scheduled one day after the previous post
-   - This ensures even distribution of content
+
+1. When new content is generated: Pending Posts:
+   - Pending posts should NOT have dates stored in the database
+   - Their dates should be calculated and displayed dynamically in the frontend
+   - The posts gets the next available publication date
+   - Ensures even distribution of content
 
 2. When a post is approved (liked):
-   - The approved post keeps its scheduled date
-   - All other pending posts are shifted one day forward
-   - This maintains the one-day spacing between posts
+   - The approved post keeps its scheduled date from the frontend
+   - All other pending posts are shifted according to schedule
+   - This maintains the correct spacing between posts
 
 ## Implementation Details
 

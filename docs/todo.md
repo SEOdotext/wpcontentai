@@ -201,3 +201,9 @@ Transfer website between organisations
 - Create a button in the bottom of the website settings for "transfer website" 
 
 Make the logo clickable to the /dashboard if logged in and to the front page if not logged in. 
+
+
+---
+
+
+When hitting the "Plan Weekly Content", in the frontend dashboard, I want to make sure that right now the function seems to do something, but I don't really see any result from it. 
