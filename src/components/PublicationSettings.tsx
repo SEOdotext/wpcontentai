@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { useSettings } from '../context/SettingsContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { toast } from 'sonner';
 
 interface PublicationSettingsProps {
   initialFrequency?: number;
@@ -42,7 +43,6 @@ export function PublicationSettings({
   const [isSaving, setIsSaving] = useState(false);
   const [showWeekends, setShowWeekends] = useState(false);
   const [localWeeklyPlanningDay, setLocalWeeklyPlanningDay] = useState(initialWeeklyPlanningDay);
-  const { toast } = useToast();
 
   // Update state when props change
   useEffect(() => {

@@ -1001,16 +1001,6 @@
   },
   {
     "section": "columns_and_checks",
-    "identifier": "websites.image_prompt",
-    "detail_1": "text",
-    "detail_2": null,
-    "detail_3": null,
-    "detail_4": null,
-    "detail_5": null,
-    "detail_6": null
-  },
-  {
-    "section": "columns_and_checks",
     "identifier": "websites.page_import_limit",
     "detail_1": "integer",
     "detail_2": null,
@@ -1343,6 +1333,16 @@
     "section": "columns_and_checks",
     "identifier": "some_posts.status",
     "detail_1": "USER-DEFINED",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "some_posts.post_link",
+    "detail_1": "text",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -5626,7 +5626,7 @@
     "detail_2": "some_posts_platform_check",
     "detail_3": "some_posts",
     "detail_4": "platform",
-    "detail_5": "((platform = ANY (ARRAY['linkedin'::social_media_platform, 'instagram'::social_media_platform, 'tiktok'::social_media_platform, 'facebook'::social_media_platform])))",
+    "detail_5": "((platform = ANY (ARRAY['linkedin'::social_media_platform, 'instagram'::social_media_platform, 'tiktok'::social_media_platform, 'facebook'::social_media_platform, 'x'::social_media_platform])))",
     "detail_6": null
   },
   {

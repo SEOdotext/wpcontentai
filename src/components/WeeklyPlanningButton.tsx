@@ -4,6 +4,7 @@ import { Calendar } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { createClient } from '@supabase/supabase-js';
 import { useWebsites } from '@/context/WebsitesContext';
+import { toast } from 'sonner';
 
 const WeeklyPlanningButton: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);

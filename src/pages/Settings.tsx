@@ -2592,14 +2592,16 @@ const Settings = () => {
                               </span>
                             </Label>
                             <Select 
-                              value={imageModel} 
+                              value={imageModel || 'dalle'} 
                               onValueChange={(value) => {
                                 setImageModel(value);
                                 toast.success(`Image model updated to ${value === 'dalle' ? 'DALL-E' : 'Stable Diffusion'}`);
                               }}
                             >
                               <SelectTrigger id="image-model">
-                                <SelectValue placeholder="Select image generation model" />
+                                <SelectValue placeholder="Select image generation model">
+                                  {imageModel === 'dalle' ? 'DALL-E' : 'Stable Diffusion'}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="dalle">DALL-E</SelectItem>
@@ -2618,10 +2620,22 @@ const Settings = () => {
                             <Input
                               id="image-prompt"
                               type="text"
-                              defaultValue={imagePrompt}
-                              onBlur={async (e) => {
+                              value={imagePrompt}
+                              onChange={(e) => {
+                                setImagePrompt(e.target.value);
+                              }}
+                              onBlur={async () => {
                                 try {
-                                  setImagePrompt(e.target.value);
+                                  await updateSettingsInDatabase(
+                                    postingFrequency,
+                                    writingStyle,
+                                    subjectMatters,
+                                    wordpressTemplate,
+                                    imagePrompt,
+                                    imageModel,
+                                    negativePrompt,
+                                    weeklyPlanningDay
+                                  );
                                   toast.success("Image generation prompt updated");
                                 } catch (error) {
                                   console.error('Failed to update image prompt:', error);

@@ -46,7 +46,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Helmet } from 'react-helmet-async';
 import { Separator } from '@/components/ui/separator';
-import { toast as sonnerToast } from 'sonner';
+import { toast } from 'sonner';
 import Header from '@/components/Header';
 import { useOrganisation } from '@/context/OrganisationContext';
 import { useWebsites } from '@/context/WebsitesContext';
@@ -525,9 +525,7 @@ const Onboarding = () => {
         console.log('Auto-transferring data after email verification for user:', userId);
         transferDataToDatabase(userId).catch(error => {
           console.error('Error auto-transferring data:', error);
-          sonnerToast.error("Error completing setup", {
-            description: error.message || "Failed to complete setup. Please try again."
-          });
+          toast.error("Error completing setup: " + (error.message || "Failed to complete setup. Please try again."));
         });
       }
     }
@@ -578,9 +576,7 @@ const Onboarding = () => {
           }
         } else {
           // For steps that are coming soon, show a toast message
-          sonnerToast("Coming Soon", {
-            description: "This feature is coming soon! Starting from the beginning.",
-          });
+          toast.info("Coming Soon: This feature is coming soon! Starting from the beginning.");
         }
       }
     }
@@ -962,9 +958,7 @@ const Onboarding = () => {
           console.error('Error learning tone:', error);
           
           // Don't mask errors with mock data - show the real issue
-          sonnerToast("Error generating ideas", {
-            description: error.message || "Failed to generate content ideas. Please try again."
-          });
+          toast.error("Error generating ideas: " + (error.message || "Failed to generate content ideas. Please try again."));
           throw error;
         }
       },
@@ -1212,9 +1206,7 @@ const Onboarding = () => {
           console.error('Error generating ideas:', error);
           
           // Don't mask errors with mock data - show the real issue
-          sonnerToast("Error generating ideas", {
-            description: error.message || "Failed to generate content ideas. Please try again."
-          });
+          toast.error("Error generating ideas: " + (error.message || "Failed to generate content ideas. Please try again."));
           throw error; // Let the error propagate to stop the process
         }
       }
@@ -1276,7 +1268,7 @@ const Onboarding = () => {
         } catch (stepError) {
           console.error(`Error in step ${i+1}:`, stepError);
           // Show toast for visibility
-          sonnerToast("Error", {
+          toast("Error", {
             description: `Error in step ${i+1}: ${stepError.message}. Please refresh and try again.`
           });
           setState(prev => ({ 
@@ -1299,7 +1291,7 @@ const Onboarding = () => {
           postIdeasCount: postIdeas.length
         });
         
-        sonnerToast("Error Completing Setup", {
+        toast("Error Completing Setup", {
           description: "Missing required data to complete the setup. Please refresh and try again."
         });
         
@@ -1321,7 +1313,7 @@ const Onboarding = () => {
     updateUrlParams({ step: 'ideas' });
     } catch (error) {
       console.error("Error in setup process:", error);
-      sonnerToast("Setup Error", {
+      toast("Setup Error", {
         description: error.message || "An unexpected error occurred. Please refresh and try again."
       });
       setState(prev => ({ 
@@ -1357,9 +1349,7 @@ const Onboarding = () => {
     // Force update
     setState(prev => ({ ...prev }));
     
-    sonnerToast("Idea saved!", {
-      description: "We'll use this to create content for you."
-    });
+    toast.success("Idea saved! We'll use this to create content for you.");
   };
 
   // Handle thumbs down on content idea
@@ -1379,86 +1369,14 @@ const Onboarding = () => {
 
   // Handle generate new ideas
   const handleGenerateNewIdeas = () => {
-    sonnerToast("Generating new ideas...", {
-      duration: 5000,
-    });
-
-    try {
-      const website_id = localStorage.getItem('website_id');
-      const language = localStorage.getItem('website_language') || 'en';
-      
-      console.log(`Generating post ideas for website ID: ${website_id}`);
-      console.log(`Website language detected: ${language}`);
-      
-      // Get necessary data to generate post ideas
-      const requestParams = {
-        website_id,
-        website_url: state.websiteUrl,
-        language: language,
-        count: 5 // Generate 5 new ideas
-      };
-      
-      console.log(`Calling generate-post-ideas with params:`, requestParams);
-      
-      // Call the edge function to generate post ideas
-      callEdgeFunction('generate-post-ideas', requestParams)
-      .then(result => {
-          console.log(`Generate post ideas result:`, result);
-          
-          // Handle the ideas from the result
-          if (result.ideas && Array.isArray(result.ideas)) {
-            // Store the ideas in localStorage
-          localStorage.setItem('post_ideas', JSON.stringify(result.ideas));
-            
-            // Update state with the new ideas
-            setLikedIdeas(result.ideas.map((idea: any) => idea.id));
-          setState(prev => ({ ...prev }));
-          } 
-          // Handle older API response format
-          else if (result.titles && Array.isArray(result.titles)) {
-            const mappedIdeas = result.titles.map((title, index) => {
-              const keywords = result.keywordsByTitle?.[title] || result.keywords || [];
-              
-              return {
-                id: `idea-${index + 1}`,
-                title,
-                description: `Generated blog post idea based on your website content.`,
-                tags: keywords,
-                hidden: false
-              };
-            });
-            
-            // Store the ideas in localStorage
-            localStorage.setItem('post_ideas', JSON.stringify(mappedIdeas));
-            
-            // Update state with the new ideas
-            setLikedIdeas(mappedIdeas.map((idea: any) => idea.id));
-            setState(prev => ({ ...prev }));
-          } 
-          else {
-            console.warn('No ideas returned from generate-post-ideas function');
-            // Don't use mock data - show the actual error
-            sonnerToast("Error generating ideas", {
-              description: "No content ideas could be generated. Please try again or contact support."
-          });
-        }
-      })
-      .catch(error => {
-          console.error('Error generating post ideas:', error);
-          
-          // Don't mask the error with mock data
-          sonnerToast("Error generating ideas", {
-            description: error.message || "Failed to generate content ideas. Please try again."
-        });
-      });
-    } catch (error) {
-      console.error('Error in handleGenerateNewIdeas:', error);
-      
-      // Don't mask errors with mock data - show the real issue
-      sonnerToast("Error generating ideas", {
-        description: error.message || "An unexpected error occurred. Please try again."
-      });
-    }
+    toast.promise(
+      generateNewIdeas(),
+      {
+        loading: 'Generating new ideas...',
+        success: 'Ideas generated successfully!',
+        error: 'Failed to generate ideas'
+      }
+    );
   };
 
   // Check if any ideas are liked
@@ -1490,7 +1408,7 @@ const Onboarding = () => {
   // Move to Setup 3: Content Generation
   const handleContinueToContentCreation = async () => {
     if (!hasLikedIdeas()) {
-      sonnerToast("Error", {
+      toast("Error", {
         description: "Please like at least one content idea to continue"
       });
       return;
@@ -1568,7 +1486,7 @@ const Onboarding = () => {
     const likedIdea = postIdeas.find((idea: any) => likedIdeas.includes(idea.id));
     
     if (!likedIdea) {
-      sonnerToast("Error", {
+      toast("Error", {
         description: "No liked ideas found. Please select an idea first."
       });
       return;
@@ -1676,7 +1594,7 @@ const Onboarding = () => {
           clearInterval(progressInterval);
           setState(prev => ({ ...prev, progress: 0 }));
           
-          sonnerToast("Error", {
+          toast("Error", {
             description: "Failed to generate content. Please try again."
           });
           
@@ -1688,7 +1606,7 @@ const Onboarding = () => {
         clearInterval(progressInterval);
         setState(prev => ({ ...prev, progress: 0 }));
         
-        sonnerToast("Error", {
+        toast("Error", {
           description: error.message || "Failed to generate content. Please try again."
         });
         
@@ -1697,7 +1615,7 @@ const Onboarding = () => {
     } catch (error) {
       setState(prev => ({ ...prev, progress: 0 }));
       
-      sonnerToast("Error", {
+      toast("Error", {
         description: error.message || "Failed to generate content. Please try again."
       });
       
@@ -1824,7 +1742,7 @@ const Onboarding = () => {
       
       // Ensure we don't exceed the posting frequency
       if (newDays.length > prev.postingFrequency) {
-        sonnerToast("Warning", {
+        toast("Warning", {
           description: `You can only select ${prev.postingFrequency} days for your current frequency.`
         });
         return prev;
@@ -1851,7 +1769,7 @@ const Onboarding = () => {
 
   // Add WordPress connection handlers
   const handleSkipWordPress = () => {
-    sonnerToast("Content saved as draft", {
+    toast("Content saved as draft", {
       description: "You can connect WordPress later from the settings."
     });
     setState(prev => ({ ...prev, step: 5 })); // Go to completion
@@ -1905,7 +1823,7 @@ const Onboarding = () => {
       const data = await response.json();
 
       if (data.success) {
-        sonnerToast.success("WordPress connected successfully!");
+        toast.success("WordPress connected successfully!");
         setState(prev => ({ 
           ...prev, 
           showWpAuthDialog: false,
@@ -1933,20 +1851,18 @@ const Onboarding = () => {
       console.log('Transferring data for user:', userId);
       transferDataToDatabase(userId)
         .then(() => {
-          sonnerToast("Setup Complete!", {
+          toast("Setup Complete!", {
             description: "You're ready to start creating content."
           });
           navigate('/dashboard');
         })
         .catch(error => {
           console.error('Error transferring data:', error);
-          sonnerToast.error("Error completing setup", {
-            description: error.message || "Failed to complete setup. Please try again."
-          });
+          toast.error("Error completing setup: " + (error.message || "Failed to complete setup. Please try again."));
         });
     } else {
       console.error('No user ID found for data transfer');
-      sonnerToast.error("Setup Error", {
+      toast.error("Setup Error", {
         description: "User ID not found. Please try signing up again."
       });
     }
@@ -2098,7 +2014,7 @@ const Onboarding = () => {
       // Now transfer data which will create membership and other data
       await transferDataToDatabase(signInData.user.id);
       
-      sonnerToast.success("Welcome to Content Gardener!", {
+      toast.success("Welcome to Content Gardener!", {
         description: "Your account has been created and you're ready to start creating content."
       });
 
@@ -2112,7 +2028,7 @@ const Onboarding = () => {
     } catch (error) {
       console.error('Signup error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
-      sonnerToast.error("Signup Error", {
+      toast.error("Signup Error", {
         description: errorMessage,
         duration: 5000
       });

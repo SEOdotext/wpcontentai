@@ -62,7 +62,7 @@ serve(async (req) => {
     // Check if AI image generation is enabled for the website
     const { data: website, error: websiteError } = await supabaseClient
       .from('websites')
-      .select('enable_ai_image_generation, image_prompt')
+      .select('enable_ai_image_generation')
       .eq('id', websiteId)
       .single();
 
@@ -156,6 +156,18 @@ async function generateImageAsync(
   try {
     console.log('Starting image generation for post:', postId);
     
+    // Get publication settings for image prompt and other settings
+    const { data: pubSettings, error: pubSettingsError } = await supabaseClient
+      .from('publication_settings')
+      .select('image_prompt, image_model, negative_prompt')
+      .eq('website_id', websiteId)
+      .single();
+
+    if (pubSettingsError) {
+      console.log('Error fetching publication settings:', pubSettingsError.message);
+      // Continue with default settings
+    }
+    
     // Call the generate-image Edge function instead of implementing image generation directly
     const edgeUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/generate-image`;
     console.log('Calling generate-image Edge function:', edgeUrl);
@@ -169,7 +181,12 @@ async function generateImageAsync(
       body: JSON.stringify({
         content: postTheme.post_content,
         postId: postId,
-        websiteId: websiteId
+        websiteId: websiteId,
+        imageSettings: {
+          prompt: pubSettings?.image_prompt,
+          model: pubSettings?.image_model,
+          negativePrompt: pubSettings?.negative_prompt
+        }
       }),
     });
     

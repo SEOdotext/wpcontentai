@@ -5,6 +5,11 @@ interface GenerateImageParams {
   content: string;
   postId: string;
   websiteId: string;
+  imageSettings?: {
+    prompt?: string;
+    model?: string;
+    negativePrompt?: string;
+  };
 }
 
 // Get allowed origins from environment variables
@@ -65,7 +70,7 @@ serve(async (req) => {
 
   try {
     // Get the request body
-    const { content, postId, websiteId } = await req.json() as GenerateImageParams;
+    const { content, postId, websiteId, imageSettings } = await req.json() as GenerateImageParams;
 
     if (!content || !postId || !websiteId) {
       throw new Error('Missing required fields');
@@ -83,7 +88,22 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Verify that the post_themes record exists and get its content
+    // Get website settings to check if AI image generation is enabled
+    const { data: website, error: websiteError } = await supabaseClient
+      .from('websites')
+      .select('enable_ai_image_generation')
+      .eq('id', websiteId)
+      .single();
+
+    if (websiteError) {
+      throw new Error(`Error checking website settings: ${websiteError.message}`);
+    }
+
+    if (!website?.enable_ai_image_generation) {
+      throw new Error('AI image generation is not enabled for this website');
+    }
+
+    // Get post theme content
     const { data: postTheme, error: postThemeError } = await supabaseClient
       .from('post_themes')
       .select('id, subject_matter, post_content')
@@ -98,45 +118,18 @@ serve(async (req) => {
       throw new Error('Post theme is missing required content (subject_matter or post_content)');
     }
 
-    // Check if AI image generation is enabled for the website
-    const { data: website, error: websiteError } = await supabaseClient
-      .from('websites')
-      .select('enable_ai_image_generation, image_prompt')
-      .eq('id', websiteId)
-      .single();
-
-    if (websiteError) {
-      throw new Error(`Error checking website settings: ${websiteError.message}`);
-    }
-
-    if (!website?.enable_ai_image_generation) {
-      throw new Error('AI image generation is not enabled for this website');
-    }
-
-    // Get publication settings to check for image model and other settings
-    const { data: pubSettings, error: pubSettingsError } = await supabaseClient
-      .from('publication_settings')
-      .select('image_prompt, image_model, negative_prompt')
-      .eq('website_id', websiteId)
-      .single();
-
-    if (pubSettingsError) {
-      console.log('Error fetching publication settings:', pubSettingsError.message);
-      // Continue with default settings if there's an error
-    }
-
-    // Determine which model to use, defaulting to DALL-E if not specified
-    const imageModel = pubSettings?.image_model || 'dalle';
+    // Use the image settings from the request, or fall back to defaults
+    const imageModel = imageSettings?.model || 'dalle';
     console.log('Using image model:', imageModel);
 
     // Get negative prompt if using Stable Diffusion
-    const negativePrompt = imageModel === 'stable-diffusion' ? (pubSettings?.negative_prompt || '') : '';
+    const negativePrompt = imageModel === 'stable-diffusion' ? (imageSettings?.negativePrompt || '') : '';
     if (imageModel === 'stable-diffusion' && negativePrompt) {
       console.log('Using negative prompt for Stable Diffusion');
     }
 
-    // Get the prompt template from settings, or use a default if none is configured
-    const promptTemplate = pubSettings?.image_prompt || website.image_prompt || 'Create a modern, professional image that represents: {title}. Context: {content}';
+    // Get the prompt template from settings, or use a default
+    const promptTemplate = imageSettings?.prompt || 'Create a modern, professional image that represents: {title}. Context: {content}';
     
     // Create the final prompt by replacing placeholders with actual content
     let finalPrompt = promptTemplate

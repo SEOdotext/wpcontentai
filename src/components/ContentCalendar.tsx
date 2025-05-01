@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { generateAndPublishContent } from '@/api/aiEndpoints';
+import { toast } from 'sonner';
 
 interface Post {
   id: string;

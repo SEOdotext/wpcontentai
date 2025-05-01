@@ -1,3 +1,20 @@
+@DBMASTERINFO.md Now make sure that the image fields are properly saved from /settings
+
+Minimal changes. 
+
+Also make sure we properly load the selected image model from the db on load etc.
+
+AI Image Generation@DBMASTERINFO.md 
+
+WHEN clicking the save button!
+
+
+
+
+---
+
+
+
 Fold email og pass ind og vis sign up with google som den primære knap
 
 Almost there. When clicking create account you’re ready to start generating content for free

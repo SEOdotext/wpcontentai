@@ -410,20 +410,13 @@ const WebsiteManager = () => {
             {editingWebsite?.enable_ai_image_generation && (
               <div className="space-y-2">
                 <Label htmlFor="image-prompt">
-                  Image Generation Prompt
+                  Image Generation Settings
                   <span className="block text-sm text-muted-foreground">
-                    Customize how images are generated. Use "{'{'}title{'}'}" for the content title and "{'{'}content{'}'}" for the content description.
+                    Configure AI image generation in the Settings page under "AI Image Generation"
                   </span>
                 </Label>
-                <Input
-                  id="image-prompt"
-                  value={editingWebsite?.image_prompt || `Create a modern, professional image that represents: {title}. Context: {content}`}
-                  onChange={(e) => setEditingWebsite(prev => prev ? { ...prev, image_prompt: e.target.value } : null)}
-                  placeholder="Create a modern, professional image that represents: {title}. Context: {content}"
-                  disabled={isEditing}
-                />
                 <p className="text-xs text-muted-foreground">
-                  Example: "Create a photorealistic {'{'}title{'}'} in the style of {'{'}content{'}'}"
+                  You can customize image generation prompts and settings in the main Settings page.
                 </p>
               </div>
             )}

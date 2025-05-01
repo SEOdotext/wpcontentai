@@ -1,8 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useWebsites } from './WebsitesContext';
+import { useWebsites } from '@/context/WebsitesContext';
 import { toast } from 'sonner';
-import { useToast } from '@/components/ui/use-toast';
 import { Database } from '@/integrations/supabase/types';
 
 // Define the website content type based on the database schema
@@ -40,12 +39,11 @@ interface WebsiteContentContextType {
 const WebsiteContentContext = createContext<WebsiteContentContextType | undefined>(undefined);
 
 // Create the provider component
-export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const WebsiteContentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [websiteContent, setWebsiteContent] = useState<WebsiteContent[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const { websites } = useWebsites();
-  const { toast } = useToast();
 
   // Fetch website content for a specific website
   const fetchWebsiteContent = async (websiteId: string) => {
@@ -66,11 +64,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       if (error) {
         console.error('Error fetching website content:', error);
         setError(error.message);
-        toast({
-          title: 'Error',
-          description: `Failed to fetch website content: ${error.message}`,
-          variant: 'destructive',
-        });
+        toast.error(`Failed to fetch website content: ${error.message}`);
         return;
       }
       
@@ -95,11 +89,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception fetching website content:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to fetch website content: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to fetch website content: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -131,11 +121,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       if (error) {
         console.error('Error adding website content:', error);
         setError(error.message);
-        toast({
-          title: 'Error',
-          description: `Failed to add website content: ${error.message}`,
-          variant: 'destructive',
-        });
+        toast.error(`Failed to add website content: ${error.message}`);
         return null;
       }
       
@@ -144,21 +130,14 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       // Update local state
       setWebsiteContent(prev => [...prev, data as WebsiteContent]);
       
-      toast({
-        title: 'Success',
-        description: 'Website content added successfully',
-      });
+      toast.success('Website content added successfully');
       
       return data as WebsiteContent;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception adding website content:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to add website content: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to add website content: ${errorMessage}`);
       return null;
     } finally {
       setLoading(false);
@@ -189,11 +168,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       if (error) {
         console.error('Error updating website content:', error);
         setError(error.message);
-        toast({
-          title: 'Error',
-          description: `Failed to update website content: ${error.message}`,
-          variant: 'destructive',
-        });
+        toast.error(`Failed to update website content: ${error.message}`);
         return null;
       }
       
@@ -212,21 +187,14 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         prev.map(item => item.id === id ? updatedContent as WebsiteContent : item)
       );
       
-      toast({
-        title: 'Success',
-        description: 'Website content updated successfully',
-      });
+      toast.success('Website content updated successfully');
       
       return updatedContent as WebsiteContent;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception updating website content:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to update website content: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to update website content: ${errorMessage}`);
       return null;
     } finally {
       setLoading(false);
@@ -251,11 +219,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       if (fetchError) {
         console.error('Error fetching content to delete:', fetchError);
         setError(fetchError.message);
-        toast({
-          title: 'Error',
-          description: `Failed to find content to delete: ${fetchError.message}`,
-          variant: 'destructive',
-        });
+        toast.error(`Failed to find content to delete: ${fetchError.message}`);
         return false;
       }
       
@@ -268,11 +232,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       if (error) {
         console.error('Error deleting website content:', error);
         setError(error.message);
-        toast({
-          title: 'Error',
-          description: `Failed to delete website content: ${error.message}`,
-          variant: 'destructive',
-        });
+        toast.error(`Failed to delete website content: ${error.message}`);
         return false;
       }
       
@@ -281,21 +241,14 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       // Update local state
       setWebsiteContent(prev => prev.filter(item => item.id !== id));
       
-      toast({
-        title: 'Success',
-        description: 'Website content deleted successfully',
-      });
+      toast.success('Website content deleted successfully');
       
       return true;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception deleting website content:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to delete website content: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to delete website content: ${errorMessage}`);
       return false;
     } finally {
       setLoading(false);
@@ -336,11 +289,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       if (error) {
         console.error('Error fetching sitemap pages:', error);
         setError(error.message);
-        toast({
-          title: 'Error',
-          description: `Failed to fetch sitemap pages: ${error.message}`,
-          variant: 'destructive',
-        });
+        toast.error(`Failed to fetch sitemap pages: ${error.message}`);
         return [];
       }
       
@@ -350,11 +299,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         
         // Only show a toast if this was a custom URL attempt or not a "No sitemap found" error
         if (customSitemapUrl || data.error !== "No sitemap found") {
-          toast({
-            title: 'Error',
-            description: data.message || `Failed to fetch sitemap pages: ${data.error}`,
-            variant: 'destructive',
-          });
+          toast.error(data.message || `Failed to fetch sitemap pages: ${data.error}`);
         }
         
         return [];
@@ -365,11 +310,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
         
         // Only show a toast if this was a custom URL attempt
         if (customSitemapUrl) {
-          toast({
-            title: 'No pages found',
-            description: data.message || 'No pages were found in the sitemap.',
-            variant: 'default',
-          });
+          toast.info(data.message || 'No pages were found in the sitemap.');
         }
         
         return [];
@@ -380,11 +321,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       // Show warning if we hit the page limit
       if (data.warning) {
         console.log('Warning from sitemap function:', data.warning);
-        toast({
-          title: 'Page Limit Reached',
-          description: data.warning,
-          variant: 'default',
-        });
+        toast.info(data.warning);
       }
       
       // Convert the returned data to WebsiteContent format
@@ -407,11 +344,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception fetching sitemap pages:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to fetch sitemap pages: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to fetch sitemap pages: ${errorMessage}`);
       return [];
     } finally {
       setLoading(false);
@@ -479,11 +412,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
             if (error) {
               console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
               setError(error.message);
-              toast({
-                title: 'Error',
-                description: `Failed to import sitemap pages: ${error.message}`,
-                variant: 'destructive',
-              });
+              toast.error(`Failed to import sitemap pages: ${error.message}`);
             } else {
               insertedCount += newPages.length;
               console.log(`Inserted batch ${i / batchSize + 1} (${newPages.length} pages)`);
@@ -499,21 +428,14 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       // Refresh the website content
       await fetchWebsiteContent(websiteId);
       
-      toast({
-        title: 'Success',
-        description: `Imported ${insertedCount} sitemap pages`,
-      });
+      toast.success(`Imported ${insertedCount} sitemap pages`);
       
       return insertedCount;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception importing sitemap pages:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to import sitemap pages: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to import sitemap pages: ${errorMessage}`);
       return 0;
     } finally {
       setLoading(false);
@@ -582,32 +504,20 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       if (error) {
         console.error('Error crawling website pages:', error);
         setError(error.message);
-        toast({
-          title: 'Error',
-          description: `Failed to crawl website pages: ${error.message}`,
-          variant: 'destructive',
-        });
+        toast.error(`Failed to crawl website pages: ${error.message}`);
         return [];
       }
       
       if (data.error) {
         console.error('Error from crawl function:', data.error);
         setError(data.error);
-        toast({
-          title: 'Error',
-          description: data.message || `Failed to crawl website pages: ${data.error}`,
-          variant: 'destructive',
-        });
+        toast.error(data.message || `Failed to crawl website pages: ${data.error}`);
         return [];
       }
       
       if (!data.pages || data.pages.length === 0) {
         console.log('No pages found during crawl');
-        toast({
-          title: 'No pages found',
-          description: data.message || 'No pages were found during the website crawl.',
-          variant: 'default',
-        });
+        toast.info(data.message || 'No pages were found during the website crawl.');
         return [];
       }
       
@@ -633,11 +543,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception crawling website pages:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to crawl website pages: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to crawl website pages: ${errorMessage}`);
       return [];
     } finally {
       setLoading(false);
@@ -705,11 +611,7 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
             if (error) {
               console.error(`Error inserting batch ${i / batchSize + 1}:`, error);
               setError(error.message);
-              toast({
-                title: 'Error',
-                description: `Failed to import crawled pages: ${error.message}`,
-                variant: 'destructive',
-              });
+              toast.error(`Failed to import crawled pages: ${error.message}`);
             } else {
               insertedCount += newPages.length;
               console.log(`Inserted batch ${i / batchSize + 1} (${newPages.length} pages)`);
@@ -725,21 +627,14 @@ export const WebsiteContentProvider: React.FC<{ children: ReactNode }> = ({ chil
       // Refresh the website content
       await fetchWebsiteContent(websiteId);
       
-      toast({
-        title: 'Success',
-        description: `Imported ${insertedCount} crawled pages`,
-      });
+      toast.success(`Imported ${insertedCount} crawled pages`);
       
       return insertedCount;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       console.error('Exception importing crawled pages:', errorMessage);
       setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: `Failed to import crawled pages: ${errorMessage}`,
-        variant: 'destructive',
-      });
+      toast.error(`Failed to import crawled pages: ${errorMessage}`);
       return 0;
     } finally {
       setLoading(false);

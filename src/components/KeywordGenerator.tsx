@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { Tag, Wand2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import KeywordBadge from './KeywordBadge';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 const mockKeywords = [
   { text: 'wordpress', difficulty: 'medium' as const },
