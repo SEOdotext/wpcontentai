@@ -230,114 +230,145 @@ export function PublicationSettings({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Publication Settings</CardTitle>
-        <CardDescription>
-          Configure your content publication schedule and planning preferences.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-6">
-          {/* Weekly Planning Day Selection */}
-          <div className="space-y-4">
-            <Label>Weekly Planning Day</Label>
-            <Select
-              value={localWeeklyPlanningDay}
-              onValueChange={(value) => {
-                setLocalWeeklyPlanningDay(value);
-                setWeeklyPlanningDay(value);
+    <div className="space-y-6">
+      {/* Weekly Planning Day Selection */}
+      <div className="space-y-4">
+        <Label>Weekly Planning Day</Label>
+        <Select
+          value={localWeeklyPlanningDay}
+          onValueChange={(value) => {
+            setLocalWeeklyPlanningDay(value);
+            setWeeklyPlanningDay(value);
+          }}
+          disabled={disabled}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select planning day" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="monday">Monday</SelectItem>
+            <SelectItem value="tuesday">Tuesday</SelectItem>
+            <SelectItem value="wednesday">Wednesday</SelectItem>
+            <SelectItem value="thursday">Thursday</SelectItem>
+            <SelectItem value="friday">Friday</SelectItem>
+            <SelectItem value="saturday">Saturday</SelectItem>
+            <SelectItem value="sunday">Sunday</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-sm text-muted-foreground">
+          On this day each week, we'll automatically plan and generate your content. You'll receive an email with the planned content for your review.
+        </p>
+      </div>
+
+      <Separator />
+
+      {/* Frequency Input */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Label>Publishing Frequency</Label>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => handleFrequencyChange(Math.max(1, postingFrequency - 1))}
+              disabled={disabled || postingFrequency <= 1}
+            >
+              -
+            </Button>
+            <input
+              type="number"
+              min="1"
+              max="299"
+              value={postingFrequency}
+              onChange={(e) => {
+                const value = parseInt(e.target.value);
+                if (!isNaN(value) && value >= 1 && value <= 299) {
+                  handleFrequencyChange(value);
+                }
               }}
+              className="w-12 h-8 text-center text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              disabled={disabled}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => handleFrequencyChange(postingFrequency + 1)}
+              disabled={disabled || postingFrequency >= 299}
+            >
+              +
+            </Button>
+            <span className="text-sm text-muted-foreground">per week</span>
+          </div>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {postingFrequency === 1 ? 'Perfect for maintaining a steady presence' :
+           postingFrequency <= 3 ? 'Ideal for growing your audience consistently' :
+           postingFrequency <= 5 ? 'Great for high engagement and SEO impact' :
+           'Maximum impact and authority building'}
+        </div>
+      </div>
+
+      <Separator className="my-6" />
+
+      {/* Posting Days */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <Label>Posting Schedule</Label>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowWeekends(!showWeekends)}
+              className="text-xs text-muted-foreground hover:text-foreground"
               disabled={disabled}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Select planning day" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monday">Monday</SelectItem>
-                <SelectItem value="tuesday">Tuesday</SelectItem>
-                <SelectItem value="wednesday">Wednesday</SelectItem>
-                <SelectItem value="thursday">Thursday</SelectItem>
-                <SelectItem value="friday">Friday</SelectItem>
-                <SelectItem value="saturday">Saturday</SelectItem>
-                <SelectItem value="sunday">Sunday</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-sm text-muted-foreground">
-              On this day each week, we'll automatically plan and generate your content. You'll receive an email with the planned content for your review.
-            </p>
+              {showWeekends ? "Hide Weekends" : "Include Weekends"}
+            </Button>
           </div>
-
-          <Separator />
-
-          {/* Frequency Input */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label>Publishing Frequency</Label>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
+        </div>
+        <div className="grid grid-cols-5 gap-2">
+          {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
+            <div key={day} className="flex flex-col items-center gap-2">
+              <Toggle
+                pressed={postingDays.includes(day)}
+                onPressedChange={() => handleDayToggle(day)}
+                className="capitalize w-full"
+                disabled={disabled}
+              >
+                {day}
+              </Toggle>
+              <div className="flex items-center gap-1">
+                <Button 
+                  variant="outline" 
                   size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={() => handleFrequencyChange(Math.max(1, postingFrequency - 1))}
-                  disabled={disabled || postingFrequency <= 1}
+                  className="h-6 w-6 p-0"
+                  onClick={() => handleRemoveDay(day)}
+                  disabled={disabled}
                 >
                   -
                 </Button>
-                <input
-                  type="number"
-                  min="1"
-                  max="299"
-                  value={postingFrequency}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (!isNaN(value) && value >= 1 && value <= 299) {
-                      handleFrequencyChange(value);
-                    }
-                  }}
-                  className="w-12 h-8 text-center text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  disabled={disabled}
-                />
+                <span className="text-sm min-w-[1.5rem] text-center">
+                  {postingDays.filter(d => d === day).length}
+                </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 w-8 p-0"
-                  onClick={() => handleFrequencyChange(postingFrequency + 1)}
-                  disabled={disabled || postingFrequency >= 299}
+                  className="h-6 w-6 p-0"
+                  onClick={() => handleAddDay(day)}
+                  disabled={disabled}
                 >
                   +
                 </Button>
-                <span className="text-sm text-muted-foreground">per week</span>
               </div>
             </div>
-            <div className="text-sm text-muted-foreground">
-              {postingFrequency === 1 ? 'Perfect for maintaining a steady presence' :
-               postingFrequency <= 3 ? 'Ideal for growing your audience consistently' :
-               postingFrequency <= 5 ? 'Great for high engagement and SEO impact' :
-               'Maximum impact and authority building'}
-            </div>
-          </div>
-
-          <Separator className="my-6" />
-
-          {/* Posting Days */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label>Posting Schedule</Label>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowWeekends(!showWeekends)}
-                  className="text-xs text-muted-foreground hover:text-foreground"
-                  disabled={disabled}
-                >
-                  {showWeekends ? "Hide Weekends" : "Include Weekends"}
-                </Button>
-              </div>
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-              {['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].map((day) => (
+          ))}
+        </div>
+        {showWeekends && (
+          <div className="mt-4 pt-4 border-t">
+            <div className="grid grid-cols-2 gap-2">
+              {['saturday', 'sunday'].map((day) => (
                 <div key={day} className="flex flex-col items-center gap-2">
                   <Toggle
                     pressed={postingDays.includes(day)}
@@ -373,108 +404,67 @@ export function PublicationSettings({
                 </div>
               ))}
             </div>
-            {showWeekends && (
-              <div className="mt-4 pt-4 border-t">
-                <div className="grid grid-cols-2 gap-2">
-                  {['saturday', 'sunday'].map((day) => (
-                    <div key={day} className="flex flex-col items-center gap-2">
-                      <Toggle
-                        pressed={postingDays.includes(day)}
-                        onPressedChange={() => handleDayToggle(day)}
-                        className="capitalize w-full"
-                        disabled={disabled}
-                      >
-                        {day}
-                      </Toggle>
-                      <div className="flex items-center gap-1">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => handleRemoveDay(day)}
-                          disabled={disabled}
-                        >
-                          -
-                        </Button>
-                        <span className="text-sm min-w-[1.5rem] text-center">
-                          {postingDays.filter(d => d === day).length}
-                        </span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => handleAddDay(day)}
-                          disabled={disabled}
-                        >
-                          +
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Schedule Summary */}
-            {postingDays.length > 0 && (
-              <div className="text-sm text-muted-foreground mt-4">
-                <p className="font-medium">Your publishing schedule:</p>
-                <div className="mt-2 space-y-2">
-                  {Array.from(new Set(postingDays))
-                    .sort((a, b) => {
-                      const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-                      return days.indexOf(a) - days.indexOf(b);
-                    })
-                    .map((day) => {
-                    const postsOnDay = postingDays.filter(d => d === day).length;
-                    return (
-                      <div key={day} className="flex items-center gap-2">
-                        <span className="capitalize font-medium min-w-[100px]">{day}:</span>
-                        <div className="flex gap-1">
-                          {Array.from({ length: postsOnDay }).map((_, i) => (
-                            <div
-                              key={i}
-                              className="w-2 h-2 rounded-full bg-primary"
-                            />
-                          ))}
-                        </div>
-                        <span className="ml-2">{postsOnDay} post{postsOnDay !== 1 ? 's' : ''}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-3 flex justify-between items-center">
-                  <p className="text-xs">
-                    Total: {postingDays.length} post{postingDays.length !== 1 ? 's' : ''} per week
-                  </p>
-                  <div className="text-sm text-gray-500">
-                    {calculatePrice(postingDays.length)}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
+        )}
 
-          {/* Save Button */}
-          {showSaveButton && (
-            <div className="flex justify-end">
-              <Button
-                onClick={handleSave}
-                disabled={isSaving || disabled || postingDays.length !== postingFrequency}
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  'Save Changes'
-                )}
-              </Button>
+        {/* Schedule Summary */}
+        {postingDays.length > 0 && (
+          <div className="text-sm text-muted-foreground mt-4">
+            <p className="font-medium">Your publishing schedule:</p>
+            <div className="mt-2 space-y-2">
+              {Array.from(new Set(postingDays))
+                .sort((a, b) => {
+                  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+                  return days.indexOf(a) - days.indexOf(b);
+                })
+                .map((day) => {
+                const postsOnDay = postingDays.filter(d => d === day).length;
+                return (
+                  <div key={day} className="flex items-center gap-2">
+                    <span className="capitalize font-medium min-w-[100px]">{day}:</span>
+                    <div className="flex gap-1">
+                      {Array.from({ length: postsOnDay }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="w-2 h-2 rounded-full bg-primary"
+                        />
+                      ))}
+                    </div>
+                    <span className="ml-2">{postsOnDay} post{postsOnDay !== 1 ? 's' : ''}</span>
+                  </div>
+                );
+              })}
             </div>
-          )}
+            <div className="mt-3 flex justify-between items-center">
+              <p className="text-xs">
+                Total: {postingDays.length} post{postingDays.length !== 1 ? 's' : ''} per week
+              </p>
+              <div className="text-sm text-gray-500">
+                {calculatePrice(postingDays.length)}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Save Button */}
+      {showSaveButton && (
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || disabled || postingDays.length !== postingFrequency}
+          >
+            {isSaving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
+          </Button>
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 } 
