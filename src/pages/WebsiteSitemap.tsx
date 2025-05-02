@@ -3,7 +3,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { useWebsiteContent } from '@/context/WebsiteContentContext';
 import Header from '@/components/Header';
 import AppSidebar from '@/components/Sidebar';
-import { Map, Download, Loader2, Link, Search, FileText, Sparkles } from 'lucide-react';
+import { Map, Download, Loader2, Link, Search, FileText, Sparkles, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import EmptyState from '@/components/EmptyState';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -19,6 +19,16 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Website } from '@/types/website';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const WebsiteSitemap = () => {
   const { currentWebsite } = useWebsites();
@@ -32,6 +42,7 @@ const WebsiteSitemap = () => {
   const navigate = useNavigate();
   const [website, setWebsite] = useState<Website | null>(null);
   const [customSitemapUrl, setCustomSitemapUrl] = useState('');
+  const [showResetWarning, setShowResetWarning] = useState(false);
 
   // Check if we have any cornerstone content
   const hasContent = websiteContent.length > 0;
@@ -113,6 +124,29 @@ const WebsiteSitemap = () => {
   const handleImportDialogSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleImportPages();
+  };
+
+  const handleResetSitemap = async () => {
+    if (!currentWebsite?.id) return;
+    
+    try {
+      const { error } = await supabase
+        .from('website_content')
+        .delete()
+        .eq('website_id', currentWebsite.id);
+        
+      if (error) throw error;
+      
+      toast.success('Sitemap reset successfully');
+      setShowImportDialog(false);
+      setShowResetWarning(false);
+      
+      // Force a hard reload to clear all state
+      window.location.reload();
+    } catch (error) {
+      console.error('Error resetting sitemap:', error);
+      toast.error('Failed to reset sitemap');
+    }
   };
 
   const handleSuggestKeyContent = async () => {
@@ -353,23 +387,64 @@ const WebsiteSitemap = () => {
                       )}
                     </div>
                     <DialogFooter>
-                      <Button type="button" variant="outline" onClick={() => setShowImportDialog(false)}>
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={isImporting}>
-                        {isImporting ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Importing...
-                          </>
-                        ) : (
-                          'Start Import'
-                        )}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => setShowResetWarning(true)}
+                          className="text-muted-foreground hover:text-destructive"
+                        >
+                          Reset Sitemap
+                        </Button>
+                        <Button type="button" variant="outline" onClick={() => setShowImportDialog(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit" disabled={isImporting}>
+                          {isImporting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Importing...
+                            </>
+                          ) : (
+                            'Start Import'
+                          )}
+                        </Button>
+                      </div>
                     </DialogFooter>
                   </form>
                 </DialogContent>
               </Dialog>
+
+              {/* Reset Warning Dialog */}
+              <AlertDialog open={showResetWarning} onOpenChange={setShowResetWarning}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-destructive" />
+                      Reset Sitemap
+                    </AlertDialogTitle>
+                    <div className="text-sm text-muted-foreground">
+                      This will permanently delete all imported pages, including:
+                      <ul className="list-disc list-inside mt-2 space-y-1">
+                        <li>All page content and metadata</li>
+                        <li>Key content designations</li>
+                        <li>Content digests and analysis</li>
+                      </ul>
+                      <p className="mt-3 font-medium">This action cannot be undone.</p>
+                    </div>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleResetSitemap}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Reset Sitemap
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
 
               {!currentWebsite ? (
                 <EmptyState 
