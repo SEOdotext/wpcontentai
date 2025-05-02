@@ -1845,7 +1845,7 @@ const Onboarding = () => {
       console.log('Transferring data for user:', userId);
       transferDataToDatabase(userId)
         .then(() => {
-          toast.success("Setup Complete! You're ready to start creating content.");
+          toast.success("Setup Complete! Your account has been created and you're ready to start creating content.");
           navigate('/dashboard');
         })
         .catch(error => {
