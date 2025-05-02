@@ -2004,6 +2004,7 @@ const Onboarding = () => {
       // Now transfer data which will create membership and other data
       await transferDataToDatabase(signInData.user.id);
       
+      // Update this toast call to use Sonner's format
       toast.success("Welcome to Content Gardener! Your account has been created and you're ready to start creating content.");
 
       // Add a small delay to ensure data is properly stored before navigation
@@ -2016,7 +2017,7 @@ const Onboarding = () => {
     } catch (error) {
       console.error('Signup error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
-      toast.error("Signup Error: " + errorMessage, { duration: 5000 });
+      toast.error("Signup Error: " + errorMessage);
       throw error;
     }
   };
