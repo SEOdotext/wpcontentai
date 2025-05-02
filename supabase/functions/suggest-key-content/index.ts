@@ -263,7 +263,11 @@ serve(async (req) => {
     // For non-onboarding mode, use AI to suggest pages
     // Prepare the content for AI analysis
     const contentForAnalysis = pagesToAnalyze
-      .map(page => `ID: ${page.id}\nTitle: ${page.title}\nURL: ${page.url}\nType: ${page.content_type}`)
+      .map(page => {
+        // Normalize URL by removing trailing slash
+        const normalizedUrl = page.url.replace(/\/$/, '');
+        return `ID: ${page.id}\nTitle: ${page.title}\nURL: ${normalizedUrl}\nType: ${page.content_type}`;
+      })
       .join('\n\n');
 
     // Create a prompt for the AI
@@ -273,42 +277,38 @@ Available content:
 ${contentForAnalysis}
 
 Instructions:
-1. Analyze the available content and suggest ONLY business-critical pages that should be marked as key content.
-2. IMPORTANT: You MUST filter out these types of pages:
-   - Privacy/Policy pages (containing: privacy, policy, gdpr, terms, privatlivspolitik, politik)
-   - Transaction pages (containing: payment, checkout, billing, betaling, kurv)
-   - System pages (containing: system, technical, error, login, register)
-   - Thank you pages
-   - Support/documentation pages
-   - Blog posts or articles
-   - Category/tag pages
-   - Archive pages
-   - Any page with a number in the title (e.g., "Page 2", "Post 3")
+1. Analyze the available content and suggest the most important pages that should be marked as key content.
+2. Focus on pages that:
+   - Are central to the website's purpose and value proposition
+   - Provide significant value to visitors
+   - Demonstrate expertise in key subject areas
+   - Have lasting relevance and importance
+   - Represent core topics or themes
+   - Drive business goals and objectives
 
-3. You MUST ONLY suggest these types of pages:
-   - Homepage/Front page
-   - Main product/service pages
-   - Core feature pages
-   - Pricing pages
-   - About/Company pages
-   - Contact pages
-   - High-value landing pages
-
-4. Return a JSON object with exactly 5 suggestions in this format:
+3. Return a JSON object with up to 5 suggestions in this format:
 {
   "suggestions": [
     {
-      "id": "page_id",
-      "reason": "Clear explanation of business value"
+      "id": "page_id"
+    },
+    {
+      "id": "page_id"
     }
   ]
 }
 
-5. Each suggestion MUST:
-   - Have a valid page ID from the available content
-   - Include a clear explanation of business value
-   - NOT be in the excluded categories above
-   - Focus on business impact and value
+4. IMPORTANT FORMAT RULES:
+   - The response must be valid JSON
+   - Return as many suggestions as you find valuable (1-5)
+   - Each suggestion must have exactly one field: "id"
+   - The "id" must match one of the page IDs from the available content
+   - Do not include any additional fields
+   - Do not include any markdown formatting
+   - Do not include any explanatory text outside the JSON
+   - Only suggest pages that are truly valuable and relevant
+   - Do not suggest duplicate or similar pages
+   - Do not suggest system pages, email protection pages, or other non-content pages
 
 Return ONLY the JSON object, no other text.`;
 
@@ -367,18 +367,6 @@ Return ONLY the JSON object, no other text.`;
         throw new Error('Failed to parse AI response');
       }
 
-      // Define exclusion patterns
-      const exclusionPatterns = [
-        /privacy|policy|gdpr|terms|privatlivspolitik|politik/i,
-        /payment|checkout|billing|betaling|kurv/i,
-        /system|technical|error|login|register/i,
-        /thank you|tak/i,
-        /support|documentation|docs/i,
-        /blog|article|post/i,
-        /category|tag|archive/i,
-        /\d+$/  // Matches numbers at the end of titles
-      ];
-
       // Validate and filter suggestions
       const validSuggestions = suggestions.suggestions
         .filter((suggestion: any) => {
@@ -391,39 +379,49 @@ Return ONLY the JSON object, no other text.`;
             return false;
           }
 
-          // Check if page title matches any exclusion patterns
-          const isExcluded = exclusionPatterns.some(pattern => pattern.test(page.title));
-          if (isExcluded) {
-            console.log('Page excluded due to title pattern:', page.title);
-            return false;
-          }
-
           // Include the URL and title from the page in the suggestion
           suggestion.url = page.url;
           suggestion.title = page.title || 'Untitled Page';
 
           return true;
         })
-        .slice(0, suggestedCount);
+        .slice(0, suggestedCount); // Use the calculated suggestedCount instead of hardcoded 5
         
       // Ensure we don't have duplicate URLs in the suggestions
       const uniqueURLs = new Set<string>();
       const uniqueSuggestions = validSuggestions.filter((suggestion: any) => {
         if (!suggestion.url) return false;
         
+        // Normalize URL by removing trailing slash
+        const normalizedUrl = suggestion.url.replace(/\/$/, '');
+        
         // If we've already seen this URL, filter it out
-        if (uniqueURLs.has(suggestion.url)) {
+        if (uniqueURLs.has(normalizedUrl)) {
           console.log(`Filtering out duplicate URL: ${suggestion.url}`);
           return false;
         }
         
         // Otherwise, add it to our set and keep it
-        uniqueURLs.add(suggestion.url);
+        uniqueURLs.add(normalizedUrl);
         return true;
       });
       
       console.log('Found', uniqueSuggestions.length, 'unique suggestions after removing duplicates');
       console.log('Unique suggestions:', uniqueSuggestions);
+
+      // If we have no valid suggestions, return an error
+      if (uniqueSuggestions.length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: 'No valid suggestions',
+            message: 'Could not find any valid pages to suggest as key content.'
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
 
       return new Response(
         JSON.stringify({
