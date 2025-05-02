@@ -64,13 +64,6 @@ const WordPressIntegrationStep: React.FC = () => {
                 <span>Set up WordPress Integration</span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/help/wordpress-integration')}
-                className="text-xs w-full sm:w-auto"
-              >
-                Learn more
-              </Button>
             </div>
           </div>
         </div>

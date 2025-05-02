@@ -181,9 +181,6 @@ function extractTitleFromUrl(url: string): string {
     // Replace hyphens and underscores with spaces
     lastSegment = lastSegment.replace(/[-_]/g, ' ');
     
-    // Capitalize first letter of each word
-    lastSegment = lastSegment.replace(/\b\w/g, c => c.toUpperCase());
-    
     return lastSegment || 'Page';
   } catch (error) {
     console.error(`Error extracting title from URL ${url}: ${error.message}`);
