@@ -2045,7 +2045,7 @@ const Settings = () => {
                     {/* WordPress Integration Card */}
                     <Card id="wordpress">
                       <CardHeader>
-                        <CardTitle>WordPress Integration</CardTitle>
+                        <CardTitle>WordPress integration</CardTitle>
                         <CardDescription>
                           {(wpSettings?.is_connected || directWpSettings?.is_connected) ? 
                             "Manage your WordPress connection and view recent activity." : 
@@ -2269,7 +2269,7 @@ const Settings = () => {
                     {/* Publication Settings Card */}
                     <Card id="publication">
                       <CardHeader>
-                        <CardTitle>Publication Settings</CardTitle>
+                        <CardTitle>Publication settings</CardTitle>
                         <CardDescription>
                           Configure your content publication schedule and planning preferences.
                         </CardDescription>
@@ -2290,7 +2290,7 @@ const Settings = () => {
                     {/* Keywords Card */}
                     <Card id="keywords">
                       <CardHeader>
-                        <CardTitle>Keyword Management</CardTitle>
+                        <CardTitle>Keyword management</CardTitle>
                         <CardDescription>
                           Configure default keywords and tags for your content
                         </CardDescription>
@@ -2341,7 +2341,7 @@ const Settings = () => {
                     {/* Writing Style Card */}
                     <Card id="writing">
                       <CardHeader>
-                        <CardTitle>Writing Style</CardTitle>
+                        <CardTitle>Writing style</CardTitle>
                         <CardDescription>
                           Define your preferred writing style and tone for content generation
                         </CardDescription>
@@ -2375,7 +2375,7 @@ const Settings = () => {
                     {/* Content Formatting Card */}
                     <Card id="formatting">
                       <CardHeader>
-                        <CardTitle>Content Formatting</CardTitle>
+                        <CardTitle>Content formatting</CardTitle>
                         <CardDescription>
                           Learn how your content will be structured and formatted when published to WordPress, optimized for maximum GPT ranking impact
                         </CardDescription>
@@ -2508,7 +2508,7 @@ const Settings = () => {
                     {/* Website Language Card */}
                     <Card id="language">
                       <CardHeader>
-                        <CardTitle>Website Language</CardTitle>
+                        <CardTitle>Website language</CardTitle>
                         <CardDescription>
                           Set the primary language for your website content
                         </CardDescription>
@@ -2554,7 +2554,7 @@ const Settings = () => {
                     {/* Import Limits Card */}
                     <Card id="import">
                       <CardHeader>
-                        <CardTitle>Import Limits</CardTitle>
+                        <CardTitle>Import limits</CardTitle>
                         <CardDescription>
                           Configure limits for page imports and key content
                         </CardDescription>
@@ -2567,7 +2567,7 @@ const Settings = () => {
                     {/* AI Image Generation Card */}
                     <Card id="images">
                       <CardHeader>
-                        <CardTitle>AI Image Generation</CardTitle>
+                        <CardTitle>AI image generation</CardTitle>
                         <CardDescription>
                           Configure AI-powered image generation for your posts
                         </CardDescription>
@@ -2718,7 +2718,7 @@ const Settings = () => {
                     {/* Social Media Card */}
                     <Card id="social">
                       <CardHeader>
-                        <CardTitle>Social Media</CardTitle>
+                        <CardTitle>Social media</CardTitle>
                         <CardDescription>
                           Configure social media platforms for content distribution
                         </CardDescription>
@@ -2787,7 +2787,7 @@ const Settings = () => {
             {window.location.href.includes('localhost:8080') && (
               <Card className="mt-6">
                 <CardHeader>
-                  <CardTitle>Data Transfer (Development Only)</CardTitle>
+                  <CardTitle>Data transfer (Development only)</CardTitle>
                   <CardDescription>
                     Manually retrigger data transfer from local storage to database
                   </CardDescription>
