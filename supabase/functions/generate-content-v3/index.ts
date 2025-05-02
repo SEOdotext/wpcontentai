@@ -118,7 +118,7 @@ serve(async (req) => {
     let postTheme, website, settings, websiteContent, cornerstoneContent;
     let contentLanguage = 'en';
     let writingStyle = 'Professional and informative';
-    let formattemplate = null;
+    let formatTemplate = null;
     let subjectMatters = [];
     
     if (isOnboarding) {
@@ -314,10 +314,10 @@ serve(async (req) => {
 - DO NOT include extra newlines between elements
 - Ensure all HTML tags are properly closed
 - Format lists properly with each <li> on its own line`;
-    } else if (formattemplate) {
+    } else if (formatTemplate) {
       formattingInstructions = `WORDPRESS TEMPLATE FORMAT:
 Use this exact HTML structure for your content:
-${formattemplate}
+${formatTemplate}
 
 Replace the content between the entry-content tags with your generated content.
 Ensure your content matches the styling and structure of the template.

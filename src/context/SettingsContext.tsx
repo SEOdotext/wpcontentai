@@ -33,7 +33,7 @@ interface SettingsContextType {
   subjectMatters: string[];
   setSubjectMatters: (subjects: string[]) => void;
   formattemplate: string;
-  setformattemplate: (template: string) => void;
+  setFormatTemplate: (template: string) => void;
   imagePrompt: string;
   setImagePrompt: (prompt: string) => void;
   imageModel: string;
@@ -59,7 +59,7 @@ export const defaultSettings = {
   postingFrequency: 3, // Default to 3 posts per week
   writingStyle: 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through. Structure your content to grab attention with a strong hook, provide context that connects with your reader, deliver clear value, back it up with proof, and end with a clear action step. This natural flow helps both readers and AI understand your message better.',
   subjectMatters: [], // Empty array for default subjects
-  formattemplate: `<!-- WordPress Post HTML Structure Example -->
+  formatTemplate: `<!-- WordPress Post HTML Structure Example -->
 <article class="post">
 
   <div class="entry-content">
@@ -108,7 +108,7 @@ const SettingsContext = createContext<SettingsContextType>({
   setWritingStyle: () => {},
   restoreDefaultWritingStyle: () => {},
   setSubjectMatters: () => {},
-  setformattemplate: () => {},
+  setFormatTemplate: () => {},
   setImagePrompt: () => {},
   setImageModel: () => {},
   setNegativePrompt: () => {},
@@ -124,7 +124,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [postingFrequency, setPostingFrequency] = useState<number>(3);
   const [writingStyle, setWritingStyle] = useState<string>('');
   const [subjectMatters, setSubjectMatters] = useState<string[]>([]);
-  const [formattemplate, setformattemplate] = useState<string>('');
+  const [formattemplate, setFormatTemplate] = useState<string>('');
   const [imagePrompt, setImagePrompt] = useState<string>('');
   const [imageModel, setImageModel] = useState<string>('');
   const [negativePrompt, setNegativePrompt] = useState<string>('');
@@ -140,7 +140,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setPostingFrequency(defaultSettings.postingFrequency);
         setWritingStyle(defaultSettings.writingStyle);
         setSubjectMatters(defaultSettings.subjectMatters);
-        setformattemplate(defaultSettings.formattemplate);
+        setFormatTemplate(defaultSettings.formattemplate);
         setImagePrompt(defaultSettings.imagePrompt);
         setImageModel(defaultSettings.imageModel);
         setNegativePrompt(defaultSettings.negativePrompt);
@@ -260,7 +260,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setPostingFrequency(defaultSettings.postingFrequency);
             setWritingStyle(defaultSettings.writingStyle);
             setSubjectMatters(defaultSettings.subjectMatters);
-            setformattemplate(defaultSettings.formattemplate);
+            setFormatTemplate(defaultSettings.formatTemplate);
             setImagePrompt(defaultSettings.imagePrompt);
             setImageModel(defaultSettings.imageModel);
             setNegativePrompt(defaultSettings.negativePrompt);
@@ -301,7 +301,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       
       // Use current values if not provided
-      const templateToUpdate = template || formattemplate;
+      const templateToUpdate = template || formatTemplate;
       const promptToUpdate = prompt || imagePrompt;
       const modelToUpdate = model || imageModel;
       const negPromptToUpdate = negPrompt || negativePrompt;
@@ -309,21 +309,25 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Ensure subjects is a clean array of strings
       const cleanSubjects = subjects.filter(s => s && s.trim().length > 0);
       console.log("Saving settings with subjects:", cleanSubjects);
+
+      const settingsData = {
+        posting_frequency: frequency,
+        writing_style: style,
+        subject_matters: cleanSubjects,
+        format_template: templateToUpdate,
+        image_prompt: promptToUpdate,
+        image_model: modelToUpdate,
+        negative_prompt: negPromptToUpdate,
+        weekly_planning_day: weeklyPlanningDay,
+        updated_at: new Date().toISOString()
+      };
       
-      // If we don't have a settingsId, we need to create new settings
       if (!settingsId) {
         console.log("Creating new settings with subjects:", cleanSubjects);
         const { data: newSettings, error: insertError } = await supabase
           .from('publication_settings')
           .insert({
-            posting_frequency: frequency,
-            writing_style: style,
-            subject_matters: cleanSubjects,
-            format_template: templateToUpdate,
-            image_prompt: promptToUpdate,
-            image_model: modelToUpdate,
-            negative_prompt: negPromptToUpdate,
-            weekly_planning_day: weeklyPlanningDay,
+            ...settingsData,
             website_id: currentWebsite.id,
             organisation_id: currentWebsite.organisation_id
           })
@@ -345,17 +349,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.log("Updating settings with subjects:", cleanSubjects);
         const { error: updateError } = await supabase
           .from('publication_settings')
-          .update({
-            posting_frequency: frequency,
-            writing_style: style,
-            subject_matters: cleanSubjects,
-            format_template: templateToUpdate,
-            image_prompt: promptToUpdate,
-            image_model: modelToUpdate,
-            negative_prompt: negPromptToUpdate,
-            weekly_planning_day: weeklyPlanningDay,
-            updated_at: new Date().toISOString()
-          })
+          .update(settingsData)
           .eq('id', settingsId);
           
         if (updateError) {
@@ -370,18 +364,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Error saving settings:', error);
       toast.error('Failed to save settings. Please try again.');
     }
-  }, [currentWebsite, settingsId, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay]);
+  }, [currentWebsite, settingsId, formatTemplate, imagePrompt, imageModel, negativePrompt]);
 
   // Handle publication frequency changes
   const handleSetPostingFrequency = (days: number) => {
     setPostingFrequency(days);
-    updateSettingsInDatabase(days, writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
+    updateSettingsInDatabase(days, writingStyle, subjectMatters, FormatTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Handle writing style changes
   const handleSetWritingStyle = (style: string) => {
     setWritingStyle(style);
-    updateSettingsInDatabase(postingFrequency, style, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
+    updateSettingsInDatabase(postingFrequency, style, subjectMatters, formatTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Handle subject matters changes
@@ -391,20 +385,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Add a small delay to ensure state is updated before saving to database
     setTimeout(() => {
       console.log("Updating database with subject matters:", subjects);
-      updateSettingsInDatabase(postingFrequency, writingStyle, subjects, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
+      updateSettingsInDatabase(postingFrequency, writingStyle, subjects, formatTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
     }, 100);
   };
 
   // Add handler for WordPress template
-  const handleSetformattemplate = (template: string) => {
-    setformattemplate(template);
+  const handleSetFormatTemplate = (template: string) => {
+    setFormatTemplate(template);
     updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, template, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Add handler for image prompt
   const handleSetImagePrompt = (prompt: string) => {
     setImagePrompt(prompt);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formattemplate, prompt, imageModel, negativePrompt, weeklyPlanningDay);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formatTemplate, prompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Add handler for image model
@@ -414,7 +408,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       postingFrequency,
       writingStyle,
       subjectMatters,
-      formattemplate,
+      formatTemplate,
       imagePrompt,
       model,
       negativePrompt,
@@ -425,19 +419,19 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Add handler for negative prompt
   const handleSetNegativePrompt = (prompt: string) => {
     setNegativePrompt(prompt);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, prompt, weeklyPlanningDay);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formatTemplate, imagePrompt, imageModel, prompt, weeklyPlanningDay);
   };
 
   // Add handler for weekly planning day
   const handleSetWeeklyPlanningDay = (day: string) => {
     setWeeklyPlanningDay(day);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, day);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formatTemplate, imagePrompt, imageModel, negativePrompt, day);
   };
 
   // Add handler for restoring default writing style
   const handleRestoreDefaultWritingStyle = () => {
     setWritingStyle(defaultSettings.writingStyle);
-    updateSettingsInDatabase(postingFrequency, defaultSettings.writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
+    updateSettingsInDatabase(postingFrequency, defaultSettings.writingStyle, subjectMatters, formatTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   return (
@@ -451,8 +445,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         restoreDefaultWritingStyle: handleRestoreDefaultWritingStyle,
         subjectMatters, 
         setSubjectMatters: handleSetSubjectMatters,
-        formattemplate,
-        setformattemplate: handleSetformattemplate,
+        FormatTemplate,
+        setFormatTemplate: handleSetFormatTemplate,
         imagePrompt,
         setImagePrompt: handleSetImagePrompt,
         imageModel,

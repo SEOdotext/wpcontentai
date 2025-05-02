@@ -411,7 +411,7 @@ const extractPotentialLinks = async (websiteId: string): Promise<{ title: string
  * @param title The post title
  * @returns The formatted content
  */
-const applyformattemplate = (content: string, template: string, title: string): string => {
+const applyFormatTemplate = (content: string, template: string, title: string): string => {
   // If the template is empty or just basic, return the content directly
   if (!template || template.trim().length === 0 || !template.includes('entry-content')) {
     console.log('Using raw content without template application');
@@ -815,7 +815,7 @@ export const generatePostContent = async (
         
         // Apply WordPress template if provided
         if (wpTemplate && wpTemplate.trim().length > 0) {
-          generatedContent = applyformattemplate(generatedContent, wpTemplate, title);
+          generatedContent = applyFormatTemplate(generatedContent, wpTemplate, title);
         }
         
         // Update the post_theme in the database if a postThemeId was provided
