@@ -99,10 +99,12 @@ serve(async (req) => {
         website_id,
         status,
         scheduled_date,
-        wp_sent_date
+        wp_sent_date,
+        wp_post_url
       `)
       .in('status', ['approved', 'generated'])
       .is('wp_sent_date', null)
+      .is('wp_post_url', null)
       .lte('scheduled_date', today.toISOString());
 
     if (postsError) {

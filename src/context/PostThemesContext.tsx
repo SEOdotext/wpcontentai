@@ -630,6 +630,12 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         return false;
       }
 
+      // Check if the theme has already been sent to WordPress
+      if (theme.wp_post_url) {
+        toast.error('This post has already been sent to WordPress');
+        return false;
+      }
+
       // Call the WordPress integration function with minimal data
       const { data, error: wpError } = await supabase.functions.invoke('wordpress-posts', {
         body: {
