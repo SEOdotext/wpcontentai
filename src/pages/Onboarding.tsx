@@ -917,6 +917,14 @@ const Onboarding = () => {
           
           console.log("suggest-key-content result:", result);
           
+          if (!result) {
+            throw new Error("No response received from suggest-key-content");
+          }
+          
+          if (result.error) {
+            throw new Error(result.error.message || "Error from suggest-key-content");
+          }
+          
           if (result?.suggestions && result.suggestions.length > 0) {
             console.log(`Received ${result.suggestions.length} key content suggestions`);
             
