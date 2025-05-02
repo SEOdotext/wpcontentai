@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar, CheckCircle2 } from 'lucide-react';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { createClient } from '@supabase/supabase-js';
 import { useWebsites } from '@/context/WebsitesContext';
-import { toast } from 'sonner';
 import { usePostThemes } from '@/context/PostThemesContext';
 
 const WeeklyPlanningButton: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isScheduleFilled, setIsScheduleFilled] = useState(false);
-  const { toast } = useToast();
   const { currentWebsite } = useWebsites();
   const { checkWeeklySchedule } = usePostThemes();
 
@@ -32,10 +30,7 @@ const WeeklyPlanningButton: React.FC = () => {
       const { isFilled, missingSlots } = await checkWeeklySchedule();
       
       if (isFilled) {
-        toast({
-          title: "Schedule Complete",
-          description: "No more posts required for the next week",
-        });
+        toast("Schedule Complete - No more posts required for the next week");
         return;
       }
 
@@ -90,9 +85,8 @@ const WeeklyPlanningButton: React.FC = () => {
       const result = await response.json();
       console.log('Weekly planning result:', result);
 
-      toast({
-        title: 'Weekly planning started',
-        description: `Content planning started for ${currentWebsite.name}. You will receive an email with the results.`,
+      toast.success('Weekly planning started', {
+        description: `Content planning started for ${currentWebsite.name}. You will receive an email with the results.`
       });
 
       // Recheck schedule after planning
@@ -101,11 +95,7 @@ const WeeklyPlanningButton: React.FC = () => {
 
     } catch (error) {
       console.error('Error triggering weekly planning:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to start weekly planning. Please try again.',
-        variant: 'destructive',
-      });
+      toast.error(error instanceof Error ? error.message : 'Failed to start weekly planning. Please try again.');
     } finally {
       setIsLoading(false);
     }

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useToast } from '@/components/ui/use-toast';
 import { useWebsites } from '@/context/WebsitesContext';
 import { format } from 'date-fns';
 import { Calendar } from '@/components/ui/calendar';
@@ -26,7 +25,6 @@ interface Website {
 }
 
 export function ContentCalendar() {
-  const { toast } = useToast();
   const { currentWebsite } = useWebsites();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [posts, setPosts] = useState<Post[]>([]);
@@ -48,15 +46,11 @@ export function ContentCalendar() {
       setPosts(data || []);
     } catch (error) {
       console.error('Error fetching posts:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch posts. Please try again.',
-        variant: 'destructive',
-      });
+      toast.error('Failed to fetch posts. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [currentWebsite?.id, toast]);
+  }, [currentWebsite?.id]);
 
   useEffect(() => {
     fetchPosts();
@@ -65,21 +59,12 @@ export function ContentCalendar() {
   const handleGenerateAndPublish = async (postThemeId: string) => {
     try {
       if (!currentWebsite?.id) {
-        toast({
-          title: 'Error',
-          description: 'Please select a website first',
-          variant: 'destructive'
-        });
+        toast.error('Please select a website first');
         return;
       }
 
-      // Prevent multiple generations for the same post theme
       if (isGenerating) {
-        toast({
-          title: 'Warning',
-          description: 'Content generation already in progress',
-          variant: 'destructive'
-        });
+        toast.error('Content generation already in progress');
         return;
       }
 
@@ -87,21 +72,14 @@ export function ContentCalendar() {
       const response = await generateAndPublishContent(postThemeId, currentWebsite.id);
       
       if (response.success) {
-        toast({
-          title: 'Success',
-          description: 'Content generated and published successfully'
-        });
+        toast.success('Content generated and published successfully');
         await fetchPosts();
       } else {
         throw new Error('Failed to generate and publish content');
       }
     } catch (error) {
       console.error('Error generating and publishing content:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to generate and publish content',
-        variant: 'destructive'
-      });
+      toast.error('Failed to generate and publish content');
     } finally {
       setIsGenerating(false);
     }

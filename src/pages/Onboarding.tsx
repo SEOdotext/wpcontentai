@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { toast } from 'sonner';
 import { 
   ArrowRight, 
   FileText, 
@@ -39,14 +40,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Logo } from "@/components/Logo";
-import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from 'uuid';
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Helmet } from 'react-helmet-async';
 import { Separator } from '@/components/ui/separator';
-import { toast } from 'sonner';
 import Header from '@/components/Header';
 import { useOrganisation } from '@/context/OrganisationContext';
 import { useWebsites } from '@/context/WebsitesContext';
@@ -471,7 +470,6 @@ const Onboarding = () => {
     showSignupModal: false,
     showEmailVerification: false,
   });
-  const { toast } = useToast();
   
   // Track liked ideas
   const [likedIdeas, setLikedIdeas] = useState<string[]>([]);
@@ -1416,9 +1414,7 @@ const Onboarding = () => {
   // Move to Setup 3: Content Generation
   const handleContinueToContentCreation = async () => {
     if (!hasLikedIdeas()) {
-      toast("Error", {
-        description: "Please like at least one content idea to continue"
-      });
+      toast.error("Please like at least one content idea to continue");
       return;
     }
 
@@ -1494,9 +1490,7 @@ const Onboarding = () => {
     const likedIdea = postIdeas.find((idea: any) => likedIdeas.includes(idea.id));
     
     if (!likedIdea) {
-      toast("Error", {
-        description: "No liked ideas found. Please select an idea first."
-      });
+      toast.error("No liked ideas found. Please select an idea first.");
       return;
     }
     
@@ -1602,9 +1596,7 @@ const Onboarding = () => {
           clearInterval(progressInterval);
           setState(prev => ({ ...prev, progress: 0 }));
           
-          toast("Error", {
-            description: "Failed to generate content. Please try again."
-          });
+          toast.error("Failed to generate content. Please try again.");
           
           console.error("No content returned from generate-content-v3 function");
         }
@@ -1614,9 +1606,7 @@ const Onboarding = () => {
         clearInterval(progressInterval);
         setState(prev => ({ ...prev, progress: 0 }));
         
-        toast("Error", {
-          description: error.message || "Failed to generate content. Please try again."
-        });
+        toast.error("Failed to generate content. Please try again.");
         
         console.error("Error generating content:", error);
       });
@@ -1750,9 +1740,7 @@ const Onboarding = () => {
       
       // Ensure we don't exceed the posting frequency
       if (newDays.length > prev.postingFrequency) {
-        toast("Warning", {
-          description: `You can only select ${prev.postingFrequency} days for your current frequency.`
-        });
+        toast.warning(`You can only select ${prev.postingFrequency} days for your current frequency.`);
         return prev;
       }
       
@@ -1777,9 +1765,7 @@ const Onboarding = () => {
 
   // Add WordPress connection handlers
   const handleSkipWordPress = () => {
-    toast("Content saved as draft", {
-      description: "You can connect WordPress later from the settings."
-    });
+    toast.info("Content saved as draft. You can connect WordPress later from the settings.");
     setState(prev => ({ ...prev, step: 5 })); // Go to completion
     
     // Update URL to reflect current step
@@ -1859,9 +1845,7 @@ const Onboarding = () => {
       console.log('Transferring data for user:', userId);
       transferDataToDatabase(userId)
         .then(() => {
-          toast("Setup Complete!", {
-            description: "You're ready to start creating content."
-          });
+          toast.success("Setup Complete! You're ready to start creating content.");
           navigate('/dashboard');
         })
         .catch(error => {
@@ -1870,9 +1854,7 @@ const Onboarding = () => {
         });
     } else {
       console.error('No user ID found for data transfer');
-      toast.error("Setup Error", {
-        description: "User ID not found. Please try signing up again."
-      });
+      toast.error("Setup Error: User ID not found. Please try signing up again.");
     }
   };
 
@@ -2022,9 +2004,7 @@ const Onboarding = () => {
       // Now transfer data which will create membership and other data
       await transferDataToDatabase(signInData.user.id);
       
-      toast.success("Welcome to Content Gardener!", {
-        description: "Your account has been created and you're ready to start creating content."
-      });
+      toast.success("Welcome to Content Gardener! Your account has been created and you're ready to start creating content.");
 
       // Add a small delay to ensure data is properly stored before navigation
       setTimeout(() => {
@@ -2036,10 +2016,7 @@ const Onboarding = () => {
     } catch (error) {
       console.error('Signup error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
-      toast.error("Signup Error", {
-        description: errorMessage,
-        duration: 5000
-      });
+      toast.error("Signup Error: " + errorMessage, { duration: 5000 });
       throw error;
     }
   };
@@ -2112,6 +2089,19 @@ const Onboarding = () => {
 
     // Show signup modal
     setState(prev => ({ ...prev, showSignupModal: true }));
+  };
+
+  // Add generateNewIdeas function
+  const generateNewIdeas = async () => {
+    // Implementation of generateNewIdeas
+    const postIdeas = JSON.parse(localStorage.getItem('post_ideas') || '[]');
+    const newIdeas = postIdeas.map(idea => ({
+      ...idea,
+      hidden: false,
+      liked: false
+    }));
+    localStorage.setItem('post_ideas', JSON.stringify(newIdeas));
+    return newIdeas;
   };
 
   return (

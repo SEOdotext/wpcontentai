@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
-import { useToast } from "@/components/ui/use-toast";
 import { Loader2 } from "lucide-react";
 import { useSettings } from '../context/SettingsContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -83,11 +82,7 @@ export function PublicationSettings({
   const handleFrequencyChange = (value: number) => {
     // Check if the new frequency would exceed the maximum limit
     if (value > 299) {
-      toast({
-        title: "Maximum limit reached",
-        description: "You can schedule a maximum of 299 articles per week.",
-        variant: "destructive"
-      });
+      toast.error("Maximum limit reached - You can schedule a maximum of 299 articles per week.");
       return;
     }
     
@@ -161,11 +156,7 @@ export function PublicationSettings({
   const handleAddDay = (day: string) => {
     // Check if adding a day would exceed the maximum limit of 299 articles per week
     if (postingDays.length >= 299) {
-      toast({
-        title: "Maximum limit reached",
-        description: "You can schedule a maximum of 299 articles per week.",
-        variant: "destructive"
-      });
+      toast.error("Maximum limit reached - You can schedule a maximum of 299 articles per week.");
       return;
     }
     
@@ -228,17 +219,10 @@ export function PublicationSettings({
           postingDays,
           weeklyPlanningDay: localWeeklyPlanningDay
         });
-        toast({
-          title: "Success",
-          description: "Publication settings saved successfully"
-        });
+        toast.success("Publication settings saved successfully");
       } catch (error) {
         console.error('Error saving settings:', error);
-        toast({
-          title: "Error",
-          description: "Failed to save publication settings",
-          variant: "destructive"
-        });
+        toast.error("Failed to save publication settings");
       } finally {
         setIsSaving(false);
       }
