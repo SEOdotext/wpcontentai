@@ -69,7 +69,7 @@ interface PublicationSettings {
   posting_frequency: number;
   writing_style: string;
   subject_matters: any; // Using any for now since we don't have the Json type
-  wordpress_template: string;
+  format_template: string;
   created_at: string;
   updated_at: string;
 }

@@ -621,7 +621,7 @@
   },
   {
     "section": "columns_and_checks",
-    "identifier": "publication_settings.wordpress_template",
+    "identifier": "publication_settings.format_template",
     "detail_1": "text",
     "detail_2": null,
     "detail_3": null,

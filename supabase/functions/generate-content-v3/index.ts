@@ -118,7 +118,7 @@ serve(async (req) => {
     let postTheme, website, settings, websiteContent, cornerstoneContent;
     let contentLanguage = 'en';
     let writingStyle = 'Professional and informative';
-    let wordpressTemplate = null;
+    let formattemplate = null;
     let subjectMatters = [];
     
     if (isOnboarding) {
@@ -229,7 +229,7 @@ serve(async (req) => {
       // Get publication settings (writing style, template, etc.)
       const { data: fetchedSettings, error: settingsError } = await supabaseAdmin
         .from('publication_settings')
-        .select('writing_style, subject_matters, wordpress_template')
+        .select('writing_style, subject_matters, format_template')
         .eq('website_id', effectiveWebsiteId)
         .single();
 
@@ -239,9 +239,9 @@ serve(async (req) => {
         
         // Use default settings instead of throwing error
         settings = {
-          writing_style: 'Professional and informative',
+          writing_style: '',
           subject_matters: [],
-          wordpress_template: null
+          format_template: null
         };
       } else {
         settings = fetchedSettings;
@@ -285,7 +285,7 @@ serve(async (req) => {
 
       contentLanguage = website?.language || 'en';
       writingStyle = settings?.writing_style || 'Professional and informative';
-      wordpressTemplate = settings?.wordpress_template;
+      formatTemplate = settings?.format_template;
       subjectMatters = settings?.subject_matters || [];
 
       // Get cornerstone content for internal links
@@ -314,10 +314,10 @@ serve(async (req) => {
 - DO NOT include extra newlines between elements
 - Ensure all HTML tags are properly closed
 - Format lists properly with each <li> on its own line`;
-    } else if (wordpressTemplate) {
+    } else if (formattemplate) {
       formattingInstructions = `WORDPRESS TEMPLATE FORMAT:
 Use this exact HTML structure for your content:
-${wordpressTemplate}
+${formattemplate}
 
 Replace the content between the entry-content tags with your generated content.
 Ensure your content matches the styling and structure of the template.

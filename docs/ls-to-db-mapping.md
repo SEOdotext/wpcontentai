@@ -189,7 +189,7 @@ interface DbPublicationSettings {
   posting_days: jsonb;  // Required
   writing_style: string;  // Required
   subject_matters: jsonb;  // Required
-  wordpress_template: string | null;
+  format_template: string | null;
   image_prompt: string | null;
   negative_prompt: string | null;
   image_model: string | null;
@@ -209,7 +209,7 @@ interface DbPublicationSettings {
   ],
   "writing_style": "Professional and informative",
   "subject_matters": ["technology", "business"],
-  "wordpress_template": null,
+  "format_template": null,
   "image_prompt": null,
   "negative_prompt": null,
   "image_model": null,

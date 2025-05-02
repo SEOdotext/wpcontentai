@@ -226,7 +226,7 @@ serve(async (req) => {
       if (isOnboarding) {
         console.log('Using default publication settings for onboarding');
         pubSettings = {
-          writing_style: writing_style || 'professional',
+          writing_style: writing_style || 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through. Structure your content to grab attention with a strong hook, provide context that connects with your reader, deliver clear value, back it up with proof, and end with a clear action step. This natural flow helps both readers and AI understand your message better.',
           subject_matters: subject_matters.length ? subject_matters : ['general'],
           image_prompt: 'Create a professional blog image'
         };

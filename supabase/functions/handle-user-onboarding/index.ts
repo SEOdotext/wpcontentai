@@ -17,7 +17,7 @@ interface OnboardingData {
     posting_days: Array<{ day: string; count: number }>
     writing_style: string
     subject_matters: any[]
-    wordpress_template?: string
+    format_template?: string
     image_prompt?: string
     negative_prompt?: string
   }
@@ -525,7 +525,40 @@ serve(async (req) => {
         posting_days: publicationSettings.posting_days,
         writing_style: publicationSettings.writing_style,
         subject_matters: publicationSettings.subject_matters,
-        wordpress_template: publicationSettings.wordpress_template || null,
+        format_template: `<!-- Post format structure example -->
+<article class="post">
+  <div class="entry-content">
+    <p>First paragraph of the post with an <a href="#">example link</a> goes here.</p>
+    
+    <h2>First Subheading</h2>
+    <p>Content under the first subheading with <strong>bold text</strong> and <em>italic text</em>.</p>
+    
+    <h3>Secondary Subheading</h3>
+    <p>More detailed content explaining the topic.</p>
+    
+    <ul>
+      <li>First bullet point</li>
+      <li>Second bullet point</li>
+      <li>Third bullet point with <a href="#">link</a></li>
+    </ul>
+    
+    <h2>Second Main Subheading</h2>
+    <p>Opening paragraph for this section introducing the next points.</p>
+    
+    <ol>
+      <li>First numbered item</li>
+      <li>Second numbered item</li>
+      <li>Third numbered item</li>
+    </ol>
+    
+    <blockquote>
+      <p>This is an example of a blockquote that might contain a testimonial or important quote related to the content.</p>
+    </blockquote>
+    
+    <h2>Conclusion</h2>
+    <p>Summary paragraph that wraps up the post and may include a call to action.</p>
+  </div>
+</article>`,
         image_prompt: publicationSettings.image_prompt || null,
         negative_prompt: publicationSettings.negative_prompt || null,
         created_at: timestamp,

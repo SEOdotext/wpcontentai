@@ -13,7 +13,7 @@ interface PublicationSettings {
   posting_frequency: number;
   writing_style: string;
   subject_matters: Json;
-  wordpress_template?: string;
+  format_template?: string;
   website_id: string;
   created_at: string;
   updated_at: string;
@@ -24,6 +24,7 @@ interface PublicationSettings {
 }
 
 interface SettingsContextType {
+  settingsId: string | null;
   postingFrequency: number; // Days between posts
   setPostingFrequency: (days: number) => void;
   writingStyle: string;
@@ -31,8 +32,8 @@ interface SettingsContextType {
   restoreDefaultWritingStyle: () => void;
   subjectMatters: string[];
   setSubjectMatters: (subjects: string[]) => void;
-  wordpressTemplate: string;
-  setWordpressTemplate: (template: string) => void;
+  formattemplate: string;
+  setformattemplate: (template: string) => void;
   imagePrompt: string;
   setImagePrompt: (prompt: string) => void;
   imageModel: string;
@@ -54,11 +55,11 @@ interface SettingsContextType {
   ) => Promise<void>;
 }
 
-const defaultSettings = {
-  postingFrequency: 7, // Default to weekly
+export const defaultSettings = {
+  postingFrequency: 3, // Default to 3 posts per week
   writingStyle: 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through. Structure your content to grab attention with a strong hook, provide context that connects with your reader, deliver clear value, back it up with proof, and end with a clear action step. This natural flow helps both readers and AI understand your message better.',
   subjectMatters: [], // Empty array for default subjects
-  wordpressTemplate: `<!-- WordPress Post HTML Structure Example -->
+  formattemplate: `<!-- WordPress Post HTML Structure Example -->
 <article class="post">
 
   <div class="entry-content">
@@ -97,15 +98,17 @@ const defaultSettings = {
   imagePrompt: 'Create a modern, professional image that represents: {title}. Context: {content}',
   imageModel: 'dalle', // Default to DALL-E
   negativePrompt: '', // Default empty negative prompt for stable diffusion
+  weeklyPlanningDay: 'friday' // Default weekly planning day
 };
 
 const SettingsContext = createContext<SettingsContextType>({
+  settingsId: null,
   ...defaultSettings,
   setPostingFrequency: () => {},
   setWritingStyle: () => {},
   restoreDefaultWritingStyle: () => {},
   setSubjectMatters: () => {},
-  setWordpressTemplate: () => {},
+  setformattemplate: () => {},
   setImagePrompt: () => {},
   setImageModel: () => {},
   setNegativePrompt: () => {},
@@ -121,7 +124,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [postingFrequency, setPostingFrequency] = useState<number>(3);
   const [writingStyle, setWritingStyle] = useState<string>('');
   const [subjectMatters, setSubjectMatters] = useState<string[]>([]);
-  const [wordpressTemplate, setWordpressTemplate] = useState<string>('');
+  const [formattemplate, setformattemplate] = useState<string>('');
   const [imagePrompt, setImagePrompt] = useState<string>('');
   const [imageModel, setImageModel] = useState<string>('');
   const [negativePrompt, setNegativePrompt] = useState<string>('');
@@ -137,7 +140,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setPostingFrequency(defaultSettings.postingFrequency);
         setWritingStyle(defaultSettings.writingStyle);
         setSubjectMatters(defaultSettings.subjectMatters);
-        setWordpressTemplate(defaultSettings.wordpressTemplate);
+        setformattemplate(defaultSettings.formattemplate);
         setImagePrompt(defaultSettings.imagePrompt);
         setImageModel(defaultSettings.imageModel);
         setNegativePrompt(defaultSettings.negativePrompt);
@@ -181,9 +184,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setPostingFrequency(settings.posting_frequency);
           setWritingStyle(settings.writing_style);
           
-          // Set WordPress template if it exists
-          if (settings.wordpress_template) {
-            setWordpressTemplate(settings.wordpress_template);
+          // Set format template if it exists
+          if (settings.format_template) {
+            setFormatTemplate(settings.format_template);
           }
           
           // Set image model if it exists
@@ -234,7 +237,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               posting_frequency: defaultSettings.postingFrequency,
               writing_style: defaultSettings.writingStyle,
               subject_matters: defaultSettings.subjectMatters,
-              wordpress_template: defaultSettings.wordpressTemplate,
+              format_template: defaultSettings.formatTemplate,
               image_prompt: defaultSettings.imagePrompt,
               image_model: defaultSettings.imageModel,
               negative_prompt: defaultSettings.negativePrompt,
@@ -257,7 +260,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setPostingFrequency(defaultSettings.postingFrequency);
             setWritingStyle(defaultSettings.writingStyle);
             setSubjectMatters(defaultSettings.subjectMatters);
-            setWordpressTemplate(defaultSettings.wordpressTemplate);
+            setformattemplate(defaultSettings.formattemplate);
             setImagePrompt(defaultSettings.imagePrompt);
             setImageModel(defaultSettings.imageModel);
             setNegativePrompt(defaultSettings.negativePrompt);
@@ -298,7 +301,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       
       // Use current values if not provided
-      const templateToUpdate = template || wordpressTemplate;
+      const templateToUpdate = template || formattemplate;
       const promptToUpdate = prompt || imagePrompt;
       const modelToUpdate = model || imageModel;
       const negPromptToUpdate = negPrompt || negativePrompt;
@@ -316,7 +319,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             posting_frequency: frequency,
             writing_style: style,
             subject_matters: cleanSubjects,
-            wordpress_template: templateToUpdate,
+            format_template: templateToUpdate,
             image_prompt: promptToUpdate,
             image_model: modelToUpdate,
             negative_prompt: negPromptToUpdate,
@@ -346,7 +349,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             posting_frequency: frequency,
             writing_style: style,
             subject_matters: cleanSubjects,
-            wordpress_template: templateToUpdate,
+            format_template: templateToUpdate,
             image_prompt: promptToUpdate,
             image_model: modelToUpdate,
             negative_prompt: negPromptToUpdate,
@@ -367,18 +370,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('Error saving settings:', error);
       toast.error('Failed to save settings. Please try again.');
     }
-  }, [currentWebsite, settingsId, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay]);
+  }, [currentWebsite, settingsId, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay]);
 
   // Handle publication frequency changes
   const handleSetPostingFrequency = (days: number) => {
     setPostingFrequency(days);
-    updateSettingsInDatabase(days, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
+    updateSettingsInDatabase(days, writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Handle writing style changes
   const handleSetWritingStyle = (style: string) => {
     setWritingStyle(style);
-    updateSettingsInDatabase(postingFrequency, style, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
+    updateSettingsInDatabase(postingFrequency, style, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Handle subject matters changes
@@ -388,20 +391,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Add a small delay to ensure state is updated before saving to database
     setTimeout(() => {
       console.log("Updating database with subject matters:", subjects);
-      updateSettingsInDatabase(postingFrequency, writingStyle, subjects, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
+      updateSettingsInDatabase(postingFrequency, writingStyle, subjects, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
     }, 100);
   };
 
   // Add handler for WordPress template
-  const handleSetWordpressTemplate = (template: string) => {
-    setWordpressTemplate(template);
+  const handleSetformattemplate = (template: string) => {
+    setformattemplate(template);
     updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, template, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Add handler for image prompt
   const handleSetImagePrompt = (prompt: string) => {
     setImagePrompt(prompt);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, prompt, imageModel, negativePrompt, weeklyPlanningDay);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formattemplate, prompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Add handler for image model
@@ -411,7 +414,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       postingFrequency,
       writingStyle,
       subjectMatters,
-      wordpressTemplate,
+      formattemplate,
       imagePrompt,
       model,
       negativePrompt,
@@ -422,19 +425,19 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Add handler for negative prompt
   const handleSetNegativePrompt = (prompt: string) => {
     setNegativePrompt(prompt);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, prompt, weeklyPlanningDay);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, prompt, weeklyPlanningDay);
   };
 
   // Add handler for weekly planning day
   const handleSetWeeklyPlanningDay = (day: string) => {
     setWeeklyPlanningDay(day);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, day);
+    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, day);
   };
 
   // Add handler for restoring default writing style
   const handleRestoreDefaultWritingStyle = () => {
     setWritingStyle(defaultSettings.writingStyle);
-    updateSettingsInDatabase(postingFrequency, defaultSettings.writingStyle, subjectMatters, wordpressTemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
+    updateSettingsInDatabase(postingFrequency, defaultSettings.writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   return (
@@ -448,8 +451,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         restoreDefaultWritingStyle: handleRestoreDefaultWritingStyle,
         subjectMatters, 
         setSubjectMatters: handleSetSubjectMatters,
-        wordpressTemplate,
-        setWordpressTemplate: handleSetWordpressTemplate,
+        formattemplate,
+        setformattemplate: handleSetformattemplate,
         imagePrompt,
         setImagePrompt: handleSetImagePrompt,
         imageModel,

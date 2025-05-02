@@ -61,7 +61,7 @@ interface WordPressSettings {
 }
 
 // Add a constant for the clean template at the top of the file
-const CLEAN_WORDPRESS_TEMPLATE = `<article class="post">
+const CLEAN_FORMAT_TEMPLATE = `<article class="post">
   <header class="entry-header">
     <h1 class="entry-title">Post Title Goes Here</h1>
     <div class="entry-meta">
@@ -79,7 +79,7 @@ const CLEAN_WORDPRESS_TEMPLATE = `<article class="post">
 </article>`;
 
 // Add default WordPress template constant
-const defaultWordPressTemplate = `<!-- WordPress Post HTML Structure Example -->
+const defaultformattemplate = `<!-- WordPress Post HTML Structure Example -->
 <article class="post">
 
   <div class="entry-content">
@@ -136,7 +136,7 @@ interface Organisation {
 }
 
 const Settings = () => {
-  const { writingStyle, setWritingStyle, restoreDefaultWritingStyle, subjectMatters, setSubjectMatters, wordpressTemplate, setWordpressTemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt, imageModel, setImageModel, negativePrompt, setNegativePrompt } = useSettings();
+  const { writingStyle, setWritingStyle, restoreDefaultWritingStyle, subjectMatters, setSubjectMatters, formattemplate, setformattemplate, isLoading: settingsLoading, imagePrompt, setImagePrompt, imageModel, setImageModel, negativePrompt, setNegativePrompt } = useSettings();
   const { currentWebsite, updateWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
   const { addPostTheme } = usePostThemes();
@@ -155,7 +155,7 @@ const Settings = () => {
   const [directWpSettings, setDirectWpSettings] = useState<WordPressSettings | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [wpFormatOpen, setWpFormatOpen] = useState(false);
-  const [htmlTemplate, setHtmlTemplate] = useState(wordpressTemplate);
+  const [htmlTemplate, setHtmlTemplate] = useState(formattemplate);
   const [sendingTestPost, setSendingTestPost] = useState(false);
   const [testPostId, setTestPostId] = useState<number | null>(null);
   const [testPostUrl, setTestPostUrl] = useState<string | null>(null);
@@ -251,10 +251,10 @@ const Settings = () => {
     if (!settingsLoading) {
       setStyleInput(writingStyle);
       setSubjects(subjectMatters);
-      setHtmlTemplate(wordpressTemplate);
-      console.log('Using WordPress template from context:', wordpressTemplate.substring(0, 50) + '...');
+      setHtmlTemplate(formattemplate);
+      console.log('Using WordPress template from context:', formattemplate.substring(0, 50) + '...');
     }
-  }, [settingsLoading, writingStyle, subjectMatters, wordpressTemplate]);
+  }, [settingsLoading, writingStyle, subjectMatters, formattemplate]);
 
   // First fix useEffect to fetch WordPress settings with proper table name
   useEffect(() => {
@@ -474,15 +474,15 @@ const Settings = () => {
     if (htmlTemplate && (htmlTemplate.includes('entry-title') || htmlTemplate.includes('Post Title Goes Here'))) {
       console.log('Setting clean WordPress template without title/author/date elements');
       // Log the template being used to verify it matches user's expectations
-      console.log('Using default WordPress template:', defaultWordPressTemplate.substring(0, 50) + '...');
-      setHtmlTemplate(defaultWordPressTemplate);
+      console.log('Using default WordPress template:', defaultformattemplate.substring(0, 50) + '...');
+      setHtmlTemplate(defaultformattemplate);
       
       // Also save to context if we're initializing with a problematic template
-      if (!settingsLoading && wordpressTemplate && wordpressTemplate.includes('entry-title')) {
-        setWordpressTemplate(defaultWordPressTemplate);
+      if (!settingsLoading && formattemplate && formattemplate.includes('entry-title')) {
+        setformattemplate(defaultformattemplate);
       }
     }
-  }, [htmlTemplate, wordpressTemplate, settingsLoading]);
+  }, [htmlTemplate, formattemplate, settingsLoading]);
 
   // Load publication settings when component mounts
   useEffect(() => {
@@ -1283,7 +1283,7 @@ const Settings = () => {
       console.log('Saving WordPress template from editor');
       
       // Save template to context which will persist to database
-      setWordpressTemplate(htmlTemplate);
+      setformattemplate(htmlTemplate);
       toast.success("WordPress template saved successfully");
       
     } catch (error) {
@@ -1458,14 +1458,14 @@ const Settings = () => {
     if (!wpFormatOpen) {
       // When opening the editor, use the current template from context
       console.log('Setting editor to current WordPress template from context');
-      setHtmlTemplate(wordpressTemplate);
+      setHtmlTemplate(formattemplate);
     }
   };
 
   // Add function to handle restoring the default template
   const handleRestoreDefaultTemplate = () => {
     // Set the template back to default
-    setHtmlTemplate(defaultWordPressTemplate);
+    setHtmlTemplate(defaultformattemplate);
     toast.info("Default WordPress template restored");
   };
 
@@ -2649,7 +2649,7 @@ const Settings = () => {
                                         postingFrequency,
                                         writingStyle,
                                         subjectMatters,
-                                        wordpressTemplate,
+                                        formattemplate,
                                         imagePrompt,
                                         imageModel,
                                         negativePrompt,

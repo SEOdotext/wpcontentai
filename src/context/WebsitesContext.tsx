@@ -5,6 +5,7 @@ import { Database } from '../integrations/supabase/types';
 
 type Website = Database['public']['Tables']['websites']['Row'] & {
   organisation_name?: string;
+  enable_some?: boolean;
 };
 type WebsiteInsert = Omit<Database['public']['Tables']['websites']['Insert'], 'organisation_id'> & {
   page_import_limit?: number;

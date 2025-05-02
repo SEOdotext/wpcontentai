@@ -56,6 +56,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FcGoogle } from 'react-icons/fc';
 import { transferDataToDatabase } from '@/api/onboardingImport';
+import { defaultSettings } from '@/context/SettingsContext';
 
 // Types
 interface ContentType {
@@ -2060,7 +2061,7 @@ const Onboarding = () => {
       posting_days: formattedPostingDays,
       website_id: localStorage.getItem('website_id'),
       organisation_id: localStorage.getItem('organisation_id'),
-      writing_style: 'Professional and informative',
+      writing_style: defaultSettings.writingStyle,
       subject_matters: []
     };
     
