@@ -1,5 +1,5 @@
-import React from 'react';
-import { Calendar, ChevronDown, FileText, Globe, Home, Map, PlusCircle, Settings, Users } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calendar, ChevronDown, FileText, Globe, Home, Map, PlusCircle, Settings, Users, Link, Tags, PenTool, Layout, Import, Image, Share2 } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -8,6 +8,9 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import {
   DropdownMenu,
@@ -16,13 +19,41 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Link, useLocation } from 'react-router-dom';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useWebsites } from '@/context/WebsitesContext';
 import { Logo } from '@/components/Logo';
 
 export function AppSidebar() {
   const { websites, currentWebsite, setCurrentWebsite, isLoading } = useWebsites();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [isSettingsExpanded, setIsSettingsExpanded] = useState(location.pathname.startsWith('/settings'));
+  
+  const settingsItems = [
+    { id: 'wordpress', label: 'WordPress Integration', icon: <Link className="h-4 w-4" /> },
+    { id: 'publication', label: 'Publication Settings', icon: <Calendar className="h-4 w-4" /> },
+    { id: 'keywords', label: 'Keyword Management', icon: <Tags className="h-4 w-4" /> },
+    { id: 'writing', label: 'Writing Style', icon: <PenTool className="h-4 w-4" /> },
+    { id: 'formatting', label: 'Content Formatting', icon: <Layout className="h-4 w-4" /> },
+    { id: 'language', label: 'Website Language', icon: <Globe className="h-4 w-4" /> },
+    { id: 'import', label: 'Import Limits', icon: <Import className="h-4 w-4" /> },
+    { id: 'images', label: 'AI Image Generation', icon: <Image className="h-4 w-4" /> },
+    { id: 'social', label: 'Social Media', icon: <Share2 className="h-4 w-4" /> }
+  ];
+
+  const handleSettingsClick = () => {
+    setIsSettingsExpanded(!isSettingsExpanded);
+    if (!location.pathname.startsWith('/settings')) {
+      navigate('/settings');
+    }
+  };
+
+  const handleSettingsSectionClick = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
   
   return (
     <Sidebar className="border-r border-border/50">
@@ -62,10 +93,10 @@ export function AppSidebar() {
                 ))
               )}
               <DropdownMenuItem asChild>
-                <Link to="/websites" className="w-full cursor-pointer">
+                <RouterLink to="/websites" className="w-full cursor-pointer">
                   <PlusCircle className="h-4 w-4 mr-2" />
                   <span>Manage Websites</span>
-                </Link>
+                </RouterLink>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -77,10 +108,10 @@ export function AppSidebar() {
               isActive={location.pathname === '/' || location.pathname === '/dashboard'}
               asChild
             >
-              <Link to="/dashboard">
+              <RouterLink to="/dashboard">
                 <Home className="h-4 w-4" />
                 <span>Dashboard</span>
-              </Link>
+              </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
           
@@ -90,10 +121,10 @@ export function AppSidebar() {
               isActive={location.pathname === '/create'}
               asChild
             >
-              <Link to="/create">
+              <RouterLink to="/create">
                 <PlusCircle className="h-4 w-4" />
                 <span>Content Creation</span>
-              </Link>
+              </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
           
@@ -103,10 +134,10 @@ export function AppSidebar() {
               isActive={location.pathname.startsWith('/calendar')}
               asChild
             >
-              <Link to="/calendar">
+              <RouterLink to="/calendar">
                 <Calendar className="h-4 w-4" />
                 <span>Content Calendar</span>
-              </Link>
+              </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
 
@@ -116,10 +147,10 @@ export function AppSidebar() {
               isActive={location.pathname.startsWith('/sitemap')}
               asChild
             >
-              <Link to="/sitemap">
+              <RouterLink to="/sitemap">
                 <Map className="h-4 w-4" />
                 <span>Website Content</span>
-              </Link>
+              </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
           
@@ -127,13 +158,38 @@ export function AppSidebar() {
             <SidebarMenuButton 
               className="gap-2"
               isActive={location.pathname.startsWith('/settings')}
-              asChild
+              onClick={handleSettingsClick}
             >
-              <Link to="/settings">
+              <div className="flex items-center gap-2">
                 <Settings className="h-4 w-4" />
                 <span>Website Settings</span>
-              </Link>
+              </div>
             </SidebarMenuButton>
+            {isSettingsExpanded && (
+              <SidebarMenuSub>
+                {settingsItems.map((item) => (
+                  <SidebarMenuSubItem key={item.id}>
+                    <SidebarMenuSubButton
+                      asChild
+                      isActive={location.hash === `#${item.id}`}
+                    >
+                      <RouterLink 
+                        to={`/settings#${item.id}`} 
+                        className="flex items-center gap-2"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          navigate(`/settings#${item.id}`);
+                          handleSettingsSectionClick(item.id);
+                        }}
+                      >
+                        {item.icon}
+                        <span>{item.label}</span>
+                      </RouterLink>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                ))}
+              </SidebarMenuSub>
+            )}
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarContent>
@@ -146,10 +202,10 @@ export function AppSidebar() {
               isActive={location.pathname.startsWith('/team-management')}
               asChild
             >
-              <Link to="/team-management">
+              <RouterLink to="/team-management">
                 <Users className="h-4 w-4" />
                 <span>Team Management</span>
-              </Link>
+              </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

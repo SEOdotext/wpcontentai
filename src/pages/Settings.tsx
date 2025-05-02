@@ -183,6 +183,7 @@ const Settings = () => {
     updateSettingsInDatabase 
   } = useSettings();
   const [isSocialMediaEnabled, setIsSocialMediaEnabled] = useState(false);
+  const [activeSection, setActiveSection] = useState('wordpress');
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -2015,792 +2016,812 @@ const Settings = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-auto p-6">
-          <div className="space-y-6 max-w-6xl mx-auto">
-            {currentWebsite && (
-              <Alert className="bg-muted/50 border-muted">
-                <Globe className="h-4 w-4" />
-                <AlertDescription>
-                  Managing settings for <strong>{currentWebsite.name}</strong>
-                </AlertDescription>
-              </Alert>
-            )}
-            
-            {settingsLoading || wpLoading ? (
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <Skeleton className="h-8 w-1/3" />
-                    <Skeleton className="h-4 w-2/3 mt-2" />
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-10 w-full" />
-                  </CardContent>
-                </Card>
-              </div>
-            ) : (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>WordPress Integration</CardTitle>
-                    <CardDescription>
-                      {(wpSettings?.is_connected || directWpSettings?.is_connected) ? 
-                        "Manage your WordPress connection and view recent activity." : 
-                        "Connect your WordPress website to automatically publish content. We'll guide you through the process."}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {(wpSettings?.is_connected || directWpSettings?.is_connected) ? (
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center">
-                              <div className={`h-2 w-2 rounded-full mr-2 bg-green-500`}></div>
-                              <p className="font-medium">Connected to WordPress</p>
+          <div className="max-w-6xl mx-auto">
+            <div className="flex gap-6">
+              <div className="flex-1 space-y-6">
+                {currentWebsite && (
+                  <Alert className="bg-muted/50 border-muted">
+                    <Globe className="h-4 w-4" />
+                    <AlertDescription>
+                      Managing settings for <strong>{currentWebsite.name}</strong>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                
+                {settingsLoading || wpLoading ? (
+                  <div className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <Skeleton className="h-8 w-1/3" />
+                        <Skeleton className="h-4 w-2/3 mt-2" />
+                      </CardHeader>
+                      <CardContent>
+                        <Skeleton className="h-10 w-full" />
+                      </CardContent>
+                    </Card>
+                  </div>
+                ) : (
+                  <>
+                    {/* WordPress Integration Card */}
+                    <Card id="wordpress">
+                      <CardHeader>
+                        <CardTitle>WordPress Integration</CardTitle>
+                        <CardDescription>
+                          {(wpSettings?.is_connected || directWpSettings?.is_connected) ? 
+                            "Manage your WordPress connection and view recent activity." : 
+                            "Connect your WordPress website to automatically publish content. We'll guide you through the process."}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {(wpSettings?.is_connected || directWpSettings?.is_connected) ? (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="flex items-center">
+                                  <div className={`h-2 w-2 rounded-full mr-2 bg-green-500`}></div>
+                                  <p className="font-medium">Connected to WordPress</p>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  Logged in as {directWpSettings?.wp_username || wpSettings?.wp_username}
+                                </p>
+                              </div>
+                              <div className="flex space-x-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    // Open dialog with existing credentials
+                                    openAuthDialogWithCredentials();
+                                  }}
+                                >
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Manage Connection
+                                </Button>
+                                
+                                {/* Check connection button */}
+                                <Button
+                                  variant="outline"
+                                  onClick={refreshWordPressSettings}
+                                >
+                                  <span className="h-4 w-4 mr-2">🔄</span>
+                                  Check Connection
+                                </Button>
+                                
+                                {/* Test Post Button */}
+                                <Button
+                                  variant="outline"
+                                  onClick={handleSendTestPost}
+                                  disabled={sendingTestPost}
+                                >
+                                  {sendingTestPost ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                      Sending...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Zap className="h-4 w-4 mr-2" />
+                                      Send Test Post
+                                    </>
+                                  )}
+                                </Button>
+                                
+                                <Button
+                                  variant="outline"
+                                  onClick={handleDisconnectWordPress}
+                                  className="text-destructive hover:text-destructive-foreground hover:bg-destructive"
+                                >
+                                  <Link2Off className="h-4 w-4 mr-2" />
+                                  Disconnect
+                                </Button>
+                              </div>
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              Logged in as {directWpSettings?.wp_username || wpSettings?.wp_username}
-                            </p>
-                          </div>
-                          <div className="flex space-x-2">
-                            <Button
-                              variant="outline"
-                              onClick={() => {
-                                // Open dialog with existing credentials
-                                openAuthDialogWithCredentials();
-                              }}
-                            >
-                              <Pencil className="h-4 w-4 mr-2" />
-                              Manage Connection
-                            </Button>
                             
-                            {/* Check connection button */}
-                            <Button
-                              variant="outline"
-                              onClick={refreshWordPressSettings}
-                            >
-                              <span className="h-4 w-4 mr-2">🔄</span>
-                              Check Connection
-                            </Button>
+                            {/* Add WordPress Publish Status selector */}
+                            <Separator className="my-6" />
+                            <div className="space-y-2">
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  id="publish-status"
+                                  checked={wpPublishStatus === 'publish'}
+                                  onCheckedChange={(checked) => updateWordPressPublishStatus(checked ? 'publish' : 'draft')}
+                                />
+                                <Label htmlFor="publish-status">
+                                  Published
+                                </Label>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                Choose whether content should be saved as draft or published immediately when sent to WordPress.
+                              </p>
+                            </div>
                             
-                            {/* Test Post Button */}
-                            <Button
-                              variant="outline"
-                              onClick={handleSendTestPost}
-                              disabled={sendingTestPost}
-                            >
-                              {sendingTestPost ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Sending...
-                                </>
-                              ) : (
-                                <>
-                                  <Zap className="h-4 w-4 mr-2" />
-                                  Send Test Post
-                                </>
-                              )}
-                            </Button>
+                            {/* Add WordPress Categories section with divider */}
+                            <Separator className="my-6" />
+                            {renderCategoriesSection()}
                             
-                            <Button
-                              variant="outline"
-                              onClick={handleDisconnectWordPress}
-                              className="text-destructive hover:text-destructive-foreground hover:bg-destructive"
-                            >
-                              <Link2Off className="h-4 w-4 mr-2" />
-                              Disconnect
-                            </Button>
-                          </div>
-                        </div>
-                        
-                        {/* Add WordPress Publish Status selector */}
-                        <Separator className="my-6" />
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <Switch
-                              id="publish-status"
-                              checked={wpPublishStatus === 'publish'}
-                              onCheckedChange={(checked) => updateWordPressPublishStatus(checked ? 'publish' : 'draft')}
-                            />
-                            <Label htmlFor="publish-status">
-                              Published
-                            </Label>
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            Choose whether content should be saved as draft or published immediately when sent to WordPress.
-                          </p>
-                        </div>
-                        
-                        {/* Add WordPress Categories section with divider */}
-                        <Separator className="my-6" />
-                        {renderCategoriesSection()}
-                        
-                        {/* Test Post Feedback - Show only when a test post has been created */}
-                        {testPostId && (
-                          <div className="mt-4 border border-green-200 rounded-md p-4 bg-green-50 dark:bg-green-900/20 dark:border-green-800">
-                            <div className="flex items-start">
-                              <div className="flex-shrink-0">
-                                <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center">
-                                  <Zap className="h-4 w-4 text-green-600 dark:text-green-300" />
+                            {/* Test Post Feedback - Show only when a test post has been created */}
+                            {testPostId && (
+                              <div className="mt-4 border border-green-200 rounded-md p-4 bg-green-50 dark:bg-green-900/20 dark:border-green-800">
+                                <div className="flex items-start">
+                                  <div className="flex-shrink-0">
+                                    <div className="h-8 w-8 rounded-full bg-green-100 dark:bg-green-800 flex items-center justify-center">
+                                      <Zap className="h-4 w-4 text-green-600 dark:text-green-300" />
+                                    </div>
+                                  </div>
+                                  <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-green-800 dark:text-green-300">Test Post Sent Successfully</h3>
+                                    <div className="mt-2 text-sm text-green-700 dark:text-green-400">
+                                      <p>Post ID: {testPostId}</p>
+                                      {testPostUrl && testPostUrl !== '#' && (
+                                        <p className="mt-1">
+                                          <a 
+                                            href={testPostUrl} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-green-600 dark:text-green-300 underline hover:text-green-800 dark:hover:text-green-200"
+                                            onClick={(e) => {
+                                              // Log click and URL for debugging
+                                              console.log('Clicked WordPress admin link:', testPostUrl);
+                                            }}
+                                          >
+                                            Edit in WordPress
+                                          </a>
+                                        </p>
+                                      )}
+                                      <p className="mt-2">
+                                        This draft post is only visible in your WordPress admin area.
+                                      </p>
+                                    </div>
+                                    <div className="mt-3">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={checkTestPost}
+                                        className="text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-800/30 border-green-200 dark:border-green-800 hover:bg-green-200 dark:hover:bg-green-800/50"
+                                      >
+                                        <ArrowRight className="h-3 w-3 mr-2" />
+                                        Open in WordPress
+                                      </Button>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                              <div className="ml-3">
-                                <h3 className="text-sm font-medium text-green-800 dark:text-green-300">Test Post Sent Successfully</h3>
-                                <div className="mt-2 text-sm text-green-700 dark:text-green-400">
-                                  <p>Post ID: {testPostId}</p>
-                                  {testPostUrl && testPostUrl !== '#' && (
-                                    <p className="mt-1">
-                                      <a 
-                                        href={testPostUrl} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="text-green-600 dark:text-green-300 underline hover:text-green-800 dark:hover:text-green-200"
-                                        onClick={(e) => {
-                                          // Log click and URL for debugging
-                                          console.log('Clicked WordPress admin link:', testPostUrl);
-                                        }}
-                                      >
-                                        Edit in WordPress
-                                      </a>
-                                    </p>
-                                  )}
-                                  <p className="mt-2">
-                                    This draft post is only visible in your WordPress admin area.
-                                  </p>
-                                </div>
-                                <div className="mt-3">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={checkTestPost}
-                                    className="text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-800/30 border-green-200 dark:border-green-800 hover:bg-green-200 dark:hover:bg-green-800/50"
-                                  >
-                                    <ArrowRight className="h-3 w-3 mr-2" />
-                                    Open in WordPress
-                                  </Button>
-                                </div>
+                            )}
+                            
+                            {/* Render additional connection status information */}
+                            {renderConnectionStatusInfo()}
+                          </div>
+                        ) : (
+                          <div className="space-y-6">
+                            <div className="rounded-lg border bg-card p-4">
+                              <h4 className="font-medium mb-2">Before you start:</h4>
+                              <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
+                                <li>Make sure you're logged into your WordPress admin</li>
+                                <li>You'll create a secure connection key that only ContentGardener.ai can use</li>
+                                <li>This is more secure than using your admin password</li>
+                              </ul>
+                            </div>
+
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <Label>Create a Secure Connection</Label>
+                                <Button 
+                                  variant="outline" 
+                                  className="w-full justify-start"
+                                  onClick={() => {
+                                    if (!currentWebsite?.url) {
+                                      toast.error('Website URL is not configured');
+                                      return;
+                                    }
+                                    // Remove protocol if present and add https
+                                    const cleanUrl = currentWebsite.url.replace(/^https?:\/\//, '');
+                                    // Check if URL ends with /wp-admin or similar
+                                    const baseUrl = cleanUrl.replace(/\/(wp-admin|wp-login|wp-content).*$/, '');
+                                    window.open(`https://${baseUrl}/wp-admin/profile.php#application-passwords-section`, '_blank');
+                                    handleStartWordPressAuth();
+                                  }}
+                                >
+                                  <Key className="h-4 w-4 mr-2" />
+                                  Generate Connection Key
+                                </Button>
+                                <p className="text-sm text-muted-foreground">
+                                  We'll open your WordPress profile where you can create a secure connection key
+                                </p>
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="default"
+                                  className="w-full"
+                                  onClick={() => {
+                                    openAuthDialogWithCredentials();
+                                  }}
+                                >
+                                  <Link className="h-4 w-4 mr-2" />
+                                  Connect & Test
+                                </Button>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button variant="outline" size="icon">
+                                        <HelpCircle className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-80">
+                                      <p>Connect to your WordPress site and test the connection immediately.</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+
+                              <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+                                <p className="text-sm font-medium">What is a Connection Key?</p>
+                                <p className="text-sm text-muted-foreground">
+                                  A connection key (or application password) is a secure way to let ContentGardener.ai connect to your WordPress site. 
+                                  Unlike your admin password, it has limited access and can be revoked at any time.
+                                </p>
                               </div>
                             </div>
                           </div>
                         )}
-                        
-                        {/* Render additional connection status information */}
-                        {renderConnectionStatusInfo()}
-                      </div>
-                    ) : (
-                      <div className="space-y-6">
-                        <div className="rounded-lg border bg-card p-4">
-                          <h4 className="font-medium mb-2">Before you start:</h4>
-                          <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
-                            <li>Make sure you're logged into your WordPress admin</li>
-                            <li>You'll create a secure connection key that only ContentGardener.ai can use</li>
-                            <li>This is more secure than using your admin password</li>
-                          </ul>
-                        </div>
+                      </CardContent>
+                    </Card>
 
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label>Create a Secure Connection</Label>
+                    {/* Publication Settings Card */}
+                    <Card id="publication">
+                      <CardHeader>
+                        <CardTitle>Publication Settings</CardTitle>
+                        <CardDescription>
+                          Configure your content publication schedule and planning preferences.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-6">
+                          <PublicationSettings
+                            initialPostingDays={postingDays}
+                            initialFrequency={postingFrequency}
+                            initialWeeklyPlanningDay={weeklyPlanningDay}
+                            onSave={handleSavePublicationSettings}
+                            disabled={!currentWebsite}
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Keywords Card */}
+                    <Card id="keywords">
+                      <CardHeader>
+                        <CardTitle>Keyword Management</CardTitle>
+                        <CardDescription>
+                          Configure default keywords and tags for your content
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <Label>Default Keywords</Label>
+                          <div className="flex flex-wrap gap-2">
+                            {subjects.map((subject, index) => (
+                              <Badge 
+                                key={index}
+                                variant="outline" 
+                                className="bg-blue-50 text-blue-700 border-blue-200"
+                              >
+                                {subject}
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-4 w-4 rounded-full p-0 ml-1 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
+                                  onClick={() => handleRemoveSubject(subject)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="flex gap-2 mt-2">
+                            <Input
+                              placeholder="Add a new keyword"
+                              value={newSubject}
+                              onChange={(e) => setNewSubject(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  handleAddSubject();
+                                }
+                              }}
+                            />
+                            <Button onClick={handleAddSubject}>
+                              <Sparkles className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Writing Style Card */}
+                    <Card id="writing">
+                      <CardHeader>
+                        <CardTitle>Writing Style</CardTitle>
+                        <CardDescription>
+                          Define your preferred writing style and tone for content generation
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="writing-style">Content Writing Style</Label>
+                          <Textarea
+                            id="writing-style"
+                            value={styleInput}
+                            onChange={(e) => setStyleInput(e.target.value)}
+                            placeholder="e.g., Professional, Conversational, Technical, Educational. You can also add specific details about tone, vocabulary level, and writing approach."
+                            className="min-h-[200px]"
+                          />
+                          <div className="flex justify-end">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={restoreDefaultWritingStyle}
+                            >
+                              Restore Default
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          Specify your preferred writing style to guide content generation. This affects tone, vocabulary, and overall presentation.
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    {/* Content Formatting Card */}
+                    <Card id="formatting">
+                      <CardHeader>
+                        <CardTitle>Content Formatting</CardTitle>
+                        <CardDescription>
+                          Learn how your content will be structured and formatted when published to WordPress, optimized for maximum GPT ranking impact
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <Label>Content Structure & Output Format</Label>
                             <Button 
                               variant="outline" 
-                              className="w-full justify-start"
-                              onClick={() => {
-                                if (!currentWebsite?.url) {
-                                  toast.error('Website URL is not configured');
-                                  return;
-                                }
-                                // Remove protocol if present and add https
-                                const cleanUrl = currentWebsite.url.replace(/^https?:\/\//, '');
-                                // Check if URL ends with /wp-admin or similar
-                                const baseUrl = cleanUrl.replace(/\/(wp-admin|wp-login|wp-content).*$/, '');
-                                window.open(`https://${baseUrl}/wp-admin/profile.php#application-passwords-section`, '_blank');
-                                handleStartWordPressAuth();
-                              }}
+                              size="sm"
+                              onClick={handleOpenWpFormat}
                             >
-                              <Key className="h-4 w-4 mr-2" />
-                              Generate Connection Key
+                              {wpFormatOpen ? "Close Editor" : "Edit HTML Template"}
                             </Button>
-                            <p className="text-sm text-muted-foreground">
-                              We'll open your WordPress profile where you can create a secure connection key
-                            </p>
                           </div>
-
-                          <div className="flex gap-2">
-                            <Button
-                              variant="default"
-                              className="w-full"
-                              onClick={() => {
-                                openAuthDialogWithCredentials();
-                              }}
-                            >
-                              <Link className="h-4 w-4 mr-2" />
-                              Connect & Test
-                            </Button>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button variant="outline" size="icon">
-                                    <HelpCircle className="h-4 w-4" />
+                          
+                          {wpFormatOpen ? (
+                            <div className="mt-2 space-y-6">
+                              <div className="border rounded-md p-3 bg-muted/30">
+                                <p className="text-sm mb-2">Edit the HTML template that will be used to format and structure your WordPress posts:</p>
+                                <Textarea
+                                  id="wpTemplate"
+                                  value={htmlTemplate}
+                                  onChange={(e) => setHtmlTemplate(e.target.value)}
+                                  className="font-mono h-60 text-sm"
+                                />
+                                <div className="mt-3 flex justify-end gap-2">
+                                  <Button 
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleRestoreDefaultTemplate}
+                                  >
+                                    Restore Default
                                   </Button>
-                                </TooltipTrigger>
-                                <TooltipContent className="max-w-80">
-                                  <p>Connect to your WordPress site and test the connection immediately.</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-
-                          <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
-                            <p className="text-sm font-medium">What is a Connection Key?</p>
-                            <p className="text-sm text-muted-foreground">
-                              A connection key (or application password) is a secure way to let ContentGardener.ai connect to your WordPress site. 
-                              Unlike your admin password, it has limited access and can be revoked at any time.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Publication Settings</CardTitle>
-                    <CardDescription>
-                      Configure your content publication schedule and planning preferences.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-6">
-                      <PublicationSettings
-                        initialPostingDays={postingDays}
-                        initialFrequency={postingFrequency}
-                        initialWeeklyPlanningDay={weeklyPlanningDay}
-                        onSave={handleSavePublicationSettings}
-                        disabled={!currentWebsite}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Keyword Management</CardTitle>
-                    <CardDescription>
-                      Configure default keywords and tags for your content
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Default Keywords</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {subjects.map((subject, index) => (
-                          <Badge 
-                            key={index}
-                            variant="outline" 
-                            className="bg-blue-50 text-blue-700 border-blue-200"
-                          >
-                            {subject}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-4 w-4 rounded-full p-0 ml-1 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
-                              onClick={() => handleRemoveSubject(subject)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </Badge>
-                        ))}
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <Input
-                          placeholder="Add a new keyword"
-                          value={newSubject}
-                          onChange={(e) => setNewSubject(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleAddSubject();
-                            }
-                          }}
-                        />
-                        <Button onClick={handleAddSubject}>
-                          <Sparkles className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Writing Style Card */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Writing Style</CardTitle>
-                    <CardDescription>
-                      Define your preferred writing style and tone for content generation
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="writing-style">Content Writing Style</Label>
-                      <Textarea
-                        id="writing-style"
-                        value={styleInput}
-                        onChange={(e) => setStyleInput(e.target.value)}
-                        placeholder="e.g., Professional, Conversational, Technical, Educational. You can also add specific details about tone, vocabulary level, and writing approach."
-                        className="min-h-[200px]"
-                      />
-                      <div className="flex justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={restoreDefaultWritingStyle}
-                        >
-                          Restore Default
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Specify your preferred writing style to guide content generation. This affects tone, vocabulary, and overall presentation.
-                    </p>
-                  </CardContent>
-                </Card>
-
-                {/* WordPress HTML Template Card */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Content Formatting</CardTitle>
-                    <CardDescription>
-                      Learn how your content will be structured and formatted when published to WordPress, optimized for maximum GPT ranking impact
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <Label>Content Structure & Output Format</Label>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={handleOpenWpFormat}
-                        >
-                          {wpFormatOpen ? "Close Editor" : "Edit HTML Template"}
-                        </Button>
-                      </div>
-                      
-                      {wpFormatOpen ? (
-                        <div className="mt-2 space-y-6">
-                          <div className="border rounded-md p-3 bg-muted/30">
-                            <p className="text-sm mb-2">Edit the HTML template that will be used to format and structure your WordPress posts:</p>
-                            <Textarea
-                              id="wpTemplate"
-                              value={htmlTemplate}
-                              onChange={(e) => setHtmlTemplate(e.target.value)}
-                              className="font-mono h-60 text-sm"
-                            />
-                            <div className="mt-3 flex justify-end gap-2">
-                              <Button 
-                                variant="outline"
-                                size="sm"
-                                onClick={handleRestoreDefaultTemplate}
-                              >
-                                Restore Default
-                              </Button>
-                              <Button 
-                                size="sm"
-                                onClick={handleSaveTemplate}
-                              >
-                                Save Template
-                              </Button>
-                            </div>
-                          </div>
-
-                          <div className="border rounded-md p-4 bg-muted/30 space-y-4">
-                            <div>
-                              <h4 className="font-medium mb-2">Strategic Text Sequences (STS) Formula</h4>
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2">
-                                  <span className="font-medium">Hook</span>
-                                  <ArrowRight className="h-4 w-4" />
-                                  <span className="font-medium">Context</span>
-                                  <ArrowRight className="h-4 w-4" />
-                                  <span className="font-medium">Value</span>
-                                  <ArrowRight className="h-4 w-4" />
-                                  <span className="font-medium">Proof</span>
-                                  <ArrowRight className="h-4 w-4" />
-                                  <span className="font-medium">Action</span>
+                                  <Button 
+                                    size="sm"
+                                    onClick={handleSaveTemplate}
+                                  >
+                                    Save Template
+                                  </Button>
                                 </div>
-                                <p className="text-sm text-muted-foreground">
-                                  This formula is specifically designed to help ChatGPT understand, process, and rank your content more effectively. It creates a logical flow that AI models can easily parse and prioritize.
-                                </p>
                               </div>
-                            </div>
 
-                            <div>
-                              <h4 className="font-medium mb-2">Best Practices for GPT Ranking</h4>
-                              <div className="space-y-3">
-                                <div className="space-y-1">
-                                  <p className="text-sm font-medium">🎯 Clear Structure</p>
-                                  <p className="text-sm text-muted-foreground">Define a clear structure for GPT to follow and align with user intent (awareness → interest → decision)</p>
+                              <div className="border rounded-md p-4 bg-muted/30 space-y-4">
+                                <div>
+                                  <h4 className="font-medium mb-2">Strategic Text Sequences (STS) Formula</h4>
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">Hook</span>
+                                      <ArrowRight className="h-4 w-4" />
+                                      <span className="font-medium">Context</span>
+                                      <ArrowRight className="h-4 w-4" />
+                                      <span className="font-medium">Value</span>
+                                      <ArrowRight className="h-4 w-4" />
+                                      <span className="font-medium">Proof</span>
+                                      <ArrowRight className="h-4 w-4" />
+                                      <span className="font-medium">Action</span>
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">
+                                      This formula is specifically designed to help ChatGPT understand, process, and rank your content more effectively. It creates a logical flow that AI models can easily parse and prioritize.
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="space-y-1">
-                                  <p className="text-sm font-medium">📚 Authoritative Content</p>
-                                  <p className="text-sm text-muted-foreground">Use structured educational content with FAQs, guides, and well-labeled headings</p>
-                                </div>
-                                <div className="space-y-1">
-                                  <p className="text-sm font-medium">💡 Quotable Content</p>
-                                  <p className="text-sm text-muted-foreground">Write short, bold statements that could be used in AI-generated summaries</p>
+
+                                <div>
+                                  <h4 className="font-medium mb-2">Best Practices for GPT Ranking</h4>
+                                  <div className="space-y-3">
+                                    <div className="space-y-1">
+                                      <p className="text-sm font-medium">🎯 Clear Structure</p>
+                                      <p className="text-sm text-muted-foreground">Define a clear structure for GPT to follow and align with user intent (awareness → interest → decision)</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-sm font-medium">📚 Authoritative Content</p>
+                                      <p className="text-sm text-muted-foreground">Use structured educational content with FAQs, guides, and well-labeled headings</p>
+                                    </div>
+                                    <div className="space-y-1">
+                                      <p className="text-sm font-medium">💡 Quotable Content</p>
+                                      <p className="text-sm text-muted-foreground">Write short, bold statements that could be used in AI-generated summaries</p>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-2 border rounded-md p-4 bg-muted/30 space-y-4">
-                          <div>
-                            <h4 className="font-medium mb-2">Strategic Text Sequences (STS) Formula</h4>
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">Hook</span>
-                                <ArrowRight className="h-4 w-4" />
-                                <span className="font-medium">Context</span>
-                                <ArrowRight className="h-4 w-4" />
-                                <span className="font-medium">Value</span>
-                                <ArrowRight className="h-4 w-4" />
-                                <span className="font-medium">Proof</span>
-                                <ArrowRight className="h-4 w-4" />
-                                <span className="font-medium">Action</span>
+                          ) : (
+                            <div className="mt-2 border rounded-md p-4 bg-muted/30 space-y-4">
+                              <div>
+                                <h4 className="font-medium mb-2">Strategic Text Sequences (STS) Formula</h4>
+                                <div className="space-y-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">Hook</span>
+                                    <ArrowRight className="h-4 w-4" />
+                                    <span className="font-medium">Context</span>
+                                    <ArrowRight className="h-4 w-4" />
+                                    <span className="font-medium">Value</span>
+                                    <ArrowRight className="h-4 w-4" />
+                                    <span className="font-medium">Proof</span>
+                                    <ArrowRight className="h-4 w-4" />
+                                    <span className="font-medium">Action</span>
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    This formula is specifically designed to help ChatGPT understand, process, and rank your content more effectively. It creates a logical flow that AI models can easily parse and prioritize.
+                                  </p>
+                                </div>
                               </div>
-                              <p className="text-sm text-muted-foreground">
-                                This formula is specifically designed to help ChatGPT understand, process, and rank your content more effectively. It creates a logical flow that AI models can easily parse and prioritize.
-                              </p>
-                            </div>
-                          </div>
 
-                          <div>
-                            <h4 className="font-medium mb-2">Best Practices for GPT Ranking</h4>
-                            <div className="space-y-3">
-                              <div className="space-y-1">
-                                <p className="text-sm font-medium">🎯 Clear Structure</p>
-                                <p className="text-sm text-muted-foreground">Define a clear structure for GPT to follow and align with user intent (awareness → interest → decision)</p>
+                              <div>
+                                <h4 className="font-medium mb-2">Best Practices for GPT Ranking</h4>
+                                <div className="space-y-3">
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-medium">🎯 Clear Structure</p>
+                                    <p className="text-sm text-muted-foreground">Define a clear structure for GPT to follow and align with user intent (awareness → interest → decision)</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-medium">📚 Authoritative Content</p>
+                                    <p className="text-sm text-muted-foreground">Use structured educational content with FAQs, guides, and well-labeled headings</p>
+                                  </div>
+                                  <div className="space-y-1">
+                                    <p className="text-sm font-medium">💡 Quotable Content</p>
+                                    <p className="text-sm text-muted-foreground">Write short, bold statements that could be used in AI-generated summaries</p>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="space-y-1">
-                                <p className="text-sm font-medium">📚 Authoritative Content</p>
-                                <p className="text-sm text-muted-foreground">Use structured educational content with FAQs, guides, and well-labeled headings</p>
-                              </div>
-                              <div className="space-y-1">
-                                <p className="text-sm font-medium">💡 Quotable Content</p>
-                                <p className="text-sm text-muted-foreground">Write short, bold statements that could be used in AI-generated summaries</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Website Language</CardTitle>
-                    <CardDescription>
-                      Set the primary language for your website content
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="language">Content Language</Label>
-                      <div className="flex gap-2">
-                        <select
-                          id="language"
-                          value={languages.some(l => l.code === websiteLanguage) ? websiteLanguage : 'other'}
-                          onChange={(e) => handleLanguageChange(e.target.value)}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {languages.map(lang => (
-                            <option key={lang.code} value={lang.code}>
-                              {lang.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {!languages.some(l => l.code === websiteLanguage) && (
-                        <div className="mt-2 p-3 border rounded-md bg-muted/30">
-                          <p>Using custom language code: <span className="font-medium">{websiteLanguage}</span></p>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="mt-2 h-8 text-xs"
-                            onClick={handleEditCustomLanguage}
-                          >
-                            <Pencil className="h-3 w-3 mr-1" />
-                            Edit Custom Language Code
-                          </Button>
-                        </div>
-                      )}
-                      <p className="text-sm text-muted-foreground">
-                        This affects how content is generated, including capitalization rules for headings and language-specific formatting.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <ImportLimitsSettings />
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>AI Image Generation</CardTitle>
-                    <CardDescription>
-                      Configure AI-powered image generation for your posts
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>Enable AI Image Generation</Label>
-                          <p className="text-sm text-muted-foreground">
-                            Automatically generate preview images for your posts using AI
-                          </p>
-                        </div>
-                        <Switch
-                          checked={currentWebsite?.enable_ai_image_generation || false}
-                          onCheckedChange={async (checked) => {
-                            if (!currentWebsite) {
-                              toast.error("Please select a website first");
-                              return;
-                            }
-                            try {
-                              await updateWebsite(currentWebsite.id, {
-                                enable_ai_image_generation: checked
-                              });
-                              toast.success(checked ? "AI image generation enabled" : "AI image generation disabled");
-                            } catch (error) {
-                              console.error('Failed to update AI image generation setting:', error);
-                              toast.error('Failed to update AI image generation setting');
-                            }
-                          }}
-                        />
-                      </div>
-
-                      {currentWebsite?.enable_ai_image_generation && (
-                        <div className="space-y-4 mt-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="image-model">
-                              Image Generation Model
-                              <span className="block text-sm text-muted-foreground">
-                                Select which AI model to use for generating images
-                              </span>
-                            </Label>
-                            <Select 
-                              value={imageModel || 'dalle'} 
-                              onValueChange={(value) => {
-                                setImageModel(value);
-                                toast.success(`Image model updated to ${value === 'dalle' ? 'DALL-E' : 'Stable Diffusion'}`);
-                              }}
-                            >
-                              <SelectTrigger id="image-model">
-                                <SelectValue placeholder="Select image generation model">
-                                  {imageModel === 'dalle' ? 'DALL-E' : 'Stable Diffusion'}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="dalle">DALL-E</SelectItem>
-                                <SelectItem value="stable-diffusion">Stable Diffusion</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="image-prompt">
-                              Image Generation Prompt
-                              <span className="block text-sm text-muted-foreground">
-                                Customize how images are generated. Use {'{title}'} for the content title and {'{content}'} for the content description.
-                              </span>
-                            </Label>
-                            <Input
-                              id="image-prompt"
-                              type="text"
-                              value={imagePrompt}
-                              onChange={(e) => {
-                                setImagePrompt(e.target.value);
-                              }}
-                              onBlur={async () => {
-                                try {
-                                  await updateSettingsInDatabase(
-                                    postingFrequency,
-                                    writingStyle,
-                                    subjectMatters,
-                                    wordpressTemplate,
-                                    imagePrompt,
-                                    imageModel,
-                                    negativePrompt,
-                                    weeklyPlanningDay
-                                  );
-                                  toast.success("Image generation prompt updated");
-                                } catch (error) {
-                                  console.error('Failed to update image prompt:', error);
-                                  toast.error('Failed to update image prompt');
-                                }
-                              }}
-                              placeholder="Create a modern, professional image that represents: {title}. Context: {content}"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Example: "Create a photorealistic {'{title}'} in the style of {'{content}'}"
-                            </p>
-                          </div>
-
-                          {imageModel === 'stable-diffusion' && (
-                            <div className="space-y-2">
-                              <Label htmlFor="negative-prompt">
-                                Negative Prompt (Stable Diffusion)
-                                <span className="block text-sm text-muted-foreground">
-                                  Specify what you don't want to appear in the generated image
-                                </span>
-                              </Label>
-                              <Input
-                                id="negative-prompt"
-                                type="text"
-                                defaultValue={negativePrompt}
-                                onBlur={async (e) => {
-                                  try {
-                                    setNegativePrompt(e.target.value);
-                                    toast.success("Negative prompt updated");
-                                  } catch (error) {
-                                    console.error('Failed to update negative prompt:', error);
-                                    toast.error('Failed to update negative prompt');
-                                  }
-                                }}
-                                placeholder="blurry, bad quality, distorted faces, bad anatomy"
-                              />
-                              <p className="text-xs text-muted-foreground">
-                                Example: "low quality, bad proportions, deformed, blurry, grainy"
-                              </p>
                             </div>
                           )}
-
-                          <div className="rounded-lg border bg-muted/30 p-4">
-                            <h4 className="font-medium mb-2">About AI Image Generation:</h4>
-                            <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
-                              <li>Generates unique preview images for each post</li>
-                              <li>Uses post content to create relevant images</li>
-                              <li>Images are automatically optimized for your website</li>
-                              <li>Requires valid content to generate images</li>
-                              {imageModel === 'stable-diffusion' && (
-                                <li>Stable Diffusion allows more control with negative prompts</li>
-                              )}
-                            </ul>
-                          </div>
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                      </CardContent>
+                    </Card>
 
-                {/* Add Social Media Card */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Social Media</CardTitle>
-                    <CardDescription>
-                      Configure social media platforms for content distribution
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <Label>Enable Social Media Integration</Label>
+                    {/* Website Language Card */}
+                    <Card id="language">
+                      <CardHeader>
+                        <CardTitle>Website Language</CardTitle>
+                        <CardDescription>
+                          Set the primary language for your website content
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="language">Content Language</Label>
+                          <div className="flex gap-2">
+                            <select
+                              id="language"
+                              value={languages.some(l => l.code === websiteLanguage) ? websiteLanguage : 'other'}
+                              onChange={(e) => handleLanguageChange(e.target.value)}
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {languages.map(lang => (
+                                <option key={lang.code} value={lang.code}>
+                                  {lang.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {!languages.some(l => l.code === websiteLanguage) && (
+                            <div className="mt-2 p-3 border rounded-md bg-muted/30">
+                              <p>Using custom language code: <span className="font-medium">{websiteLanguage}</span></p>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                className="mt-2 h-8 text-xs"
+                                onClick={handleEditCustomLanguage}
+                              >
+                                <Pencil className="h-3 w-3 mr-1" />
+                                Edit Custom Language Code
+                              </Button>
+                            </div>
+                          )}
                           <p className="text-sm text-muted-foreground">
-                            Automatically share your content across social media platforms
+                            This affects how content is generated, including capitalization rules for headings and language-specific formatting.
                           </p>
                         </div>
-                        <Switch
-                          checked={currentWebsite?.enable_some || false}
-                          onCheckedChange={async (checked) => {
-                            if (!currentWebsite) {
-                              toast.error("Please select a website first");
-                              return;
-                            }
-                            try {
-                              await updateWebsite(currentWebsite.id, {
-                                enable_some: checked
-                              });
-                              setIsSocialMediaEnabled(checked);
-                              toast.success(checked ? "Social media integration enabled" : "Social media integration disabled");
-                            } catch (error) {
-                              console.error('Failed to update social media setting:', error);
-                              toast.error('Failed to update social media setting');
-                            }
-                          }}
-                        />
-                      </div>
+                      </CardContent>
+                    </Card>
 
-                      {currentWebsite?.enable_some && (
-                        <div className="mt-6">
-                          <SocialMediaSettings />
+                    {/* Import Limits Card */}
+                    <Card id="import">
+                      <CardHeader>
+                        <CardTitle>Import Limits</CardTitle>
+                        <CardDescription>
+                          Configure limits for page imports and key content
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <ImportLimitsSettings />
+                      </CardContent>
+                    </Card>
+
+                    {/* AI Image Generation Card */}
+                    <Card id="images">
+                      <CardHeader>
+                        <CardTitle>AI Image Generation</CardTitle>
+                        <CardDescription>
+                          Configure AI-powered image generation for your posts
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Enable AI Image Generation</Label>
+                              <p className="text-sm text-muted-foreground">
+                                Automatically generate preview images for your posts using AI
+                              </p>
+                            </div>
+                            <Switch
+                              checked={currentWebsite?.enable_ai_image_generation || false}
+                              onCheckedChange={async (checked) => {
+                                if (!currentWebsite) {
+                                  toast.error("Please select a website first");
+                                  return;
+                                }
+                                try {
+                                  await updateWebsite(currentWebsite.id, {
+                                    enable_ai_image_generation: checked
+                                  });
+                                  toast.success(checked ? "AI image generation enabled" : "AI image generation disabled");
+                                } catch (error) {
+                                  console.error('Failed to update AI image generation setting:', error);
+                                  toast.error('Failed to update AI image generation setting');
+                                }
+                              }}
+                            />
+                          </div>
+
+                          {currentWebsite?.enable_ai_image_generation && (
+                            <div className="space-y-4 mt-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="image-model">
+                                  Image Generation Model
+                                  <span className="block text-sm text-muted-foreground">
+                                    Select which AI model to use for generating images
+                                  </span>
+                                </Label>
+                                <Select 
+                                  value={imageModel || 'dalle'} 
+                                  onValueChange={(value) => {
+                                    setImageModel(value);
+                                    toast.success(`Image model updated to ${value === 'dalle' ? 'DALL-E' : 'Stable Diffusion'}`);
+                                  }}
+                                >
+                                  <SelectTrigger id="image-model">
+                                    <SelectValue placeholder="Select image generation model">
+                                      {imageModel === 'dalle' ? 'DALL-E' : 'Stable Diffusion'}
+                                    </SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="dalle">DALL-E</SelectItem>
+                                    <SelectItem value="stable-diffusion">Stable Diffusion</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label htmlFor="image-prompt">
+                                  Image Generation Prompt
+                                  <span className="block text-sm text-muted-foreground">
+                                    Customize how images are generated. Use {'{title}'} for the content title and {'{content}'} for the content description.
+                                  </span>
+                                </Label>
+                                <Input
+                                  id="image-prompt"
+                                  type="text"
+                                  value={imagePrompt}
+                                  onChange={(e) => {
+                                    setImagePrompt(e.target.value);
+                                  }}
+                                  onBlur={async () => {
+                                    try {
+                                      await updateSettingsInDatabase(
+                                        postingFrequency,
+                                        writingStyle,
+                                        subjectMatters,
+                                        wordpressTemplate,
+                                        imagePrompt,
+                                        imageModel,
+                                        negativePrompt,
+                                        weeklyPlanningDay
+                                      );
+                                      toast.success("Image generation prompt updated");
+                                    } catch (error) {
+                                      console.error('Failed to update image prompt:', error);
+                                      toast.error('Failed to update image prompt');
+                                    }
+                                  }}
+                                  placeholder="Create a modern, professional image that represents: {title}. Context: {content}"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Example: "Create a photorealistic {'{title}'} in the style of {'{content}'}"
+                                </p>
+                              </div>
+
+                              {imageModel === 'stable-diffusion' && (
+                                <div className="space-y-2">
+                                  <Label htmlFor="negative-prompt">
+                                    Negative Prompt (Stable Diffusion)
+                                    <span className="block text-sm text-muted-foreground">
+                                      Specify what you don't want to appear in the generated image
+                                    </span>
+                                  </Label>
+                                  <Input
+                                    id="negative-prompt"
+                                    type="text"
+                                    defaultValue={negativePrompt}
+                                    onBlur={async (e) => {
+                                      try {
+                                        setNegativePrompt(e.target.value);
+                                        toast.success("Negative prompt updated");
+                                      } catch (error) {
+                                        console.error('Failed to update negative prompt:', error);
+                                        toast.error('Failed to update negative prompt');
+                                      }
+                                    }}
+                                    placeholder="blurry, bad quality, distorted faces, bad anatomy"
+                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Example: "low quality, bad proportions, deformed, blurry, grainy"
+                                  </p>
+                                </div>
+                              )}
+
+                              <div className="rounded-lg border bg-muted/30 p-4">
+                                <h4 className="font-medium mb-2">About AI Image Generation:</h4>
+                                <ul className="list-disc pl-4 space-y-1 text-sm text-muted-foreground">
+                                  <li>Generates unique preview images for each post</li>
+                                  <li>Uses post content to create relevant images</li>
+                                  <li>Images are automatically optimized for your website</li>
+                                  <li>Requires valid content to generate images</li>
+                                  {imageModel === 'stable-diffusion' && (
+                                    <li>Stable Diffusion allows more control with negative prompts</li>
+                                  )}
+                                </ul>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                      </CardContent>
+                    </Card>
 
-                <div className="flex justify-end space-x-4">
+                    {/* Social Media Card */}
+                    <Card id="social">
+                      <CardHeader>
+                        <CardTitle>Social Media</CardTitle>
+                        <CardDescription>
+                          Configure social media platforms for content distribution
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-0.5">
+                              <Label>Enable Social Media Integration</Label>
+                              <p className="text-sm text-muted-foreground">
+                                Automatically share your content across social media platforms
+                              </p>
+                            </div>
+                            <Switch
+                              checked={currentWebsite?.enable_some || false}
+                              onCheckedChange={async (checked) => {
+                                if (!currentWebsite) {
+                                  toast.error("Please select a website first");
+                                  return;
+                                }
+                                try {
+                                  await updateWebsite(currentWebsite.id, {
+                                    enable_some: checked
+                                  });
+                                  setIsSocialMediaEnabled(checked);
+                                  toast.success(checked ? "Social media integration enabled" : "Social media integration disabled");
+                                } catch (error) {
+                                  console.error('Failed to update social media setting:', error);
+                                  toast.error('Failed to update social media setting');
+                                }
+                              }}
+                            />
+                          </div>
+
+                          {currentWebsite?.enable_some && (
+                            <div className="mt-6">
+                              <SocialMediaSettings />
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <div className="flex justify-end space-x-4">
+                      <Button
+                        variant="default"
+                        onClick={handleSave}
+                        disabled={isSaving}
+                      >
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Settings'
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Add Retrigger Data Transfer Button - only show on localhost */}
+            {window.location.href.includes('localhost:8080') && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Data Transfer (Development Only)</CardTitle>
+                  <CardDescription>
+                    Manually retrigger data transfer from local storage to database
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
                   <Button
-                    variant="default"
-                    onClick={handleSave}
-                    disabled={isSaving}
+                    onClick={async () => {
+                      try {
+                        // Get current user session
+                        const { data: { session } } = await supabase.auth.getSession();
+                        const userId = session?.user?.id;
+                        
+                        if (!userId) {
+                          toast.error('Please log in to transfer data');
+                          return;
+                        }
+
+                        await transferDataToDatabase(userId);
+                        // Optionally refresh the page after successful transfer
+                        window.location.reload();
+                      } catch (error) {
+                        console.error('Data transfer error:', error);
+                        toast.error(`Data transfer failed: ${error.message}`);
+                      }
+                    }}
+                    variant="outline"
                   >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Settings'
-                    )}
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Retrigger Data Transfer
                   </Button>
-                </div>
-              </>
+                </CardContent>
+              </Card>
             )}
           </div>
-
-          {/* Add Retrigger Data Transfer Button - only show on localhost */}
-          {window.location.href.includes('localhost:8080') && (
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>Data Transfer (Development Only)</CardTitle>
-                <CardDescription>
-                  Manually retrigger data transfer from local storage to database
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  onClick={async () => {
-                    try {
-                      // Get current user session
-                      const { data: { session } } = await supabase.auth.getSession();
-                      const userId = session?.user?.id;
-                      
-                      if (!userId) {
-                        toast.error('Please log in to transfer data');
-                        return;
-                      }
-
-                      await transferDataToDatabase(userId);
-                      // Optionally refresh the page after successful transfer
-                      window.location.reload();
-                    } catch (error) {
-                      console.error('Data transfer error:', error);
-                      toast.error(`Data transfer failed: ${error.message}`);
-                    }
-                  }}
-                  variant="outline"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Retrigger Data Transfer
-                </Button>
-              </CardContent>
-            </Card>
-          )}
         </main>
       </div>
 
