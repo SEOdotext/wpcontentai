@@ -227,7 +227,7 @@ serve(async (req) => {
         console.log('Using default publication settings for onboarding');
         pubSettings = {
           writing_style: writing_style || 'SEO friendly content that captures the reader. Use simple, clear language with a genuine tone. Write directly to your reader using natural language, as if having a conversation. Keep sentences concise and avoid filler words. Add personal touches like anecdotes or light humor when appropriate. Explain complex ideas in a friendly, approachable way. Stay direct and let your authentic voice come through. Structure your content to grab attention with a strong hook, provide context that connects with your reader, deliver clear value, back it up with proof, and end with a clear action step. This natural flow helps both readers and AI understand your message better.',
-          subject_matters: subject_matters.length ? subject_matters : ['general'],
+          subject_matters: Array.isArray(subject_matters) && subject_matters.length > 0 ? subject_matters : ['general'],
           image_prompt: 'Create a professional blog image'
         };
       } else {
@@ -243,11 +243,14 @@ serve(async (req) => {
           // Use default settings if no settings found
           pubSettings = {
             writing_style: writing_style || 'professional',
-            subject_matters: subject_matters.length ? subject_matters : ['general'],
+            subject_matters: Array.isArray(subject_matters) && subject_matters.length > 0 ? subject_matters : ['general'],
             image_prompt: 'Create a professional blog image'
           };
         } else {
-          pubSettings = data;
+          pubSettings = {
+            ...data,
+            subject_matters: Array.isArray(data?.subject_matters) && data.subject_matters.length > 0 ? data.subject_matters : ['general']
+          };
         }
       }
     } catch (error) {
@@ -256,7 +259,7 @@ serve(async (req) => {
         console.log('Using default publication settings after error');
         pubSettings = {
           writing_style: writing_style || 'professional',
-          subject_matters: subject_matters.length ? subject_matters : ['general'],
+          subject_matters: Array.isArray(subject_matters) && subject_matters.length > 0 ? subject_matters : ['general'],
           image_prompt: 'Create a professional blog image'
         };
       } else {
@@ -391,7 +394,7 @@ serve(async (req) => {
 Additional context:
 Current year: 2025
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
-Subject matters: ${subject_matters.join(',') || pubSettings?.subject_matters?.join(',') || 'general'}
+Subject matters: ${(Array.isArray(subject_matters) && subject_matters.length > 0 ? subject_matters : pubSettings?.subject_matters || ['general']).join(',')}
 Language: ${isDanish ? 'Danish (da)' : 'English (en)'}
 
 Existing cornerstone content (use these as a reference for your suggestions):
@@ -421,7 +424,7 @@ Each post should:
 Additional context:
 Current year: 2025
 Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
-Subject matters: ${subject_matters.join(',') || pubSettings?.subject_matters?.join(',') || 'general'}
+Subject matters: ${(Array.isArray(subject_matters) && subject_matters.length > 0 ? subject_matters : pubSettings?.subject_matters || ['general']).join(',')}
 Language: ${isDanish ? 'Danish (da)' : 'English (en)'}
 
 Available categories (use category IDs):
@@ -484,7 +487,7 @@ Important rules:
 
     // Create the OpenAI request payload
     const openaiRequestBody = {
-      model: 'gpt-4-turbo-preview',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
@@ -497,9 +500,8 @@ Important rules:
           content: promptText
         }
       ],
-      response_format: { type: "json_object" },
       temperature: 0.7,
-      max_tokens: 2000
+      max_tokens: 1000
     };
 
     // Log the full OpenAI request payload

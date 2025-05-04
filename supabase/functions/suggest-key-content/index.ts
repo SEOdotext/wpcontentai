@@ -290,10 +290,12 @@ Instructions:
 {
   "suggestions": [
     {
-      "id": "page_id"
+      "id": "page_id",
+      "reason": "Brief explanation of why this page is important"
     },
     {
-      "id": "page_id"
+      "id": "page_id",
+      "reason": "Brief explanation of why this page is important"
     }
   ]
 }
@@ -301,8 +303,9 @@ Instructions:
 4. IMPORTANT FORMAT RULES:
    - The response must be valid JSON
    - Return as many suggestions as you find valuable (1-5)
-   - Each suggestion must have exactly one field: "id"
+   - Each suggestion must have exactly two fields: "id" and "reason"
    - The "id" must match one of the page IDs from the available content
+   - The "reason" should be a brief explanation of why this page is important
    - Do not include any additional fields
    - Do not include any markdown formatting
    - Do not include any explanatory text outside the JSON
@@ -325,7 +328,7 @@ Return ONLY the JSON object, no other text.`;
           'Authorization': `Bearer ${openaiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4o',
           messages: [
             {
               role: 'system',
@@ -337,7 +340,8 @@ Return ONLY the JSON object, no other text.`;
             }
           ],
           temperature: 0.7,
-          max_tokens: 1000,
+          max_tokens: 2000,
+          response_format: { type: "json_object" }
         }),
       });
 
