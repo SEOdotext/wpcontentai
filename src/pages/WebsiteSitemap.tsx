@@ -176,7 +176,7 @@ const WebsiteSitemap = () => {
       
       // Validate suggestions
       const validSuggestions = data.suggestions.filter((suggestion: any) => {
-        const isValid = suggestion && suggestion.id && suggestion.reason;
+        const isValid = suggestion && suggestion.id && suggestion.title && suggestion.url;
         if (!isValid) {
           console.warn('Invalid suggestion:', suggestion);
         }
