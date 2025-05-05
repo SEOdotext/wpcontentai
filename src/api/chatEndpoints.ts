@@ -18,12 +18,26 @@ export const updateContentWithChat = async (
   request: ChatUpdateRequest
 ): Promise<ChatUpdateResponse> => {
   try {
-    const response = await fetch(`/api/chat/update/${postThemeId}`, {
+    // Get current session for authentication
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session?.access_token) {
+      throw new Error('No active session found');
+    }
+
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-content-update`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${sessionData.session.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify({
+        post_theme_id: postThemeId,
+        message: request.userMessage,
+        current_content: request.selectedText || '',
+        platform: request.platform,
+        platform_settings: request.platformSettings
+      }),
     });
 
     if (!response.ok) {
