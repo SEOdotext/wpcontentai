@@ -41,10 +41,17 @@ export const updateContentWithChat = async (
     });
 
     if (!response.ok) {
-      throw new Error('Failed to update content');
+      const errorData = await response.json();
+      console.error('Error response from chat-content-update:', errorData);
+      throw new Error(errorData.error || 'Failed to update content');
     }
 
-    return await response.json();
+    const data = await response.json();
+    // Patch: Ensure updatedContent is set, regardless of server key
+    return {
+      ...data,
+      updatedContent: data.updatedContent ?? data.content,
+    };
   } catch (error) {
     console.error('Error in updateContentWithChat:', error);
     return {

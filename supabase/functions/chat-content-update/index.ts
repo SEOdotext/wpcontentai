@@ -1,23 +1,32 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders, handleCors } from '../_shared/cors.ts';
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   try {
     console.log('Starting chat-content-update function');
     
     // Get the request body
-    const { post_theme_id, message, current_content } = await req.json();
-    console.log('Request payload:', { post_theme_id, messageLength: message?.length });
+    const { post_theme_id, message, current_content, platform, platform_settings } = await req.json();
+    console.log('Request payload:', { 
+      post_theme_id, 
+      messageLength: message?.length,
+      hasCurrentContent: !!current_content,
+      platform,
+      hasPlatformSettings: !!platform_settings
+    });
+
+    if (!post_theme_id) {
+      throw new Error('post_theme_id is required');
+    }
+
+    if (!message) {
+      throw new Error('message is required');
+    }
 
     // Initialize Supabase client
     const supabaseClient = createClient(
@@ -35,18 +44,18 @@ serve(async (req) => {
 
     if (postThemeError) {
       console.error('Error fetching post theme:', postThemeError);
-      throw postThemeError;
+      throw new Error(`Database error: ${postThemeError.message}`);
     }
     if (!postTheme) {
       console.error('Post theme not found:', post_theme_id);
-      throw new Error('Post theme not found');
+      throw new Error(`Post theme not found: ${post_theme_id}`);
     }
 
     // Prepare the prompt
     const prompt = `You are an AI content editor. The user wants to modify the following content:
 
 Current content:
-${current_content}
+${current_content || postTheme.post_content || ''}
 
 User's request:
 ${message}
@@ -64,7 +73,7 @@ Please provide the complete updated content that addresses the user's request wh
     console.log('Making API request');
     const apiKey = Deno.env.get('OPENAI_API_KEY');
     if (!apiKey) {
-      throw new Error('API key not found');
+      throw new Error('OpenAI API key not found');
     }
 
     // Make a direct fetch request to OpenAI API
@@ -93,8 +102,8 @@ Please provide the complete updated content that addresses the user's request wh
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('API Error:', errorData);
-      throw new Error(`API Error: ${errorData.error?.message || 'Unknown error'}`);
+      console.error('OpenAI API Error:', errorData);
+      throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
@@ -118,7 +127,7 @@ Please provide the complete updated content that addresses the user's request wh
 
     if (updateError) {
       console.error('Error updating post theme:', updateError);
-      throw updateError;
+      throw new Error(`Database update error: ${updateError.message}`);
     }
 
     console.log('Successfully updated content');
