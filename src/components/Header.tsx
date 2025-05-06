@@ -73,6 +73,15 @@ const Header: React.FC = () => {
 
   const handleLogout = async () => {
     try {
+      // Clear all organization-related data from localStorage
+      localStorage.removeItem('currentOrganisation');
+      localStorage.removeItem('organisations');
+      localStorage.removeItem('current_organisation_id');
+      localStorage.removeItem('organisation_id');
+      localStorage.removeItem('organisation_info');
+      localStorage.removeItem('currentWebsiteId');
+      localStorage.removeItem('currentWebsiteName');
+      
       await supabase.auth.signOut();
       toast.success('Logged out successfully');
       navigate('/auth');

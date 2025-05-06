@@ -62,6 +62,17 @@ const OrganisationContext = createContext<OrganisationContextType>({
 export const useOrganisation = () => useContext(OrganisationContext);
 
 // Helper functions for localStorage cache
+const clearOrganisationData = () => {
+  console.log('OrganisationContext: Clearing all organisation data from localStorage');
+  localStorage.removeItem('currentOrganisation');
+  localStorage.removeItem('organisations');
+  localStorage.removeItem('current_organisation_id');
+  localStorage.removeItem('organisation_id');
+  localStorage.removeItem('organisation_info');
+  localStorage.removeItem('currentWebsiteId');
+  localStorage.removeItem('currentWebsiteName');
+};
+
 const getStoredOrganisation = () => {
   const storedData = localStorage.getItem('currentOrganisation');
   if (storedData) {
@@ -303,7 +314,11 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
     
     if (!isAuthenticated) {
-      console.log('OrganisationContext: Not authenticated, skipping fetch');
+      console.log('OrganisationContext: Not authenticated, clearing organisation data');
+      clearOrganisationData();
+      setOrganisation(null);
+      setOrganisations([]);
+      setHasOrganisation(false);
       setIsLoading(false);
       return;
     }
