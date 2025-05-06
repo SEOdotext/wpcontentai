@@ -188,6 +188,7 @@ export const transferDataToDatabase = async (userId: string) => {
         'Authorization': `Bearer ${sessionData.session.access_token}`,
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
       },
+      credentials: 'include',
       mode: 'cors',
       body: JSON.stringify(data)
     });
