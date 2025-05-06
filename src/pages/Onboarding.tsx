@@ -651,6 +651,7 @@ const Onboarding = () => {
     // Store IDs in localStorage
     localStorage.setItem('website_id', websiteId);
     localStorage.setItem('organisation_id', organisationId);
+    localStorage.setItem('current_organisation_id', organisationId); // Add this line to store current org ID
     
     // Create organisation name from URL
     const urlWithoutProtocol = state.websiteUrl.replace(/^https?:\/\//, '');
@@ -674,6 +675,7 @@ const Onboarding = () => {
       created_at: new Date().toISOString()
     };
     localStorage.setItem('organisation_info', JSON.stringify(organisationInfo));
+    localStorage.setItem('currentOrganisation', JSON.stringify(organisationInfo));
     
     // Also store the full organisation object for the OrganisationContext
     console.log('Storing full organisation data in localStorage for OrganisationContext');

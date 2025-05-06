@@ -41,7 +41,7 @@ interface OrganisationResponse {
 
 interface OrganisationContextType {
   organisation: Organisation | null;
-  organizations: Organisation[];
+  organisations: Organisation[];
   isLoading: boolean;
   hasOrganisation: boolean;
   createOrganisation: (name: string) => Promise<boolean>;
@@ -51,7 +51,7 @@ interface OrganisationContextType {
 
 const OrganisationContext = createContext<OrganisationContextType>({
   organisation: null,
-  organizations: [],
+  organisations: [],
   isLoading: true,
   hasOrganisation: false,
   createOrganisation: async () => false,
@@ -109,10 +109,10 @@ const setStoredOrganisations = (orgs: Organisation[]) => {
 
 export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
-  const [organization, setOrganization] = useState<Organisation | null>(null);
-  const [organizations, setOrganizations] = useState<Organisation[]>([]);
+  const [organisation, setOrganisation] = useState<Organisation | null>(null);
+  const [organisations, setOrganisations] = useState<Organisation[]>([]);
   const [hasOrganisation, setHasOrganisation] = useState(false);
-  const [organizationsCount, setOrganizationsCount] = useState(0);
+  const [organisationsCount, setOrganisationsCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const fetchInProgress = useRef(false);
@@ -126,15 +126,15 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     console.log('OrganisationContext: State updated:', {
       isLoading,
       hasOrganisation,
-      organizationsCount,
+      organisationsCount,
       isAuthenticated,
       isOnboarding
     });
-  }, [isLoading, hasOrganisation, organizationsCount, isAuthenticated, isOnboarding]);
+  }, [isLoading, hasOrganisation, organisationsCount, isAuthenticated, isOnboarding]);
 
-  // Fetch organizations function
+  // Fetch organisations function
   const fetchOrganisations = async () => {
-    console.log('OrganisationContext: Starting to fetch organizations...');
+    console.log('OrganisationContext: Starting to fetch organisations...');
     let mounted = true;
     
     try {
@@ -143,25 +143,15 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       if (!session) {
         console.log('OrganisationContext: No session found, setting loading to false');
-          if (mounted) {
-            setHasOrganisation(false);
-            setIsLoading(false);
+        if (mounted) {
+          setHasOrganisation(false);
+          setIsLoading(false);
           setIsInitialized(true);
-          }
-          return;
         }
-
-      // Check if we have a stored organization in localStorage
-      const storedOrg = getStoredOrganisation();
-      if (storedOrg) {
-        console.log('OrganisationContext: Found stored organization in localStorage:', storedOrg.name);
-        setOrganization(storedOrg);
-        setHasOrganisation(true);
-        setIsLoading(false);
-        setIsInitialized(true);
+        return;
       }
 
-      // Fetch organizations from the database
+      // Fetch organisations from the database with membership details
       const { data, error } = await supabase
         .from('organisation_memberships')
         .select(`
@@ -172,15 +162,26 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             current_plan,
             credits,
             next_payment_date
-          )
+          ),
+          created_at,
+          role
         `)
-        .eq('member_id', session.user.id);
+        .eq('member_id', session.user.id)
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('OrganisationContext: Error fetching organizations:', error);
-        // Only reset state if we don't have any existing organization data
-        if (!organization && organizations.length === 0) {
+        console.error('OrganisationContext: Error fetching organisations:', error);
+        // Only try localStorage if database fetch fails
+        const storedOrg = getStoredOrganisation();
+        if (storedOrg) {
+          console.log('OrganisationContext: Using stored organisation as fallback:', storedOrg.name);
+          setOrganisation(storedOrg);
+          setHasOrganisation(true);
+          setOrganisations([storedOrg]);
+        } else {
           setHasOrganisation(false);
+          setOrganisation(null);
+          setOrganisations([]);
         }
         if (mounted) {
           setIsLoading(false);
@@ -190,62 +191,55 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       if (mounted) {
-        // Transform the data to match our Organization type
+        // Transform the data to match our Organisation type
         const transformedData = (data || [])
           .map((item: any) => item.organisation)
           .filter((org: any) => org !== null) as Organisation[];
         
-        // Update organizations list
-        setOrganizations(transformedData);
-        setOrganizationsCount(transformedData.length);
+        // Update organisations list
+        setOrganisations(transformedData);
+        setOrganisationsCount(transformedData.length);
         
-        // If we have a stored organization ID, try to find it in the fetched data
-        const storedOrgId = localStorage.getItem('current_organisation_id');
-        if (storedOrgId) {
-          const storedOrg = transformedData.find(org => org.id === storedOrgId);
-          if (storedOrg) {
-            setOrganization(storedOrg);
-            setHasOrganisation(true);
-          } else {
-            // If stored org not found, use the first one or null
-            if (transformedData && transformedData.length > 0) {
-              setOrganization(transformedData[0]);
-              setHasOrganisation(true);
-              localStorage.setItem('current_organisation_id', transformedData[0].id);
-            } else {
-              setOrganization(null);
-              setHasOrganisation(false);
-              localStorage.removeItem('current_organisation_id');
-            }
-          }
-        } else if (transformedData && transformedData.length > 0) {
-          // No stored org ID, use the first one
-          setOrganization(transformedData[0]);
+        if (transformedData.length > 0) {
+          // Get the most recent organisation membership
+          const mostRecentOrg = transformedData[0]; // Data is already ordered by created_at desc
+          setOrganisation(mostRecentOrg);
           setHasOrganisation(true);
-          localStorage.setItem('current_organisation_id', transformedData[0].id);
+          localStorage.setItem('current_organisation_id', mostRecentOrg.id);
+          localStorage.setItem('currentOrganisation', JSON.stringify(mostRecentOrg));
         } else {
-          setOrganization(null);
+          // No organisations found in database
+          setOrganisation(null);
           setHasOrganisation(false);
+          localStorage.removeItem('current_organisation_id');
+          localStorage.removeItem('currentOrganisation');
         }
         
         setIsLoading(false);
         setIsInitialized(true);
       }
     } catch (error) {
-      console.error('OrganisationContext: Organization fetch timed out or failed:', error);
-      // Keep existing data if we have it
-      if (!organization && organizations.length === 0) {
+      console.error('OrganisationContext: Error in fetchOrganisations:', error);
+      // Only try localStorage if everything else fails
+      const storedOrg = getStoredOrganisation();
+      if (storedOrg) {
+        console.log('OrganisationContext: Using stored organisation as last resort:', storedOrg.name);
+        setOrganisation(storedOrg);
+        setHasOrganisation(true);
+        setOrganisations([storedOrg]);
+      } else {
         setHasOrganisation(false);
+        setOrganisation(null);
+        setOrganisations([]);
       }
       if (mounted) {
         setIsLoading(false);
         setIsInitialized(true);
-        console.log('OrganisationContext: Initialization completed, loading:', false);
       }
     }
   };
 
-  // Helper function to safely fetch organizations with debouncing
+  // Helper function to safely fetch organisations with debouncing
   const safeFetchOrganisations = async () => {
     // Prevent multiple simultaneous fetches
     if (fetchInProgress.current) {
@@ -289,19 +283,19 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
     
     if (cachedOrg) {
-      setOrganization(cachedOrg);
+      setOrganisation(cachedOrg);
       setHasOrganisation(true);
     }
     
     if (cachedOrgs.length > 0) {
-      setOrganizations(cachedOrgs);
-      setOrganizationsCount(cachedOrgs.length);
+      setOrganisations(cachedOrgs);
+      setOrganisationsCount(cachedOrgs.length);
     }
     
     setIsInitialized(true);
   }, []);
 
-  // Fetch organizations when authenticated
+  // Fetch organisations when authenticated
   useEffect(() => {
     if (!isInitialized) {
       console.log('OrganisationContext: Not initialized yet, skipping fetch');
@@ -320,7 +314,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
     
-    console.log('OrganisationContext: Authenticated and initialized, fetching organizations');
+    console.log('OrganisationContext: Authenticated and initialized, fetching organisations');
     safeFetchOrganisations();
   }, [isAuthenticated, isInitialized, isOnboarding]);
 
@@ -329,18 +323,18 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     console.log('OrganisationContext: Context value updated:', {
       isLoading,
       hasOrganisation,
-      organization: organization ? { id: organization.id, name: organization.name } : null,
-      organizationsCount: organizations.length
+      organisation: organisation ? { id: organisation.id, name: organisation.name } : null,
+      organisationsCount: organisations.length
     });
-  }, [isLoading, hasOrganisation, organization, organizations]);
+  }, [isLoading, hasOrganisation, organisation, organisations]);
 
-  // Add function to switch organizations
+  // Add function to switch organisations
   const switchOrganisation = async (orgId: string) => {
     try {
       console.log('OrganisationContext: Switching to organisation:', orgId);
       setIsLoading(true);
       
-      // Get organization details
+      // Get organisation details
       const { data: orgData, error: orgError } = await supabase
         .from('organisations')
         .select('*')
@@ -354,8 +348,8 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       console.log('OrganisationContext: Organisation details fetched:', orgData.name);
       
-      // Update current organization
-      setOrganization(orgData);
+      // Update current organisation
+      setOrganisation(orgData);
       
       // Redirect to home page
       console.log('OrganisationContext: Redirecting to home page');
@@ -363,8 +357,8 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       return true;
     } catch (error) {
-      console.error("OrganisationContext: Error switching organization:", error);
-      toast.error("Failed to switch organization");
+      console.error("OrganisationContext: Error switching organisation:", error);
+      toast.error("Failed to switch organisation");
       return false;
     } finally {
       setIsLoading(false);
@@ -387,7 +381,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       console.log('OrganisationContext: User authenticated, creating organisation in database');
       
-      // Create organization
+      // Create organisation
       const { data: orgData, error: orgError } = await supabase
         .from('organisations')
         .insert([{ name }])
@@ -401,7 +395,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       console.log('OrganisationContext: Organisation created in database:', orgData.id);
       
-      // Add user as admin to the organization
+      // Add user as admin to the organisation
       console.log('OrganisationContext: Adding user as admin to organisation');
       const { error: membershipError } = await supabase
         .from('organisation_memberships')
@@ -419,13 +413,13 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.log('OrganisationContext: User added as admin to organisation');
       
       // Update state
-      setOrganization(orgData);
+      setOrganisation(orgData);
       setHasOrganisation(true);
-      setOrganizations(prev => [...prev, orgData]);
+      setOrganisations(prev => [...prev, orgData]);
       
       toast.success("Organisation created successfully");
       
-      // Redirect to home after organization is created
+      // Redirect to home after organisation is created
       console.log('OrganisationContext: Redirecting to home page');
       navigate('/');
       
@@ -493,8 +487,8 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.log('OrganisationContext: Organisation updated successfully:', orgData.id);
       
       // Update state
-      setOrganization(orgData);
-      setOrganizations(prev => prev.map(org => 
+      setOrganisation(orgData);
+      setOrganisations(prev => prev.map(org => 
         org.id === id ? orgData : org
       ));
       
@@ -543,7 +537,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.error('OrganisationContext: Permission check error:', permError);
       }
       
-      // Generate organization name from website URL
+      // Generate organisation name from website URL
       const orgName = websiteUrl
         .replace(/^https?:\/\/(www\.)?/, '')
         .split('.')[0]
@@ -551,7 +545,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
 
-      console.log('OrganisationContext: Organization name generated:', orgName);
+      console.log('OrganisationContext: Organisation name generated:', orgName);
       
       // Format website URL properly
       let formattedUrl = websiteUrl.trim();
@@ -560,10 +554,10 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.log('OrganisationContext: URL formatted with https://', formattedUrl);
       }
       
-      console.log('OrganisationContext: === STEP 1: Creating organization ===');
-      console.log('OrganisationContext: Organization insertion payload:', { name: orgName });
+      console.log('OrganisationContext: === STEP 1: Creating organisation ===');
+      console.log('OrganisationContext: Organisation insertion payload:', { name: orgName });
       
-      // Step 1: Create organization
+      // Step 1: Create organisation
       const orgResponse = await supabase
         .from('organisations')
         .insert([{ name: orgName }])
@@ -573,28 +567,28 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.log('OrganisationContext: Raw organisation creation response:', orgResponse);
       
       if (orgResponse.error) {
-        console.error('OrganisationContext: Error creating organization:', orgResponse.error);
-        throw new Error(`Failed to create organization: ${orgResponse.error.message} (${orgResponse.error.code})`);
+        console.error('OrganisationContext: Error creating organisation:', orgResponse.error);
+        throw new Error(`Failed to create organisation: ${orgResponse.error.message} (${orgResponse.error.code})`);
       }
       
       const orgData = orgResponse.data;
       if (!orgData) {
-        console.error('OrganisationContext: No organization data returned');
-        throw new Error('No organization data returned after creation');
+        console.error('OrganisationContext: No organisation data returned');
+        throw new Error('No organisation data returned after creation');
       }
       
-      console.log('OrganisationContext: Organization created successfully:', orgData);
+      console.log('OrganisationContext: Organisation created successfully:', orgData);
       const organisationId = orgData.id;
-      console.log('OrganisationContext: Organization ID:', organisationId);
+      console.log('OrganisationContext: Organisation ID:', organisationId);
 
-      console.log('OrganisationContext: === STEP 2: Creating organization membership ===');
+      console.log('OrganisationContext: === STEP 2: Creating organisation membership ===');
       console.log('OrganisationContext: Membership insertion payload:', {
         member_id: userId,
         organisation_id: organisationId,
         role: 'admin'
       });
       
-      // Step 2: Add user as admin to the organization
+      // Step 2: Add user as admin to the organisation
       const membershipResponse = await supabase
         .from('organisation_memberships')
         .insert({
@@ -606,11 +600,11 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       console.log('OrganisationContext: Raw membership creation response:', membershipResponse);
       
       if (membershipResponse.error) {
-        console.error('OrganisationContext: Error creating organization membership:', membershipResponse.error);
+        console.error('OrganisationContext: Error creating organisation membership:', membershipResponse.error);
         throw new Error(`Failed to create membership: ${membershipResponse.error.message} (${membershipResponse.error.code})`);
       }
       
-      console.log('OrganisationContext: Organization membership created for user:', userId);
+      console.log('OrganisationContext: Organisation membership created for user:', userId);
 
       console.log('OrganisationContext: === STEP 3: Creating website ===');
       console.log('OrganisationContext: Website insertion payload:', {
@@ -669,7 +663,7 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       updateOrganisationsState([updatedOrg]);
       setHasOrganisation(true);
       
-      console.log('OrganisationContext: Organization state updated successfully');
+      console.log('OrganisationContext: Organisation state updated successfully');
       console.log('OrganisationContext: === SETUP PROCESS COMPLETED SUCCESSFULLY ===');
       toast.success("Setup completed successfully");
       
@@ -708,14 +702,14 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Update the setOrganisation function to also update localStorage
   const updateOrganisationState = (org: Organisation | null) => {
     console.log('OrganisationContext: Updating organisation state:', org ? org.id : 'null');
-    setOrganization(org);
+    setOrganisation(org);
     setStoredOrganisation(org);
   };
 
-  // Update the setOrganizations function to also update localStorage
+  // Update the setOrganisations function to also update localStorage
   const updateOrganisationsState = (orgs: Organisation[]) => {
-    console.log('OrganisationContext: Updating organizations state:', orgs.length);
-    setOrganizations(orgs);
+    console.log('OrganisationContext: Updating organisations state:', orgs.length);
+    setOrganisations(orgs);
     setStoredOrganisations(orgs);
   };
 
@@ -732,8 +726,8 @@ export const OrganisationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   return (
     <OrganisationContext.Provider value={{
-      organisation: organization,
-      organizations,
+      organisation: organisation,
+      organisations: organisations,
       isLoading,
       hasOrganisation,
       createOrganisation,

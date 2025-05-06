@@ -24,33 +24,56 @@ export const transferDataToDatabase = async (userId: string) => {
       throw new Error('No active session found');
     }
 
-    // Check for existing organisation
-    const { data: existingOrgs } = await supabase
-      .from('organisation_memberships')
-      .select('organisation_id')
-      .eq('member_id', userId)
-      .single();
-      
-    if (existingOrgs?.organisation_id) {
-      // Get organisation name
+    // Get the organization ID from localStorage that was set during onboarding
+    const currentOrgId = localStorage.getItem('current_organisation_id');
+    
+    if (currentOrgId) {
+      // Use the current organization from onboarding
       const { data: orgData } = await supabase
         .from('organisations')
         .select('name')
-        .eq('id', existingOrgs.organisation_id)
+        .eq('id', currentOrgId)
         .single();
         
       if (orgData) {
-        // Use existing organisation instead of creating new one
-        organisationInfo.id = existingOrgs.organisation_id;
+        // Use the current organization
+        organisationInfo.id = currentOrgId;
         organisationInfo.name = orgData.name;
-        
-        // Update website info to link to existing org
-        websiteInfo.organisation_id = existingOrgs.organisation_id;
+        websiteInfo.organisation_id = currentOrgId;
         
         toast.info(
-          "Adding to existing organisation",
-          { description: `Website will be added to your organisation: ${orgData.name}` }
+          "Adding to current organisation",
+          { description: `Website will be added to organisation: ${orgData.name}` }
         );
+      }
+    } else {
+      // If no current organization, check for existing memberships
+      const { data: existingOrgs } = await supabase
+        .from('organisation_memberships')
+        .select('organisation_id, created_at')
+        .eq('member_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+        
+      if (existingOrgs?.[0]?.organisation_id) {
+        // Get organisation name
+        const { data: orgData } = await supabase
+          .from('organisations')
+          .select('name')
+          .eq('id', existingOrgs[0].organisation_id)
+          .single();
+          
+        if (orgData) {
+          // Use most recent organization
+          organisationInfo.id = existingOrgs[0].organisation_id;
+          organisationInfo.name = orgData.name;
+          websiteInfo.organisation_id = existingOrgs[0].organisation_id;
+          
+          toast.info(
+            "Adding to existing organisation",
+            { description: `Website will be added to your organisation: ${orgData.name}` }
+          );
+        }
       }
     }
 
