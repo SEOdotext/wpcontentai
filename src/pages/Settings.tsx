@@ -1,4 +1,4 @@
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import AppSidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { Toaster } from "@/components/ui/sonner";
@@ -41,6 +41,7 @@ import { Slider } from "@/components/ui/slider";
 import { Website } from "@/types/website";
 import { transferDataToDatabase } from '@/api/onboardingImport';
 import { PublicationSettings } from "@/components/PublicationSettings";
+import { FloatingSaveButton } from '@/components/ui/FloatingSaveButton';
 
 // Configuration
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
@@ -150,7 +151,10 @@ const Settings = () => {
     imageModel, 
     setImageModel, 
     negativePrompt, 
-    setNegativePrompt 
+    setNegativePrompt, 
+    weeklyPlanningDay, 
+    setWeeklyPlanningDay, 
+    updateSettingsInDatabase 
   } = useSettings();
   const { currentWebsite, updateWebsite } = useWebsites();
   const { settings: wpSettings, isLoading: wpLoading, initiateWordPressAuth, completeWordPressAuth, disconnect } = useWordPress();
@@ -174,12 +178,10 @@ const Settings = () => {
   const [sendingTestPost, setSendingTestPost] = useState(false);
   const [testPostId, setTestPostId] = useState<number | null>(null);
   const [testPostUrl, setTestPostUrl] = useState<string | null>(null);
-  // Add state for website language
   const [websiteLanguage, setWebsiteLanguage] = useState<string>(currentWebsite?.language || 'en');
   const [customLanguageModalOpen, setCustomLanguageModalOpen] = useState(false);
   const [customLanguageInput, setCustomLanguageInput] = useState("");
   const [wpPublishStatus, setWpPublishStatus] = useState<string>('draft');
-  // Add new state for category generation
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [generatedCategories, setGeneratedCategories] = useState<{ name: string; slug: string }[]>([]);
   const [isGeneratingCategories, setIsGeneratingCategories] = useState(false);
@@ -187,18 +189,9 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [postingDays, setPostingDays] = useState<string[]>([]);
   const [postingFrequency, setPostingFrequency] = useState(3);
-  const [weeklyPlanningDay, setWeeklyPlanningDay] = useState<string>('friday');
-  const { 
-    postingFrequency: contextPostingFrequency, 
-    setPostingFrequency: setContextPostingFrequency,
-    writingStyle: contextWritingStyle,
-    subjectMatters: contextSubjectMatters,
-    weeklyPlanningDay: contextWeeklyPlanningDay,
-    setWeeklyPlanningDay: setContextWeeklyPlanningDay,
-    updateSettingsInDatabase 
-  } = useSettings();
   const [isSocialMediaEnabled, setIsSocialMediaEnabled] = useState(false);
   const [activeSection, setActiveSection] = useState('wordpress');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -505,7 +498,6 @@ const Settings = () => {
       try {
         console.log('Loading publication settings for website:', currentWebsite.id);
         
-        // Get the most recent publication settings
         const { data: settings, error } = await supabase
           .from('publication_settings')
           .select('*')
@@ -518,11 +510,9 @@ const Settings = () => {
           return;
         }
 
-        // Use the first (most recent) settings if available
         const currentSettings = settings?.[0];
         if (currentSettings) {
           console.log('Found existing publication settings:', currentSettings);
-          // Convert the posting_days from database format to array format
           const days = currentSettings.posting_days?.reduce((acc: string[], day: { day: string; count: number }) => {
             return [...acc, ...Array(day.count).fill(day.day)];
           }, []) || ['monday', 'wednesday', 'friday'];
@@ -530,7 +520,6 @@ const Settings = () => {
           setPostingDays(days);
           setPostingFrequency(days.length);
           
-          // Set other settings
           if (currentSettings.writing_style) {
             setWritingStyle(currentSettings.writing_style);
             setStyleInput(currentSettings.writing_style);
@@ -541,14 +530,12 @@ const Settings = () => {
           }
           if (currentSettings.weekly_planning_day) {
             setWeeklyPlanningDay(currentSettings.weekly_planning_day);
-            setContextWeeklyPlanningDay(currentSettings.weekly_planning_day);
           }
         } else {
           console.log('No existing publication settings, using defaults');
           setPostingDays(['monday', 'wednesday', 'friday']);
           setPostingFrequency(3);
           setWeeklyPlanningDay('friday');
-          setContextWeeklyPlanningDay('friday');
         }
       } catch (error) {
         console.error('Error loading publication settings:', error);
@@ -558,8 +545,8 @@ const Settings = () => {
     loadPublicationSettings();
   }, [currentWebsite]);
 
-  // Update the publication settings save handler
-  const handleSavePublicationSettings = async (settings: { postingDays: string[], weeklyPlanningDay: string }) => {
+  // Memoize the publication settings save handler
+  const handleSavePublicationSettings = useCallback(async (settings: { postingDays: string[], weeklyPlanningDay: string }) => {
     if (!currentWebsite) {
       toast.error("Please select a website first");
       return;
@@ -567,7 +554,6 @@ const Settings = () => {
 
     setSaving(true);
     try {
-      // Format posting days to match database structure
       const formattedPostingDays = settings.postingDays.reduce((acc: { day: string; count: number }[], day) => {
         const existingDay = acc.find(d => d.day === day);
         if (existingDay) {
@@ -587,7 +573,6 @@ const Settings = () => {
         weekly_planning_day: settings.weeklyPlanningDay
       });
 
-      // Get the most recent settings
       const { data: existingSettings } = await supabase
         .from('publication_settings')
         .select('id')
@@ -596,7 +581,6 @@ const Settings = () => {
         .limit(1);
 
       if (existingSettings?.[0]) {
-        // Update existing settings
         const { error: updateError } = await supabase
           .from('publication_settings')
           .update({
@@ -611,7 +595,6 @@ const Settings = () => {
 
         if (updateError) throw updateError;
       } else {
-        // Insert new settings
         const { error: insertError } = await supabase
           .from('publication_settings')
           .insert({
@@ -628,10 +611,9 @@ const Settings = () => {
         if (insertError) throw insertError;
       }
 
-      // Update local state
       setPostingDays(settings.postingDays);
       setPostingFrequency(settings.postingDays.length);
-      setContextWeeklyPlanningDay(settings.weeklyPlanningDay);
+      setWeeklyPlanningDay(settings.weeklyPlanningDay);
 
       toast.success("Publication settings saved successfully");
     } catch (error) {
@@ -640,50 +622,55 @@ const Settings = () => {
     } finally {
       setSaving(false);
     }
-  };
+  }, [currentWebsite, writingStyle, subjects, setWeeklyPlanningDay]);
 
-  // Update the main settings save handler to also save publication settings
-  const handleSave = async () => {
+  // Memoize the main settings save handler
+  const handleSave = useCallback(async () => {
+    if (!currentWebsite) {
+      toast.error('Please select a website first');
+      return;
+    }
+
     setIsSaving(true);
     try {
-      setWritingStyle(styleInput);
-      setSubjectMatters(subjects);
-
-      // Also update publication settings with the new writing style and subjects
-      if (currentWebsite) {
-        const { error: updateError } = await supabase
-          .from('publication_settings')
-          .update({
-            writing_style: styleInput,
-            subject_matters: subjects,
-            updated_at: new Date().toISOString()
-          })
-          .eq('website_id', currentWebsite.id);
-
-        if (updateError) throw updateError;
-      }
-
-      toast.success("Settings saved successfully");
+      await updateSettingsInDatabase(
+        postingFrequency,
+        styleInput,
+        subjects,
+        formattemplate,
+        imagePrompt,
+        imageModel,
+        negativePrompt,
+        weeklyPlanningDay
+      );
+      setHasUnsavedChanges(false);
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast.error("Failed to save settings. Please try again.");
+      toast.error('Failed to save settings');
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [currentWebsite, postingFrequency, styleInput, subjects, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay, updateSettingsInDatabase]);
 
-  const handleAddSubject = () => {
+  // Add effect to track changes
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [postingFrequency, styleInput, subjects, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay]);
+
+  // Memoize handlers for subject management
+  const handleAddSubject = useCallback(() => {
     if (newSubject.trim() && !subjects.includes(newSubject.trim())) {
       setSubjects([...subjects, newSubject.trim()]);
       setNewSubject('');
     }
-  };
+  }, [newSubject, subjects]);
 
-  const handleRemoveSubject = (subject: string) => {
+  const handleRemoveSubject = useCallback((subject: string) => {
     setSubjects(subjects.filter(s => s !== subject));
-  };
+  }, [subjects]);
 
-  const handleStartWordPressAuth = () => {
+  // Memoize WordPress auth handlers
+  const handleStartWordPressAuth = useCallback(() => {
     if (!currentWebsite?.url) {
       toast.error('Please enter your WordPress website URL first');
       return;
@@ -695,7 +682,14 @@ const Settings = () => {
     
     initiateWordPressAuth(currentWebsite.url);
     setShowAuthDialog(true);
-  };
+  }, [currentWebsite, initiateWordPressAuth]);
+
+  // Memoize the WordPress settings section
+  const wordPressSettingsSection = useMemo(() => (
+    <div className="space-y-4">
+      {/* WordPress settings content */}
+    </div>
+  ), [/* dependencies */]);
 
   const handleCompleteWordPressAuth = async () => {
     // Field validations
@@ -2770,22 +2764,11 @@ const Settings = () => {
                       </CardContent>
                     </Card>
 
-                    <div className="flex justify-end space-x-4">
-                      <Button
-                        variant="default"
-                        onClick={handleSave}
-                        disabled={isSaving}
-                      >
-                        {isSaving ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          'Save Settings'
-                        )}
-                      </Button>
-                    </div>
+                    {/* Add the floating save button */}
+                    <FloatingSaveButton 
+                      onClick={handleSave}
+                      isLoading={isSaving}
+                    />
                   </>
                 )}
               </div>
