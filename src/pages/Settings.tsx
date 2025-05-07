@@ -847,10 +847,56 @@ const Settings = () => {
   };
 
   const handleDisconnectWordPress = async () => {
-    if (await disconnect()) {
+    // Add confirmation dialog
+    const confirmed = window.confirm('Are you sure you want to disconnect WordPress? This will remove all WordPress connection settings.');
+    if (!confirmed) {
+      console.log('WordPress disconnect cancelled by user');
+      return;
+    }
+
+    console.log('Starting WordPress disconnect process...');
+    setIsConnecting(true);
+    try {
+      // First try to delete directly from the database if we have direct settings
+      if (directWpSettings) {
+        console.log('Found direct WordPress settings, attempting direct database delete...');
+        const { error: deleteError } = await supabase
+          .from('wordpress_settings')
+          .delete()
+          .eq('website_id', currentWebsite?.id);
+
+        if (deleteError) {
+          console.error('Error deleting WordPress settings directly:', deleteError);
+          throw deleteError;
+        }
+        console.log('Successfully deleted WordPress settings directly from database');
+      }
+
+      // Then call the context disconnect function to clean up state
+      console.log('Calling disconnect function from WordPress context...');
+      const disconnected = await disconnect();
+      console.log('Disconnect function returned:', disconnected);
+
+      // Clear all WordPress-related state
+      console.log('Clearing WordPress-related state...');
       setWpUrl('');
       setWpUsername('');
       setWpPassword('');
+      setDirectWpSettings(null);
+      setConnectionError(null);
+      setConnectionDiagnostics(null);
+      setWpPublishStatus('draft');
+      
+      toast.success('WordPress disconnected successfully');
+      
+      // Refresh the page to ensure clean state
+      console.log('Refreshing page to ensure clean state...');
+      window.location.reload();
+    } catch (error) {
+      console.error('Error disconnecting from WordPress:', error);
+      toast.error('Failed to disconnect from WordPress: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -1696,12 +1742,58 @@ const Settings = () => {
   };
 
   const handleWordPressDisconnect = async () => {
+    // Add confirmation dialog
+    const confirmed = window.confirm('Are you sure you want to disconnect WordPress? This will remove all WordPress connection settings.');
+    if (!confirmed) {
+      console.log('WordPress disconnect cancelled by user');
+      return;
+    }
+
+    console.log('Starting WordPress disconnect process...');
     setIsConnecting(true);
     try {
-      handleDisconnectWordPress();
+      // First try to delete directly from the database if we have direct settings
+      if (directWpSettings) {
+        console.log('Found direct WordPress settings, attempting direct database delete...');
+        const { error: deleteError } = await supabase
+          .from('wordpress_settings')
+          .delete()
+          .eq('website_id', currentWebsite?.id);
+
+        if (deleteError) {
+          console.error('Error deleting WordPress settings directly:', deleteError);
+          throw deleteError;
+        }
+        console.log('Successfully deleted WordPress settings directly from database');
+      }
+
+      // Then call the context disconnect function to clean up state
+      console.log('Calling disconnect function from WordPress context...');
+      const disconnected = await disconnect();
+      console.log('Disconnect function returned:', disconnected);
+
+      if (disconnected) {
+        // Clear all WordPress-related state
+        console.log('Clearing WordPress-related state...');
+        setWpUrl('');
+        setWpUsername('');
+        setWpPassword('');
+        setDirectWpSettings(null);
+        setConnectionError(null);
+        setConnectionDiagnostics(null);
+        setWpPublishStatus('draft');
+        toast.success('WordPress disconnected successfully');
+        
+        // Refresh the page to ensure all state is cleared
+        console.log('Refreshing page to ensure clean state...');
+        window.location.reload();
+      } else {
+        console.error('Disconnect function returned false');
+        toast.error('Failed to disconnect from WordPress');
+      }
     } catch (error) {
       console.error('Error disconnecting from WordPress:', error);
-      toast.error('Failed to disconnect from WordPress');
+      toast.error('Failed to disconnect from WordPress: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsConnecting(false);
     }

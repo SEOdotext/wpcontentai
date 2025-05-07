@@ -591,25 +591,84 @@ export const WordPressProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Disconnect WordPress integration
   const disconnect = async (): Promise<boolean> => {
-    if (!settings) return true;
+    console.log('Starting WordPress disconnect process in context...');
+    
+    if (!currentWebsite) {
+      console.error('No current website selected');
+      return false;
+    }
 
     try {
       setIsLoading(true);
 
-      // @ts-ignore - Ignore TypeScript errors for wordpress_settings table access
-      const { error } = await supabase
+      // Even if we don't have settings in context, try to get them from DB
+      const { data: dbSettings, error: fetchError } = await supabase
+        .from('wordpress_settings')
+        .select('*')
+        .eq('website_id', currentWebsite.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error fetching WordPress settings:', fetchError);
+        throw fetchError;
+      }
+
+      // If we have settings either in context or DB, proceed with disconnect
+      const settingsToUse = settings || dbSettings;
+      
+      if (!settingsToUse) {
+        console.log('No WordPress settings found in context or DB');
+        return true; // Consider it a successful disconnect if no settings exist
+      }
+
+      console.log('WordPress settings to disconnect:', {
+        id: settingsToUse.id,
+        website_id: settingsToUse.website_id,
+        wp_url: settingsToUse.wp_url
+      });
+
+      // First try to revoke the application password if possible
+      if (settingsToUse.wp_url && settingsToUse.wp_username && settingsToUse.wp_application_password) {
+        try {
+          console.log('Attempting to verify WordPress credentials before disconnecting...');
+          const response = await fetch(`${settingsToUse.wp_url}/wp-json/wp/v2/users/me`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Basic ${btoa(`${settingsToUse.wp_username}:${settingsToUse.wp_application_password}`)}`
+            }
+          });
+
+          if (response.ok) {
+            console.log('Successfully verified WordPress credentials before disconnecting');
+          } else {
+            console.warn('Could not verify WordPress credentials, status:', response.status);
+          }
+        } catch (error) {
+          console.warn('Could not verify WordPress credentials before disconnecting:', error);
+        }
+      }
+
+      console.log('Deleting WordPress settings from database...');
+      // Delete the settings from the database using website_id
+      const { error: deleteError } = await supabase
         .from('wordpress_settings')
         .delete()
-        .eq('id', settings.id);
+        .eq('website_id', currentWebsite.id);
 
-      if (error) throw error;
+      if (deleteError) {
+        console.error('Error deleting WordPress settings:', deleteError);
+        throw deleteError;
+      }
 
+      console.log('Successfully deleted WordPress settings from database');
+
+      // Clear the settings from state
       setSettings(null);
       toast.success('WordPress disconnected successfully');
       return true;
     } catch (error) {
       console.error('Error disconnecting WordPress:', error);
-      toast.error('Failed to disconnect WordPress');
+      toast.error('Failed to disconnect WordPress: ' + (error instanceof Error ? error.message : 'Unknown error'));
       return false;
     } finally {
       setIsLoading(false);
