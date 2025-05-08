@@ -254,6 +254,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         updated_at: new Date().toISOString()
       };
       
+      let updateSuccessful = false;
+
       if (!settingsId) {
         console.log("Creating new settings with subjects:", cleanSubjects);
         const { data: newSettings, error: insertError } = await supabase
@@ -275,7 +277,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           console.log("New settings created:", newSettings);
           setSettingsId(newSettings.id);
           setLastSavedValues(settingsData);
-          toast.success("Settings created successfully");
+          updateSuccessful = true;
         }
       } else {
         // Update existing settings
@@ -292,30 +294,41 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         console.log("Settings updated successfully with subjects:", cleanSubjects);
         setLastSavedValues(settingsData);
-        toast.success("Settings updated successfully");
+        updateSuccessful = true;
+      }
+
+      // Only show success toast if the update was successful and we're not in a debounced call
+      if (updateSuccessful && !isInitializing) {
+        toast.success("Settings updated successfully", {
+          id: 'settings-update' // Use a consistent ID to prevent duplicate toasts
+        });
       }
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast.error('Failed to save settings. Please try again.');
+      toast.error('Failed to save settings. Please try again.', {
+        id: 'settings-error' // Use a consistent ID for error toasts
+      });
     }
   }, [currentWebsite, settingsId, formattemplate, imagePrompt, imageModel, negativePrompt, isInitializing, haveValuesChanged]);
 
   // Optimize settings fetch
   useEffect(() => {
     let isMounted = true;
+    let isInitialFetch = true;
+    
     const fetchSettings = async () => {
       if (!currentWebsite) {
         console.log("No website selected, using default settings");
         if (isMounted) {
-        setPostingFrequency(defaultSettings.postingFrequency);
-        setWritingStyle(defaultSettings.writingStyle);
-        setSubjectMatters(defaultSettings.subjectMatters);
-        setformattemplate(defaultSettings.formattemplate);
-        setImagePrompt(defaultSettings.imagePrompt);
-        setImageModel(defaultSettings.imageModel);
-        setNegativePrompt(defaultSettings.negativePrompt);
-        setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay || 'friday');
-        setIsLoading(false);
+          setPostingFrequency(defaultSettings.postingFrequency);
+          setWritingStyle(defaultSettings.writingStyle);
+          setSubjectMatters(defaultSettings.subjectMatters);
+          setformattemplate(defaultSettings.formattemplate);
+          setImagePrompt(defaultSettings.imagePrompt);
+          setImageModel(defaultSettings.imageModel);
+          setNegativePrompt(defaultSettings.negativePrompt);
+          setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay || 'friday');
+          setIsLoading(false);
           setIsInitializing(false);
         }
         return;
@@ -352,37 +365,39 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (data && data.length > 0 && isMounted) {
           console.log("Found existing settings:", data[0]);
           const settings = data[0] as PublicationSettings;
-          setSettingsId(settings.id);
-          setPostingFrequency(settings.posting_frequency);
-          setWritingStyle(settings.writing_style);
           
-          // Set format template if it exists
-          if (settings.format_template) {
+          // Only update state if values are different
+          if (settings.id !== settingsId) setSettingsId(settings.id);
+          if (settings.posting_frequency !== postingFrequency) setPostingFrequency(settings.posting_frequency);
+          if (settings.writing_style !== writingStyle) setWritingStyle(settings.writing_style);
+          
+          // Set format template if it exists and is different
+          if (settings.format_template && settings.format_template !== formattemplate) {
             setformattemplate(settings.format_template);
           }
           
-          // Set image model if it exists
-          if (settings.image_model) {
+          // Set image model if it exists and is different
+          if (settings.image_model && settings.image_model !== imageModel) {
             setImageModel(settings.image_model);
-          } else {
+          } else if (!settings.image_model) {
             setImageModel(defaultSettings.imageModel);
           }
           
-          // Set image prompt if it exists
-          if (settings.image_prompt) {
+          // Set image prompt if it exists and is different
+          if (settings.image_prompt && settings.image_prompt !== imagePrompt) {
             setImagePrompt(settings.image_prompt);
-          } else {
+          } else if (!settings.image_prompt) {
             setImagePrompt(defaultSettings.imagePrompt);
           }
           
-          // Set negative prompt if it exists
-          if (settings.negative_prompt) {
+          // Set negative prompt if it exists and is different
+          if (settings.negative_prompt && settings.negative_prompt !== negativePrompt) {
             setNegativePrompt(settings.negative_prompt);
-          } else {
+          } else if (!settings.negative_prompt) {
             setNegativePrompt(defaultSettings.negativePrompt);
           }
           
-          // Parse and set subject matters
+          // Parse and set subject matters only if different
           try {
             const subjectsArray = Array.isArray(settings.subject_matters) 
               ? settings.subject_matters 
@@ -390,16 +405,23 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 ? JSON.parse(settings.subject_matters)
                 : [];
             console.log("Parsed subject matters:", subjectsArray);
-            setSubjectMatters(subjectsArray);
+            if (JSON.stringify(subjectsArray) !== JSON.stringify(subjectMatters)) {
+              setSubjectMatters(subjectsArray);
+            }
           } catch (error) {
             console.error("Error parsing subject_matters:", error);
-            setSubjectMatters(defaultSettings.subjectMatters);
+            if (JSON.stringify(defaultSettings.subjectMatters) !== JSON.stringify(subjectMatters)) {
+              setSubjectMatters(defaultSettings.subjectMatters);
+            }
           }
           
-          // Set weekly planning day if it exists
-          if (settings.weekly_planning_day) {
+          // Set weekly planning day if it exists and is different
+          if (settings.weekly_planning_day && settings.weekly_planning_day !== weeklyPlanningDay) {
             setWeeklyPlanningDay(settings.weekly_planning_day);
           }
+
+          // Update last saved values
+          setLastSavedValues(settings);
         } else if (isMounted) {
           console.log("No settings found, creating default settings");
           // Create default settings
@@ -437,12 +459,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setImageModel(defaultSettings.imageModel);
             setNegativePrompt(defaultSettings.negativePrompt);
             setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay || 'friday');
+            setLastSavedValues(newSettings);
           }
         }
       } catch (error) {
         console.error("Error in fetchSettings:", error);
         if (isMounted) {
-        toast.error("Failed to load settings");
+          toast.error("Failed to load settings");
           setIsLoading(false);
           setIsInitializing(false);
         }
@@ -450,6 +473,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (isMounted) {
         setIsLoading(false);
         setIsInitializing(false);
+        isInitialFetch = false;
       }
     };
 

@@ -192,6 +192,16 @@ const Settings = () => {
   const [isSocialMediaEnabled, setIsSocialMediaEnabled] = useState(false);
   const [activeSection, setActiveSection] = useState('wordpress');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [lastSavedValues, setLastSavedValues] = useState({
+    posting_frequency: 3,
+    writing_style: 'Professional',
+    subject_matters: ['guide', 'tips', 'best practices', 'how to', 'introduction'],
+    format_template: defaultFormatTemplate,
+    image_prompt: '',
+    image_model: 'dalle',
+    negative_prompt: '',
+    weekly_planning_day: 'friday'
+  });
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -627,7 +637,9 @@ const Settings = () => {
   // Memoize the main settings save handler
   const handleSave = useCallback(async () => {
     if (!currentWebsite) {
-      toast.error('Please select a website first');
+      toast.error('Please select a website first', {
+        id: 'website-required'
+      });
       return;
     }
 
@@ -646,16 +658,54 @@ const Settings = () => {
       setHasUnsavedChanges(false);
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast.error('Failed to save settings');
+      // Error toast is handled by the context
     } finally {
       setIsSaving(false);
     }
   }, [currentWebsite, postingFrequency, styleInput, subjects, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay, updateSettingsInDatabase]);
 
-  // Add effect to track changes
+  // Add effect to track changes with debounce
   useEffect(() => {
-    setHasUnsavedChanges(true);
-  }, [postingFrequency, styleInput, subjects, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay]);
+    if (settingsLoading || !hasUnsavedChanges) return;
+
+    const timer = setTimeout(() => {
+      handleSave();
+    }, 1000); // 1 second debounce
+
+    return () => clearTimeout(timer);
+  }, [hasUnsavedChanges, handleSave, settingsLoading]);
+
+  // Update the effect to track changes with less frequency
+  useEffect(() => {
+    // Don't set changes during initialization or loading
+    if (settingsLoading) return;
+
+    // Compare with previous values to determine if there are actual changes
+    const hasChanges = 
+      postingFrequency !== lastSavedValues?.posting_frequency ||
+      styleInput !== lastSavedValues?.writing_style ||
+      JSON.stringify(subjects) !== JSON.stringify(lastSavedValues?.subject_matters) ||
+      formattemplate !== lastSavedValues?.format_template ||
+      imagePrompt !== lastSavedValues?.image_prompt ||
+      imageModel !== lastSavedValues?.image_model ||
+      negativePrompt !== lastSavedValues?.negative_prompt ||
+      weeklyPlanningDay !== lastSavedValues?.weekly_planning_day;
+
+    if (hasChanges) {
+      setHasUnsavedChanges(true);
+    }
+  }, [
+    postingFrequency,
+    styleInput,
+    subjects,
+    formattemplate,
+    imagePrompt,
+    imageModel,
+    negativePrompt,
+    weeklyPlanningDay,
+    settingsLoading,
+    lastSavedValues
+  ]);
 
   // Memoize handlers for subject management
   const handleAddSubject = useCallback(() => {
@@ -1587,19 +1637,19 @@ const Settings = () => {
 
   // Effect to sync language state with current website
   useEffect(() => {
-    if (currentWebsite?.language) {
+    if (currentWebsite?.language && currentWebsite.language !== websiteLanguage) {
       setWebsiteLanguage(currentWebsite.language);
-    } else {
+    } else if (!currentWebsite?.language && websiteLanguage !== 'en') {
       setWebsiteLanguage('en'); // Default to English
     }
-  }, [currentWebsite]);
+  }, [currentWebsite, websiteLanguage]);
 
   // Effect to initialize social media enabled state
   useEffect(() => {
-    if (currentWebsite) {
+    if (currentWebsite && currentWebsite.enable_some !== isSocialMediaEnabled) {
       setIsSocialMediaEnabled(currentWebsite.enable_some || false);
     }
-  }, [currentWebsite]);
+  }, [currentWebsite, isSocialMediaEnabled]);
 
   // Update WordPress publish status
   const updateWordPressPublishStatus = async (status: string) => {

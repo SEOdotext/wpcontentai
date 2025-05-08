@@ -461,6 +461,42 @@ Value-add or insight 💡
                   </div>
 
                   <div className="space-y-2">
+                    <Label>Image Settings</Label>
+                    <div className="space-y-4">
+                      <div>
+                        <Label className="text-sm">Image Prompt</Label>
+                        <Textarea
+                          placeholder="Enter prompt for generating images for this platform"
+                          value={localSetting.image_prompt || setting?.image_prompt || ''}
+                          onChange={(e) => handleTextChange(platform.key, 'image_prompt', e.target.value)}
+                          className="mt-1"
+                        />
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Provide instructions for generating images that match your brand and platform style.
+                        </p>
+                      </div>
+
+                      <div>
+                        <Label className="text-sm">Image Formats</Label>
+                        <Textarea
+                          placeholder="Enter preferred image formats (one per line)"
+                          value={localSetting.image_formats || setting?.image_formats || ''}
+                          onChange={(e) => handleTextChange(platform.key, 'image_formats', e.target.value)}
+                          className="mt-1"
+                        />
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Specify preferred image formats and dimensions for this platform (e.g., square 1:1, portrait 4:5, landscape 16:9).
+                          {platform.key === 'instagram' && ' Instagram: Square (1:1), Portrait (4:5), Landscape (1.91:1)'}
+                          {platform.key === 'linkedin' && ' LinkedIn: Square (1:1), Landscape (1.91:1)'}
+                          {platform.key === 'facebook' && ' Facebook: Square (1:1), Landscape (1.91:1)'}
+                          {platform.key === 'x' && ' X (Twitter): Square (1:1), Landscape (16:9)'}
+                          {platform.key === 'tiktok' && ' TikTok: Portrait (9:16)'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Post Format Example</Label>
                       <Button
