@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getCorsHeaders, handleCors } from '../_shared/cors.ts';
 
 // Get allowed origins from environment variables
 const ALLOWED_ORIGINS = {
@@ -30,27 +31,9 @@ serve(async (req) => {
     headers: Object.fromEntries(req.headers.entries())
   });
 
-  // Get the origin from the request
-  const origin = req.headers.get('origin');
-  console.log('Request origin:', origin);
-  
-  // Set CORS headers based on origin
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': isAllowedOrigin(origin) ? origin : ALLOWED_ORIGINS.production[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-queue-processing, x-original-user-token',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Max-Age': '86400'
-  };
-
-  // ALWAYS handle OPTIONS preflight requests immediately, 
-  // before any token validation or body parsing
-  if (req.method === 'OPTIONS') {
-    console.log('Handling OPTIONS preflight request immediately');
-    return new Response('ok', { 
-      headers: corsHeaders,
-      status: 200 
-    });
-  }
+  // Handle CORS preflight request
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
 
   try {
     console.log('Starting main function logic...');
