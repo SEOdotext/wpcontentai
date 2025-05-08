@@ -58,7 +58,7 @@ const WordPressIntegrationStep: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center gap-2 sm:space-x-2">
               <Button
                 variant="default"
-                onClick={() => navigate('/settings/wordpress')}
+                onClick={() => navigate('/settings#wordpress')}
                 className="w-full sm:w-auto space-x-2"
               >
                 <span>Set up WordPress Integration</span>

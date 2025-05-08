@@ -217,22 +217,26 @@ const Settings = () => {
             return;
           }
 
-          const response = await (supabase as any)
+          const { data, error } = await supabase
             .from('wordpress_settings')
             .select('*')
             .eq('website_id', currentWebsite.id)
-            .limit(1)
-            .auth(session.access_token);
+            .limit(1);
           
-          if (response.data && response.data.length > 0) {
-            console.log('Directly fetched settings from database:', response.data[0]);
-            setDirectWpSettings(response.data[0]);
+          if (error) {
+            console.error('Error fetching WordPress settings:', error);
+            return;
+          }
+          
+          if (data && data.length > 0) {
+            console.log('Directly fetched settings from database:', data[0]);
+            setDirectWpSettings(data[0]);
             // Only set fields if they're empty
             if (!wpUsername) {
-              setWpUsername(response.data[0].wp_username || '');
+              setWpUsername(data[0].wp_username || '');
             }
             if (!wpPassword) {
-              setWpPassword(response.data[0].wp_application_password || '');
+              setWpPassword(data[0].wp_application_password || '');
             }
           }
         } catch (error) {
