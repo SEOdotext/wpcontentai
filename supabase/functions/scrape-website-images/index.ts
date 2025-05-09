@@ -17,6 +17,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 interface ScrapeRequest {
   website_url: string
   user_id: string
+  max_images?: number  // Optional parameter to control max images
 }
 
 async function scrapeImages(url: string): Promise<string[]> {
@@ -298,7 +299,7 @@ serve(async (req) => {
   }
 
   try {
-    const { website_url, user_id } = await req.json() as ScrapeRequest
+    const { website_url, user_id, max_images = 50 } = await req.json() as ScrapeRequest
     
     if (!website_url || !user_id) {
       throw new Error('Missing required parameters')
@@ -343,9 +344,9 @@ serve(async (req) => {
       )
     }
     
-    // Process up to 10 new images
+    // Process up to max_images new images
     const processedImages = await Promise.all(
-      newImages.slice(0, 10).map(url => importImageToContentGardener(url, user_id))
+      newImages.slice(0, max_images).map(url => importImageToContentGardener(url, user_id))
     )
     
     // Filter out failed imports
@@ -356,7 +357,10 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         imported_count: successfulImports.length,
-        images: successfulImports
+        images: successfulImports,
+        total_found: images.length,
+        new_found: newImages.length,
+        max_images
       }),
       {
         headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' },

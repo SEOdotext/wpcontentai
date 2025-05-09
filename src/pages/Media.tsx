@@ -4,7 +4,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Upload, Image as ImageIcon, Info, Download, Wand2, Globe2, Bot, Library, Globe } from 'lucide-react';
+import { Search, Upload, Image as ImageIcon, Info, Download, Wand2, Globe2, Bot, Library, Globe, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -25,6 +26,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type ImageSource = 'upload' | 'ai_generated' | 'external_url' | 'scraped' | 'stock_library' | 'other';
 
@@ -75,6 +86,8 @@ export default function Media() {
   const [description, setDescription] = useState('');
   const [selectedSource, setSelectedSource] = useState<ImageSource | 'all'>('all');
   const [isScraping, setIsScraping] = useState(false);
+  const [imageToDelete, setImageToDelete] = useState<ImageItem | null>(null);
+  const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (currentWebsite) {
@@ -269,6 +282,107 @@ export default function Media() {
     }
   };
 
+  const handleDeleteImage = async () => {
+    if (!imageToDelete || !currentWebsite) return;
+
+    const deleteToast = toast.loading('Deleting image...');
+
+    try {
+      // Extract the file path from the URL
+      const url = new URL(imageToDelete.url);
+      const filePath = url.pathname.split('/').slice(-2).join('/'); // Gets the last two parts of the path
+
+      // Delete from storage
+      const { error: storageError } = await supabase.storage
+        .from('images')
+        .remove([filePath]);
+
+      if (storageError) {
+        console.error('Storage delete error:', storageError);
+        throw new Error('Failed to delete image from storage');
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('images')
+        .delete()
+        .eq('id', imageToDelete.id);
+
+      if (dbError) {
+        console.error('Database delete error:', dbError);
+        throw new Error('Failed to delete image record');
+      }
+
+      toast.dismiss(deleteToast);
+      toast.success('Image deleted successfully');
+      await fetchImages(); // Refresh the image list
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      toast.dismiss(deleteToast);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete image');
+    } finally {
+      setImageToDelete(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedImages.size === 0 || !currentWebsite) return;
+
+    const deleteToast = toast.loading(`Deleting ${selectedImages.size} images...`);
+
+    try {
+      // Get the images to delete
+      const imagesToDelete = images.filter(img => selectedImages.has(img.id));
+      
+      // Delete from storage
+      const filePaths = imagesToDelete.map(img => {
+        const url = new URL(img.url);
+        return url.pathname.split('/').slice(-2).join('/');
+      });
+
+      const { error: storageError } = await supabase.storage
+        .from('images')
+        .remove(filePaths);
+
+      if (storageError) {
+        console.error('Storage delete error:', storageError);
+        throw new Error('Failed to delete some images from storage');
+      }
+
+      // Delete from database
+      const { error: dbError } = await supabase
+        .from('images')
+        .delete()
+        .in('id', Array.from(selectedImages));
+
+      if (dbError) {
+        console.error('Database delete error:', dbError);
+        throw new Error('Failed to delete some image records');
+      }
+
+      toast.dismiss(deleteToast);
+      toast.success(`Successfully deleted ${selectedImages.size} images`);
+      setSelectedImages(new Set());
+      await fetchImages(); // Refresh the image list
+    } catch (error) {
+      console.error('Error deleting images:', error);
+      toast.dismiss(deleteToast);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete images');
+    }
+  };
+
+  const toggleImageSelection = (imageId: string) => {
+    setSelectedImages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(imageId)) {
+        newSet.delete(imageId);
+      } else {
+        newSet.add(imageId);
+      }
+      return newSet;
+    });
+  };
+
   const filteredImages = images.filter(item => {
     const matchesSearch = 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -286,7 +400,24 @@ export default function Media() {
           <main className="flex-1 px-4 py-6 overflow-y-auto">
             <div className="max-w-6xl mx-auto space-y-6">
               <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Image Library</h1>
+                <div className="flex items-center gap-4">
+                  <h1 className="text-2xl font-bold">Image Library</h1>
+                  {selectedImages.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {selectedImages.size} selected
+                      </span>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Selected
+                      </Button>
+                    </div>
+                  )}
+                </div>
                 <div className="flex gap-4">
                   <Select
                     value={selectedSource}
@@ -359,7 +490,7 @@ export default function Media() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredImages.map((item) => (
                     <Dialog key={item.id}>
-                      <Card className="overflow-hidden group">
+                      <Card className={`overflow-hidden group relative ${selectedImages.has(item.id) ? 'ring-2 ring-primary' : ''}`}>
                         <CardContent className="p-0">
                           <div className="aspect-video relative">
                             <img
@@ -367,19 +498,50 @@ export default function Media() {
                               alt={item.description || item.name}
                               className="object-cover w-full h-full"
                             />
-                            <DialogTrigger asChild>
+                            <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setSelectedImage(item);
+                                    setDescription(item.description || '');
+                                  }}
+                                >
+                                  <Info className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => {
-                                  setSelectedImage(item);
-                                  setDescription(item.description || '');
-                                }}
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setImageToDelete(item)}
                               >
-                                <Info className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
-                            </DialogTrigger>
+                            </div>
+                            <div 
+                              className="absolute inset-0 cursor-pointer"
+                              onClick={() => toggleImageSelection(item.id)}
+                            />
+                            {selectedImages.has(item.id) && (
+                              <div className="absolute top-2 left-2">
+                                <div className="bg-primary text-primary-foreground rounded-full p-1">
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className="h-4 w-4"
+                                  >
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                </div>
+                              </div>
+                            )}
                           </div>
                           <div className="p-4">
                             <div className="flex items-center gap-2">
@@ -458,6 +620,26 @@ export default function Media() {
           </main>
         </div>
       </div>
+
+      <AlertDialog open={!!imageToDelete} onOpenChange={() => setImageToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Image</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this image? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteImage}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SidebarProvider>
   );
 } 
