@@ -4,7 +4,7 @@ import { useWebsites } from '@/context/WebsitesContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Upload, Image as ImageIcon, Info, Download, Wand2, Globe2, Bot, Library } from 'lucide-react';
+import { Search, Upload, Image as ImageIcon, Info, Download, Wand2, Globe2, Bot, Library, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import { Textarea } from '@/components/ui/textarea';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -74,6 +74,7 @@ export default function Media() {
   const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null);
   const [description, setDescription] = useState('');
   const [selectedSource, setSelectedSource] = useState<ImageSource | 'all'>('all');
+  const [isScraping, setIsScraping] = useState(false);
 
   useEffect(() => {
     if (currentWebsite) {
@@ -228,6 +229,46 @@ export default function Media() {
     }
   };
 
+  const handleScrapeImages = async () => {
+    if (!currentWebsite?.url) {
+      toast.error('No website URL configured');
+      return;
+    }
+
+    setIsScraping(true);
+    const scrapeToast = toast.loading('Scraping images from website...');
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/scrape-website-images`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          website_url: currentWebsite.url,
+          user_id: currentWebsite.id
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to scrape images');
+      }
+
+      toast.dismiss(scrapeToast);
+      toast.success(`Successfully imported ${data.imported_count} images`);
+      await fetchImages(); // Refresh the image list
+    } catch (error) {
+      console.error('Error scraping images:', error);
+      toast.dismiss(scrapeToast);
+      toast.error(error instanceof Error ? error.message : 'Failed to scrape images');
+    } finally {
+      setIsScraping(false);
+    }
+  };
+
   const filteredImages = images.filter(item => {
     const matchesSearch = 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -272,6 +313,14 @@ export default function Media() {
                       className="pl-8 w-[200px]"
                     />
                   </div>
+                  <Button 
+                    variant="outline"
+                    onClick={handleScrapeImages}
+                    disabled={isScraping || !currentWebsite?.url}
+                  >
+                    <Globe className="h-4 w-4 mr-2" />
+                    {isScraping ? 'Scraping...' : 'Scrape Website'}
+                  </Button>
                   <Button asChild>
                     <label className="cursor-pointer">
                       <Upload className="h-4 w-4 mr-2" />
