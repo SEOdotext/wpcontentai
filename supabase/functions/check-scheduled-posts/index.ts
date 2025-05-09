@@ -1,6 +1,23 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Add TypeScript interfaces
+interface ProcessedPost {
+  postId: string;
+  queueJobId?: string;
+  error?: string;
+  status: 'queued' | 'failed';
+}
+
+interface PostTheme {
+  id: string;
+  website_id: string;
+  status: string;
+  scheduled_date: string;
+  wp_sent_date: string | null;
+  wp_post_url: string | null;
+}
+
 // Get allowed origins from environment variables
 const ALLOWED_ORIGINS = {
   production: Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai', 'https://contentgardener.ai/'],
@@ -183,7 +200,7 @@ serve(async (req) => {
     console.log(`Found ${readyPosts.length} posts ready to be published`);
 
     // Add each post to the publish queue
-    const processedPosts = [];
+    const processedPosts: ProcessedPost[] = [];
     console.log(`Processing ${readyPosts.length} posts for publishing:`, {
       postIds: readyPosts.map(p => p.id),
       websiteIds: readyPosts.map(p => p.website_id),
