@@ -1694,6 +1694,46 @@ const Settings = () => {
     }
   }, [currentWebsite, isSocialMediaEnabled]);
 
+  // Add effect to check for active social media channels
+  useEffect(() => {
+    const checkActiveSocialChannels = async () => {
+      if (!currentWebsite) return;
+      
+      try {
+        // Check if there are any active social media settings
+        const { data: activeChannels, error } = await supabase
+          .from('some_settings')
+          .select('*')
+          .eq('website_id', currentWebsite.id)
+          .eq('is_active', true);
+        
+        if (error) {
+          console.error('Error checking active social channels:', error);
+          return;
+        }
+        
+        // If there are active channels but social media is not enabled
+        if (activeChannels && activeChannels.length > 0 && !currentWebsite.enable_some) {
+          console.log('Found active social channels, enabling social media integration');
+          try {
+            // Update the website setting
+            await updateWebsite(currentWebsite.id, {
+              enable_some: true
+            });
+            setIsSocialMediaEnabled(true);
+            toast.success('Social media integration enabled due to active channels');
+          } catch (error) {
+            console.error('Failed to update social media setting:', error);
+          }
+        }
+      } catch (err) {
+        console.error('Error in checkActiveSocialChannels:', err);
+      }
+    };
+    
+    checkActiveSocialChannels();
+  }, [currentWebsite]);
+
   // Update WordPress publish status
   const updateWordPressPublishStatus = async (status: string) => {
     if (!currentWebsite) {
