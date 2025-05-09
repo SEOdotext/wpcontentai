@@ -936,7 +936,43 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
               <div className="flex-1 flex overflow-hidden">
                 {/* Editor/Preview */}
                 <div className="w-[70%] p-4 overflow-auto">
-                  {currentPlatform && !editedContent ? (
+                  {!content && currentPlatform === null ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                      <div className="max-w-md">
+                        <h3 className="text-xl font-semibold mb-4">No Article Content Yet</h3>
+                        <div className="text-muted-foreground mb-6">
+                          <p className="mb-3">
+                            Get started by generating your article content. Our AI will create engaging, well-structured content that:
+                          </p>
+                          <ul className="text-left space-y-2">
+                            <li>• Matches your website's tone and style</li>
+                            <li>• Includes strategic backlinks to your key content</li>
+                            <li>• Optimizes for your target keywords</li>
+                            <li>• Follows your website's formatting guidelines</li>
+                            <li>• Incorporates your brand voice and messaging</li>
+                          </ul>
+                        </div>
+                        <Button 
+                          onClick={onRegenerate}
+                          disabled={isGeneratingContent}
+                          size="lg"
+                          className="w-full"
+                        >
+                          {isGeneratingContent ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generating Article...
+                            </>
+                          ) : (
+                            <>
+                              <FileEdit className="mr-2 h-4 w-4" />
+                              Generate Article Content
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : currentPlatform && !editedContent ? (
                     <div className="h-full flex flex-col items-center justify-center">
                       <p className="text-muted-foreground mb-4">No content generated yet for {currentPlatform}</p>
                       <Button 

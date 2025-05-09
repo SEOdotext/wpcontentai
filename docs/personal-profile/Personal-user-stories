@@ -1,0 +1,24 @@
+Based on updated main, create new branch called personal profile
+
+Db: user_profiles/content_gardeners... The personal user profile does not handle any auth
+
+Share your best post
+Upload your CV
+
+
+
+
+| Field            | Description                                     |
+| ---------------- | ----------------------------------------------- |
+| `id`             | Primary key                                     |
+| `user_id`        | Foreign key to auth table                       |
+| `display_name`   | Full name or business name                      |
+| `headline`       | Tagline or title                                |
+| `bio`            | About the user or business                      |
+| `linkedin_url`   | Public LinkedIn profile                         |
+| `profile_image`  | URL of profile image                            |
+| `website_url`    | Business or personal site                       |
+| `tags`           | JSON array of expertise or industries           |
+| `content_themes` | Focus areas (e.g., SEO, social media, branding) |
+| `location`       | Optional city or country                        |
+| `import_source`  | Enum (e.g., 'manual', 'linkedin', 'resume')     |
