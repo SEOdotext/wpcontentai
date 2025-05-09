@@ -1,0 +1,414 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useWebsites } from '@/context/WebsitesContext';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Search, Upload, Image as ImageIcon, Info, Download, Wand2, Globe2, Bot, Library } from 'lucide-react';
+import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import Header from '@/components/Header';
+import AppSidebar from '@/components/Sidebar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type ImageSource = 'upload' | 'ai_generated' | 'external_url' | 'scraped' | 'stock_library' | 'other';
+
+interface ImageItem {
+  id: string;
+  name: string;
+  url: string;
+  created_at: string;
+  size: number;
+  type: string;
+  source: ImageSource;
+  description?: string;
+  metadata?: {
+    width?: number;
+    height?: number;
+    alt?: string;
+    caption?: string;
+    originalName?: string;
+    fileType?: string;
+    fileSize?: number;
+    [key: string]: any;
+  };
+}
+
+const sourceIcons = {
+  upload: Upload,
+  ai_generated: Wand2,
+  external_url: Globe2,
+  scraped: Bot,
+  stock_library: Library,
+  other: Download,
+};
+
+const sourceLabels = {
+  upload: 'Uploaded',
+  ai_generated: 'AI Generated',
+  scraped: 'Scraped',
+  stock_library: 'Stock Library',
+  other: 'Other',
+};
+
+export default function Media() {
+  const { currentWebsite } = useWebsites();
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedImage, setSelectedImage] = useState<ImageItem | null>(null);
+  const [description, setDescription] = useState('');
+  const [selectedSource, setSelectedSource] = useState<ImageSource | 'all'>('all');
+
+  useEffect(() => {
+    if (currentWebsite) {
+      fetchImages();
+    }
+  }, [currentWebsite]);
+
+  const fetchImages = async () => {
+    try {
+      setLoading(true);
+      console.log('Fetching images for website:', currentWebsite?.id);
+
+      // Fetch all images from the images table
+      const { data: images, error } = await supabase
+        .from('images')
+        .select('*')
+        .eq('website_id', currentWebsite?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      console.log('Fetched images:', images?.length || 0);
+
+      setImages(images || []);
+    } catch (error) {
+      console.error('Error fetching images:', error);
+      toast.error('Failed to load image library');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !currentWebsite) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > maxSize) {
+      toast.error('Image size must be less than 10MB');
+      return;
+    }
+
+    const uploadToast = toast.loading('Uploading image...');
+
+    try {
+      // Generate a unique filename
+      const timestamp = new Date().getTime();
+      const randomString = Math.random().toString(36).substring(2, 15);
+      const fileExt = file.name.split('.').pop()?.toLowerCase();
+      const sanitizedOriginalName = file.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+      const fileName = `${timestamp}_${randomString}_${sanitizedOriginalName}`;
+      const filePath = `${currentWebsite.id}/${fileName}`;
+
+      // Upload file to Supabase Storage
+      const { error: uploadError, data: uploadData } = await supabase.storage
+        .from('images')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type
+        });
+
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw new Error('Failed to upload image to storage');
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath);
+
+      // Get image dimensions
+      const metadata: ImageItem['metadata'] = {
+        originalName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      };
+
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = () => {
+          metadata.width = img.width;
+          metadata.height = img.height;
+          URL.revokeObjectURL(img.src);
+          resolve(null);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(img.src);
+          reject(new Error('Failed to load image for dimension calculation'));
+        };
+        img.src = URL.createObjectURL(file);
+      });
+
+      // Save image record to database
+      const { error: dbError } = await supabase
+        .from('images')
+        .insert({
+          website_id: currentWebsite.id,
+          name: file.name,
+          url: publicUrl,
+          size: file.size,
+          type: file.type,
+          source: 'upload',
+          metadata
+        });
+
+      if (dbError) {
+        // If database insert fails, clean up the uploaded file
+        await supabase.storage
+          .from('images')
+          .remove([filePath]);
+        throw dbError;
+      }
+
+      toast.dismiss(uploadToast);
+      toast.success('Image uploaded successfully');
+      await fetchImages(); // Refresh the image list
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast.dismiss(uploadToast);
+      toast.error(error instanceof Error ? error.message : 'Failed to upload image');
+    }
+  };
+
+  const handleUpdateDescription = async () => {
+    if (!selectedImage) return;
+
+    try {
+      const { error } = await supabase
+        .from('images')
+        .update({ description })
+        .eq('id', selectedImage.id);
+
+      if (error) throw error;
+
+      toast.success('Description updated successfully');
+      fetchImages();
+      setSelectedImage(null);
+    } catch (error) {
+      console.error('Error updating description:', error);
+      toast.error('Failed to update description');
+    }
+  };
+
+  const filteredImages = images.filter(item => {
+    const matchesSearch = 
+      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSource = selectedSource === 'all' || item.source === selectedSource;
+    return matchesSearch && matchesSource;
+  });
+
+  return (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-background">
+        <AppSidebar />
+        <div className="flex-1 flex flex-col">
+          <Header />
+          <main className="flex-1 px-4 py-6 overflow-y-auto">
+            <div className="max-w-6xl mx-auto space-y-6">
+              <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold">Image Library</h1>
+                <div className="flex gap-4">
+                  <Select
+                    value={selectedSource}
+                    onValueChange={(value) => setSelectedSource(value as ImageSource | 'all')}
+                  >
+                    <SelectTrigger className="w-[150px]">
+                      <SelectValue placeholder="Filter by source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Sources</SelectItem>
+                      {Object.entries(sourceLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search images..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-8 w-[200px]"
+                    />
+                  </div>
+                  <Button asChild>
+                    <label className="cursor-pointer">
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                      />
+                    </label>
+                  </Button>
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {[...Array(8)].map((_, i) => (
+                    <Card key={i} className="animate-pulse">
+                      <CardContent className="p-4">
+                        <div className="aspect-video bg-muted rounded-md" />
+                        <div className="h-4 bg-muted rounded mt-2 w-3/4" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : filteredImages.length === 0 ? (
+                <div className="text-center py-12">
+                  <ImageIcon className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-medium">No images found</h3>
+                  <p className="text-muted-foreground mt-2">
+                    {searchQuery ? 'Try a different search term' : 'Upload your first image'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {filteredImages.map((item) => (
+                    <Dialog key={item.id}>
+                      <Card className="overflow-hidden group">
+                        <CardContent className="p-0">
+                          <div className="aspect-video relative">
+                            <img
+                              src={item.url}
+                              alt={item.description || item.name}
+                              className="object-cover w-full h-full"
+                            />
+                            <DialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => {
+                                  setSelectedImage(item);
+                                  setDescription(item.description || '');
+                                }}
+                              >
+                                <Info className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                          </div>
+                          <div className="p-4">
+                            <div className="flex items-center gap-2">
+                              <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                              <p className="font-medium truncate">{item.name}</p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              {React.createElement(sourceIcons[item.source], { className: "h-3 w-3 text-muted-foreground" })}
+                              <p className="text-xs text-muted-foreground">{sourceLabels[item.source]}</p>
+                            </div>
+                            {item.description && (
+                              <p className="text-sm text-muted-foreground mt-1 truncate">
+                                {item.description}
+                              </p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Image Details</DialogTitle>
+                          <DialogDescription>
+                            Add a description and view image details
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <img
+                              src={item.url}
+                              alt={item.description || item.name}
+                              className="w-full rounded-lg"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Description</label>
+                            <Textarea
+                              value={description}
+                              onChange={(e) => setDescription(e.target.value)}
+                              placeholder="Add a description..."
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="font-medium">Source</p>
+                              <p className="text-muted-foreground">{sourceLabels[item.source]}</p>
+                            </div>
+                            {item.metadata?.width && item.metadata?.height && (
+                              <div>
+                                <p className="font-medium">Dimensions</p>
+                                <p className="text-muted-foreground">
+                                  {item.metadata.width} × {item.metadata.height}
+                                </p>
+                              </div>
+                            )}
+                            <div>
+                              <p className="font-medium">Size</p>
+                              <p className="text-muted-foreground">
+                                {(item.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                            <div>
+                              <p className="font-medium">Type</p>
+                              <p className="text-muted-foreground">{item.type}</p>
+                            </div>
+                          </div>
+                          <Button onClick={handleUpdateDescription} className="w-full">
+                            Save Changes
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  ))}
+                </div>
+              )}
+            </div>
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+} 

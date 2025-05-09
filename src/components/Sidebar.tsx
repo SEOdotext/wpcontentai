@@ -153,6 +153,19 @@ export function AppSidebar() {
               </RouterLink>
             </SidebarMenuButton>
           </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              className="gap-2"
+              isActive={location.pathname.startsWith('/media')}
+              asChild
+            >
+              <RouterLink to="/media">
+                <Image className="h-4 w-4" />
+                <span>Media Library</span>
+              </RouterLink>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           
           <SidebarMenuItem>
             <SidebarMenuButton 

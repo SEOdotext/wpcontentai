@@ -86,8 +86,23 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.log('WebsitesContext: Caching current website data:', {
           id: currentWebsite.id,
           name: currentWebsite.name,
-          url: currentWebsite.url
+          url: currentWebsite.url,
+          timestamp: new Date().toISOString()
         });
+        
+        // Store website data with timestamp
+        const websiteData = {
+          id: currentWebsite.id,
+          name: currentWebsite.name,
+          url: currentWebsite.url || '',
+          organisation_id: currentWebsite.organisation_id,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Store all data in a single object to prevent race conditions
+        localStorage.setItem('currentWebsiteData', JSON.stringify(websiteData));
+        
+        // For backward compatibility, also store individual items
         localStorage.setItem('currentWebsiteId', currentWebsite.id);
         localStorage.setItem('currentWebsiteName', currentWebsite.name);
         localStorage.setItem('currentWebsiteUrl', currentWebsite.url || '');
@@ -100,6 +115,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Clear website data from localStorage when no website is selected
       try {
         console.log('WebsitesContext: Clearing website data from localStorage');
+        localStorage.removeItem('currentWebsiteData');
         localStorage.removeItem('currentWebsiteId');
         localStorage.removeItem('currentWebsiteName');
         localStorage.removeItem('currentWebsiteUrl');
@@ -114,18 +130,33 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const restoreSavedWebsite = (websitesWithOrg: Website[]) => {
     if (isInitialized && !isAuthStateChange) return;
 
-    // Use the state variable instead of reading from localStorage directly
-    const currentSavedId = savedWebsiteIdState;
-    console.log('WebsitesContext: Saved website ID from state:', currentSavedId);
-    
-    // If we already have a current website set, don't override it
-    if (currentWebsite) {
-      console.log("WebsitesContext: Current website already set, not restoring from saved state");
-      return;
-    }
-    
-    if (currentSavedId) {
-      try {
+    try {
+      // First try to get the complete website data object
+      const savedWebsiteData = localStorage.getItem('currentWebsiteData');
+      let currentSavedId = null;
+      
+      if (savedWebsiteData) {
+        const parsedData = JSON.parse(savedWebsiteData);
+        currentSavedId = parsedData.id;
+        console.log('WebsitesContext: Restored website data from localStorage:', {
+          id: parsedData.id,
+          name: parsedData.name,
+          timestamp: parsedData.timestamp
+        });
+      } else {
+        // Fallback to individual items for backward compatibility
+        currentSavedId = localStorage.getItem('currentWebsiteId');
+      }
+      
+      console.log('WebsitesContext: Saved website ID from state:', currentSavedId);
+      
+      // If we already have a current website set, don't override it
+      if (currentWebsite) {
+        console.log("WebsitesContext: Current website already set, not restoring from saved state");
+        return;
+      }
+      
+      if (currentSavedId) {
         // Find the website with the saved ID among the accessible websites
         const savedWebsite = websitesWithOrg.find(website => website.id === currentSavedId);
         if (savedWebsite) {
@@ -143,41 +174,38 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           });
           setCurrentWebsite(websitesWithOrg[0] as Website);
           setSavedWebsiteIdState(websitesWithOrg[0].id);
-        } else {
-          // Reset current website if user has no access to any websites
-          console.log("WebsitesContext: No accessible websites found, resetting current website");
-          setCurrentWebsite(null);
-          setSavedWebsiteIdState(null);
-          // Clear localStorage since there are no accessible websites
-          localStorage.removeItem('currentWebsiteId');
-          localStorage.removeItem('currentWebsiteName');
-          localStorage.removeItem('currentWebsiteUrl');
-          localStorage.removeItem('currentOrgId');
         }
-      } catch (error) {
-        console.error('WebsitesContext: Error restoring website:', error);
-        // Fallback to first website if available
-        if (websitesWithOrg.length > 0) {
-          console.log("WebsitesContext: Error occurred, falling back to first website");
-          setCurrentWebsite(websitesWithOrg[0] as Website);
-          setSavedWebsiteIdState(websitesWithOrg[0].id);
-        } else {
-          setCurrentWebsite(null);
-          setSavedWebsiteIdState(null);
-        }
+      } else if (websitesWithOrg.length > 0) {
+        // Set first website as current if none is saved
+        console.log("WebsitesContext: No saved website found, using first website:", {
+          id: websitesWithOrg[0].id,
+          name: websitesWithOrg[0].name
+        });
+        setCurrentWebsite(websitesWithOrg[0] as Website);
+        setSavedWebsiteIdState(websitesWithOrg[0].id);
+      } else {
+        // Reset current website if user has no access to any websites
+        console.log("WebsitesContext: No accessible websites found, resetting current website");
+        setCurrentWebsite(null);
+        setSavedWebsiteIdState(null);
+        // Clear localStorage since there are no accessible websites
+        localStorage.removeItem('currentWebsiteData');
+        localStorage.removeItem('currentWebsiteId');
+        localStorage.removeItem('currentWebsiteName');
+        localStorage.removeItem('currentWebsiteUrl');
+        localStorage.removeItem('currentOrgId');
       }
-    } else if (websitesWithOrg.length > 0) {
-      // Set first website as current if none is saved
-      console.log("WebsitesContext: No saved website ID, using first website:", {
-        id: websitesWithOrg[0].id,
-        name: websitesWithOrg[0].name
-      });
-      setCurrentWebsite(websitesWithOrg[0] as Website);
-      setSavedWebsiteIdState(websitesWithOrg[0].id);
-    } else {
-      console.log("WebsitesContext: No websites available for this user");
-      setCurrentWebsite(null);
-      setSavedWebsiteIdState(null);
+    } catch (error) {
+      console.error('WebsitesContext: Error restoring website:', error);
+      // Fallback to first website if available
+      if (websitesWithOrg.length > 0) {
+        console.log("WebsitesContext: Error occurred, falling back to first website");
+        setCurrentWebsite(websitesWithOrg[0] as Website);
+        setSavedWebsiteIdState(websitesWithOrg[0].id);
+      } else {
+        setCurrentWebsite(null);
+        setSavedWebsiteIdState(null);
+      }
     }
     setIsInitialized(true);
     setIsAuthStateChange(false);
