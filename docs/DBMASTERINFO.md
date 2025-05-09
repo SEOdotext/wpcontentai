@@ -1041,6 +1041,26 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "websites.cms",
+    "detail_1": "text",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "websites.crm",
+    "detail_1": "text",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "some_settings.id",
     "detail_1": "uuid",
     "detail_2": null,
@@ -1183,6 +1203,16 @@
     "section": "columns_and_checks",
     "identifier": "some_settings.simple_post_format_example",
     "detail_1": "text",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "some_settings.image_default",
+    "detail_1": "boolean",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
