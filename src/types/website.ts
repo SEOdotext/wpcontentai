@@ -10,4 +10,5 @@ export interface Website {
   enable_some?: boolean;
   page_import_limit?: number;
   key_content_limit?: number;
+  favicon?: string;
 } 

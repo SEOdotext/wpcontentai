@@ -33,11 +33,14 @@ import {
 } from 'lucide-react';
 import { TikTokLogo } from '@/components/icons/TikTokLogo';
 
+// Add this type definition at the top of the file
+type SocialMediaPlatform = 'linkedin' | 'instagram' | 'tiktok' | 'facebook' | 'x';
+
 // Exactly match the database schema
 interface SomeSettings {
   id: string;
   website_id: string;
-  platform: 'linkedin' | 'instagram' | 'tiktok' | 'facebook' | 'x';
+  platform: SocialMediaPlatform;
   tone: string | null;
   hashtags: string | null;
   mentions: string | null;
@@ -50,6 +53,7 @@ interface SomeSettings {
   } | null;
   post_length: number | null;
   simple_post_format_example: string | null;
+  image_default: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -59,6 +63,14 @@ export const SocialMediaSettings = () => {
   const [settings, setSettings] = useState<SomeSettings[]>([]);
   const [loading, setLoading] = useState(false);
   const [localSettings, setLocalSettings] = useState<Record<string, any>>({});
+  const [isSocialMediaEnabled, setIsSocialMediaEnabled] = useState(false);
+
+  // Initialize social media enabled state from website settings
+  useEffect(() => {
+    if (currentWebsite) {
+      setIsSocialMediaEnabled(currentWebsite.enable_some ?? false);
+    }
+  }, [currentWebsite]);
 
   // Create debounced update function
   const debouncedUpdate = useCallback(
@@ -161,16 +173,16 @@ Key point or insight that adds value.
 
 #Hashtag1 #Hashtag2 #Hashtag3`,
 
-      instagram: `✨ Attention-grabbing opening line that makes people stop scrolling
+      instagram: `✨ [Hook] Attention-grabbing opening line that makes people stop scrolling
 
-🎯 Key insight or value proposition that draws readers in
+🎯 [Main Point] Key insight or value proposition that draws readers in
 
-💡 Supporting information or tips
+💡 [Details] Supporting information or tips
 • Point 1
 • Point 2
 • Point 3
 
-🔑 Clear next step for readers
+🔑 [Call to Action] Clear next step for readers
 
 .
 .
@@ -308,12 +320,13 @@ Value-add or insight 💡
     }
   };
 
-  const platforms = [
-    { key: 'linkedin' as const, name: 'LinkedIn', icon: <Linkedin className="h-5 w-5" /> },
-    { key: 'instagram' as const, name: 'Instagram', icon: <Instagram className="h-5 w-5" /> },
-    { key: 'tiktok' as const, name: 'TikTok', icon: <TikTokLogo className="h-5 w-5" /> },
-    { key: 'facebook' as const, name: 'Facebook', icon: <Facebook className="h-5 w-5" /> },
-    { key: 'x' as const, name: 'X (Twitter)', icon: <Twitter className="h-5 w-5" /> }
+  // Update the platforms array
+  const platforms: { key: SocialMediaPlatform; name: string; icon: JSX.Element; }[] = [
+    { key: 'linkedin', name: 'LinkedIn', icon: <Linkedin className="h-5 w-5" /> },
+    { key: 'instagram', name: 'Instagram', icon: <Instagram className="h-5 w-5" /> },
+    { key: 'tiktok', name: 'TikTok', icon: <TikTokLogo className="h-5 w-5" /> },
+    { key: 'facebook', name: 'Facebook', icon: <Facebook className="h-5 w-5" /> },
+    { key: 'x', name: 'X (Twitter)', icon: <Twitter className="h-5 w-5" /> }
   ];
 
   return (
@@ -460,6 +473,30 @@ Value-add or insight 💡
                     </p>
                   </div>
 
+ <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Post Format Example</Label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => updatePlatformSettings(platform.key, true, { simple_post_format_example: getDefaultFormat(platform.key) })}
+                        className="h-8"
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Reset to Default
+                      </Button>
+                    </div>
+                    <Textarea
+                      placeholder="Enter a simple example of how you want your posts formatted"
+                      value={localSetting.simple_post_format_example || setting?.simple_post_format_example || getDefaultFormat(platform.key)}
+                      onChange={(e) => handleTextChange(platform.key, 'simple_post_format_example', e.target.value)}
+                      className="min-h-[200px] font-mono text-sm"
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      This format will be used as a template for generating posts. Include placeholders for main content, hashtags, and any platform-specific elements.
+                    </p>
+                  </div>
+
                   <div className="space-y-2">
                     <Label>Image Settings</Label>
                     <div className="space-y-4">
@@ -496,28 +533,15 @@ Value-add or insight 💡
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Post Format Example</Label>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updatePlatformSettings(platform.key, true, { simple_post_format_example: getDefaultFormat(platform.key) })}
-                        className="h-8"
-                      >
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Reset to Default
-                      </Button>
-                    </div>
-                    <Textarea
-                      placeholder="Enter a simple example of how you want your posts formatted"
-                      value={localSetting.simple_post_format_example || setting?.simple_post_format_example || getDefaultFormat(platform.key)}
-                      onChange={(e) => handleTextChange(platform.key, 'simple_post_format_example', e.target.value)}
-                      className="min-h-[200px] font-mono text-sm"
+                 
+
+                  <div className="flex items-center space-x-2 mt-4">
+                    <Switch
+                      id={`${platform.key}-image-default`}
+                      checked={setting?.image_default ?? true}
+                      onCheckedChange={(checked) => updatePlatformSettings(platform.key as SomeSettings['platform'], setting?.is_active ?? false, { image_default: checked })}
                     />
-                    <p className="text-sm text-muted-foreground">
-                      This format will be used as a template for generating posts. Include placeholders for main content, hashtags, and any platform-specific elements.
-                    </p>
+                    <Label htmlFor={`${platform.key}-image-default`}>Include images</Label>
                   </div>
 
                 </div>

@@ -40,8 +40,8 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Website } from "@/types/website";
 import { transferDataToDatabase } from '@/api/onboardingImport';
-import { FloatingSaveButton } from '@/components/ui/FloatingSaveButton';
 import { PublicationSettings } from "@/components/PublicationSettings";
+import { FloatingSaveButton } from '@/components/ui/FloatingSaveButton';
 
 // Configuration
 const SUPABASE_FUNCTIONS_URL = 'https://vehcghewfnjkwlwmmrix.supabase.co/functions/v1';
@@ -136,17 +136,6 @@ interface Organisation {
   created_at: string;
 }
 
-interface DbSettings {
-  posting_frequency: number;
-  writing_style: string;
-  subject_matters: string[];
-  format_template: string;
-  image_prompt: string;
-  image_model: string;
-  negative_prompt: string;
-  weekly_planning_day: string;
-}
-
 const Settings = () => {
   const { 
     writingStyle, 
@@ -203,50 +192,16 @@ const Settings = () => {
   const [isSocialMediaEnabled, setIsSocialMediaEnabled] = useState(false);
   const [activeSection, setActiveSection] = useState('wordpress');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [dbSettings, setDbSettings] = useState<DbSettings | null>(null);
-
-  // Clear localStorage immediately when website changes
-  useEffect(() => {
-    if (currentWebsite?.id) {
-      console.log('Website changed, clearing all localStorage keys');
-      // Get all localStorage keys
-      const allKeys = Object.keys(localStorage);
-      
-      // Clear all keys that might contain settings
-      allKeys.forEach(key => {
-        if (key.includes('settings') || 
-            key.includes('wordpress') || 
-            key.includes('post') || 
-            key.includes('format') || 
-            key.includes('style') || 
-            key.includes('subjects') || 
-            key.includes('days') || 
-            key.includes('planning') ||
-            key.includes('frequency') ||
-            key.includes('posting') ||
-            key.includes('publication')) {
-          localStorage.removeItem(key);
-        }
-      });
-
-      // Reset all state immediately
-      setPostingDays([]);
-      setPostingFrequency(0);
-      setWritingStyle('');
-      setSubjects([]);
-      setWeeklyPlanningDay('');
-      setImagePrompt('');
-      setImageModel('');
-      setNegativePrompt('');
-      setformattemplate('');
-      setHasUnsavedChanges(false);
-      setDbSettings(null);
-      setHtmlTemplate('');
-      setWpPublishStatus('draft');
-      setCategories([]);
-      setDirectWpSettings(null);
-    }
-  }, [currentWebsite?.id]); // This effect must run first
+  const [lastSavedValues, setLastSavedValues] = useState({
+    posting_frequency: 3,
+    writing_style: 'Professional',
+    subject_matters: ['guide', 'tips', 'best practices', 'how to', 'introduction'],
+    format_template: defaultFormatTemplate,
+    image_prompt: '',
+    image_model: 'dalle',
+    negative_prompt: '',
+    weekly_planning_day: 'friday'
+  });
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -552,13 +507,11 @@ const Settings = () => {
   // Load publication settings when component mounts
   useEffect(() => {
     const loadPublicationSettings = async () => {
-      try {
-        console.log('Loading publication settings for website:', currentWebsite?.id);
-        if (!currentWebsite) {
-          console.log('No website selected, skipping settings load');
-          return;
-        }
+      if (!currentWebsite) return;
 
+      try {
+        console.log('Loading publication settings for website:', currentWebsite.id);
+        
         const { data: settings, error } = await supabase
           .from('publication_settings')
           .select('*')
@@ -574,11 +527,9 @@ const Settings = () => {
         const currentSettings = settings?.[0];
         if (currentSettings) {
           console.log('Found existing publication settings:', currentSettings);
-          setDbSettings(currentSettings);
-          
           const days = currentSettings.posting_days?.reduce((acc: string[], day: { day: string; count: number }) => {
             return [...acc, ...Array(day.count).fill(day.day)];
-          }, []) || [];
+          }, []) || ['monday', 'wednesday', 'friday'];
           
           setPostingDays(days);
           setPostingFrequency(days.length);
@@ -594,6 +545,11 @@ const Settings = () => {
           if (currentSettings.weekly_planning_day) {
             setWeeklyPlanningDay(currentSettings.weekly_planning_day);
           }
+        } else {
+          console.log('No existing publication settings, using defaults');
+          setPostingDays(['monday', 'wednesday', 'friday']);
+          setPostingFrequency(3);
+          setWeeklyPlanningDay('friday');
         }
       } catch (error) {
         console.error('Error loading publication settings:', error);
@@ -723,21 +679,25 @@ const Settings = () => {
     return () => clearTimeout(timer);
   }, [hasUnsavedChanges, handleSave, settingsLoading]);
 
-  // Update the change detection logic
+  // Update the effect to track changes with less frequency
   useEffect(() => {
-    if (!dbSettings) return;
+    // Don't set changes during initialization or loading
+    if (settingsLoading) return;
 
+    // Compare with previous values to determine if there are actual changes
     const hasChanges = 
-      postingFrequency !== dbSettings.posting_frequency ||
-      styleInput !== dbSettings.writing_style ||
-      JSON.stringify(subjects) !== JSON.stringify(dbSettings.subject_matters) ||
-      formattemplate !== dbSettings.format_template ||
-      imagePrompt !== dbSettings.image_prompt ||
-      imageModel !== dbSettings.image_model ||
-      negativePrompt !== dbSettings.negative_prompt ||
-      weeklyPlanningDay !== dbSettings.weekly_planning_day;
+      postingFrequency !== lastSavedValues?.posting_frequency ||
+      styleInput !== lastSavedValues?.writing_style ||
+      JSON.stringify(subjects) !== JSON.stringify(lastSavedValues?.subject_matters) ||
+      formattemplate !== lastSavedValues?.format_template ||
+      imagePrompt !== lastSavedValues?.image_prompt ||
+      imageModel !== lastSavedValues?.image_model ||
+      negativePrompt !== lastSavedValues?.negative_prompt ||
+      weeklyPlanningDay !== lastSavedValues?.weekly_planning_day;
 
-    setHasUnsavedChanges(hasChanges);
+    if (hasChanges) {
+      setHasUnsavedChanges(true);
+    }
   }, [
     postingFrequency,
     styleInput,
@@ -747,7 +707,8 @@ const Settings = () => {
     imageModel,
     negativePrompt,
     weeklyPlanningDay,
-    dbSettings
+    settingsLoading,
+    lastSavedValues
   ]);
 
   // Memoize handlers for subject management
@@ -1694,46 +1655,6 @@ const Settings = () => {
     }
   }, [currentWebsite, isSocialMediaEnabled]);
 
-  // Add effect to check for active social media channels
-  useEffect(() => {
-    const checkActiveSocialChannels = async () => {
-      if (!currentWebsite) return;
-      
-      try {
-        // Check if there are any active social media settings
-        const { data: activeChannels, error } = await supabase
-          .from('some_settings')
-          .select('*')
-          .eq('website_id', currentWebsite.id)
-          .eq('is_active', true);
-        
-        if (error) {
-          console.error('Error checking active social channels:', error);
-          return;
-        }
-        
-        // If there are active channels but social media is not enabled
-        if (activeChannels && activeChannels.length > 0 && !currentWebsite.enable_some) {
-          console.log('Found active social channels, enabling social media integration');
-          try {
-            // Update the website setting
-            await updateWebsite(currentWebsite.id, {
-              enable_some: true
-            });
-            setIsSocialMediaEnabled(true);
-            toast.success('Social media integration enabled due to active channels');
-          } catch (error) {
-            console.error('Failed to update social media setting:', error);
-          }
-        }
-      } catch (err) {
-        console.error('Error in checkActiveSocialChannels:', err);
-      }
-    };
-    
-    checkActiveSocialChannels();
-  }, [currentWebsite]);
-
   // Update WordPress publish status
   const updateWordPressPublishStatus = async (status: string) => {
     if (!currentWebsite) {
@@ -2236,23 +2157,6 @@ const Settings = () => {
       )}
     </div>
   );
-
-  const haveValuesChanged = useCallback(() => {
-    if (!currentWebsite || !dbSettings) return false;
-
-    const newValues = {
-      posting_frequency: postingFrequency,
-      writing_style: writingStyle,
-      subject_matters: subjects,
-      format_template: formattemplate,
-      image_prompt: imagePrompt,
-      image_model: imageModel,
-      negative_prompt: negativePrompt,
-      weekly_planning_day: weeklyPlanningDay
-    };
-
-    return JSON.stringify(newValues) !== JSON.stringify(dbSettings);
-  }, [currentWebsite, postingFrequency, writingStyle, subjects, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay, dbSettings]);
 
   return (
     <div className="min-h-screen flex w-full bg-background">
@@ -2977,7 +2881,7 @@ const Settings = () => {
                               </p>
                             </div>
                             <Switch
-                              checked={currentWebsite?.enable_some || false}
+                              checked={isSocialMediaEnabled}
                               onCheckedChange={async (checked) => {
                                 if (!currentWebsite) {
                                   toast.error("Please select a website first");
@@ -2997,7 +2901,7 @@ const Settings = () => {
                             />
                           </div>
 
-                          {currentWebsite?.enable_some && (
+                          {isSocialMediaEnabled && (
                             <div className="mt-6">
                               <SocialMediaSettings />
                             </div>
