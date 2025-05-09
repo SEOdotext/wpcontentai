@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Database } from '../integrations/supabase/types';
@@ -34,6 +34,33 @@ export const useWebsites = () => {
   return context;
 };
 
+// Add debounce utility at the top of the file
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  let lastCallTime = 0;
+  
+  return (...args: any[]) => {
+    const now = Date.now();
+    const timeSinceLastCall = now - lastCallTime;
+    
+    // If it's been less than wait time since last call, clear the timeout
+    if (timeSinceLastCall < wait) {
+      clearTimeout(timeout);
+    }
+    
+    // Set the timeout
+    timeout = setTimeout(() => {
+      lastCallTime = Date.now();
+      func(...args);
+    }, wait);
+    
+    // Return cleanup function
+    return () => {
+      clearTimeout(timeout);
+    };
+  };
+};
+
 export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Try to restore data from localStorage initially
   const savedWebsiteId = localStorage.getItem('currentWebsiteId');
@@ -59,6 +86,8 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [savedWebsiteIdState, setSavedWebsiteIdState] = useState<string | null>(savedWebsiteId);
   const [isAuthStateChange, setIsAuthStateChange] = useState<boolean>(false);
+  const [isFetching, setIsFetching] = useState<boolean>(false);
+  const [isHandlingAuthChange, setIsHandlingAuthChange] = useState<boolean>(false);
 
   // Add safety timeout to prevent getting stuck in loading state
   useEffect(() => {
@@ -128,7 +157,10 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [currentWebsite]);
 
   const restoreSavedWebsite = (websitesWithOrg: Website[]) => {
-    if (isInitialized && !isAuthStateChange) return;
+    if (isInitialized && !isAuthStateChange) {
+      console.log("WebsitesContext: Already initialized and no auth state change, skipping restore");
+      return;
+    }
 
     try {
       // First try to get the complete website data object
@@ -150,10 +182,23 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       console.log('WebsitesContext: Saved website ID from state:', currentSavedId);
       
-      // If we already have a current website set, don't override it
-      if (currentWebsite) {
-        console.log("WebsitesContext: Current website already set, not restoring from saved state");
+      // If we have a current website and it matches the saved ID, don't change anything
+      if (currentWebsite && currentWebsite.id === currentSavedId) {
+        console.log("WebsitesContext: Current website matches saved ID, no change needed");
+        setIsInitialized(true);
+        setIsAuthStateChange(false);
         return;
+      }
+
+      // If we have a current website but it doesn't match the saved ID, check if the saved website exists
+      if (currentWebsite && currentSavedId) {
+        const savedWebsiteExists = websitesWithOrg.some(website => website.id === currentSavedId);
+        if (!savedWebsiteExists) {
+          console.log("WebsitesContext: Saved website no longer exists, keeping current website");
+          setIsInitialized(true);
+          setIsAuthStateChange(false);
+          return;
+        }
       }
       
       if (currentSavedId) {
@@ -212,8 +257,15 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const fetchWebsites = async () => {
+    // Prevent multiple simultaneous fetches
+    if (isFetching) {
+      console.log("WebsitesContext: Already fetching websites, skipping");
+      return;
+    }
+
     try {
       console.log("WebsitesContext: Starting to fetch websites...");
+      setIsFetching(true);
       setIsLoading(true);
       
       const { data: { user } } = await supabase.auth.getUser();
@@ -222,6 +274,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setWebsites([]);
         setCurrentWebsite(null);
         setIsLoading(false);
+        setIsFetching(false);
         return;
       }
       console.log("WebsitesContext: Authenticated user found", user.id);
@@ -242,6 +295,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setWebsites([]);
         setCurrentWebsite(null);
         setIsLoading(false);
+        setIsFetching(false);
         return;
       }
 
@@ -338,6 +392,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
               }
               
               setIsLoading(false);
+              setIsFetching(false);
               return; // Exit early as we've set everything up
             }
           }
@@ -361,6 +416,8 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           console.log('WebsitesContext: No website access found for user');
           setWebsites([]);
           setCurrentWebsite(null);
+          setIsLoading(false);
+          setIsFetching(false);
           return;
         }
 
@@ -404,8 +461,30 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } finally {
       console.log('WebsitesContext: Setting loading to false');
       setIsLoading(false);
+      setIsFetching(false);
     }
   };
+
+  // Debounce the fetchWebsites function with cleanup
+  const debouncedFetchWebsites = useCallback(
+    debounce(async () => {
+      console.log("WebsitesContext: Debounced fetch triggered");
+      if (!isFetching) {
+        await fetchWebsites();
+      } else {
+        console.log("WebsitesContext: Already fetching, skipping debounced fetch");
+      }
+    }, 1000), // Increased debounce time to 1 second
+    [isFetching]
+  );
+
+  // Cleanup function for debounced fetch
+  useEffect(() => {
+    return () => {
+      // Cleanup any pending debounced fetches on unmount
+      debouncedFetchWebsites();
+    };
+  }, [debouncedFetchWebsites]);
 
   useEffect(() => {
     console.log("WebsitesContext: Provider mounted");
@@ -421,7 +500,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .channel('websites')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'websites' }, (payload) => {
         console.log("WebsitesContext: Website table changed", payload);
-        fetchWebsites();
+        debouncedFetchWebsites();
       })
       .subscribe();
 
@@ -430,15 +509,27 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       .channel('organisation_memberships')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'organisation_memberships' }, (payload) => {
         console.log("WebsitesContext: Organisation memberships changed", payload);
-        fetchWebsites();
+        debouncedFetchWebsites();
       })
       .subscribe();
 
     // Set up auth state change listener
-    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("WebsitesContext: Auth state changed", event, session?.user.id);
-      setIsAuthStateChange(true);
-      fetchWebsites();
+      
+      // Prevent multiple simultaneous auth state change handlers
+      if (isHandlingAuthChange) {
+        console.log("WebsitesContext: Already handling auth state change, skipping");
+        return;
+      }
+      
+      try {
+        setIsHandlingAuthChange(true);
+        setIsAuthStateChange(true);
+        await debouncedFetchWebsites();
+      } finally {
+        setIsHandlingAuthChange(false);
+      }
     });
 
     return () => {
@@ -447,7 +538,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       membershipSubscription.unsubscribe();
       authSubscription.unsubscribe();
     };
-  }, []);
+  }, [isHandlingAuthChange]);
 
   // Log website state changes for debugging
   useEffect(() => {

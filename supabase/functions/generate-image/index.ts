@@ -370,12 +370,12 @@ serve(async (req) => {
       .from('images')
       .insert({
         website_id: websiteId,
-        name: `AI Generated Image for ${postTheme.subject_matter}`,
+        name: `${postTheme.subject_matter} image`,
         url: publicUrl,
         size: imageBlob.size,
         type: imageFormat,
         source: 'ai_generated',
-        description: `AI generated image for post: ${postTheme.subject_matter}`,
+        description: `Image for post: ${postTheme.subject_matter}`,
         metadata: {
           postThemeId: postId,
           prompt: finalPrompt,
