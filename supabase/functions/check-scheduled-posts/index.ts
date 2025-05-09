@@ -91,7 +91,56 @@ serve(async (req) => {
     const now = new Date();
     const today = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 
-    // Find posts that are ready to be published
+    // First check WordPress connection status
+    const { data: wpSettings, error: wpError } = await supabaseClient
+      .from('wordpress_settings')
+      .select('is_connected, website_id')
+      .eq('is_connected', true);
+
+    if (wpError) {
+      console.error('Error fetching WordPress settings:', wpError);
+      throw new Error(`Failed to fetch WordPress settings: ${wpError.message}`);
+    }
+
+    // Check for and handle stalled queue items first
+    const STALL_TIMEOUT_MINUTES = 30; // Consider items stalled after 30 minutes
+    const stallCutoff = new Date(Date.now() - (STALL_TIMEOUT_MINUTES * 60 * 1000)).toISOString();
+    
+    const { data: stalledItems } = await supabaseClient
+      .from('publish_queue')
+      .select('id, post_theme_id, status, started_at')
+      .in('status', ['pending', 'processing'])
+      .lt('created_at', stallCutoff);
+
+    if (stalledItems && stalledItems.length > 0) {
+      console.log(`Found ${stalledItems.length} stalled queue items:`, {
+        items: stalledItems.map(item => ({
+          id: item.id,
+          postThemeId: item.post_theme_id,
+          status: item.status,
+          startedAt: item.started_at
+        }))
+      });
+
+      // Mark stalled items as failed
+      const { error: updateError } = await supabaseClient
+        .from('publish_queue')
+        .update({
+          status: 'failed',
+          error: 'Queue item timed out',
+          completed_at: new Date().toISOString()
+        })
+        .in('id', stalledItems.map(item => item.id));
+
+      if (updateError) {
+        console.error('Error updating stalled items:', updateError);
+      }
+    }
+
+    // Get list of connected website IDs
+    const connectedWebsiteIds = wpSettings?.map(s => s.website_id) || [];
+
+    // Find posts that are ready to be published, excluding those with active queue items
     const { data: readyPosts, error: postsError } = await supabaseClient
       .from('post_themes')
       .select(`
@@ -100,12 +149,20 @@ serve(async (req) => {
         status,
         scheduled_date,
         wp_sent_date,
-        wp_post_url
+        wp_post_url,
+        (
+          select count(*)
+          from publish_queue
+          where post_theme_id = post_themes.id
+          and status in ('pending', 'processing')
+        ) as active_queue_count
       `)
       .in('status', ['approved', 'generated'])
       .is('wp_sent_date', null)
       .is('wp_post_url', null)
-      .lte('scheduled_date', today.toISOString());
+      .lte('scheduled_date', today.toISOString())
+      .in('website_id', connectedWebsiteIds)
+      .eq('active_queue_count', 0); // Only get posts with no active queue items
 
     if (postsError) {
       console.error('Error fetching ready posts:', postsError);
@@ -127,26 +184,64 @@ serve(async (req) => {
 
     // Add each post to the publish queue
     const processedPosts = [];
+    console.log(`Processing ${readyPosts.length} posts for publishing:`, {
+      postIds: readyPosts.map(p => p.id),
+      websiteIds: readyPosts.map(p => p.website_id),
+      scheduledDates: readyPosts.map(p => p.scheduled_date)
+    });
+
     for (const post of readyPosts) {
       try {
-        // Check if post is already in the queue
-        const { data: existingQueueItem } = await supabaseClient
-          .from('publish_queue')
-          .select('id')
-          .eq('post_theme_id', post.id)
-          .eq('status', 'pending')
-          .single();
+        console.log(`Processing post ${post.id}:`, {
+          websiteId: post.website_id,
+          scheduledDate: post.scheduled_date,
+          status: post.status
+        });
 
-        if (existingQueueItem) {
-          console.log(`Post ${post.id} is already in the queue, skipping...`);
+        // Enhanced duplicate check - check for ANY existing queue items or WordPress status
+        const [queueCheck, wpCheck] = await Promise.all([
+          // Check for ANY existing queue items, not just pending
+          supabaseClient
+            .from('publish_queue')
+            .select('id, status')
+            .eq('post_theme_id', post.id),
+          
+          // Double check WordPress status
+          supabaseClient
+            .from('post_themes')
+            .select('wp_sent_date, wp_post_url')
+            .eq('id', post.id)
+            .single()
+        ]);
+
+        // Log check results
+        console.log(`Check results for post ${post.id}:`, {
+          hasQueueItems: queueCheck.data?.length > 0,
+          queueStatuses: queueCheck.data?.map(q => q.status),
+          wpSentDate: wpCheck.data?.wp_sent_date,
+          wpPostUrl: wpCheck.data?.wp_post_url
+        });
+
+        // Skip if already in queue or published
+        if (queueCheck.data?.length > 0) {
+          console.log(`Post ${post.id} already has queue items:`, {
+            count: queueCheck.data.length,
+            statuses: queueCheck.data.map(q => q.status)
+          });
           continue;
         }
 
-        // Add to publish queue
+        if (wpCheck.data?.wp_sent_date || wpCheck.data?.wp_post_url) {
+          console.log(`Post ${post.id} appears to be already published:`, wpCheck.data);
+          continue;
+        }
+
+        // Add to publish queue with additional safeguards
         const { data: queueJob, error: queueError } = await supabaseClient
           .from('publish_queue')
           .insert({
             post_theme_id: post.id,
+            website_id: post.website_id, // Ensure website_id is set
             status: 'pending',
             created_at: new Date().toISOString(),
             user_token: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -187,6 +282,17 @@ serve(async (req) => {
 
     if (!queueResponse.ok) {
       console.error('Error triggering queue processing:', await queueResponse.text());
+    }
+
+    // After processing, double check for any items that got stuck during our processing
+    const { data: newStalledItems } = await supabaseClient
+      .from('publish_queue')
+      .select('id, post_theme_id')
+      .in('status', ['pending', 'processing'])
+      .lt('created_at', stallCutoff);
+
+    if (newStalledItems && newStalledItems.length > 0) {
+      console.warn('Found new stalled items after processing:', newStalledItems);
     }
 
     return new Response(

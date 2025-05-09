@@ -36,6 +36,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from 'react-helmet-async';
 import GoogleTagManager from '@/components/GoogleTagManager';
 import GDPRConsentBanner from '@/components/GDPRConsentBanner';
+import ScrollToTop from '@/components/ScrollToTop';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -260,6 +261,7 @@ function App() {
       <HelmetProvider>
         <GoogleTagManager />
         <Router basename="/">
+          <ScrollToTop />
           <AppContexts withSidebar={false}>
             <Routes>
               <Route path="/auth" element={<AuthRedirector><Auth /></AuthRedirector>} />

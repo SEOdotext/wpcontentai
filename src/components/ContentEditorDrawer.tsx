@@ -26,7 +26,8 @@ import {
   ExternalLink,
   Trash,
   Image,
-  Sparkles
+  Sparkles,
+  Download
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -636,6 +637,31 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
         )}
       </Button>
     );
+
+    // Download button for website content
+    if (platform === null && content) {
+      actions.push(
+        <Button
+          key="download"
+          variant="ghost"
+          size="icon"
+          onClick={() => {
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+          }}
+          title="Download content"
+        >
+          <Download className="h-4 w-4" />
+        </Button>
+      );
+    }
 
     // Generate/Regenerate content button
     if (platform === null) {
