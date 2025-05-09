@@ -22,9 +22,9 @@ interface PublicationSettingsProps {
 }
 
 export function PublicationSettings({
-  initialFrequency = 3,
-  initialPostingDays = ['monday', 'wednesday', 'friday'],
-  initialWeeklyPlanningDay = 'friday',
+  initialFrequency = 0,
+  initialPostingDays = [],
+  initialWeeklyPlanningDay = '',
   onSave,
   showSaveButton = true,
   disabled = false
@@ -35,20 +35,27 @@ export function PublicationSettings({
     writingStyle,
     subjectMatters,
     weeklyPlanningDay,
-    setWeeklyPlanningDay,
-    updateSettingsInDatabase 
+    setWeeklyPlanningDay
   } = useSettings();
   const [postingDays, setPostingDays] = useState<string[]>(initialPostingDays);
   const [isSaving, setIsSaving] = useState(false);
   const [showWeekends, setShowWeekends] = useState(false);
   const [localWeeklyPlanningDay, setLocalWeeklyPlanningDay] = useState(initialWeeklyPlanningDay);
+  const [localPostingFrequency, setLocalPostingFrequency] = useState(initialFrequency);
 
   // Update state when props change
   useEffect(() => {
     console.log('Publication settings props updated:', { initialFrequency, initialPostingDays, initialWeeklyPlanningDay });
-    setPostingFrequency(initialFrequency);
-    setPostingDays(initialPostingDays || ['monday', 'wednesday', 'friday']);
-    setLocalWeeklyPlanningDay(initialWeeklyPlanningDay || 'friday');
+    
+    // Skip if we're still initializing
+    if (!initialWeeklyPlanningDay) {
+      return;
+    }
+
+    // Reset all state values when website changes
+    setLocalPostingFrequency(initialFrequency || 0);
+    setPostingDays(initialPostingDays || []);
+    setLocalWeeklyPlanningDay(initialWeeklyPlanningDay);
   }, [initialFrequency, initialPostingDays, initialWeeklyPlanningDay]);
 
   // Get default posting days based on frequency
@@ -86,8 +93,8 @@ export function PublicationSettings({
       return;
     }
     
-    // Always update the frequency first
-    setPostingFrequency(value);
+    // Update local frequency
+    setLocalPostingFrequency(value);
     
     // For specific frequencies, always use the standard pattern
     if ([1, 2, 3, 4, 5].includes(value)) {
@@ -128,9 +135,6 @@ export function PublicationSettings({
     else if (postingDays.length > value) {
       setPostingDays(prev => prev.slice(0, value));
     }
-    
-    // Update the database
-    updateSettingsInDatabase(value, writingStyle, subjectMatters);
   };
 
   const handleDayToggle = (day: string) => {
@@ -141,7 +145,7 @@ export function PublicationSettings({
       
       // Update frequency to match the number of days
       const newFrequency = newDays.length;
-      setPostingFrequency(newFrequency);
+      setLocalPostingFrequency(newFrequency);
       
       // For specific frequencies, ensure we use the standard pattern
       if ([1, 2, 3, 4, 5].includes(newFrequency)) {
@@ -165,12 +169,13 @@ export function PublicationSettings({
     
     // For specific frequencies, ensure we use the standard pattern
     if ([1, 2, 3, 4, 5].includes(newFrequency)) {
-      setPostingDays(getDefaultPostingDays(newFrequency));
+      const standardDays = getDefaultPostingDays(newFrequency);
+      setPostingDays(standardDays);
+      setLocalPostingFrequency(newFrequency);
     } else {
       setPostingDays(newDays);
+      setLocalPostingFrequency(newFrequency);
     }
-    
-    setPostingFrequency(newFrequency);
   };
 
   // Add a function to handle removing a day
@@ -182,12 +187,13 @@ export function PublicationSettings({
       
       // For specific frequencies, ensure we use the standard pattern
       if ([1, 2, 3, 4, 5].includes(newFrequency)) {
-        setPostingDays(getDefaultPostingDays(newFrequency));
+        const standardDays = getDefaultPostingDays(newFrequency);
+        setPostingDays(standardDays);
+        setLocalPostingFrequency(newFrequency);
       } else {
         setPostingDays(newDays);
+        setLocalPostingFrequency(newFrequency);
       }
-      
-      setPostingFrequency(newFrequency);
     }
   };
 
@@ -219,6 +225,9 @@ export function PublicationSettings({
           postingDays,
           weeklyPlanningDay: localWeeklyPlanningDay
         });
+        // Update global state after successful save
+        setPostingFrequency(localPostingFrequency);
+        setWeeklyPlanningDay(localWeeklyPlanningDay);
         toast.success("Publication settings saved successfully");
       } catch (error) {
         console.error('Error saving settings:', error);
@@ -238,7 +247,6 @@ export function PublicationSettings({
           value={localWeeklyPlanningDay}
           onValueChange={(value) => {
             setLocalWeeklyPlanningDay(value);
-            setWeeklyPlanningDay(value);
           }}
           disabled={disabled}
         >
@@ -251,8 +259,6 @@ export function PublicationSettings({
             <SelectItem value="wednesday">Wednesday</SelectItem>
             <SelectItem value="thursday">Thursday</SelectItem>
             <SelectItem value="friday">Friday</SelectItem>
-            <SelectItem value="saturday">Saturday</SelectItem>
-            <SelectItem value="sunday">Sunday</SelectItem>
           </SelectContent>
         </Select>
         <p className="text-sm text-muted-foreground">
@@ -271,8 +277,8 @@ export function PublicationSettings({
               variant="outline"
               size="sm"
               className="h-8 w-8 p-0"
-              onClick={() => handleFrequencyChange(Math.max(1, postingFrequency - 1))}
-              disabled={disabled || postingFrequency <= 1}
+              onClick={() => handleFrequencyChange(Math.max(1, localPostingFrequency - 1))}
+              disabled={disabled || localPostingFrequency <= 1}
             >
               -
             </Button>
@@ -280,7 +286,7 @@ export function PublicationSettings({
               type="number"
               min="1"
               max="299"
-              value={postingFrequency}
+              value={localPostingFrequency}
               onChange={(e) => {
                 const value = parseInt(e.target.value);
                 if (!isNaN(value) && value >= 1 && value <= 299) {
@@ -294,8 +300,8 @@ export function PublicationSettings({
               variant="outline"
               size="sm"
               className="h-8 w-8 p-0"
-              onClick={() => handleFrequencyChange(postingFrequency + 1)}
-              disabled={disabled || postingFrequency >= 299}
+              onClick={() => handleFrequencyChange(localPostingFrequency + 1)}
+              disabled={disabled || localPostingFrequency >= 299}
             >
               +
             </Button>
@@ -303,9 +309,9 @@ export function PublicationSettings({
           </div>
         </div>
         <div className="text-sm text-muted-foreground">
-          {postingFrequency === 1 ? 'Perfect for maintaining a steady presence' :
-           postingFrequency <= 3 ? 'Ideal for growing your audience consistently' :
-           postingFrequency <= 5 ? 'Great for high engagement and SEO impact' :
+          {localPostingFrequency === 1 ? 'Perfect for maintaining a steady presence' :
+           localPostingFrequency <= 3 ? 'Ideal for growing your audience consistently' :
+           localPostingFrequency <= 5 ? 'Great for high engagement and SEO impact' :
            'Maximum impact and authority building'}
         </div>
       </div>
@@ -452,7 +458,7 @@ export function PublicationSettings({
         <div className="flex justify-end">
           <Button
             onClick={handleSave}
-            disabled={isSaving || disabled || postingDays.length !== postingFrequency}
+            disabled={isSaving || disabled || postingDays.length !== localPostingFrequency}
           >
             {isSaving ? (
               <>

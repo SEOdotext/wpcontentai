@@ -139,6 +139,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [lastSavedValues, setLastSavedValues] = useState<Record<string, any>>({});
   const { currentWebsite } = useWebsites();
 
+  // Add authentication state tracking
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
   // Helper to check if values have actually changed
   const haveValuesChanged = useCallback((
     frequency: number,
@@ -314,11 +317,23 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Optimize settings fetch
   useEffect(() => {
     let isMounted = true;
-    let isInitialFetch = true;
     
     const fetchSettings = async () => {
+      // Check authentication first
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        console.log('SettingsContext: No authenticated session, skipping fetch');
+        if (isMounted) {
+          setIsLoading(false);
+          setIsInitializing(false);
+        }
+        return;
+      }
+      
+      setIsAuthenticated(true);
+
       if (!currentWebsite) {
-        console.log("No website selected, using default settings");
+        console.log("SettingsContext: No website selected, using default settings");
         if (isMounted) {
           setPostingFrequency(defaultSettings.postingFrequency);
           setWritingStyle(defaultSettings.writingStyle);
@@ -327,7 +342,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setImagePrompt(defaultSettings.imagePrompt);
           setImageModel(defaultSettings.imageModel);
           setNegativePrompt(defaultSettings.negativePrompt);
-          setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay || 'friday');
+          setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay);
           setIsLoading(false);
           setIsInitializing(false);
         }
@@ -336,17 +351,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       
       try {
         if (isMounted) setIsLoading(true);
-        console.log("Fetching settings for website:", currentWebsite.id);
-        
-        // Check if user is authenticated
-        const { data: sessionData } = await supabase.auth.getSession();
-        const session = sessionData.session;
-        
-        if (!session) {
-          console.error("User not authenticated, cannot fetch settings");
-          if (isMounted) toast.error("Please log in to access settings");
-          return;
-        }
+        console.log("SettingsContext: Fetching settings for website:", currentWebsite.id);
         
         // Filter settings by the current website's ID
         const { data, error } = await supabase
@@ -357,99 +362,73 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           .limit(1);
           
         if (error) {
-          console.error("Error fetching settings:", error);
+          console.error("SettingsContext: Error fetching settings:", error);
           if (isMounted) toast.error("Failed to load settings");
           throw error;
         }
         
         if (data && data.length > 0 && isMounted) {
-          console.log("Found existing settings:", data[0]);
+          console.log("SettingsContext: Found existing settings:", data[0]);
           const settings = data[0] as PublicationSettings;
           
-          // Only update state if values are different
-          if (settings.id !== settingsId) setSettingsId(settings.id);
-          if (settings.posting_frequency !== postingFrequency) setPostingFrequency(settings.posting_frequency);
-          if (settings.writing_style !== writingStyle) setWritingStyle(settings.writing_style);
-          
-          // Set format template if it exists and is different
-          if (settings.format_template && settings.format_template !== formattemplate) {
-            setformattemplate(settings.format_template);
-          }
-          
-          // Set image model if it exists and is different
-          if (settings.image_model && settings.image_model !== imageModel) {
-            setImageModel(settings.image_model);
-          } else if (!settings.image_model) {
-            setImageModel(defaultSettings.imageModel);
-          }
-          
-          // Set image prompt if it exists and is different
-          if (settings.image_prompt && settings.image_prompt !== imagePrompt) {
-            setImagePrompt(settings.image_prompt);
-          } else if (!settings.image_prompt) {
-            setImagePrompt(defaultSettings.imagePrompt);
-          }
-          
-          // Set negative prompt if it exists and is different
-          if (settings.negative_prompt && settings.negative_prompt !== negativePrompt) {
-            setNegativePrompt(settings.negative_prompt);
-          } else if (!settings.negative_prompt) {
-            setNegativePrompt(defaultSettings.negativePrompt);
-          }
-          
-          // Parse and set subject matters only if different
-          try {
-            const subjectsArray = Array.isArray(settings.subject_matters) 
-              ? settings.subject_matters 
-              : typeof settings.subject_matters === 'string' 
-                ? JSON.parse(settings.subject_matters)
-                : [];
-            console.log("Parsed subject matters:", subjectsArray);
-            if (JSON.stringify(subjectsArray) !== JSON.stringify(subjectMatters)) {
+          // Update state in a batch to prevent multiple re-renders
+          if (isMounted) {
+            setSettingsId(settings.id);
+            setPostingFrequency(settings.posting_frequency);
+            setWritingStyle(settings.writing_style || defaultSettings.writingStyle);
+            setformattemplate(settings.format_template || defaultSettings.formattemplate);
+            setImageModel(settings.image_model || defaultSettings.imageModel);
+            setImagePrompt(settings.image_prompt || defaultSettings.imagePrompt);
+            setNegativePrompt(settings.negative_prompt || defaultSettings.negativePrompt);
+            setWeeklyPlanningDay(settings.weekly_planning_day || defaultSettings.weeklyPlanningDay);
+            
+            // Parse and set subject matters
+            try {
+              const subjectsArray = Array.isArray(settings.subject_matters) 
+                ? settings.subject_matters 
+                : typeof settings.subject_matters === 'string' 
+                  ? JSON.parse(settings.subject_matters)
+                  : defaultSettings.subjectMatters;
               setSubjectMatters(subjectsArray);
-            }
-          } catch (error) {
-            console.error("Error parsing subject_matters:", error);
-            if (JSON.stringify(defaultSettings.subjectMatters) !== JSON.stringify(subjectMatters)) {
+            } catch (error) {
+              console.error("SettingsContext: Error parsing subject_matters:", error);
               setSubjectMatters(defaultSettings.subjectMatters);
             }
-          }
-          
-          // Set weekly planning day if it exists and is different
-          if (settings.weekly_planning_day && settings.weekly_planning_day !== weeklyPlanningDay) {
-            setWeeklyPlanningDay(settings.weekly_planning_day);
-          }
 
-          // Update last saved values
-          setLastSavedValues(settings);
+            setLastSavedValues(settings);
+          }
         } else if (isMounted) {
-          console.log("No settings found, creating default settings");
+          console.log("SettingsContext: Creating default settings");
           // Create default settings
+          const defaultSettingsData = {
+            posting_frequency: defaultSettings.postingFrequency,
+            writing_style: defaultSettings.writingStyle,
+            subject_matters: defaultSettings.subjectMatters,
+            format_template: defaultSettings.formattemplate,
+            image_prompt: defaultSettings.imagePrompt,
+            image_model: defaultSettings.imageModel,
+            negative_prompt: defaultSettings.negativePrompt,
+            weekly_planning_day: defaultSettings.weeklyPlanningDay,
+            website_id: currentWebsite.id,
+            organisation_id: currentWebsite.organisation_id,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+
           const { data: newSettings, error: insertError } = await supabase
             .from('publication_settings')
-            .insert({
-              posting_frequency: defaultSettings.postingFrequency,
-              writing_style: defaultSettings.writingStyle,
-              subject_matters: defaultSettings.subjectMatters,
-              format_template: defaultSettings.formattemplate,
-              image_prompt: defaultSettings.imagePrompt,
-              image_model: defaultSettings.imageModel,
-              negative_prompt: defaultSettings.negativePrompt,
-              weekly_planning_day: defaultSettings.weeklyPlanningDay,
-              website_id: currentWebsite.id,
-              organisation_id: currentWebsite.organisation_id
-            })
+            .insert(defaultSettingsData)
             .select()
             .single();
             
           if (insertError) {
-            console.error("Error creating default settings:", insertError);
+            console.error("SettingsContext: Error creating default settings:", insertError);
             if (isMounted) toast.error("Failed to create default settings");
             throw insertError;
           }
           
           if (newSettings && isMounted) {
-            console.log("Created new settings:", newSettings);
+            console.log("SettingsContext: Created new settings:", newSettings);
             setSettingsId(newSettings.id);
             setPostingFrequency(defaultSettings.postingFrequency);
             setWritingStyle(defaultSettings.writingStyle);
@@ -458,12 +437,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             setImagePrompt(defaultSettings.imagePrompt);
             setImageModel(defaultSettings.imageModel);
             setNegativePrompt(defaultSettings.negativePrompt);
-            setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay || 'friday');
+            setWeeklyPlanningDay(defaultSettings.weeklyPlanningDay);
             setLastSavedValues(newSettings);
           }
         }
       } catch (error) {
-        console.error("Error in fetchSettings:", error);
+        console.error("SettingsContext: Error in fetchSettings:", error);
         if (isMounted) {
           toast.error("Failed to load settings");
           setIsLoading(false);
@@ -473,7 +452,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (isMounted) {
         setIsLoading(false);
         setIsInitializing(false);
-        isInitialFetch = false;
       }
     };
 
@@ -486,31 +464,18 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Handle publication frequency changes
   const handleSetPostingFrequency = (days: number) => {
     setPostingFrequency(days);
-    updateSettingsInDatabase(days, writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Handle writing style changes
   const handleSetWritingStyle = (style: string) => {
     setWritingStyle(style);
-    updateSettingsInDatabase(postingFrequency, style, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
-  // Handle subject matters changes with debouncing
+  // Handle subject matters changes
   const handleSetSubjectMatters = useCallback((subjects: string[]) => {
     console.log("Setting subject matters:", subjects);
     setSubjectMatters(subjects);
-    // Always save when subjects change, even during initialization
-    updateSettingsInDatabase(
-      postingFrequency,
-      writingStyle,
-      subjects,
-      formattemplate,
-      imagePrompt,
-      imageModel,
-      negativePrompt,
-      weeklyPlanningDay
-    );
-  }, [postingFrequency, writingStyle, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay, updateSettingsInDatabase]);
+  }, []);
 
   // Handle adding a single subject
   const handleAddSubject = useCallback((subject: string) => {
@@ -528,46 +493,31 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Add handler for WordPress template
   const handleSetformattemplate = (template: string) => {
     setformattemplate(template);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, template, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Add handler for image prompt
   const handleSetImagePrompt = (prompt: string) => {
     setImagePrompt(prompt);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formattemplate, prompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   // Add handler for image model
   const handleSetImageModel = (model: string) => {
     setImageModel(model);
-    updateSettingsInDatabase(
-      postingFrequency,
-      writingStyle,
-      subjectMatters,
-      formattemplate,
-      imagePrompt,
-      model,
-      negativePrompt,
-      weeklyPlanningDay
-    );
   };
 
   // Add handler for negative prompt
   const handleSetNegativePrompt = (prompt: string) => {
     setNegativePrompt(prompt);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, prompt, weeklyPlanningDay);
   };
 
   // Add handler for weekly planning day
   const handleSetWeeklyPlanningDay = (day: string) => {
     setWeeklyPlanningDay(day);
-    updateSettingsInDatabase(postingFrequency, writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, day);
   };
 
   // Add handler for restoring default writing style
   const handleRestoreDefaultWritingStyle = () => {
     setWritingStyle(defaultSettings.writingStyle);
-    updateSettingsInDatabase(postingFrequency, defaultSettings.writingStyle, subjectMatters, formattemplate, imagePrompt, imageModel, negativePrompt, weeklyPlanningDay);
   };
 
   return (

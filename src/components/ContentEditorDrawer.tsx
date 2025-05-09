@@ -951,6 +951,9 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                             <li>• Follows your website's formatting guidelines</li>
                             <li>• Incorporates your brand voice and messaging</li>
                           </ul>
+                          <p className="mt-4 text-sm text-muted-foreground/80">
+                            Want to customize these settings? <a href="/settings/website" className="text-primary hover:underline">Configure your website preferences</a>
+                          </p>
                         </div>
                         <Button 
                           onClick={onRegenerate}
@@ -975,6 +978,11 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                   ) : currentPlatform && !editedContent ? (
                     <div className="h-full flex flex-col items-center justify-center">
                       <p className="text-muted-foreground mb-4">No content generated yet for {currentPlatform}</p>
+                      <div className="text-center mb-6">
+                        <p className="text-sm text-muted-foreground/80">
+                          Want to customize your {currentPlatform} settings? <a href={`/settings/social/${currentPlatform}`} className="text-primary hover:underline">Configure your preferences</a>
+                        </p>
+                      </div>
                       <Button 
                         onClick={handleGenerateSocialContent}
                         disabled={isLoadingSocialContent}
