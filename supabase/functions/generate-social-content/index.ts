@@ -200,6 +200,8 @@ Requirements:
 4. Use these hashtags if relevant: ${settings.hashtags?.split('\n').filter(Boolean).join(', ')}
 5. Use these mentions if relevant: ${settings.mentions?.split('\n').filter(Boolean).join(', ')}
 ${postTheme.wp_post_url ? `6. Include a call-to-action to read the full article at: ${postTheme.wp_post_url}` : ''}
+7. Do not add quotation marks at the start or end of the post
+8. Do not add any labels or formatting instructions in the output
 
 Write the complete post now, formatted exactly as shown in the example above.`;
 

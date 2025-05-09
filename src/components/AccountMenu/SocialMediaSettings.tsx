@@ -161,16 +161,16 @@ Key point or insight that adds value.
 
 #Hashtag1 #Hashtag2 #Hashtag3`,
 
-      instagram: `✨ [Hook] Attention-grabbing opening line that makes people stop scrolling
+      instagram: `✨ Attention-grabbing opening line that makes people stop scrolling
 
-🎯 [Main Point] Key insight or value proposition that draws readers in
+🎯 Key insight or value proposition that draws readers in
 
-💡 [Details] Supporting information or tips
+💡 Supporting information or tips
 • Point 1
 • Point 2
 • Point 3
 
-🔑 [Call to Action] Clear next step for readers
+🔑 Clear next step for readers
 
 .
 .
