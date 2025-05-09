@@ -39,20 +39,43 @@ async function scrapeImages(url: string): Promise<string[]> {
     'Sec-Fetch-User': '?1',
     'Upgrade-Insecure-Requests': '1',
     'Referer': new URL(url).origin,
+    'Connection': 'keep-alive',
+    'DNT': '1',
+    'Origin': new URL(url).origin,
   }
   
   try {
     // Try direct fetch first
-    let response = await fetch(url, { headers: browserHeaders })
+    let response = await fetch(url, { 
+      headers: browserHeaders,
+      redirect: 'follow',
+      mode: 'cors'
+    })
     
-    // If direct fetch fails, try with a delay
+    // If direct fetch fails, try with a delay and different headers
     if (!response.ok) {
       console.log('Initial fetch failed, retrying with delay...')
       await new Promise(resolve => setTimeout(resolve, 2000)) // 2 second delay
-      response = await fetch(url, { headers: browserHeaders })
+      
+      // Try with different headers
+      const altHeaders = {
+        ...browserHeaders,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.5',
+      }
+      
+      response = await fetch(url, { 
+        headers: altHeaders,
+        redirect: 'follow',
+        mode: 'cors'
+      })
     }
     
     if (!response.ok) {
+      if (response.status === 403) {
+        throw new Error('Access to the website was forbidden (403). This website may have anti-scraping measures in place. Please try a different website or contact the website owner for permission.')
+      }
       throw new Error(`Failed to fetch webpage: ${response.status} ${response.statusText}. Please check if the website URL is correct and accessible.`)
     }
     

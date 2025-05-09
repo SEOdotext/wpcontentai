@@ -47,6 +47,7 @@ interface ImageItem {
   size: number;
   type: string;
   source: ImageSource;
+  website_id: string;
   description?: string;
   metadata?: {
     width?: number;
@@ -88,6 +89,7 @@ export default function Media() {
   const [isScraping, setIsScraping] = useState(false);
   const [imageToDelete, setImageToDelete] = useState<ImageItem | null>(null);
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     if (currentWebsite) {
@@ -383,6 +385,84 @@ export default function Media() {
     });
   };
 
+  const handleAnalyzeImages = async () => {
+    if (selectedImages.size === 0 || !currentWebsite) return;
+
+    setIsAnalyzing(true);
+    const analyzeToast = toast.loading(`Analyzing ${selectedImages.size} images...`);
+
+    try {
+      // Log the current state
+      console.log('Current state:', {
+        selectedImages: Array.from(selectedImages),
+        currentWebsite: {
+          id: currentWebsite.id,
+          name: currentWebsite.name
+        },
+        images: images.map(img => ({
+          id: img.id,
+          name: img.name,
+          website_id: img.website_id
+        }))
+      });
+
+      // Verify that selected images exist and belong to the current website
+      const validImageIds = Array.from(selectedImages).filter(id => 
+        images.some(img => img.id === id && img.website_id === currentWebsite.id)
+      );
+
+      if (validImageIds.length === 0) {
+        throw new Error('No valid images selected for the current website');
+      }
+
+      console.log('Analyzing images:', {
+        image_ids: validImageIds,
+        website_id: currentWebsite.id
+      });
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-images`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+        },
+        body: JSON.stringify({
+          image_ids: validImageIds,
+          website_id: currentWebsite.id
+        })
+      });
+
+      const data = await response.json();
+      console.log('Analysis response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to analyze images');
+      }
+
+      toast.dismiss(analyzeToast);
+      const successCount = data.results?.filter(r => r.success).length || 0;
+      console.log('Analysis results:', {
+        total: data.results?.length || 0,
+        success: successCount,
+        failed: (data.results?.length || 0) - successCount
+      });
+      
+      if (successCount === 0) {
+        toast.error('No images were successfully analyzed. Please try again.');
+      } else {
+        toast.success(`Successfully analyzed ${successCount} images`);
+      }
+      
+      await fetchImages(); // Refresh the image list
+    } catch (error) {
+      console.error('Error analyzing images:', error);
+      toast.dismiss(analyzeToast);
+      toast.error(error instanceof Error ? error.message : 'Failed to analyze images');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const filteredImages = images.filter(item => {
     const matchesSearch = 
       item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -401,19 +481,28 @@ export default function Media() {
             <div className="max-w-6xl mx-auto space-y-6">
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
-                  <h1 className="text-2xl font-bold">Image Library</h1>
+                  <h1 className="text-2xl font-bold">Image library</h1>
                   {selectedImages.size > 0 && (
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">
                         {selectedImages.size} selected
                       </span>
                       <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAnalyzeImages}
+                        disabled={isAnalyzing}
+                      >
+                        <Wand2 className="h-4 w-4 mr-2" />
+                        {isAnalyzing ? 'Analyzing...' : 'Analyze with AI'}
+                      </Button>
+                      <Button
                         variant="destructive"
                         size="sm"
                         onClick={handleBulkDelete}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Delete Selected
+                        Delete selected
                       </Button>
                     </div>
                   )}
@@ -427,7 +516,7 @@ export default function Media() {
                       <SelectValue placeholder="Filter by source" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All Sources</SelectItem>
+                      <SelectItem value="all">All sources</SelectItem>
                       {Object.entries(sourceLabels).map(([value, label]) => (
                         <SelectItem key={value} value={value}>
                           {label}
@@ -450,12 +539,12 @@ export default function Media() {
                     disabled={isScraping || !currentWebsite?.url}
                   >
                     <Globe className="h-4 w-4 mr-2" />
-                    {isScraping ? 'Scraping...' : 'Scrape Website'}
+                    {isScraping ? 'Scraping...' : 'Scrape website'}
                   </Button>
                   <Button asChild>
                     <label className="cursor-pointer">
                       <Upload className="h-4 w-4 mr-2" />
-                      Upload Image
+                      Upload images
                       <input
                         type="file"
                         accept="image/*"
@@ -503,10 +592,12 @@ export default function Media() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setSelectedImage(item);
                                     setDescription(item.description || '');
                                   }}
+                                  className="bg-black/50 hover:bg-black/70 text-white"
                                 >
                                   <Info className="h-4 w-4" />
                                 </Button>
@@ -514,14 +605,18 @@ export default function Media() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => setImageToDelete(item)}
+                                className="bg-black/50 hover:bg-black/70 text-white hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setImageToDelete(item);
+                                }}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                             <div 
                               className="absolute inset-0 cursor-pointer"
+                              style={{ top: '40px' }}
                               onClick={() => toggleImageSelection(item.id)}
                             />
                             {selectedImages.has(item.id) && (
@@ -560,14 +655,14 @@ export default function Media() {
                           </div>
                         </CardContent>
                       </Card>
-                      <DialogContent>
+                      <DialogContent className="max-w-4xl">
                         <DialogHeader>
-                          <DialogTitle>Image Details</DialogTitle>
+                          <DialogTitle>Image details</DialogTitle>
                           <DialogDescription>
                             Add a description and view image details
                           </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-6">
                           <div>
                             <img
                               src={item.url}
@@ -575,41 +670,44 @@ export default function Media() {
                               className="w-full rounded-lg"
                             />
                           </div>
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium">Description</label>
-                            <Textarea
-                              value={description}
-                              onChange={(e) => setDescription(e.target.value)}
-                              placeholder="Add a description..."
-                            />
-                          </div>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="font-medium">Source</p>
-                              <p className="text-muted-foreground">{sourceLabels[item.source]}</p>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium">Description</label>
+                              <Textarea
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Add a description..."
+                                className="min-h-[100px]"
+                              />
                             </div>
-                            {item.metadata?.width && item.metadata?.height && (
+                            <div className="grid grid-cols-2 gap-4 text-sm">
                               <div>
-                                <p className="font-medium">Dimensions</p>
+                                <p className="font-medium">Source</p>
+                                <p className="text-muted-foreground">{sourceLabels[item.source]}</p>
+                              </div>
+                              {item.metadata?.width && item.metadata?.height && (
+                                <div>
+                                  <p className="font-medium">Dimensions</p>
+                                  <p className="text-muted-foreground">
+                                    {item.metadata.width} × {item.metadata.height}
+                                  </p>
+                                </div>
+                              )}
+                              <div>
+                                <p className="font-medium">Size</p>
                                 <p className="text-muted-foreground">
-                                  {item.metadata.width} × {item.metadata.height}
+                                  {(item.size / 1024 / 1024).toFixed(2)} MB
                                 </p>
                               </div>
-                            )}
-                            <div>
-                              <p className="font-medium">Size</p>
-                              <p className="text-muted-foreground">
-                                {(item.size / 1024 / 1024).toFixed(2)} MB
-                              </p>
+                              <div>
+                                <p className="font-medium">Type</p>
+                                <p className="text-muted-foreground">{item.type}</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-medium">Type</p>
-                              <p className="text-muted-foreground">{item.type}</p>
-                            </div>
+                            <Button onClick={handleUpdateDescription} className="w-full">
+                              Save changes
+                            </Button>
                           </div>
-                          <Button onClick={handleUpdateDescription} className="w-full">
-                            Save Changes
-                          </Button>
                         </div>
                       </DialogContent>
                     </Dialog>
