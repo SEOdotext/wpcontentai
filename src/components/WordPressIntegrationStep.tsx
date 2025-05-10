@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Link, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWebsites } from '@/context/WebsitesContext';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 
 const WordPressIntegrationStep: React.FC = () => {
   const navigate = useNavigate();
@@ -18,18 +18,24 @@ const WordPressIntegrationStep: React.FC = () => {
         return;
       }
 
-      const supabase = createClient(
-        import.meta.env.VITE_SUPABASE_URL,
-        import.meta.env.VITE_SUPABASE_ANON_KEY
-      );
+      try {
+        const { data, error } = await supabase
+          .from('wordpress_settings')
+          .select('is_connected')
+          .eq('website_id', currentWebsite.id)
+          .maybeSingle();
 
-      const { data } = await supabase
-        .from('wordpress_settings')
-        .select('is_connected')
-        .eq('website_id', currentWebsite.id)
-        .single();
+        if (error) {
+          console.error('Error checking WordPress connection:', error);
+          setIsWordPressConnected(false);
+          return;
+        }
 
-      setIsWordPressConnected(data?.is_connected ?? false);
+        setIsWordPressConnected(data?.is_connected ?? false);
+      } catch (error) {
+        console.error('Exception checking WordPress connection:', error);
+        setIsWordPressConnected(false);
+      }
     };
 
     checkWordPressConnection();
