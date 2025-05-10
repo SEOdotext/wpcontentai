@@ -13,6 +13,11 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from '@/integrations/supabase/client';
 import { Tables } from '@/types/supabase';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import GeneratePostIdeasFromImages from './GeneratePostIdeasFromImages';
 
 /**
  * IMPORTANT: Date Calculation
@@ -27,6 +32,7 @@ import { Tables } from '@/types/supabase';
 type PostTheme = Tables['post_themes']['Row'] & {
   categories: { id: string; name: string }[];
   status: 'pending' | 'approved' | 'published' | 'generated' | 'declined' | 'generatingidea' | 'textgenerated';
+  image_id?: string | null;
 };
 
 interface ContentStructureViewProps {
@@ -106,7 +112,9 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     updatePostTheme,
     isGeneratingContent,
     getNextPublicationDate,
-    setPostThemes
+    setPostThemes,
+    imageMap,
+    fetchImagesForWebsite
   } = usePostThemes();
   
   // Add categoriesByTitle state
@@ -510,36 +518,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       return false;
     })
     // Sort by created_at date, newest first
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    .map(theme => {
-      // Create a date object from the theme's scheduled_date
-      let themeDate: Date;
-      try {
-        if (!theme.scheduled_date || theme.scheduled_date === '') {
-          // If no date, use tomorrow for pending posts, today for others
-          themeDate = theme.status === 'pending' ? addDays(new Date(), 1) : new Date();
-        } else {
-          themeDate = new Date(theme.scheduled_date);
-          // Validate the date - if it's invalid, use a fallback
-          if (isNaN(themeDate.getTime())) {
-            console.warn('Invalid date in theme, using fallback:', theme.id, theme.scheduled_date);
-            themeDate = theme.status === 'pending' ? addDays(new Date(), 1) : new Date();
-          }
-        }
-      } catch (e) {
-        console.error('Error parsing date:', theme.scheduled_date, e);
-        themeDate = theme.status === 'pending' ? addDays(new Date(), 1) : new Date();
-      }
-      
-      return {
-        id: theme.id,
-        title: theme.subject_matter,
-        keywords: theme.keywords || [],
-        categories: theme.categories || [],
-        date: themeDate,
-        status: theme.status
-      };
-    });
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   // Calculate pagination
   const totalPages = Math.ceil(filteredTitleSuggestions.length / ITEMS_PER_PAGE);
@@ -589,6 +568,12 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
   // Separate loading state for input/button disabling
   const isInputDisabled = isGenerating || !currentWebsite;
 
+  useEffect(() => {
+    if (currentWebsite?.id) {
+      fetchImagesForWebsite(currentWebsite.id);
+    }
+  }, [currentWebsite?.id]);
+
   return (
     <div className={className}>
       {currentWebsite && (
@@ -601,74 +586,64 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
       )}
       
       <div className="mb-4">
-        <div className="flex gap-2">
-          <Input
-            placeholder="Enter keywords (e.g., wordpress, seo, content marketing)"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            className="flex-1"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !isGenerating && inputValue.trim() && currentWebsite) {
-                e.preventDefault();
-                handleGenerateTitleSuggestions();
-              }
-            }}
-            disabled={isInputDisabled}
-          />
-          <Button 
-            onClick={handleGenerateTitleSuggestions} 
-            disabled={isInputDisabled}
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                {inputValue.trim() ? 'Generate from Keywords' : 'Generate from Subjects'}
-              </>
-            )}
-          </Button>
-        </div>
-        <div className="flex justify-between items-center mt-2">
-          <p className="text-xs text-muted-foreground">
-          {websiteContent ? 
-            "Website content analyzed and ready for title generation" : 
-            currentWebsite ? 
-                "" : 
-              "Select a website to analyze content"
-          }
-        </p>
-          
-          <div className="flex gap-2">
-            <Button
-              variant={viewMode === 'pending' ? "default" : "ghost"}
-              size="sm"
-              className="text-xs h-7 px-2"
-              onClick={() => setViewMode('pending')}
-            >
-              Content Calendar
-            </Button>
-            <Button
-              variant={viewMode === 'approved' ? "default" : "ghost"}
-              size="sm"
-              className="text-xs h-7 px-2"
-              onClick={() => setViewMode('approved')}
-            >
-              Approved
-            </Button>
-            <Button
-              variant={viewMode === 'published' ? "default" : "ghost"}
-              size="sm"
-              className="text-xs h-7 px-2"
-              onClick={() => setViewMode('published')}
-            >
-              Published
-            </Button>
-          </div>
-        </div>
+        <Tabs defaultValue="subjects" className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="subjects" className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              <span>Generate from Subjects</span>
+            </TabsTrigger>
+            <TabsTrigger value="media" className="flex items-center gap-2">
+              <Globe className="h-4 w-4" />
+              <span>Generate from Media</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="subjects">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Enter keywords (e.g., wordpress, seo, content marketing)"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                className="flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !isGenerating && inputValue.trim() && currentWebsite) {
+                    e.preventDefault();
+                    handleGenerateTitleSuggestions();
+                  }
+                }}
+                disabled={isInputDisabled}
+              />
+              <Button 
+                onClick={handleGenerateTitleSuggestions} 
+                disabled={isInputDisabled}
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    {inputValue.trim() ? 'Generate from Keywords' : 'Generate from Subjects'}
+                  </>
+                )}
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="media">
+            <GeneratePostIdeasFromImages
+              currentWebsite={currentWebsite ? {
+                id: currentWebsite.id,
+                language: currentWebsite.language || 'en'
+              } : null}
+              writingStyle={writingStyle}
+              subjectMatters={subjectMatters}
+              onContentGenerated={fetchPostThemes}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
       
       {isLoading ? (
@@ -682,31 +657,47 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   </AlertDescription>
                 </Alert>
               )}
-              {paginatedSuggestions.map((suggestion) => (
-                <TitleSuggestion
-                  key={suggestion.id}
-                  id={suggestion.id}
-                  title={suggestion.title}
-                  keywords={suggestion.keywords}
-                  categories={suggestion.categories}
-                  selected={suggestion.id === selectedTitleId}
-                  onSelect={handleSelectTitle}
-                  onRemove={handleRemoveTitle}
-                  date={suggestion.date}
-                  onUpdateDate={(newDate) => {
-                    if (newDate instanceof Date) {
-                      handleUpdateTitleDate(suggestion.id, newDate);
-                    } else {
-                      console.error('Invalid date received from calendar:', newDate);
-                    }
-                  }}
-                  onLiked={() => handleTitleLiked(suggestion.id)}
-                  status={suggestion.status}
-                  onUpdateKeywords={handleUpdateKeywords}
-                  onUpdateCategories={handleUpdateCategories}
-                  isGeneratingContent={isGeneratingContent(suggestion.id)}
-                />
-              ))}
+              {paginatedSuggestions.map((suggestion) => {
+                let themeDate: Date;
+                try {
+                  themeDate = suggestion.scheduled_date ? new Date(suggestion.scheduled_date) : new Date();
+                } catch {
+                  themeDate = new Date();
+                }
+                return (
+                  <div key={suggestion.id} className="flex items-center gap-4 w-full mb-2">
+                    {/* Show image preview on the left if image_id is present and found in imageMap */}
+                    {suggestion.image_id && imageMap[suggestion.image_id] ? (
+                      <img
+                        src={imageMap[suggestion.image_id].url}
+                        alt={imageMap[suggestion.image_id].name}
+                        className="w-16 h-16 object-cover rounded border"
+                        style={{ minWidth: 64, minHeight: 64 }}
+                      />
+                    ) : null}
+                    {/* The rest of the row */}
+                    <div className="flex-1">
+                      <TitleSuggestion
+                        id={suggestion.id}
+                        title={suggestion.subject_matter}
+                        keywords={suggestion.keywords}
+                        categories={suggestion.categories}
+                        selected={suggestion.id === selectedTitleId}
+                        onSelect={handleSelectTitle}
+                        onRemove={handleRemoveTitle}
+                        className="mb-2"
+                        date={themeDate}
+                        onUpdateDate={date => handleUpdateTitleDate(suggestion.id, date)}
+                        onLiked={() => handleTitleLiked(suggestion.id)}
+                        status={suggestion.status}
+                        onUpdateKeywords={handleUpdateKeywords}
+                        onUpdateCategories={handleUpdateCategories}
+                        isGeneratingContent={isGeneratingContent(suggestion.id)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
           <div className="flex justify-center items-center py-4">
@@ -727,31 +718,47 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               </AlertDescription>
             </Alert>
           )}
-          {paginatedSuggestions.map((suggestion) => (
-            <TitleSuggestion
-              key={suggestion.id}
-              id={suggestion.id}
-              title={suggestion.title}
-              keywords={suggestion.keywords}
-              categories={suggestion.categories}
-              selected={suggestion.id === selectedTitleId}
-              onSelect={handleSelectTitle}
-              onRemove={handleRemoveTitle}
-              date={suggestion.date}
-              onUpdateDate={(newDate) => {
-                if (newDate instanceof Date) {
-                  handleUpdateTitleDate(suggestion.id, newDate);
-                } else {
-                  console.error('Invalid date received from calendar:', newDate);
-                }
-              }}
-              onLiked={() => handleTitleLiked(suggestion.id)}
-              status={suggestion.status}
-              onUpdateKeywords={handleUpdateKeywords}
-              onUpdateCategories={handleUpdateCategories}
-              isGeneratingContent={isGeneratingContent(suggestion.id)}
-            />
-          ))}
+          {paginatedSuggestions.map((suggestion) => {
+            let themeDate: Date;
+            try {
+              themeDate = suggestion.scheduled_date ? new Date(suggestion.scheduled_date) : new Date();
+            } catch {
+              themeDate = new Date();
+            }
+            return (
+              <div key={suggestion.id} className="flex items-center gap-4 w-full mb-2">
+                {/* Show image preview on the left if image_id is present and found in imageMap */}
+                {suggestion.image_id && imageMap[suggestion.image_id] ? (
+                  <img
+                    src={imageMap[suggestion.image_id].url}
+                    alt={imageMap[suggestion.image_id].name}
+                    className="w-16 h-16 object-cover rounded border"
+                    style={{ minWidth: 64, minHeight: 64 }}
+                  />
+                ) : null}
+                {/* The rest of the row */}
+                <div className="flex-1">
+                  <TitleSuggestion
+                    id={suggestion.id}
+                    title={suggestion.subject_matter}
+                    keywords={suggestion.keywords}
+                    categories={suggestion.categories}
+                    selected={suggestion.id === selectedTitleId}
+                    onSelect={handleSelectTitle}
+                    onRemove={handleRemoveTitle}
+                    className="mb-2"
+                    date={themeDate}
+                    onUpdateDate={date => handleUpdateTitleDate(suggestion.id, date)}
+                    onLiked={() => handleTitleLiked(suggestion.id)}
+                    status={suggestion.status}
+                    onUpdateKeywords={handleUpdateKeywords}
+                    onUpdateCategories={handleUpdateCategories}
+                    isGeneratingContent={isGeneratingContent(suggestion.id)}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <EmptyState

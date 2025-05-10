@@ -49,15 +49,15 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-interface GeneratePostIdeasRequest {
+interface GenerateRequest {
   website_id: string;
   website_url?: string;
   keywords?: string[];
   writing_style?: string;
   subject_matters?: string[];
   language?: string;
-  scraped_content?: { title: string; digest: string }[];
-  count?: number; // Optional parameter for number of posts to generate
+  count?: number;
+  image_url?: string;
 }
 
 interface PostIdea {
@@ -169,15 +169,23 @@ serve(async (req) => {
   }
 
   try {
-    // Get the request body
-    const requestBody = await req.json();
-    const { website_id, website_url, keywords = [], writing_style, subject_matters = [], language: requestLanguage = 'en', scraped_content } = requestBody as GeneratePostIdeasRequest;
+    const requestBody = await req.json() as GenerateRequest;
+    const { 
+      website_id, 
+      website_url, 
+      keywords = [], 
+      writing_style, 
+      subject_matters = [], 
+      language = 'en',
+      count = 5,
+      image_url
+    } = requestBody;
     
     console.log('------------ GENERATE POST IDEAS REQUEST ------------');
     console.log('Request parameters:', JSON.stringify(requestBody, null, 2));
     console.log(`Website ID: ${website_id}`);
     console.log(`Website URL: ${website_url}`);
-    console.log(`Requested Language: ${requestLanguage}`);
+    console.log(`Requested Language: ${language}`);
     console.log(`Keywords: ${keywords.join(', ')}`);
     console.log('----------------------------------------------------');
 
@@ -686,6 +694,118 @@ Important rules:
       categoriesByTitle,
       postThemes
     };
+
+    // If we have an image URL, use it to generate content
+    if (image_url) {
+      const prompt = `Generate ${count} unique blog post ideas based on this image: ${image_url}
+
+Additional context:
+Current year: 2025
+Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
+Subject matters: ${(Array.isArray(subject_matters) && subject_matters.length > 0 ? subject_matters : pubSettings?.subject_matters || ['general']).join(',')}
+Language: ${isDanish ? 'Danish (da)' : 'English (en)'}
+
+For each idea, provide:
+1. A compelling title that describes what's in the image and relates it to the website's content
+2. 3-5 relevant keywords based on the image and website's content (avoid using colons in keywords)
+3. A brief description (max 50 words - be very concise)
+
+Important rules:
+1. ${isDanish ? 'IMPORTANT: Generate all content in Danish language' : 'Generate all content in English language'}
+2. ${isDanish ? 'For Danish titles: Only capitalize the first word and proper nouns' : 'For English titles: Capitalize main words following standard English title case'}
+3. Keywords should be category-oriented and domain-specific
+4. Avoid generic single words like: ${isDanish ? 'virksomhed, løsning, sammenligning, bedste, tips, pålidelig' : 'business, solution, comparison, best, tips, reliable'}
+5. DO create post ideas that align with the image content but offer new perspectives
+6. DO NOT use colons in any keywords
+7. BE CONCISE - keep descriptions short and simple (max 50 words)`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4-vision-preview',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a content strategist helping to generate blog post ideas based on images. Generate unique, engaging content ideas that incorporate the image while maintaining relevance to the website\'s theme.'
+            },
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'text',
+                  text: prompt
+                },
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: image_url
+                  }
+                }
+              ]
+            }
+          ],
+          max_tokens: 1000
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate content from image');
+      }
+
+      const result = await response.json();
+      const content = result.choices[0].message.content;
+
+      // Parse the generated content
+      const titles: string[] = [];
+      const keywordsByTitle: { [key: string]: string[] } = {};
+      const descriptions: { [key: string]: string } = {};
+
+      const lines = content.split('\n');
+      let currentTitle = '';
+      let currentKeywords: string[] = [];
+      let currentDescription = '';
+
+      for (const line of lines) {
+        if (line.startsWith('1.')) {
+          // Save previous content if exists
+          if (currentTitle) {
+            titles.push(currentTitle);
+            keywordsByTitle[currentTitle] = currentKeywords;
+            descriptions[currentTitle] = currentDescription;
+          }
+          // Start new content
+          currentTitle = line.replace('1.', '').trim();
+          currentKeywords = [];
+          currentDescription = '';
+        } else if (line.startsWith('2.')) {
+          const keywordsLine = line.replace('2.', '').trim();
+          currentKeywords = keywordsLine.split(',').map(k => k.trim());
+        } else if (line.startsWith('3.')) {
+          currentDescription = line.replace('3.', '').trim();
+        }
+      }
+
+      // Add the last content
+      if (currentTitle) {
+        titles.push(currentTitle);
+        keywordsByTitle[currentTitle] = currentKeywords;
+        descriptions[currentTitle] = currentDescription;
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          titles,
+          keywordsByTitle,
+          descriptions
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // In onboarding mode, just skip the database lookups and use mock data
     if (isOnboarding) {

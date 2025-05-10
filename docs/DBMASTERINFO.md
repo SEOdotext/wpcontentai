@@ -341,6 +341,16 @@
   },
   {
     "section": "columns_and_checks",
+    "identifier": "post_themes.image_id",
+    "detail_1": "uuid",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
     "identifier": "organisations.id",
     "detail_1": "uuid",
     "detail_2": null,
@@ -1741,38 +1751,8 @@
   },
   {
     "section": "columns_and_checks",
-    "identifier": "post_theme_categories.id",
+    "identifier": "images.id",
     "detail_1": "uuid",
-    "detail_2": null,
-    "detail_3": null,
-    "detail_4": null,
-    "detail_5": null,
-    "detail_6": null
-  },
-  {
-    "section": "columns_and_checks",
-    "identifier": "post_theme_categories.post_theme_id",
-    "detail_1": "uuid",
-    "detail_2": null,
-    "detail_3": null,
-    "detail_4": null,
-    "detail_5": null,
-    "detail_6": null
-  },
-  {
-    "section": "columns_and_checks",
-    "identifier": "post_theme_categories.wordpress_category_id",
-    "detail_1": "uuid",
-    "detail_2": null,
-    "detail_3": null,
-    "detail_4": null,
-    "detail_5": null,
-    "detail_6": null
-  },
-  {
-    "section": "columns_and_checks",
-    "identifier": "post_theme_categories.created_at",
-    "detail_1": "timestamp with time zone",
     "detail_2": null,
     "detail_3": null,
     "detail_4": null,
@@ -1882,6 +1862,46 @@
   {
     "section": "columns_and_checks",
     "identifier": "images.updated_at",
+    "detail_1": "timestamp with time zone",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "post_theme_categories.id",
+    "detail_1": "uuid",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "post_theme_categories.post_theme_id",
+    "detail_1": "uuid",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "post_theme_categories.wordpress_category_id",
+    "detail_1": "uuid",
+    "detail_2": null,
+    "detail_3": null,
+    "detail_4": null,
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "columns_and_checks",
+    "identifier": "post_theme_categories.created_at",
     "detail_1": "timestamp with time zone",
     "detail_2": null,
     "detail_3": null,
@@ -2061,16 +2081,6 @@
   },
   {
     "section": "pg_policies",
-    "identifier": "public.images",
-    "detail_1": "Users can view images for their websites",
-    "detail_2": "{public}",
-    "detail_3": "SELECT",
-    "detail_4": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))",
-    "detail_5": null,
-    "detail_6": "PERMISSIVE"
-  },
-  {
-    "section": "pg_policies",
     "identifier": "public.websites",
     "detail_1": "Users can access websites",
     "detail_2": "{authenticated}",
@@ -2221,41 +2231,11 @@
   },
   {
     "section": "pg_policies",
-    "identifier": "public.images",
-    "detail_1": "Users can insert images for their websites",
-    "detail_2": "{public}",
-    "detail_3": "INSERT",
-    "detail_4": null,
-    "detail_5": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))",
-    "detail_6": "PERMISSIVE"
-  },
-  {
-    "section": "pg_policies",
     "identifier": "public.organisations",
     "detail_1": "Users can manage their own organisation",
     "detail_2": "{public}",
     "detail_3": "ALL",
     "detail_4": "(EXISTS ( SELECT 1\n   FROM organisation_memberships\n  WHERE ((organisation_memberships.member_id = auth.uid()) AND (organisation_memberships.organisation_id = organisations.id))))",
-    "detail_5": null,
-    "detail_6": "PERMISSIVE"
-  },
-  {
-    "section": "pg_policies",
-    "identifier": "public.images",
-    "detail_1": "Users can update images for their websites",
-    "detail_2": "{public}",
-    "detail_3": "UPDATE",
-    "detail_4": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))",
-    "detail_5": null,
-    "detail_6": "PERMISSIVE"
-  },
-  {
-    "section": "pg_policies",
-    "identifier": "public.images",
-    "detail_1": "Users can delete images for their websites",
-    "detail_2": "{public}",
-    "detail_3": "DELETE",
-    "detail_4": "(website_id IN ( SELECT website_access.website_id\n   FROM website_access\n  WHERE (website_access.user_id = auth.uid())))",
     "detail_5": null,
     "detail_6": "PERMISSIVE"
   },
@@ -2267,6 +2247,16 @@
     "detail_3": "INSERT",
     "detail_4": null,
     "detail_5": "((member_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM organisation_memberships organisation_memberships_1\n  WHERE ((organisation_memberships_1.member_id = auth.uid()) AND (organisation_memberships_1.organisation_id = organisation_memberships_1.organisation_id) AND (organisation_memberships_1.role = 'admin'::text)))))",
+    "detail_6": "PERMISSIVE"
+  },
+  {
+    "section": "pg_policies",
+    "identifier": "public.images",
+    "detail_1": "Allow all operations",
+    "detail_2": "{authenticated}",
+    "detail_3": "ALL",
+    "detail_4": "true",
+    "detail_5": "true",
     "detail_6": "PERMISSIVE"
   },
   {
@@ -5595,6 +5585,16 @@
     "detail_1": "PRIMARY KEY",
     "detail_2": "organisation_memberships_pkey",
     "detail_3": "organisation_memberships",
+    "detail_4": "id",
+    "detail_5": null,
+    "detail_6": null
+  },
+  {
+    "section": "constraints",
+    "identifier": "post_themes.image_id",
+    "detail_1": "FOREIGN KEY",
+    "detail_2": "post_themes_image_id_fkey",
+    "detail_3": "images",
     "detail_4": "id",
     "detail_5": null,
     "detail_6": null
