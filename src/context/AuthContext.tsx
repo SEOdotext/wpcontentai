@@ -89,6 +89,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, []);
 
+  // Add this after the initial useEffect that checks onboarding data
+  useEffect(() => {
+    // Check for valid org and website in localStorage
+    const currentOrgId = localStorage.getItem('currentOrgId') || localStorage.getItem('current_organisation_id');
+    const currentWebsiteId = localStorage.getItem('currentWebsiteId') || localStorage.getItem('website_id');
+    const onboardingData = localStorage.getItem('website_info') || localStorage.getItem('pending_signup');
+
+    if (currentOrgId && currentWebsiteId && onboardingData) {
+      // User has completed onboarding, clear onboarding data
+      localStorage.removeItem('website_info');
+      localStorage.removeItem('pending_signup');
+      setIsOnboarding(false);
+      console.log('AuthContext: Cleared onboarding data after detecting valid org and website');
+    }
+  }, [
+    localStorage.getItem('currentOrgId'),
+    localStorage.getItem('current_organisation_id'),
+    localStorage.getItem('currentWebsiteId'),
+    localStorage.getItem('website_id'),
+    localStorage.getItem('website_info'),
+    localStorage.getItem('pending_signup')
+  ]);
+
   // Handle onboarding data transfer
   const transferOnboardingData = useCallback(async () => {
     if (!user) {

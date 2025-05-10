@@ -186,8 +186,6 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         ? createDayCountMap(settings[0].posting_days)
         : { monday: 1, wednesday: 1, friday: 1 }; // Default schedule if no settings
 
-      console.log('Day count map:', dayCountMap);
-
       // Get all active posts (not pending or declined)
       const activePosts = postThemes.filter(p => 
         p.scheduled_date && 
@@ -215,24 +213,23 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       
       // Look for next available slot
       let maxAttempts = 28; // 4 weeks safety limit
+      let lastCheckedDate = '';
+      
       while (maxAttempts > 0) {
         const dayName = format(currentDate, 'EEEE').toLowerCase();
         const dateStr = format(currentDate, 'yyyy-MM-dd');
+        
+        // Prevent checking the same date multiple times
+        if (dateStr === lastCheckedDate) {
+          currentDate = addDays(currentDate, 1);
+          maxAttempts--;
+          continue;
+        }
+        
+        lastCheckedDate = dateStr;
         const existingPostsForDay = countPostsForDate(postThemes, dateStr);
 
-        console.log('Checking date:', {
-          date: dateStr,
-          dayName,
-          isPostingDay: !!dayCountMap[dayName],
-          existingPostsForDay,
-          maxPostsForDay: dayCountMap[dayName],
-          activeStatuses: postThemes
-            .filter(p => p.scheduled_date && format(new Date(p.scheduled_date), 'yyyy-MM-dd') === dateStr)
-            .map(p => p.status)
-        });
-
         if (dayCountMap[dayName] && existingPostsForDay < dayCountMap[dayName]) {
-          console.log(`Found available slot on ${dayName}, ${dateStr}`);
           return currentDate;
         }
 
@@ -252,7 +249,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
       tomorrow.setHours(0, 0, 0, 0);
       return tomorrow;
     }
-  }, [currentWebsite, postThemes]);
+  }, [currentWebsite?.id, postThemes]); // Only depend on website ID and postThemes
 
   // Function to fetch post themes from the database
   const fetchPostThemes = async () => {

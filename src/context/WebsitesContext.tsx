@@ -418,23 +418,36 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
 
+      // Add a check to prevent unnecessary fetches
+      const currentWebsiteId = currentWebsite?.id;
+      const savedWebsiteId = localStorage.getItem('currentWebsiteId');
+      
+      // If we have a current website and it matches the saved ID, and we have websites loaded,
+      // skip the fetch unless explicitly requested
+      if (currentWebsiteId && savedWebsiteId === currentWebsiteId && websites.length > 0) {
+        console.log("WebsitesContext: Current website matches saved ID and websites are loaded, skipping fetch");
+        return;
+      }
+
       await fetchWebsites();
     }, 1000),
-    [isFetching]
+    [isFetching, currentWebsite?.id, websites.length]
   );
 
   // Cleanup function for debounced fetch
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
 
     const cleanup = () => {
       mounted = false;
-      // Cleanup any pending debounced fetches on unmount
-      debouncedFetchWebsites();
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
 
     return cleanup;
-  }, [debouncedFetchWebsites]);
+  }, []);
 
   useEffect(() => {
     console.log("WebsitesContext: Provider mounted");
@@ -454,18 +467,25 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Set up subscription to websites table changes
     const subscription = supabase
       .channel('websites')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'websites' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'websites' }, async (payload: { new: { organisation_id: string } }) => {
         console.log("WebsitesContext: Website table changed", payload);
-        debouncedFetchWebsites();
+        // Only trigger fetch if the change is relevant to the current website
+        if (currentWebsite && payload.new?.organisation_id === currentWebsite.organisation_id) {
+          debouncedFetchWebsites();
+        }
       })
       .subscribe();
 
     // Also set up subscription to organisation_memberships table changes
     const membershipSubscription = supabase
       .channel('organisation_memberships')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'organisation_memberships' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'organisation_memberships' }, async (payload: { new: { member_id: string } }) => {
         console.log("WebsitesContext: Organisation memberships changed", payload);
-        debouncedFetchWebsites();
+        // Only trigger fetch if the change is relevant to the current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (payload.new?.member_id === user?.id) {
+          debouncedFetchWebsites();
+        }
       })
       .subscribe();
 
@@ -493,8 +513,8 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return;
         }
 
-        // Only fetch if we have a session
-        if (session) {
+        // Only fetch if we have a session and no websites are loaded
+        if (session && websites.length === 0) {
           await debouncedFetchWebsites();
         }
       } finally {
@@ -508,7 +528,7 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       membershipSubscription.unsubscribe();
       authSubscription.unsubscribe();
     };
-  }, [isHandlingAuthChange]);
+  }, [isHandlingAuthChange, currentWebsite?.organisation_id, websites.length]);
 
   // Log website state changes for debugging
   useEffect(() => {
