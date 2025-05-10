@@ -157,11 +157,6 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [currentWebsite]);
 
   const restoreSavedWebsite = (websitesWithOrg: Website[]) => {
-    if (isInitialized && !isAuthStateChange) {
-      console.log("WebsitesContext: Already initialized and no auth state change, skipping restore");
-      return;
-    }
-
     try {
       // First try to get the complete website data object
       const savedWebsiteData = localStorage.getItem('currentWebsiteData');
@@ -185,24 +180,11 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // If we have a current website and it matches the saved ID, don't change anything
       if (currentWebsite && currentWebsite.id === currentSavedId) {
         console.log("WebsitesContext: Current website matches saved ID, no change needed");
-        setIsInitialized(true);
-        setIsAuthStateChange(false);
         return;
       }
 
-      // If we have a current website but it doesn't match the saved ID, check if the saved website exists
-      if (currentWebsite && currentSavedId) {
-        const savedWebsiteExists = websitesWithOrg.some(website => website.id === currentSavedId);
-        if (!savedWebsiteExists) {
-          console.log("WebsitesContext: Saved website no longer exists, keeping current website");
-          setIsInitialized(true);
-          setIsAuthStateChange(false);
-          return;
-        }
-      }
-      
+      // If we have a saved website ID, try to restore it
       if (currentSavedId) {
-        // Find the website with the saved ID among the accessible websites
         const savedWebsite = websitesWithOrg.find(website => website.id === currentSavedId);
         if (savedWebsite) {
           console.log("WebsitesContext: Restoring previously selected website:", {
@@ -211,49 +193,38 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             url: savedWebsite.url
           });
           setCurrentWebsite(savedWebsite as Website);
-        } else if (websitesWithOrg.length > 0) {
-          // If the saved website is no longer accessible, use the first accessible one
-          console.log("WebsitesContext: Saved website ID not accessible or not found, using first website:", {
-            id: websitesWithOrg[0].id,
-            name: websitesWithOrg[0].name
-          });
-          setCurrentWebsite(websitesWithOrg[0] as Website);
-          setSavedWebsiteIdState(websitesWithOrg[0].id);
+          return;
         }
-      } else if (websitesWithOrg.length > 0) {
-        // Set first website as current if none is saved
-        console.log("WebsitesContext: No saved website found, using first website:", {
-          id: websitesWithOrg[0].id,
-          name: websitesWithOrg[0].name
-        });
-        setCurrentWebsite(websitesWithOrg[0] as Website);
-        setSavedWebsiteIdState(websitesWithOrg[0].id);
-      } else {
-        // Reset current website if user has no access to any websites
-        console.log("WebsitesContext: No accessible websites found, resetting current website");
-        setCurrentWebsite(null);
-        setSavedWebsiteIdState(null);
-        // Clear localStorage since there are no accessible websites
-        localStorage.removeItem('currentWebsiteData');
-        localStorage.removeItem('currentWebsiteId');
-        localStorage.removeItem('currentWebsiteName');
-        localStorage.removeItem('currentWebsiteUrl');
-        localStorage.removeItem('currentOrgId');
       }
+
+      // If we get here, either:
+      // 1. No saved website ID exists
+      // 2. The saved website no longer exists in the accessible websites
+      // In either case, we should keep the current website if it exists and is accessible
+      if (currentWebsite) {
+        const currentWebsiteExists = websitesWithOrg.some(website => website.id === currentWebsite.id);
+        if (currentWebsiteExists) {
+          console.log("WebsitesContext: Keeping current website as it's still accessible");
+          return;
+        }
+      }
+
+      // If we have no current website or it's not accessible, and no saved website was found,
+      // we should clear the current website
+      console.log("WebsitesContext: No accessible website found, clearing current website");
+      setCurrentWebsite(null);
+      setSavedWebsiteIdState(null);
+      // Clear localStorage since there are no accessible websites
+      localStorage.removeItem('currentWebsiteData');
+      localStorage.removeItem('currentWebsiteId');
+      localStorage.removeItem('currentWebsiteName');
+      localStorage.removeItem('currentWebsiteUrl');
+      localStorage.removeItem('currentOrgId');
     } catch (error) {
       console.error('WebsitesContext: Error restoring website:', error);
-      // Fallback to first website if available
-      if (websitesWithOrg.length > 0) {
-        console.log("WebsitesContext: Error occurred, falling back to first website");
-        setCurrentWebsite(websitesWithOrg[0] as Website);
-        setSavedWebsiteIdState(websitesWithOrg[0].id);
-      } else {
-        setCurrentWebsite(null);
-        setSavedWebsiteIdState(null);
-      }
+      // Don't change the current website on error
+      return;
     }
-    setIsInitialized(true);
-    setIsAuthStateChange(false);
   };
 
   const fetchWebsites = async () => {
@@ -352,92 +323,56 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         if (teamError) {
           console.error('WebsitesContext: Error fetching team data:', teamError);
-        } else if (teamData && teamData.team_members) {
-          console.log('WebsitesContext: Found team data:', teamData);
-          
-          // Find the current user in the team members
-          const currentUserData = teamData.team_members.find((member: any) => member.id === user.id);
-          
-          if (currentUserData && currentUserData.website_access && currentUserData.website_access.length > 0) {
-            console.log('WebsitesContext: Found user website access via team data:', currentUserData.website_access);
-            
-            // Extract website info directly from the team data
-            const userWebsites = currentUserData.website_access.map((access: any) => ({
-              ...access.website,
-              organisation_name: orgData.name
-            }));
-            
-            console.log('WebsitesContext: Extracted websites for user:', userWebsites);
-            
-            if (userWebsites.length > 0) {
-              setWebsites(userWebsites);
-              
-              // Check if there's a saved website ID in localStorage
-              const savedWebsiteId = localStorage.getItem('currentWebsiteId');
-              
-              if (savedWebsiteId) {
-                // Find the website with the saved ID among the accessible websites
-                const savedWebsite = userWebsites.find(website => website.id === savedWebsiteId);
-                if (savedWebsite) {
-                  console.log("WebsitesContext: Restoring previously selected website:", savedWebsite.name);
-                  setCurrentWebsite(savedWebsite as Website);
-                } else if (userWebsites.length > 0) {
-                  // If the saved website is no longer accessible, use the first accessible one
-                  console.log("WebsitesContext: Saved website ID not accessible or not found, using first website");
-                  setCurrentWebsite(userWebsites[0] as Website);
-                }
-              } else if (userWebsites.length > 0) {
-                // Set first website as current if none is saved
-                setCurrentWebsite(userWebsites[0] as Website);
-              }
-              
-              setIsLoading(false);
-              setIsFetching(false);
-              return; // Exit early as we've set everything up
-            }
-          }
+          throw teamError;
         }
         
-        // Fall back to the original approach if team data method fails
-        // Get websites the user has access to from website_access table
-        const { data: accessibleWebsites, error: accessError } = await supabase
-          .from('website_access')
-          .select('website_id')
-          .eq('user_id', user.id);
-
-        if (accessError) {
-          console.error('WebsitesContext: Error fetching website access:', accessError);
-          throw accessError;
-        }
-
-        console.log('WebsitesContext: Accessible websites:', accessibleWebsites);
-
-        if (!accessibleWebsites || accessibleWebsites.length === 0) {
-          console.log('WebsitesContext: No website access found for user');
+        if (!teamData || !teamData.team_members) {
+          console.log('WebsitesContext: No team data found');
           setWebsites([]);
           setCurrentWebsite(null);
           setIsLoading(false);
           setIsFetching(false);
           return;
         }
-
-        // Extract website IDs the user has access to
-        const websiteIds = accessibleWebsites.map(access => access.website_id);
-        console.log('WebsitesContext: Website IDs user has access to:', websiteIds);
-
-        // Get the actual website details
-        const { data, error } = await supabase
-          .from('websites')
-          .select('*')
-          .in('id', websiteIds);
-
-        if (error) {
-          console.error('WebsitesContext: Error fetching websites by IDs:', error);
-          throw error;
+        
+        console.log('WebsitesContext: Found team data:', teamData);
+        
+        // Find the current user in the team members
+        const currentUserData = teamData.team_members.find((member: any) => member.id === user.id);
+        
+        if (!currentUserData || !currentUserData.website_access || currentUserData.website_access.length === 0) {
+          console.log('WebsitesContext: No website access found for user in team data');
+          setWebsites([]);
+          setCurrentWebsite(null);
+          setIsLoading(false);
+          setIsFetching(false);
+          return;
         }
-
-        console.log('WebsitesContext: Fetched websites for member:', data);
-        websitesData = data;
+        
+        console.log('WebsitesContext: Found user website access via team data:', currentUserData.website_access);
+        
+        // Extract website info directly from the team data
+        const userWebsites = currentUserData.website_access.map((access: any) => ({
+          ...access.website,
+          organisation_name: orgData.name
+        }));
+        
+        console.log('WebsitesContext: Extracted websites for user:', userWebsites);
+        
+        if (userWebsites.length === 0) {
+          console.log('WebsitesContext: No accessible websites found');
+          setWebsites([]);
+          setCurrentWebsite(null);
+          setIsLoading(false);
+          setIsFetching(false);
+          return;
+        }
+        
+        setWebsites(userWebsites);
+        restoreSavedWebsite(userWebsites);
+        setIsLoading(false);
+        setIsFetching(false);
+        return;
       }
 
       // Add organization name to each website
@@ -454,10 +389,8 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (err) {
       console.error("WebsitesContext: Error fetching websites:", err);
       setError(err instanceof Error ? err : new Error('Failed to fetch websites'));
-      toast.error('Failed to load websites. Using sample data instead.');
-      
-      // Fall back to sample data if database fetch fails
-      provideSampleData();
+      setWebsites([]);
+      setCurrentWebsite(null);
     } finally {
       console.log('WebsitesContext: Setting loading to false');
       setIsLoading(false);
@@ -589,13 +522,9 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const provideSampleData = () => {
     console.log('WebsitesContext: No sample data provided - to avoid masking real issues');
-    
-    // Set empty arrays/null values instead of fake data
     setWebsites([]);
     setCurrentWebsite(null);
     setIsLoading(false);
-    
-    // Clear any previously stored website data
     localStorage.removeItem('currentWebsiteId');
     localStorage.removeItem('currentWebsite');
   };
