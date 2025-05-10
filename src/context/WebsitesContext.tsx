@@ -469,30 +469,53 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const debouncedFetchWebsites = useCallback(
     debounce(async () => {
       console.log("WebsitesContext: Debounced fetch triggered");
-      if (!isFetching) {
-        await fetchWebsites();
-      } else {
+      
+      // Check if we're already fetching or if there's no auth
+      if (isFetching) {
         console.log("WebsitesContext: Already fetching, skipping debounced fetch");
+        return;
       }
-    }, 1000), // Increased debounce time to 1 second
+
+      // Get current auth state
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.log("WebsitesContext: No active session, skipping fetch");
+        setIsLoading(false);
+        setIsFetching(false);
+        return;
+      }
+
+      await fetchWebsites();
+    }, 1000),
     [isFetching]
   );
 
   // Cleanup function for debounced fetch
   useEffect(() => {
-    return () => {
+    let mounted = true;
+
+    const cleanup = () => {
+      mounted = false;
       // Cleanup any pending debounced fetches on unmount
       debouncedFetchWebsites();
     };
+
+    return cleanup;
   }, [debouncedFetchWebsites]);
 
   useEffect(() => {
     console.log("WebsitesContext: Provider mounted");
     
-    // Force immediate fetch on mount
+    // Force immediate fetch on mount only if we have a session
     (async () => {
-      console.log("WebsitesContext: Initial fetch on mount");
-      await fetchWebsites();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log("WebsitesContext: Initial fetch on mount with session");
+        await fetchWebsites();
+      } else {
+        console.log("WebsitesContext: No session on mount, skipping initial fetch");
+        setIsLoading(false);
+      }
     })();
 
     // Set up subscription to websites table changes
@@ -526,7 +549,21 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         setIsHandlingAuthChange(true);
         setIsAuthStateChange(true);
-        await debouncedFetchWebsites();
+
+        // Clear data on sign out
+        if (event === 'SIGNED_OUT') {
+          console.log("WebsitesContext: User signed out, clearing data");
+          setWebsites([]);
+          setCurrentWebsite(null);
+          setIsLoading(false);
+          setIsFetching(false);
+          return;
+        }
+
+        // Only fetch if we have a session
+        if (session) {
+          await debouncedFetchWebsites();
+        }
       } finally {
         setIsHandlingAuthChange(false);
       }
