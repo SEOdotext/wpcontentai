@@ -202,6 +202,7 @@ const Settings = () => {
     negative_prompt: '',
     weekly_planning_day: 'friday'
   });
+  const [imageGenerationEnabled, setImageGenerationEnabled] = useState(false);
 
   // Add direct fetch from database when dialog opens
   useEffect(() => {
@@ -2158,6 +2159,13 @@ const Settings = () => {
     </div>
   );
 
+  // Add effect to sync AI image generation state
+  useEffect(() => {
+    if (currentWebsite) {
+      setImageGenerationEnabled(currentWebsite.enable_ai_image_generation || false);
+    }
+  }, [currentWebsite]);
+
   return (
     <div className="min-h-screen flex w-full bg-background">
       <AppSidebar />
@@ -2730,7 +2738,7 @@ const Settings = () => {
                               </p>
                             </div>
                             <Switch
-                              checked={currentWebsite?.enable_ai_image_generation || false}
+                              checked={currentWebsite?.enable_ai_image_generation ?? false}
                               onCheckedChange={async (checked) => {
                                 if (!currentWebsite) {
                                   toast.error("Please select a website first");

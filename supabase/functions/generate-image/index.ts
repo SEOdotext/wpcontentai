@@ -324,13 +324,14 @@ serve(async (req) => {
     console.log('Uploading image to Supabase Storage...');
     
     // Use a simpler file path that's easier to maintain and access
-    const fileName = `${postId}-header.png`;
+    const timestamp = new Date().getTime();
+    const fileName = `${websiteId}/${timestamp}_${postId}_ai_generated.png`;
     
     // First try to delete any existing image to avoid conflicts
     try {
       await supabaseClient
         .storage
-        .from('post-images')
+        .from('images')
         .remove([fileName]);
       console.log('Removed any existing image');
     } catch (removeError) {
@@ -341,7 +342,7 @@ serve(async (req) => {
     // Now upload the new image with public access
     const { data: uploadData, error: uploadError } = await supabaseClient
       .storage
-      .from('post-images')
+      .from('images')
       .upload(fileName, imageBlob, {
         contentType: imageFormat,
         upsert: true,
@@ -355,7 +356,7 @@ serve(async (req) => {
     // Get the public URL
     const { data: { publicUrl } } = supabaseClient
       .storage
-      .from('post-images')
+      .from('images')
       .getPublicUrl(fileName);
     
     if (!publicUrl) {
@@ -364,6 +365,30 @@ serve(async (req) => {
     
     console.log('Generated public URL:', publicUrl);
       
+    // Insert into images table
+    const { data: imageData, error: imageError } = await supabaseClient
+      .from('images')
+      .insert({
+        website_id: websiteId,
+        name: `${postTheme.subject_matter} image`,
+        url: publicUrl,
+        size: imageBlob.size,
+        type: imageFormat,
+        source: 'ai_generated',
+        description: `Image for post: ${postTheme.subject_matter}`,
+        metadata: {
+          postThemeId: postId,
+          prompt: finalPrompt,
+          model: imageModel
+        }
+      })
+      .select()
+      .single();
+
+    if (imageError) {
+      throw new Error(`Error inserting into images table: ${imageError.message}`);
+    }
+
     // Update the post_themes table with the image URL
     console.log('Updating post_themes record with image URL...');
     const { data: updateData, error: updateError } = await supabaseClient
@@ -384,15 +409,17 @@ serve(async (req) => {
       throw new Error('Update succeeded but image URL was not saved correctly');
     }
 
-    console.log('Successfully updated post_themes record with image URL:', {
+    console.log('Successfully updated records with image URL:', {
       postId,
-      imageUrl: publicUrl
+      imageUrl: publicUrl,
+      imageId: imageData.id
     });
 
     return new Response(
       JSON.stringify({
         success: true,
         imageUrl: publicUrl,
+        imageId: imageData.id
       }),
       {
         headers: {

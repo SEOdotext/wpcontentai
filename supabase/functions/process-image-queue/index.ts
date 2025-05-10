@@ -220,13 +220,23 @@ serve(async (req) => {
             imageUrl: result.imageUrl
           });
 
-          // Update post_themes table
-          await supabaseClient
-            .from('post_themes')
-            .update({ image: result.imageUrl })
-            .eq('id', job.post_theme_id);
+          // Update post_themes table with the image URL and ID
+          if (result.imageId) {
+            await supabaseClient
+              .from('post_themes')
+              .update({ 
+                image: result.imageUrl,
+                image_id: result.imageId 
+              })
+              .eq('id', job.post_theme_id);
+          } else {
+            await supabaseClient
+              .from('post_themes')
+              .update({ image: result.imageUrl })
+              .eq('id', job.post_theme_id);
+          }
 
-          return { jobId: job.id, status: 'completed', imageUrl: result.imageUrl };
+          return { jobId: job.id, status: 'completed', imageUrl: result.imageUrl, imageId: result.imageId };
         } else {
           // Image is still being generated
           await logToImageQueue(supabaseClient, job.id, 'info', 'Image generation in progress');

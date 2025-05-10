@@ -37,6 +37,7 @@ interface PostThemeRow {
   image_generation_error?: string | null;
   // Add categories relation
   categories?: WordPressCategory[];
+  image_id?: string | null;
 }
 
 interface WordPressCategory {
@@ -60,6 +61,7 @@ export interface PostTheme {
   wp_sent_date: string | null;
   image_generation_error?: string | null;
   categories: WordPressCategory[];
+  image_id?: string | null;
 }
 
 interface PublicationSettings {
@@ -82,6 +84,13 @@ interface PostThemeCategoryResponse {
   } | null;
 }
 
+interface ImageMapItem {
+  id: string;
+  url: string;
+  name: string;
+  description?: string;
+}
+
 interface PostThemesContextType {
   postThemes: PostTheme[];
   isLoading: boolean;
@@ -96,9 +105,11 @@ interface PostThemesContextType {
   getNextPublicationDate: () => Promise<Date>;
   checkWeeklySchedule: () => Promise<{ isFilled: boolean; missingSlots: { date: Date; count: number }[] }>;
   setPostThemes: React.Dispatch<React.SetStateAction<PostTheme[]>>;
+  imageMap: Record<string, ImageMapItem>;
+  fetchImagesForWebsite: (websiteId: string) => Promise<void>;
 }
 
-const PostThemesContext = createContext<PostThemesContextType>({
+export const PostThemesContext = createContext<PostThemesContextType>({
   postThemes: [],
   isLoading: false,
   error: null,
@@ -106,12 +117,14 @@ const PostThemesContext = createContext<PostThemesContextType>({
   addPostTheme: async () => false,
   updatePostTheme: async () => false,
   deletePostTheme: async () => false,
-  generateContent: async () => { throw new Error('Method not implemented'); },
+  generateContent: async () => { throw new Error('Not implemented'); },
   sendToWordPress: async () => false,
   isGeneratingContent: () => false,
   getNextPublicationDate: async () => new Date(),
   checkWeeklySchedule: async () => ({ isFilled: false, missingSlots: [] }),
   setPostThemes: () => {},
+  imageMap: {},
+  fetchImagesForWebsite: async () => {},
 });
 
 export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -121,6 +134,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
   const { currentWebsite } = useWebsites();
   const { } = useSettings();
+  const [imageMap, setImageMap] = useState<Record<string, ImageMapItem>>({});
 
   // Fetch post themes when the current website changes
   useEffect(() => {
@@ -413,6 +427,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         wp_post_url: rowData.wp_post_url || null,
         wp_sent_date: rowData.wp_sent_date || null,
         image_generation_error: rowData.image_generation_error || undefined,
+        image_id: rowData.image_id || undefined,
       };
       
       setPostThemes(prev => [...prev, typedData]);
@@ -590,6 +605,7 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
         wp_post_url: rowData.wp_post_url || null,
         wp_sent_date: rowData.wp_sent_date || null,
         image_generation_error: rowData.image_generation_error || undefined,
+        image_id: rowData.image_id || undefined,
       };
 
       setPostThemes(prev => 
@@ -776,6 +792,18 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, [currentWebsite, postThemes]);
 
+  const fetchImagesForWebsite = async (websiteId: string) => {
+    const { data, error } = await supabase
+      .from('images')
+      .select('id, url, name, description')
+      .eq('website_id', websiteId);
+    if (!error && data) {
+      const map: Record<string, ImageMapItem> = {};
+      data.forEach(img => { map[img.id] = img; });
+      setImageMap(map);
+    }
+  };
+
   // Create the context value
   const contextValue: PostThemesContextType = {
     postThemes,
@@ -790,7 +818,9 @@ export const PostThemesProvider: React.FC<{ children: ReactNode }> = ({ children
     isGeneratingContent,
     getNextPublicationDate,
     checkWeeklySchedule,
-    setPostThemes
+    setPostThemes,
+    imageMap,
+    fetchImagesForWebsite
   };
 
   return (

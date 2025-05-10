@@ -5,59 +5,23 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
+// @ts-ignore: Deno types are available at runtime in Supabase Edge Functions
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+// @ts-ignore: Deno types are available at runtime in Supabase Edge Functions
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Get allowed origins from environment variables
-const ALLOWED_ORIGINS = {
-  production: Deno.env.get('ALLOWED_ORIGINS_PROD') ? 
-    Deno.env.get('ALLOWED_ORIGINS_PROD')?.split(',') || ['https://contentgardener.ai', 'https://contentgardener.ai/'] : 
-    ['https://contentgardener.ai', 'https://contentgardener.ai/'],
-  staging: Deno.env.get('ALLOWED_ORIGINS_STAGING') ? 
-    Deno.env.get('ALLOWED_ORIGINS_STAGING')?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080'] : 
-    ['https://staging.contentgardener.ai', 'http://localhost:8080']
-};
-
-// Function to determine if origin is allowed
-function isAllowedOrigin(origin: string | null): boolean {
-  if (!origin) return false;
-  
-  // In development, allow all origins
-  if (Deno.env.get('ENVIRONMENT') === 'development') return true;
-  
-  // Check against allowed origins based on environment
-  const allowedOrigins = Deno.env.get('ENVIRONMENT') === 'production' 
-    ? ALLOWED_ORIGINS.production 
-    : ALLOWED_ORIGINS.staging;
-    
-  // Log for debugging
-  console.log(`Checking origin: ${origin}, allowed: ${allowedOrigins.join(', ')}`);
-  
-  return allowedOrigins.some(allowed => origin.trim() === allowed.trim());
-}
-
-// Handle CORS headers generation
-function getCorsHeaders(req: Request) {
-  const origin = req.headers.get('origin');
-  const allowedOrigin = isAllowedOrigin(origin) ? origin || ALLOWED_ORIGINS.production[0] : ALLOWED_ORIGINS.production[0];
-  
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Max-Age': '86400' // 24 hours caching of preflight requests
-  };
-}
-
-interface GeneratePostIdeasRequest {
+interface GenerateRequest {
   website_id: string;
   website_url?: string;
   keywords?: string[];
   writing_style?: string;
   subject_matters?: string[];
-  language?: string;
-  scraped_content?: { title: string; digest: string }[];
-  count?: number; // Optional parameter for number of posts to generate
+  requestLanguage?: string;
+  count?: number;
+  image_url?: string;
+  image_id?: string;
+  image_name?: string;
+  image_description?: string;
 }
 
 interface PostIdea {
@@ -103,19 +67,6 @@ function isDanishContent(text: string): boolean {
   return danishIndicators.some(indicator => lowerText.includes(indicator));
 }
 
-// Helper function to format Danish titles
-function formatDanishTitle(title: string): string {
-  const words = title.split(' ');
-  return words.map((word, index) => {
-    if (index === 0) return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-    // Capitalize proper nouns
-    if (word.length > 3 && word.charAt(0).toUpperCase() === word.charAt(0)) {
-      return word;
-    }
-    return word.toLowerCase();
-  }).join(' ');
-}
-
 // Helper function to generate focused keywords
 function generateFocusedKeywords(title: string, userKeywords: string[], subjectMatters: string[]): string[] {
   const lowerTitle = title.toLowerCase();
@@ -155,23 +106,79 @@ function generateFocusedKeywords(title: string, userKeywords: string[], subjectM
 
 console.log("Hello from Functions!")
 
+// Function to determine if origin is allowed
+function isAllowedOrigin(origin: string | null, env: { [key: string]: string | undefined }): boolean {
+  if (!origin) return false;
+  // In development, allow all origins
+  if (env['ENVIRONMENT'] === 'development') return true;
+  // Check against allowed origins based on environment
+  const allowedOrigins = env['ENVIRONMENT'] === 'production'
+    ? (env['ALLOWED_ORIGINS_PROD']?.split(',') || ['https://contentgardener.ai', 'https://contentgardener.ai/'])
+    : (env['ALLOWED_ORIGINS_STAGING']?.split(',') || ['https://staging.contentgardener.ai', 'http://localhost:8080']);
+  // Log for debugging
+  console.log(`Checking origin: ${origin}, allowed: ${allowedOrigins.join(', ')}`);
+  return allowedOrigins.some(allowed => origin.trim() === allowed.trim());
+}
+
+// Handle CORS headers generation
+function getCorsHeaders(req: Request, env: { [key: string]: string | undefined }) {
+  const origin = req.headers.get('origin');
+  const allowedOrigin = isAllowedOrigin(origin, env) ? origin || (env['ALLOWED_ORIGINS_PROD']?.split(',')[0] || 'https://contentgardener.ai') : (env['ALLOWED_ORIGINS_PROD']?.split(',')[0] || 'https://contentgardener.ai');
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400' // 24 hours caching of preflight requests
+  };
+}
+
 serve(async (req) => {
+  // Gather all needed env vars at the top of the handler (move Deno.env.get here)
+  const ENVIRONMENT = Deno.env.get('ENVIRONMENT');
+  const ALLOWED_ORIGINS_PROD = Deno.env.get('ALLOWED_ORIGINS_PROD');
+  const ALLOWED_ORIGINS_STAGING = Deno.env.get('ALLOWED_ORIGINS_STAGING');
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+  const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+
   // Get CORS headers for this request
-  const corsHeaders = getCorsHeaders(req);
-  
+  const corsHeaders = getCorsHeaders(req, {
+    ENVIRONMENT,
+    ALLOWED_ORIGINS_PROD,
+    ALLOWED_ORIGINS_STAGING,
+    SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY,
+    OPENAI_API_KEY,
+  });
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    console.log('Handling OPTIONS preflight request');
-    return new Response('ok', { 
-      headers: corsHeaders,
-      status: 200
+    return new Response(null, {
+      headers: {
+        ...corsHeaders,
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+        'Access-Control-Max-Age': '86400'
+      },
+      status: 204
     });
   }
 
   try {
-    // Get the request body
-    const requestBody = await req.json();
-    const { website_id, website_url, keywords = [], writing_style, subject_matters = [], language: requestLanguage = 'en', scraped_content } = requestBody as GeneratePostIdeasRequest;
+    const requestBody = await req.json() as GenerateRequest & { scraped_content?: any[] };
+    const { 
+      website_id, 
+      website_url, 
+      keywords = [], 
+      writing_style, 
+      subject_matters = [], 
+      requestLanguage = 'en',
+      count = 5,
+      image_url,
+      image_id,
+      image_name,
+      image_description,
+      scraped_content = []
+    } = requestBody;
     
     console.log('------------ GENERATE POST IDEAS REQUEST ------------');
     console.log('Request parameters:', JSON.stringify(requestBody, null, 2));
@@ -187,8 +194,8 @@ serve(async (req) => {
 
     // Initialize Supabase client
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      SUPABASE_URL ?? '',
+      SUPABASE_SERVICE_ROLE_KEY ?? ''
     );
 
     // Flag to indicate if we're in onboarding flow
@@ -199,7 +206,7 @@ serve(async (req) => {
     const effectiveWebsiteId = website_id || `temp-${Date.now()}`;
     
     // Get website language from database if not in onboarding mode
-    let language = requestLanguage;
+    let effectiveLanguage = requestLanguage;
     if (!isOnboarding && website_id) {
       try {
         const { data: websiteData, error: websiteError } = await supabaseClient
@@ -211,16 +218,16 @@ serve(async (req) => {
         if (websiteError) {
           console.error('Error fetching website language:', websiteError);
         } else if (websiteData?.language) {
-          language = websiteData.language;
-          console.log(`Using website language from database: ${language}`);
+          effectiveLanguage = websiteData.language;
+          console.log(`Using website language from database: ${effectiveLanguage}`);
         }
       } catch (error) {
         console.error('Error fetching website data:', error);
       }
     }
     
-    // Get publication settings for the website
-    let pubSettings = null;
+    // Initialise pubSettings as any
+    let pubSettings: any = null;
     try {
       // Skip DB lookup completely in onboarding mode - use default settings
       if (isOnboarding) {
@@ -382,105 +389,63 @@ serve(async (req) => {
     // Format categories for the prompt with IDs
     const categoriesList = categories?.map(cat => `${cat.id}: ${cat.name}`).join('\n') || '';
 
-    // Adjust prompt based on language
-    console.log(`Creating prompt for language: ${language}`);
+    // Build up the context for the prompt
+    let promptContextSections: string[] = [];
     
-    // Determine if we're generating Danish content
-    const isDanish = language === 'da';
-    
-    let promptText = isOnboarding 
-      ? `Generate ${requestBody.count || 5} unique blog post ideas for a website based on its existing content.
-
-Additional context:
-Current year: 2025
-Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
-Subject matters: ${(Array.isArray(subject_matters) && subject_matters.length > 0 ? subject_matters : pubSettings?.subject_matters || ['general']).join(',')}
-Language: ${isDanish ? 'Danish (da)' : 'English (en)'}
-
-Existing cornerstone content (use these as a reference for your suggestions):
-${cornerstoneContent.join('\n')}
-
-For each idea, provide:
-1. A compelling title that aligns with the website's content and tone
-2. 3-5 relevant keywords based on the website's content (avoid using colons in keywords)
-3. A brief description (max 50 words - be very concise)
-
-Important rules:
-1. ${isDanish ? 'IMPORTANT: Generate all content in Danish language' : 'Generate all content in English language'}
-2. ${isDanish ? 'For Danish titles: Only capitalize the first word and proper nouns' : 'For English titles: Capitalize main words following standard English title case'}
-3. Keywords should be category-oriented and domain-specific
-4. Avoid generic single words like: ${isDanish ? 'virksomhed, løsning, sammenligning, bedste, tips, pålidelig' : 'business, solution, comparison, best, tips, reliable'}
-5. DO create post ideas that align with the themes in the cornerstone content but offer new perspectives
-6. DO NOT use colons in any keywords
-7. BE CONCISE - keep descriptions short and simple (max 50 words)`
-      : `Generate ${requestBody.count || 5} unique blog post ideas for a website based on these keywords:
-${keywords.join(',')}
-
-Each post should:
-1. Be centered around these keywords and the keywords should be included in the title
-2. Explore different aspects or angles of these topics
-3. Provide unique value while maintaining the keyword focus
-
-Additional context:
-Current year: 2025
-Writing style: ${writing_style || pubSettings?.writing_style || 'professional'}
-Subject matters: ${(Array.isArray(subject_matters) && subject_matters.length > 0 ? subject_matters : pubSettings?.subject_matters || ['general']).join(',')}
-Language: ${isDanish ? 'Danish (da)' : 'English (en)'}
-
-Available categories (use category IDs):
-${categories?.map(cat => `- ${cat.id}: ${cat.name}`).join('\n') || 'No categories available'}
-
-Avoid these existing topics:
-${existingTitles.join('\n')}
-
-Existing cornerstone content (use these as a reference for your suggestions):
-${cornerstoneContent.join('\n')}
-
-For each idea, provide:
-1. A compelling title that incorporates the keywords naturally
-2. 3-5 relevant keywords (avoid using colons in keywords)
-3. A brief description (max 50 words - be very concise)
-4. Up to 3 most relevant category IDs from the available list above
-
-Important rules:
-1. ${isDanish ? 'IMPORTANT: Generate all content in Danish language' : 'Generate all content in English language'}
-2. ${isDanish ? 'For Danish titles: Only capitalize the first word and proper nouns' : 'For English titles: Capitalize main words following standard English title case'}
-3. Keywords should be category-oriented and domain-specific
-4. Avoid generic single words like: ${isDanish ? 'virksomhed, løsning, sammenligning, bedste, tips, pålidelig' : 'business, solution, comparison, best, tips, reliable'}
-5. Categories MUST be selected from the provided list only - use category IDs exactly as shown
-6. Each post should have 1-3 relevant categories (not more)
-7. DO create post ideas that align with the themes in the cornerstone content but offer new perspectives
-8. DO NOT use colons in any keywords
-9. Category IDs must be valid UUIDs from the provided list - do not modify or format them in any way
-10. IMPORTANT: When referring to categories, use ONLY the UUID strings, not objects with id/name properties
-11. BE CONCISE - keep descriptions short and simple (max 50 words)`;
-
-    // Format your response as pure JSON with NO markdown formatting and this exact structure:
-    const responseFormat = isOnboarding 
-      ? `{
-  "ideas": [
-    {
-      "title": "[TITLE]",
-      "keywords": ["[KEYWORD1]", "[KEYWORD2]", "[KEYWORD3]"],
-      "description": "[DESCRIPTION]"
+    // Always include cornerstone content and website context
+    if (cornerstoneContent && cornerstoneContent.length > 0) {
+      promptContextSections.push(`Existing cornerstone content (use these as a reference for your suggestions):\n${cornerstoneContent.join('\n')}`);
     }
-  ]
-}`
-      : `{
-  "ideas": [
-    {
-      "title": "[TITLE]",
-      "keywords": ["[KEYWORD1]", "[KEYWORD2]", "[KEYWORD3]"],
-      "description": "[DESCRIPTION]",
-      "categories": ["[UUID1]", "[UUID2]"]
+    if (existingTitles && existingTitles.length > 0) {
+      promptContextSections.push(`Avoid these existing topics:\n${existingTitles.join('\n')}`);
     }
-  ]
-}`;
+    if (categories && categories.length > 0) {
+      promptContextSections.push(`Available categories (use category IDs):\n${categories.map(cat => `- ${cat.id}: ${cat.name}`).join('\n')}`);
+    }
+    if (keywords && keywords.length > 0) {
+      promptContextSections.push(`Keywords: ${keywords.join(', ')}`);
+    }
+    if (subject_matters && subject_matters.length > 0) {
+      promptContextSections.push(`Subject matters: ${subject_matters.join(', ')}`);
+    }
+    // Add image description as additional context if present
+    if (image_description) {
+      promptContextSections.push(`IMAGE DESCRIPTION (use this as inspiration for the post, but keep all other context in mind):\n${image_description}`);
+    }
 
-    promptText += `\n\nFormat your response as pure JSON with NO markdown formatting and this exact structure:\n${responseFormat}\n\n`;
-    if (!isOnboarding) {
-      promptText += `Notice that the "categories" field contains an array of string UUIDs, not objects. Do not include category names in this array, only the UUIDs exactly as they appear in the available categories list above.`;
+    // Danish/English language rules and all important instructions
+    const isDanish = effectiveLanguage === 'da';
+    let importantRules = [
+      isDanish
+        ? 'IMPORTANT: Generate all content in Danish language'
+        : 'Generate all content in English language',
+      isDanish
+        ? 'For Danish titles: Only capitalise the first word and proper nouns'
+        : 'For English titles: Capitalise main words following standard English title case',
+      'Keywords should be category-oriented and domain-specific',
+      isDanish
+        ? 'Avoid generic single words like: virksomhed, løsning, sammenligning, bedste, tips, pålidelig'
+        : 'Avoid generic single words like: business, solution, comparison, best, tips, reliable',
+      'Categories MUST be selected from the provided list only - use category IDs exactly as shown',
+      'Each post should have 1-3 relevant categories (not more)',
+      'DO create post ideas that align with the themes in the cornerstone content but offer new perspectives',
+      'DO NOT use colons in any keywords',
+      'Category IDs must be valid UUIDs from the provided list - do not modify or format them in any way',
+      'When referring to categories, use ONLY the UUID strings, not objects with id/name properties',
+      'BE CONCISE - keep descriptions short and simple (max 50 words)'
+    ];
+
+    // Build the prompt
+    let promptText = image_description
+      ? `Generate ${count} unique blog post ideas for a blog post that will use this image.\n\n` // Only difference for image-based
+      : `Generate ${count} unique blog post ideas for a website.\n\n`;
+    if (promptContextSections.length > 0) {
+      promptText += `Context:\n${promptContextSections.join('\n\n')}`;
     }
+    promptText += `\n\nAdditional context:\nCurrent year: 2025\nWriting style: ${writing_style || pubSettings?.writing_style || 'professional'}\nLanguage: ${isDanish ? 'Danish (da)' : 'English (en)'}`;
+    promptText += `\n\nFor each idea, provide:\n1. A compelling title that aligns with the website's content and tone\n2. 3-5 relevant keywords based on the website's content (avoid using colons in keywords)\n3. A brief description (max 50 words - be very concise)\n4. Up to 3 most relevant category IDs from the available list above`;
+    promptText += `\n\nImportant rules:\n${importantRules.map((rule, i) => `${i + 1}. ${rule}`).join('\n')}`;
+    promptText += `\n\nFormat your response as pure JSON with NO markdown formatting and this exact structure:\n{\n  "ideas": [\n    {\n      "title": "[TITLE]",\n      "keywords": ["[KEYWORD1]", "[KEYWORD2]", "[KEYWORD3]"],\n      "description": "[DESCRIPTION]",\n      "categories": ["[UUID1]", "[UUID2]"]\n    }\n  ]\n}`;
 
     // Log the prompt being sent to OpenAI
     console.log('Prompt being sent to OpenAI:', promptText);
@@ -512,7 +477,7 @@ Important rules:
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify(openaiRequestBody)
     });
@@ -586,28 +551,10 @@ Important rules:
     }
     
     ideas.ideas.forEach((idea: PostIdea) => {
-      // Format the title based on language
-      const processedTitle = isDanish ? formatDanishTitle(idea.title) : idea.title;
-      processedTitles.push(processedTitle);
-      
-      // Use the original keywords from the AI response
-      keywordsByTitle[processedTitle] = idea.keywords;
-      
-      // Make sure we NEVER return null or invalid categories
-      if (Array.isArray(idea.categories)) {
-        // Strictly filter to only include valid UUIDs that exist in the category map
-        const validCategories = idea.categories.filter(id => 
-          id && 
-          typeof id === 'string' && 
-          id.trim() !== '' && 
-          categoryMap[id.trim()] !== undefined
-        ).map(id => id.trim());
-        
-        categoriesByTitle[processedTitle] = validCategories;
-      } else {
-        // Always ensure we have an array, even if empty
-        categoriesByTitle[processedTitle] = [];
-      }
+      // Use the title directly from the AI response
+      processedTitles.push(idea.title);
+      keywordsByTitle[idea.title] = idea.keywords;
+      categoriesByTitle[idea.title] = idea.categories || [];
     });
 
     // Use the first title's keywords as the default set
@@ -624,7 +571,9 @@ Important rules:
           website_id: effectiveWebsiteId,
           subject_matter: idea.title,
           keywords: idea.keywords as string[], // Ensure it's treated as an array
-          status: 'pending'
+          status: 'pending',
+          image_id: image_id, // Store the image_id reference
+          post_content: null
         })
         .select()
         .single();
@@ -686,70 +635,6 @@ Important rules:
       categoriesByTitle,
       postThemes
     };
-
-    // In onboarding mode, just skip the database lookups and use mock data
-    if (isOnboarding) {
-      console.log("Onboarding mode detected - returning actual generated ideas");
-      
-      // Check if we have the website_url to work with
-      if (!website_url) {
-        throw new Error("No website URL provided for onboarding");
-      }
-      
-      // Continue with the actual AI-generated ideas from earlier in the function
-      console.log('------------ GENERATE POST IDEAS RESPONSE ------------');
-      console.log(`Returning generated ideas for onboarding mode:`, JSON.stringify({ 
-        success: true, 
-        titles: processedTitles,
-        keywords: defaultKeywords,
-        keywordsByTitle,
-        categoriesByTitle,
-        postThemes
-      }, null, 2));
-      console.log('-----------------------------------------------------');
-      
-      // Format the response in a way the frontend expects
-      const formattedIdeas = processedTitles.map((title, index) => {
-        const id = `idea-${Date.now()}-${index+1}`;
-        const titleKeywords = keywordsByTitle[title] || defaultKeywords;
-        
-        // Safely extract domain for the description
-        let domain = "your website";
-        try {
-          if (website_url) {
-            const urlWithoutProtocol = website_url.replace(/^https?:\/\//, '');
-            const firstSegment = urlWithoutProtocol.split('/')[0] || '';
-            domain = firstSegment || "your website";
-          }
-        } catch (err) {
-          console.log('Error extracting domain from URL:', err);
-          domain = "your website";
-        }
-        
-        return {
-          id,
-          title,
-          keywords: titleKeywords,
-          description: `Content idea for ${domain}.`,
-          categories: categoriesByTitle[title] || []
-        };
-      });
-      
-      // Return the response with CORS headers
-      return new Response(
-        JSON.stringify({
-          success: true,
-          ideas: formattedIdeas
-        }),
-        { 
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          },
-          status: 200 
-        }
-      );
-    }
 
     console.log('------------ GENERATE POST IDEAS RESPONSE ------------');
     console.log('Returning ideas response:', JSON.stringify(result, null, 2));

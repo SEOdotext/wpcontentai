@@ -37,6 +37,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import GoogleTagManager from '@/components/GoogleTagManager';
 import GDPRConsentBanner from '@/components/GDPRConsentBanner';
 import ScrollToTop from '@/components/ScrollToTop';
+import Media from './pages/Media';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -339,6 +340,13 @@ function App() {
                       <AuthWrapper>
                         <ProtectedRoute>
                           <WebsiteSitemap />
+                        </ProtectedRoute>
+                      </AuthWrapper>
+                    } />
+                    <Route path="/media" element={
+                      <AuthWrapper>
+                        <ProtectedRoute>
+                          <Media />
                         </ProtectedRoute>
                       </AuthWrapper>
                     } />

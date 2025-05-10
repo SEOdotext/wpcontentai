@@ -1,0 +1,12 @@
+{
+  "name": "analyze-images",
+  "version": "1.0.0",
+  "description": "Edge function to analyze images with AI and generate descriptions",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  }
+} 
