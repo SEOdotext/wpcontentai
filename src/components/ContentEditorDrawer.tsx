@@ -222,7 +222,7 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   onSelectImage,
 }) => {
   const { currentWebsite } = useWebsites();
-  const { updatePostTheme, fetchPostThemes, postThemes, imageMap } = usePostThemes();
+  const { updatePostTheme, fetchPostThemes, postThemes, imageMap, fetchImagesForWebsite } = usePostThemes();
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [userInput, setUserInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -913,12 +913,20 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   const currentPostTheme = postThemes.find(pt => pt.id === postThemeId);
   const imageToShow = currentPostTheme ? getPostThemeImage(currentPostTheme, imageMap) : null;
 
-  // Log which image is being displayed for debugging
+  // Debug logging for image display issues
   if (!currentPlatform) {
-    if (imageToShow?.url) {
-      console.log('[Drawer] Displaying image:', imageToShow.url);
-    }
+    console.log('[Drawer] currentPostTheme:', currentPostTheme);
+    console.log('[Drawer] imageMap:', imageMap);
+    console.log('[Drawer] imageToShow:', imageToShow);
   }
+
+  // Always fetch images for the current website when drawer is open or website changes
+  useEffect(() => {
+    if (isOpen && currentWebsite?.id) {
+      fetchImagesForWebsite(currentWebsite.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, currentWebsite?.id]);
 
   return (
     <>
