@@ -55,6 +55,7 @@ interface TitleSuggestionProps {
   onUpdateKeywords?: (id: string, keywords: string[]) => void;
   onUpdateCategories?: (id: string, categories: { id: string; name: string }[]) => void;
   isGeneratingContent?: boolean;
+  image?: { url: string; name: string } | null;
 }
 
 // Helper function to format titles with proper Danish capitalization
@@ -665,36 +666,28 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                   themeDate = new Date();
                 }
                 return (
-                  <div key={suggestion.id} className="flex items-center gap-4 w-full mb-2">
-                    {/* Show image preview on the left if image_id is present and found in imageMap */}
-                    {suggestion.image_id && imageMap[suggestion.image_id] ? (
-                      <img
-                        src={imageMap[suggestion.image_id].url}
-                        alt={imageMap[suggestion.image_id].name}
-                        className="w-16 h-16 object-cover rounded border"
-                        style={{ minWidth: 64, minHeight: 64 }}
-                      />
-                    ) : null}
-                    {/* The rest of the row */}
-                    <div className="flex-1">
-                      <TitleSuggestion
-                        id={suggestion.id}
-                        title={suggestion.subject_matter}
-                        keywords={suggestion.keywords}
-                        categories={suggestion.categories}
-                        selected={suggestion.id === selectedTitleId}
-                        onSelect={handleSelectTitle}
-                        onRemove={handleRemoveTitle}
-                        className="mb-2"
-                        date={themeDate}
-                        onUpdateDate={date => handleUpdateTitleDate(suggestion.id, date)}
-                        onLiked={() => handleTitleLiked(suggestion.id)}
-                        status={suggestion.status}
-                        onUpdateKeywords={handleUpdateKeywords}
-                        onUpdateCategories={handleUpdateCategories}
-                        isGeneratingContent={isGeneratingContent(suggestion.id)}
-                      />
-                    </div>
+                  <div key={suggestion.id} className="w-full">
+                    <TitleSuggestion
+                      id={suggestion.id}
+                      title={suggestion.subject_matter}
+                      keywords={suggestion.keywords}
+                      categories={suggestion.categories}
+                      selected={suggestion.id === selectedTitleId}
+                      onSelect={handleSelectTitle}
+                      onRemove={handleRemoveTitle}
+                      className="mb-1"
+                      date={themeDate}
+                      onUpdateDate={date => handleUpdateTitleDate(suggestion.id, date)}
+                      onLiked={() => handleTitleLiked(suggestion.id)}
+                      status={suggestion.status}
+                      onUpdateKeywords={handleUpdateKeywords}
+                      onUpdateCategories={handleUpdateCategories}
+                      isGeneratingContent={isGeneratingContent(suggestion.id)}
+                      image={suggestion.image_id && imageMap[suggestion.image_id] ? {
+                        url: imageMap[suggestion.image_id].url,
+                        name: imageMap[suggestion.image_id].name
+                      } : null}
+                    />
                   </div>
                 );
               })}
@@ -726,36 +719,28 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
               themeDate = new Date();
             }
             return (
-              <div key={suggestion.id} className="flex items-center gap-4 w-full mb-2">
-                {/* Show image preview on the left if image_id is present and found in imageMap */}
-                {suggestion.image_id && imageMap[suggestion.image_id] ? (
-                  <img
-                    src={imageMap[suggestion.image_id].url}
-                    alt={imageMap[suggestion.image_id].name}
-                    className="w-16 h-16 object-cover rounded border"
-                    style={{ minWidth: 64, minHeight: 64 }}
-                  />
-                ) : null}
-                {/* The rest of the row */}
-                <div className="flex-1">
-                  <TitleSuggestion
-                    id={suggestion.id}
-                    title={suggestion.subject_matter}
-                    keywords={suggestion.keywords}
-                    categories={suggestion.categories}
-                    selected={suggestion.id === selectedTitleId}
-                    onSelect={handleSelectTitle}
-                    onRemove={handleRemoveTitle}
-                    className="mb-2"
-                    date={themeDate}
-                    onUpdateDate={date => handleUpdateTitleDate(suggestion.id, date)}
-                    onLiked={() => handleTitleLiked(suggestion.id)}
-                    status={suggestion.status}
-                    onUpdateKeywords={handleUpdateKeywords}
-                    onUpdateCategories={handleUpdateCategories}
-                    isGeneratingContent={isGeneratingContent(suggestion.id)}
-                  />
-                </div>
+              <div key={suggestion.id} className="w-full">
+                <TitleSuggestion
+                  id={suggestion.id}
+                  title={suggestion.subject_matter}
+                  keywords={suggestion.keywords}
+                  categories={suggestion.categories}
+                  selected={suggestion.id === selectedTitleId}
+                  onSelect={handleSelectTitle}
+                  onRemove={handleRemoveTitle}
+                  className="mb-1"
+                  date={themeDate}
+                  onUpdateDate={date => handleUpdateTitleDate(suggestion.id, date)}
+                  onLiked={() => handleTitleLiked(suggestion.id)}
+                  status={suggestion.status}
+                  onUpdateKeywords={handleUpdateKeywords}
+                  onUpdateCategories={handleUpdateCategories}
+                  isGeneratingContent={isGeneratingContent(suggestion.id)}
+                  image={suggestion.image_id && imageMap[suggestion.image_id] ? {
+                    url: imageMap[suggestion.image_id].url,
+                    name: imageMap[suggestion.image_id].name
+                  } : null}
+                />
               </div>
             );
           })}

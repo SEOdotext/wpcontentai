@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { ThumbsDown, ThumbsUp, Calendar, Minus, Check, RefreshCw, X, Loader2 } from 'lucide-react';
+import { ThumbsDown, ThumbsUp, Calendar, Minus, Check, RefreshCw, X, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +29,7 @@ interface TitleSuggestionProps {
   onUpdateKeywords?: (id: string, keywords: string[]) => void;
   onUpdateCategories?: (id: string, categories: { id: string; name: string }[]) => void;
   isGeneratingContent?: boolean;
+  image?: { url: string; name: string } | null;
 }
 
 const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
@@ -47,6 +48,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   onUpdateKeywords,
   onUpdateCategories,
   isGeneratingContent = false,
+  image = null,
 }) => {
   const { postThemes, updatePostTheme, deletePostTheme, getNextPublicationDate } = usePostThemes();
   const { currentWebsite } = useWebsites();
@@ -259,6 +261,26 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
       });
   };
 
+  const handleDeleteImage = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    try {
+      const success = await updatePostTheme(id, { 
+        image_id: null,
+        image: null 
+      });
+      
+      if (success) {
+        toast.success('Image removed');
+      } else {
+        toast.error('Failed to remove image');
+      }
+    } catch (error) {
+      console.error('Error removing image:', error);
+      toast.error('Failed to remove image');
+    }
+  };
+
   // Handle animation end
   const handleTransitionEnd = useCallback(() => {
     if (isExiting && onRemove) {
@@ -317,140 +339,164 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
         opacity: isExiting ? 0 : 1,
       }}
     >
-      <div className="flex justify-between items-start mb-2">
-        <div>
-          <h3 className="font-medium text-base text-balance">{title}</h3>
-          <div className="mt-1 flex items-center gap-2">
-            {getStatusBadge()}
-            <div className="flex flex-wrap gap-1">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex flex-wrap gap-1">
-                      {categories.map((category) => (
-                        <Badge 
-                          key={`cat-${category.id}`}
-                          variant="secondary"
-                          className="bg-secondary/50 text-secondary-foreground"
-                        >
-                          <span>{category.name}</span>
-                          <button
-                            onClick={(e) => handleRemoveCategory(category, e)}
-                            className="ml-1 hover:text-destructive"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Categories help organize your content on WordPress</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
+      <div className="flex gap-4">
+        {image && (
+          <div className="relative group">
+            <img
+              src={image.url}
+              alt={image.name}
+              className="w-16 h-16 object-cover rounded border flex-shrink-0"
+              style={{ minWidth: 64, minHeight: 64 }}
+            />
+            <Button
+              size="icon"
+              variant="destructive"
+              className="absolute -top-2 -right-2 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={handleDeleteImage}
+              title="Remove image"
+            >
+              <Trash2 className="h-3 w-3" />
+              <span className="sr-only">Remove image</span>
+            </Button>
           </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {isGeneratingContent ? (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>Generating content...</span>
+        )}
+        <div className="flex-1">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h3 className="font-medium text-base text-balance">{title}</h3>
+              <div className="mt-1 flex items-center gap-2">
+                {getStatusBadge()}
+                <div className="flex flex-wrap gap-1">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex flex-wrap gap-1">
+                          {categories.map((category) => (
+                            <Badge 
+                              key={`cat-${category.id}`}
+                              variant="secondary"
+                              className="bg-secondary/50 text-secondary-foreground"
+                            >
+                              <span>{category.name}</span>
+                              <button
+                                onClick={(e) => handleRemoveCategory(category, e)}
+                                className="ml-1 hover:text-destructive"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Categories help organize your content on WordPress</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
             </div>
-          ) : (
-            <>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="flex items-center text-xs text-muted-foreground h-7 px-2"
-                    onClick={(e) => e.stopPropagation()}
+            
+            <div className="flex items-center gap-2">
+              {isGeneratingContent ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <span>Generating content...</span>
+                </div>
+              ) : (
+                <>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="flex items-center text-xs text-muted-foreground h-7 px-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <CalendarIcon className="h-3 w-3 mr-1" />
+                        <span>{formatDate(displayDate)}</span>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                      <CalendarComponent
+                        mode="single"
+                        selected={displayDate}
+                        onSelect={handleDateSelect}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className={cn(
+                      "h-7 w-7", 
+                      liked && "text-green-500"
+                    )}
+                    onClick={handleLike}
+                    disabled={status === 'published'}
+                    title={status === 'published' ? 'Already in calendar' : 'Add to calendar'}
                   >
-                    <CalendarIcon className="h-3 w-3 mr-1" />
-                    <span>{formatDate(displayDate)}</span>
+                    <ThumbsUp className="h-3.5 w-3.5" />
+                    <span className="sr-only">Like</span>
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                  <CalendarComponent
-                    mode="single"
-                    selected={displayDate}
-                    onSelect={handleDateSelect}
-                    initialFocus
-                    className="p-3 pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
+                </>
+              )}
               
               <Button
                 size="icon"
                 variant="ghost"
                 className={cn(
                   "h-7 w-7", 
-                  liked && "text-green-500"
+                  disliked && "text-red-500"
                 )}
-                onClick={handleLike}
+                onClick={handleDislike}
                 disabled={status === 'published'}
-                title={status === 'published' ? 'Already in calendar' : 'Add to calendar'}
+                title={status === 'published' ? 'Cannot remove published content' : 'Remove suggestion'}
               >
-                <ThumbsUp className="h-3.5 w-3.5" />
-                <span className="sr-only">Like</span>
+                <ThumbsDown className="h-3.5 w-3.5" />
+                <span className="sr-only">Dislike</span>
               </Button>
-            </>
-          )}
+            </div>
+          </div>
           
-          <Button
-            size="icon"
-            variant="ghost"
-            className={cn(
-              "h-7 w-7", 
-              disliked && "text-red-500"
-            )}
-            onClick={handleDislike}
-            disabled={status === 'published'}
-            title={status === 'published' ? 'Cannot remove published content' : 'Remove suggestion'}
-          >
-            <ThumbsDown className="h-3.5 w-3.5" />
-            <span className="sr-only">Dislike</span>
-          </Button>
+          {safeKeywords.length > 0 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {safeKeywords.map((keyword, index) => (
+                      <Badge 
+                        key={index}
+                        variant="outline" 
+                        className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 pr-1"
+                      >
+                        <span>{keyword}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-3 w-3 rounded-full p-0 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
+                          onClick={(e) => handleRemoveKeyword(keyword, e)}
+                          disabled={status === 'published'}
+                        >
+                          <X className="h-2 w-2" />
+                          <span className="sr-only">Remove keyword</span>
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Keywords help with SEO and content organization</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
       </div>
-      
-      {safeKeywords.length > 0 && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {safeKeywords.map((keyword, index) => (
-                  <Badge 
-                    key={index}
-                    variant="outline" 
-                    className="bg-blue-50 text-blue-700 border-blue-200 text-xs flex items-center gap-1 pr-1"
-                  >
-                    <span>{keyword}</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-3 w-3 rounded-full p-0 text-blue-700 hover:bg-blue-200 hover:text-blue-800"
-                      onClick={(e) => handleRemoveKeyword(keyword, e)}
-                      disabled={status === 'published'}
-                    >
-                      <X className="h-2 w-2" />
-                      <span className="sr-only">Remove keyword</span>
-                    </Button>
-                  </Badge>
-                ))}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Keywords help with SEO and content organization</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
     </div>
   );
 };
