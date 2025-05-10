@@ -141,20 +141,22 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.error('WebsitesContext: Error caching website data:', error);
       }
     } else {
-      // Clear website data from localStorage when no website is selected
-      try {
-        console.log('WebsitesContext: Clearing website data from localStorage');
-        localStorage.removeItem('currentWebsiteData');
-        localStorage.removeItem('currentWebsiteId');
-        localStorage.removeItem('currentWebsiteName');
-        localStorage.removeItem('currentWebsiteUrl');
-        localStorage.removeItem('currentOrgId');
-        setSavedWebsiteIdState(null);
-      } catch (error) {
-        console.error('WebsitesContext: Error clearing website data:', error);
+      // Only clear website data if explicitly setting to null
+      // This prevents accidental clearing during initial load
+      if (savedWebsiteIdState === null) {
+        try {
+          console.log('WebsitesContext: Clearing website data from localStorage');
+          localStorage.removeItem('currentWebsiteData');
+          localStorage.removeItem('currentWebsiteId');
+          localStorage.removeItem('currentWebsiteName');
+          localStorage.removeItem('currentWebsiteUrl');
+          localStorage.removeItem('currentOrgId');
+        } catch (error) {
+          console.error('WebsitesContext: Error clearing website data:', error);
+        }
       }
     }
-  }, [currentWebsite]);
+  }, [currentWebsite, savedWebsiteIdState]);
 
   const restoreSavedWebsite = (websitesWithOrg: Website[]) => {
     try {
@@ -194,6 +196,8 @@ export const WebsitesProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           });
           setCurrentWebsite(savedWebsite as Website);
           return;
+        } else {
+          console.log("WebsitesContext: Saved website not found in available websites:", currentSavedId);
         }
       }
 
