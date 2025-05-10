@@ -692,31 +692,30 @@ const TeamManagement = () => {
                                     </TableCell>
                                     <TableCell>{member.email}</TableCell>
                                     <TableCell>
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant={member.role === 'admin' ? 'default' : 'secondary'}>
-                                          {member.role === 'admin' ? (
-                                            <Shield className="h-3 w-3 mr-1" />
-                                          ) : (
-                                            <Users className="h-3 w-3 mr-1" />
-                                          )}
-                                          {member.role === 'admin' ? 'Admin' : 'Member'}
-                                        </Badge>
-                                        <Select
-                                          value={member.role}
-                                          onValueChange={(value) => 
-                                            handleUpdateRole(member.id, value as 'admin' | 'member')
-                                          }
-                                          disabled={isUpdatingRole}
-                                        >
-                                          <SelectTrigger className="w-[110px] h-8">
-                                            <SelectValue />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            <SelectItem value="admin">Admin</SelectItem>
-                                            <SelectItem value="member">Member</SelectItem>
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
+                                      <Select
+                                        value={member.role}
+                                        onValueChange={(value) => 
+                                          handleUpdateRole(member.id, value as 'admin' | 'member')
+                                        }
+                                        disabled={isUpdatingRole}
+                                      >
+                                        <SelectTrigger className="w-[110px] h-8">
+                                          <SelectValue>
+                                            <div className="flex items-center gap-1">
+                                              {member.role === 'admin' ? (
+                                                <Shield className="h-3 w-3" />
+                                              ) : (
+                                                <Users className="h-3 w-3" />
+                                              )}
+                                              {member.role === 'admin' ? 'Admin' : 'Member'}
+                                            </div>
+                                          </SelectValue>
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value="admin">Admin</SelectItem>
+                                          <SelectItem value="member">Member</SelectItem>
+                                        </SelectContent>
+                                      </Select>
                                     </TableCell>
                                     <TableCell>
                                       {member.role === 'admin' ? (
@@ -742,32 +741,32 @@ const TeamManagement = () => {
                                       <div className="flex items-center gap-2">
                                         {member.role === 'member' && (
                                           <Button
-                                            variant="outline"
-                                            size="sm"
+                                            variant="ghost"
+                                            size="icon"
                                             onClick={() => openManageAccessDialog(member)}
+                                            title="Manage Website Access"
                                           >
-                                            Manage Access
+                                            <Globe className="h-4 w-4" />
                                           </Button>
                                         )}
                                         <Button
-                                          variant="outline"
-                                          size="sm"
+                                          variant="ghost"
+                                          size="icon"
                                           onClick={() => handleResendInvite(member)}
                                           disabled={resendingMemberId === member.id}
+                                          title="Resend Invitation"
                                         >
                                           {resendingMemberId === member.id ? (
-                                            <>
-                                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                              Resending...
-                                            </>
+                                            <Loader2 className="h-4 w-4 animate-spin" />
                                           ) : (
-                                            'Resend Invite'
+                                            <UserPlus className="h-4 w-4" />
                                           )}
                                         </Button>
                                         <Button
-                                          variant="destructive"
+                                          variant="ghost"
                                           size="icon"
                                           onClick={() => handleRemoveTeamMember(member.id)}
+                                          title="Remove Team Member"
                                         >
                                           <Trash2 className="h-4 w-4" />
                                         </Button>
