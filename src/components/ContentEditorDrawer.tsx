@@ -27,7 +27,8 @@ import {
   Trash,
   Image,
   Sparkles,
-  Download
+  Download,
+  Upload
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -43,6 +44,10 @@ import { TikTokLogo } from '@/components/icons/TikTokLogo';
 import { FacebookPost } from './social/FacebookPost';
 import { TikTokPost } from './social/TikTokPost';
 import { XPost } from './social/XPost';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import MediaLibraryModal from './MediaLibraryModal';
+import { usePostThemes } from '@/context/PostThemesContext';
+import { getPostThemeImage } from '@/utils/getPostThemeImage';
 
 interface ContentEditorDrawerProps {
   isOpen: boolean;
@@ -66,6 +71,7 @@ interface ContentEditorDrawerProps {
   isGeneratingImage?: boolean;
   onGenerateAndPublish?: () => void;
   isGeneratingAndPublishing?: boolean;
+  onSelectImage?: (imageId: string) => void;
 }
 
 interface ChatMessage {
@@ -213,8 +219,10 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   isGeneratingImage = false,
   onGenerateAndPublish,
   isGeneratingAndPublishing = false,
+  onSelectImage,
 }) => {
   const { currentWebsite } = useWebsites();
+  const { updatePostTheme, fetchPostThemes, postThemes, imageMap } = usePostThemes();
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [userInput, setUserInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -228,6 +236,7 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
   const [wpConfigured, setWpConfigured] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [isMediaLibraryOpen, setIsMediaLibraryOpen] = useState(false);
 
   const platforms: Platform[] = [
     { key: 'linkedin', name: 'LinkedIn', icon: <Linkedin className="h-5 w-5" /> },
@@ -724,6 +733,23 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
           </Button>
         );
       }
+
+      // Add image selection button for website content
+      if (platform === null && !preview_image_url) {
+        actions.push(
+          <Button
+            key="select-image"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              setIsMediaLibraryOpen(true);
+            }}
+            title="Select image from library"
+          >
+            <Image className="h-4 w-4" />
+          </Button>
+        );
+      }
     } else {
       // For social media content
       if (editedContent) {
@@ -864,6 +890,35 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
 
     return actions;
   };
+
+  // Handler to update the post_theme with the selected image
+  const handleSelectImage = async (image) => {
+    if (!postThemeId || !image?.id) return;
+    try {
+      const success = await updatePostTheme(postThemeId, { image_id: image.id });
+      if (success) {
+        await fetchPostThemes();
+        toast.success('Image added to article');
+      } else {
+        toast.error('Failed to add image');
+      }
+    } catch (error) {
+      console.error('Error updating image:', error);
+      toast.error('Failed to add image');
+    }
+    setIsMediaLibraryOpen(false);
+  };
+
+  // Find the current post theme to get image_id
+  const currentPostTheme = postThemes.find(pt => pt.id === postThemeId);
+  const imageToShow = currentPostTheme ? getPostThemeImage(currentPostTheme, imageMap) : null;
+
+  // Log which image is being displayed for debugging
+  if (!currentPlatform) {
+    if (imageToShow?.url) {
+      console.log('[Drawer] Displaying image:', imageToShow.url);
+    }
+  }
 
   return (
     <>
@@ -1045,10 +1100,32 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
                           </div>
                         </div>
                       )}
-                      {!currentPlatform && preview_image_url && (
+                      {/* Display image for post using getPostThemeImage utility */}
+                      {!currentPlatform && imageToShow?.url && (
                         <div className="mb-4 relative group">
-                          <img 
-                            src={preview_image_url} 
+                          <img
+                            src={imageToShow.url}
+                            alt={imageToShow.name || 'Selected image'}
+                            className="rounded-lg shadow-md max-h-[300px] object-cover w-full"
+                          />
+                          <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              variant="secondary"
+                              size="icon"
+                              className="h-8 w-8 bg-white/80 hover:bg-white shadow-sm text-destructive hover:text-destructive"
+                              onClick={onDeleteImage}
+                              title="Remove image"
+                            >
+                              <Trash className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {/* Fallback to preview_image_url if no image_id or not found in imageMap */}
+                      {!currentPlatform && !imageToShow?.url && preview_image_url && (
+                        <div className="mb-4 relative group">
+                          <img
+                            src={preview_image_url}
                             alt="Generated preview"
                             className="rounded-lg shadow-md max-h-[300px] object-cover w-full"
                           />
@@ -1217,6 +1294,13 @@ const ContentEditorDrawer: React.FC<ContentEditorDrawerProps> = ({
           </div>
         </div>
       </div>
+
+      <MediaLibraryModal
+        isOpen={isMediaLibraryOpen}
+        onClose={() => setIsMediaLibraryOpen(false)}
+        onSelectImage={handleSelectImage}
+        websiteId={currentWebsite?.id || ''}
+      />
     </>
   );
 };

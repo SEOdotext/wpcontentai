@@ -56,6 +56,7 @@ interface TitleSuggestionProps {
   onUpdateCategories?: (id: string, categories: { id: string; name: string }[]) => void;
   isGeneratingContent?: boolean;
   image?: { url: string; name: string } | null;
+  onSelectImage?: (imageId: string) => void;
 }
 
 // Helper function to format titles with proper Danish capitalization
@@ -575,6 +576,25 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
     }
   }, [currentWebsite?.id]);
 
+  const handleSelectImage = async (id: string, imageId: string) => {
+    try {
+      const success = await updatePostTheme(id, { 
+        image_id: imageId
+      });
+      
+      if (success) {
+        // Refresh post themes to get updated data
+        await fetchPostThemes();
+        toast.success('Image selected');
+      } else {
+        toast.error('Failed to select image');
+      }
+    } catch (error) {
+      console.error('Error selecting image:', error);
+      toast.error('Failed to select image');
+    }
+  };
+
   return (
     <div className={className}>
       {currentWebsite && (
@@ -687,6 +707,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                         url: imageMap[suggestion.image_id].url,
                         name: imageMap[suggestion.image_id].name
                       } : null}
+                      onSelectImage={(imageId) => handleSelectImage(suggestion.id, imageId)}
                     />
                   </div>
                 );
@@ -740,6 +761,7 @@ const ContentStructureView: React.FC<ContentStructureViewProps> = ({ className }
                     url: imageMap[suggestion.image_id].url,
                     name: imageMap[suggestion.image_id].name
                   } : null}
+                  onSelectImage={(imageId) => handleSelectImage(suggestion.id, imageId)}
                 />
               </div>
             );

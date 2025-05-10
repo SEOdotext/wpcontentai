@@ -30,6 +30,7 @@ interface TitleSuggestionProps {
   onUpdateCategories?: (id: string, categories: { id: string; name: string }[]) => void;
   isGeneratingContent?: boolean;
   image?: { url: string; name: string } | null;
+  onSelectImage?: (imageId: string) => void;
 }
 
 const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
@@ -49,6 +50,7 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
   onUpdateCategories,
   isGeneratingContent = false,
   image = null,
+  onSelectImage,
 }) => {
   const { postThemes, updatePostTheme, deletePostTheme, getNextPublicationDate } = usePostThemes();
   const { currentWebsite } = useWebsites();
@@ -278,6 +280,23 @@ const TitleSuggestion: React.FC<TitleSuggestionProps> = ({
     } catch (error) {
       console.error('Error removing image:', error);
       toast.error('Failed to remove image');
+    }
+  };
+
+  const handleSelectImage = async (imageId: string) => {
+    try {
+      const success = await updatePostTheme(id, { 
+        image_id: imageId
+      });
+      
+      if (success) {
+        toast.success('Image selected');
+      } else {
+        toast.error('Failed to select image');
+      }
+    } catch (error) {
+      console.error('Error selecting image:', error);
+      toast.error('Failed to select image');
     }
   };
 

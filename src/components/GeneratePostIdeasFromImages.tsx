@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { usePostThemes } from '@/context/PostThemesContext';
+import MediaLibraryModal from './MediaLibraryModal';
 
 interface ImageItem {
   id: string;
@@ -300,55 +301,15 @@ const GeneratePostIdeasFromImages: React.FC<GeneratePostIdeasFromImagesProps> = 
         )}
       </Button>
 
-      <Dialog open={isMediaLibraryOpen} onOpenChange={setIsMediaLibraryOpen}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Select an image from your media library</DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="h-[60vh]">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
-              {mediaLibraryImages.map((image) => (
-                <div
-                  key={image.id}
-                  className={`relative aspect-video rounded-lg overflow-hidden cursor-pointer group ${
-                    selectedLibraryImage?.id === image.id ? 'ring-2 ring-primary' : ''
-                  }`}
-                  onClick={() => setSelectedLibraryImage(image)}
-                >
-                  <img
-                    src={image.url}
-                    alt={image.name}
-                    className="object-cover w-full h-full"
-                  />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
-                    <h4 className="text-white text-sm font-medium truncate">
-                      {image.name}
-                    </h4>
-                    {image.description && (
-                      <p className="text-white/80 text-xs truncate">
-                        {image.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsMediaLibraryOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                setIsMediaLibraryOpen(false);
-              }}
-              disabled={!selectedLibraryImage}
-            >
-              Use Selected Image
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <MediaLibraryModal
+        isOpen={isMediaLibraryOpen}
+        onClose={() => setIsMediaLibraryOpen(false)}
+        onSelectImage={(image) => {
+          setSelectedLibraryImage(image);
+          setIsMediaLibraryOpen(false);
+        }}
+        websiteId={currentWebsite?.id || ''}
+      />
     </div>
   );
 };

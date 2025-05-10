@@ -55,6 +55,7 @@ interface ContentViewProps {
   isGeneratingAndPublishing?: boolean;
   canSendToWordPress?: boolean;
   canGenerateImage?: boolean;
+  onSelectImage?: (imageUrl: string) => void;
 }
 
 const ContentView: React.FC<ContentViewProps> = ({
@@ -82,6 +83,7 @@ const ContentView: React.FC<ContentViewProps> = ({
   isGeneratingAndPublishing = false,
   canSendToWordPress = false,
   canGenerateImage = false,
+  onSelectImage,
 }) => {
   const [content, setContent] = useState(fullContent || description || '');
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
@@ -137,6 +139,7 @@ const ContentView: React.FC<ContentViewProps> = ({
       isGeneratingImage={isGeneratingImage}
       onGenerateAndPublish={onGenerateAndPublish}
       isGeneratingAndPublishing={isGeneratingAndPublishing}
+      onSelectImage={onSelectImage}
     />
   );
 };
