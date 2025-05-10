@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { usePostThemes } from '@/context/PostThemesContext';
 
 interface ImageItem {
   id: string;
@@ -40,6 +41,7 @@ const GeneratePostIdeasFromImages: React.FC<GeneratePostIdeasFromImagesProps> = 
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const { fetchPostThemes } = usePostThemes();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -132,6 +134,9 @@ const GeneratePostIdeasFromImages: React.FC<GeneratePostIdeasFromImagesProps> = 
         body: JSON.stringify({
           website_id: currentWebsite.id,
           image_url: imageUrl,
+          image_id: imageId,
+          image_name: imageName,
+          image_description: imageDescription || aiAnalysis,
           writing_style: writingStyle || 'default',
           subject_matters: subjectMatters || [],
           language: currentWebsite.language || 'en'
@@ -148,31 +153,8 @@ const GeneratePostIdeasFromImages: React.FC<GeneratePostIdeasFromImagesProps> = 
         throw new Error(result.error || 'Failed to generate content from image');
       }
 
-      // Create post themes for each title
-      const now = new Date().toISOString();
-      const creationPromises = result.titles.map(title => 
-        supabase
-          .from('post_themes')
-          .insert({
-            website_id: currentWebsite.id,
-            subject_matter: title,
-            keywords: Array.isArray(result.keywordsByTitle?.[title])
-              ? result.keywordsByTitle[title]
-              : Array.isArray(result.keywords)
-                ? result.keywords
-                : [],
-            status: 'pending',
-            post_content: null,
-            image_id: imageId,
-            wp_post_id: null,
-            wp_post_url: null,
-            wp_sent_date: null,
-            created_at: now,
-            updated_at: now
-          })
-      );
-
-      await Promise.all(creationPromises);
+      // Instead of inserting post themes, just refresh the list
+      await fetchPostThemes();
       onContentGenerated();
       toast.success('Content generated successfully from image');
       setSelectedFile(null);
